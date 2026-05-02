@@ -11,8 +11,10 @@ GTEXT(z_tc32_thread_start)
 
 /* void z_tc32_switch(struct k_thread *new, struct k_thread *old) */
 SECTION_FUNC(TEXT, z_tc32_switch)
-	tstorer sp, [r1, #_thread_offset_to_sp]
-	tstorer lr, [r1, #_thread_offset_to_lr]
+	tmov r2, r13
+	tstorer r2, [r1, #_thread_offset_to_sp]
+	tmov r2, r14
+	tstorer r2, [r1, #_thread_offset_to_lr]
 	tstorer r4, [r1, #_thread_offset_to_r4]
 	tstorer r5, [r1, #_thread_offset_to_r5]
 	tstorer r6, [r1, #_thread_offset_to_r6]
@@ -30,8 +32,10 @@ SECTION_FUNC(TEXT, z_tc32_switch)
 
 	tstorer r1, [r1, #___thread_t_switch_handle_OFFSET]
 
-	tloadr sp, [r0, #_thread_offset_to_sp]
-	tloadr lr, [r0, #_thread_offset_to_lr]
+	tloadr r2, [r0, #_thread_offset_to_sp]
+	tmov r13, r2
+	tloadr r2, [r0, #_thread_offset_to_lr]
+	tmov r14, r2
 	tloadr r4, [r0, #_thread_offset_to_r4]
 	tloadr r5, [r0, #_thread_offset_to_r5]
 	tloadr r6, [r0, #_thread_offset_to_r6]
@@ -49,10 +53,12 @@ SECTION_FUNC(TEXT, z_tc32_switch)
 	tjex lr
 
 SECTION_FUNC(TEXT, z_tc32_thread_start)
-	tloadr r0, [sp, #__struct_arch_esf_r0_OFFSET]
-	tloadr r1, [sp, #__struct_arch_esf_r1_OFFSET]
-	tloadr r2, [sp, #__struct_arch_esf_r2_OFFSET]
-	tloadr r3, [sp, #__struct_arch_esf_r3_OFFSET]
-	tloadr r4, [sp, #__struct_arch_esf_pc_OFFSET]
-	tadd sp, #__struct_arch_esf_SIZEOF
+	tmov r5, r13
+	tloadr r0, [r5, #__struct_arch_esf_r0_OFFSET]
+	tloadr r1, [r5, #__struct_arch_esf_r1_OFFSET]
+	tloadr r2, [r5, #__struct_arch_esf_r2_OFFSET]
+	tloadr r3, [r5, #__struct_arch_esf_r3_OFFSET]
+	tloadr r4, [r5, #__struct_arch_esf_pc_OFFSET]
+	tadd r5, r5, #__struct_arch_esf_SIZEOF
+	tmov r13, r5
 	tjex r4

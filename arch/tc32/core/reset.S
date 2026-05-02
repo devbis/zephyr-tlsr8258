@@ -22,7 +22,7 @@ SECTION_FUNC(vectors, __start)
 .Lstack_end:
 	.word _stack_end_
 
-SECTION_FUNC(.ram_code, __irq)
+SECTION_FUNC(ram_code, __irq)
 z_tc32_irq_entry:
 	tpush {r14}
 	tpush {r0-r7}
