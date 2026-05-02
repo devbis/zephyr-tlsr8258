@@ -39,6 +39,8 @@ elseif("${ARCH}" STREQUAL "riscv")
   else()
     set(triple riscv32-unknown-elf)
   endif()
+elseif("${ARCH}" STREQUAL "tc32")
+  set(triple tc32-unknown-none-elf)
 endif()
 
 if(DEFINED triple)

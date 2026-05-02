@@ -1,0 +1,17 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <telink/tlsr8258.dtsi>
+
+/ {
+	model = "Telink TLSR8258 Generic";
+	compatible = "telink,tlsr8258-generic";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash;
+	};
+};

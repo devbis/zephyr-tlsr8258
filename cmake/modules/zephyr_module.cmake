@@ -44,9 +44,12 @@ endif()
 file(MAKE_DIRECTORY ${KCONFIG_BINARY_DIR})
 set(kconfig_modules_file ${KCONFIG_BINARY_DIR}/Kconfig.modules)
 set(kconfig_sysbuild_file ${KCONFIG_BINARY_DIR}/Kconfig.sysbuild.modules)
+set(kconfig_module_dirs_file ${KCONFIG_BINARY_DIR}/kconfig_module_dirs.cmake)
 set(cmake_modules_file ${CMAKE_BINARY_DIR}/zephyr_modules.txt)
 set(cmake_sysbuild_file ${CMAKE_BINARY_DIR}/sysbuild_modules.txt)
 set(zephyr_settings_file ${CMAKE_BINARY_DIR}/zephyr_settings.txt)
+
+file(WRITE ${kconfig_module_dirs_file} "set(kconfig_env_dirs)\n")
 
 if(WEST OR ZEPHYR_MODULES)
   # Zephyr module uses west, so only call it if west is installed or
