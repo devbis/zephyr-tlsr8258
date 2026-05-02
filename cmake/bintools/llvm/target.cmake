@@ -13,13 +13,23 @@ execute_process(COMMAND ${CMAKE_C_COMPILER} --version
                 OUTPUT_VARIABLE CLANGVER)
 string(REGEX REPLACE "[^0-9]*([0-9]+).*" "\\1" CLANGVER ${CLANGVER})
 
-find_program(CMAKE_AR      llvm-ar      ${find_program_clang_args})
+find_program(LLVM_AR       llvm-ar      ${find_program_clang_args})
+if(LLVM_AR)
+  set(CMAKE_AR ${LLVM_AR} CACHE FILEPATH "LLVM archiver" FORCE)
+else()
+  find_program(CMAKE_AR    llvm-ar      ${find_program_clang_args})
+endif()
 find_program(CMAKE_NM      llvm-nm      ${find_program_clang_args})
 find_program(CMAKE_OBJDUMP NAMES
                            llvm-objdump
                            llvm-objdump-${CLANGVER}
                            ${find_program_clang_args})
-find_program(CMAKE_RANLIB  llvm-ranlib  ${find_program_clang_args})
+find_program(LLVM_RANLIB   llvm-ranlib  ${find_program_clang_args})
+if(LLVM_RANLIB)
+  set(CMAKE_RANLIB ${LLVM_RANLIB} CACHE FILEPATH "LLVM ranlib" FORCE)
+else()
+  find_program(CMAKE_RANLIB llvm-ranlib ${find_program_clang_args})
+endif()
 find_program(CMAKE_STRIP   llvm-strip   ${find_program_clang_args})
 find_program(CMAKE_OBJCOPY NAMES
                            llvm-objcopy
