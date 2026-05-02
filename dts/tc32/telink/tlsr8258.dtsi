@@ -1,0 +1,37 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "telink,tlsr8258-tc32";
+			reg = <0>;
+			clock-frequency = <24000000>;
+		};
+	};
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "telink,tlsr8258-soc";
+		ranges;
+
+		sram0: memory@840000 {
+			compatible = "mmio-sram";
+			reg = <0x00840000 0x00010000>;
+		};
+
+		flash: flash@0 {
+			compatible = "soc-nv-flash";
+			reg = <0x00000000 0x00080000>;
+			write-block-size = <1>;
+		};
+	};
+};
