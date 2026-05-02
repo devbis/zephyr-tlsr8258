@@ -597,6 +597,18 @@ do {                                                                    \
 		"\n\t.equ\t" #name "," #value       \
 		"\n\t.type\t" #name ",%object")
 
+#elif defined(CONFIG_TC32)
+
+#define GEN_ABSOLUTE_SYM(name, value)		\
+	__asm__ __volatile__(".globl\t" #name "\n\t.equ\t" #name \
+		",%c0"                              \
+		"\n\t.type\t" #name ",%%object" :  : "n"(value))
+
+#define GEN_ABSOLUTE_SYM_KCONFIG(name, value)       \
+	__asm__ __volatile__(".globl\t" #name                    \
+		"\n\t.equ\t" #name "," #value       \
+		"\n\t.type\t" #name ",%object")
+
 #elif defined(CONFIG_SPARC)
 #define GEN_ABSOLUTE_SYM(name, value)			\
 	__asm__ __volatile__(".global\t" #name "\n\t.equ\t" #name	\

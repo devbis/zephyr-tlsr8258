@@ -61,6 +61,8 @@
 	OUTPUT_FORMAT("elf32-rx-le")
 #elif defined(CONFIG_OPENRISC)
 	OUTPUT_FORMAT("elf32-or1k")
+#elif defined(CONFIG_TC32)
+	OUTPUT_FORMAT("elf32-littletc32")
 #else
 	#error Arch not supported.
 #endif

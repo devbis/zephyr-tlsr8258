@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_SERIES_TLSR825X
+
+config NUM_IRQS
+	default 32
+
+config SYS_CLOCK_EXISTS
+	default n
+
+config XIP
+	default y
+
+config FLASH_BASE_ADDRESS
+	default 0x0
+
+config FLASH_SIZE
+	default 512
+
+config SRAM_BASE_ADDRESS
+	default 0x840000
+
+config SRAM_SIZE
+	default 64
+
+config MAIN_STACK_SIZE
+	default 2048
+
+config IDLE_STACK_SIZE
+	default 1024
+
+config TEST_EXTRA_STACK_SIZE
+	default 1024
+
+endif # SOC_SERIES_TLSR825X
