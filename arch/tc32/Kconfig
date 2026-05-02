@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menu "TC32 Options"
+	depends on TC32
+
+config ARCH
+	string
+	default "tc32"
+
+config GEN_ISR_TABLES
+	default y
+
+config GEN_IRQ_VECTOR_TABLE
+	default n
+
+config GEN_SW_ISR_TABLE
+	default y
+
+config ARCH_HAS_SINGLE_THREAD_SUPPORT
+	default y if !SMP
+
+endmenu

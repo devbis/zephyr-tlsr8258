@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_TLSR825X
+	bool
+	select TC32
+	select HAS_TELINK_DRIVERS
+	imply XIP
+
+if SOC_SERIES_TLSR825X
+
+config SOC_TLSR8258
+	bool
+
+endif # SOC_SERIES_TLSR825X
