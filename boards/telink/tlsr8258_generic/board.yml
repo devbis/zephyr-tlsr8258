@@ -1,0 +1,6 @@
+board:
+  name: tlsr8258_generic
+  full_name: TLSR8258 Generic
+  vendor: telink
+  socs:
+  - name: tlsr8258
