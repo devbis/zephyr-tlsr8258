@@ -23,6 +23,20 @@
 		compatible = "telink,tlsr8258-soc";
 		ranges;
 
+		intc: interrupt-controller@800640 {
+			compatible = "telink,tlsr8258-intc";
+			reg = <0x00800640 0x0000000c>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		stimer: stimer@800740 {
+			compatible = "telink,tlsr8258-stimer";
+			reg = <0x00800740 0x00000010>;
+			interrupts = <20>;
+			interrupt-parent = <&intc>;
+		};
+
 		sram0: memory@840000 {
 			compatible = "mmio-sram";
 			reg = <0x00840000 0x00010000>;
