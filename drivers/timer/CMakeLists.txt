@@ -56,6 +56,7 @@ zephyr_library_sources_ifdef(CONFIG_STM32WB0_RADIO_TIMER stm32wb0_radio_timer.c)
 zephyr_library_sources_ifdef(CONFIG_STM32_LPTIM_TIMER stm32_lptim_timer.c)
 zephyr_library_sources_ifdef(CONFIG_SY1XX_SYS_TIMER sy1xx_sys_timer.c)
 zephyr_library_sources_ifdef(CONFIG_TI_DM_TIMER ti_dmtimer.c)
+zephyr_library_sources_ifdef(CONFIG_TLSR8258_STIMER tlsr8258_stimer.c)
 zephyr_library_sources_ifdef(CONFIG_XLNX_PSTTC_TIMER xlnx_psttc_timer.c)
 zephyr_library_sources_ifdef(CONFIG_XTENSA_TIMER xtensa_sys_timer.c)
 # zephyr-keep-sorted-stop

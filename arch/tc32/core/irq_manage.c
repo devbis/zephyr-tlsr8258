@@ -5,10 +5,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <kswap.h>
+#include <tlsr825x/irq.h>
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
-
-#define TC32_REG_IRQ_SRC ((volatile uint32_t *)0x00800648u)
 
 FUNC_NORETURN void z_irq_spurious(const void *unused)
 {
@@ -33,16 +32,29 @@ static ALWAYS_INLINE void enter_irq(unsigned int irq)
 	}
 }
 
+static ALWAYS_INLINE bool irq_is_valid(unsigned int irq)
+{
+	return (BIT(irq) & TLSR8258_IRQ_VALID_MASK) != 0u;
+}
+
 void z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
 
 	_kernel.cpus[0].nested++;
 
-	while ((pending = (*TC32_REG_IRQ_SRC & *TC32_REG_IRQ_MASK)) != 0u) {
+	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
 		unsigned int irq = find_lsb_set(pending) - 1u;
 
-		*TC32_REG_IRQ_SRC = BIT(irq);
+		if (!irq_is_valid(irq)) {
+			break;
+		}
+
+		if (irq <= TLSR8258_IRQ_TMR2) {
+			*TLSR8258_REG_IRQ_SRC = BIT(irq);
+			*TLSR8258_REG_TMR_STA = BIT(irq);
+		}
+
 		enter_irq(irq);
 	}
 
@@ -55,8 +67,8 @@ void z_tc32_handle_irqs(void)
 
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
 int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
-			     void (*routine)(const void *parameter),
-			     const void *parameter, uint32_t flags)
+		     void (*routine)(const void *parameter),
+		     const void *parameter, uint32_t flags)
 {
 	ARG_UNUSED(priority);
 	ARG_UNUSED(flags);
