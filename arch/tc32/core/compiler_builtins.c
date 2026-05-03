@@ -99,3 +99,52 @@ uint64_t __udivdi3(uint64_t dividend, uint64_t divisor)
 
 	return quotient.value;
 }
+
+uint32_t __udivsi3(uint32_t a, uint32_t b)
+{
+	if (b == 0U) {
+		return UINT32_MAX;
+	}
+	if (a < b) {
+		return 0U;
+	}
+
+	uint32_t q = 0;
+	union u64_words rem = { .value = 0 };
+	union u64_words divisor = { .value = b };
+
+	for (int i = 31; i >= 0; i--) {
+		u64_shl1(&rem);
+		rem.word.lo |= (a >> i) & 1U;
+		if (u64_ge(rem, divisor)) {
+			u64_sub(&rem, divisor);
+			q |= (1U << i);
+		}
+	}
+
+	return q;
+}
+
+int32_t __divsi3(int32_t a, int32_t b)
+{
+	int neg = 0;
+	uint32_t ua = (uint32_t)a;
+	uint32_t ub = (uint32_t)b;
+
+	if (a < 0) {
+		neg = !neg;
+		ua = 0U - ua;
+	}
+	if (b < 0) {
+		neg = !neg;
+		ub = 0U - ub;
+	}
+
+	if (ub == 0U) {
+		return INT32_MAX;
+	}
+
+	uint32_t q = __udivsi3(ua, ub);
+
+	return (int32_t)(neg ? (0U - q) : q);
+}
