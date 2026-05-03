@@ -7,3 +7,4 @@ zephyr_ld_options(-mcpu=tc32)
 
 add_subdirectory(core)
 zephyr_include_directories(include)
+zephyr_include_directories(${ZEPHYR_BASE}/soc)
