@@ -16,16 +16,23 @@
 #define TLSR8258_REG_SYSTEM_TICK_MODE  (*(volatile uint8_t *)0x0080074cu)
 #define TLSR8258_REG_SYSTEM_TICK_CTRL  (*(volatile uint8_t *)0x0080074fu)
 
-#define FLD_SYSTEM_TICK_START         BIT(0)
-#define FLD_SYSTEM_TICK_IRQ_EN        BIT(1)
+#define FLD_SYSTEM_TICK_START BIT(0)
+#define FLD_SYSTEM_TICK_IRQ_EN BIT(1)
 
-#define CYCLES_PER_TICK              (sys_clock_hw_cycles_per_sec() / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
+#define CYCLES_PER_TICK (sys_clock_hw_cycles_per_sec() / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
+
+__weak void tlsr8258_stimer_debug_tick(void)
+{
+}
 
 static void tlsr8258_stimer_irq(const void *unused)
 {
 	ARG_UNUSED(unused);
 
 	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+#if defined(CONFIG_TLSR8258_STIMER_DEBUG_HOOK)
+	tlsr8258_stimer_debug_tick();
+#endif
 	TLSR8258_REG_SYSTEM_TICK_IRQ = TLSR8258_REG_SYSTEM_TICK_IRQ + CYCLES_PER_TICK;
 	sys_clock_announce(1);
 }
