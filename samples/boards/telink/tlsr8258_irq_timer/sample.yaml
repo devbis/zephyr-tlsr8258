@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: TLSR8258 system timer IRQ smoke
+tests:
+  sample.boards.telink.tlsr8258_irq_timer:
+    build_only: true
+    platform_allow:
+      - tlsr8258_generic
+    tags:
+      - irq
+      - timer
+      - telink
