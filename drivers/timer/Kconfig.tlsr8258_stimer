@@ -6,3 +6,10 @@ config TLSR8258_STIMER
 	depends on SOC_SERIES_TLSR825X
 	default y
 	depends on DT_HAS_TELINK_TLSR8258_STIMER_ENABLED
+
+config TLSR8258_STIMER_DEBUG_HOOK
+	bool "Enable TLSR8258 stimer debug hook callback"
+	depends on TLSR8258_STIMER
+	help
+	  Enable calling tlsr8258_stimer_debug_tick() from the system timer ISR.
+	  This is intended for debugging and sample instrumentation.
