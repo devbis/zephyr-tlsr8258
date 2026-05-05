@@ -97,11 +97,10 @@ SECTIONS
 
 	__rodata_region_end = .;
 	_image_ram_start = RAM_BASE;
-	. = RAM_BASE + 0x900 + _ramcode_size_align_256_;
 
 #include <snippets-ram-sections.ld>
 
-	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
+	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME, RAM_BASE + 0x900 + _ramcode_size_align_256_,)
 	{
 		. = ALIGN(4);
 		__data_region_start = .;
