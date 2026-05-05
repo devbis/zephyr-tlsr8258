@@ -46,7 +46,6 @@ void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
 	ARG_UNUSED(entry);
 
 	_kernel.cpus[0].current = main_thread;
-	main_thread->switch_handle = NULL;
 	z_tc32_switch_to_thread(main_thread);
 	CODE_UNREACHABLE;
 }

@@ -44,6 +44,12 @@
 
 LOG_MODULE_REGISTER(os, CONFIG_KERNEL_LOG_LEVEL);
 
+#ifdef CONFIG_TC32
+#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+#else
+#define Z_TC32_BRANCH_TARGET(fn) (fn)
+#endif
+
 /* the only struct z_kernel instance */
 __pinned_bss
 struct z_kernel _kernel;
@@ -244,7 +250,9 @@ static void z_sys_init_run_level(enum init_level level)
 				result = do_device_init(dev);
 			}
 		} else {
-			result = entry->init_fn();
+			int (*init_fn)(void) = (int (*)(void))Z_TC32_BRANCH_TARGET(entry->init_fn);
+
+			result = init_fn();
 		}
 		sys_trace_sys_init_exit(entry, level, result);
 	}
