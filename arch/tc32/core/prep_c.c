@@ -10,7 +10,8 @@
 
 void z_prep_c(void)
 {
-	void (*volatile cstart)(void) = z_cstart;
+	uintptr_t cstart_addr = (uintptr_t)z_cstart & ~1u;
+	void (*volatile cstart)(void) = (void (*)(void))cstart_addr;
 
 	if (IS_ENABLED(CONFIG_ARCH_CACHE)) {
 		arch_cache_init();

@@ -15,6 +15,12 @@
 
 #include <timeslicing.h>
 
+#ifdef CONFIG_TC32
+#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+#else
+#define Z_TC32_BRANCH_TARGET(fn) (fn)
+#endif
+
 static uint64_t curr_tick;
 
 static sys_dlist_t timeout_list = SYS_DLIST_STATIC_INIT(&timeout_list);
@@ -271,12 +277,11 @@ void sys_clock_announce_locked(int32_t ticks, k_spinlock_key_t key)
 			t->dticks = TIMEOUT_DTICKS_ANNOUNCING;
 
 			k_spin_unlock(&timeout_lock, key);
-			handler(t);
+			((void (*)(struct _timeout *))Z_TC32_BRANCH_TARGET(handler))(t);
 			key = k_spin_lock(&timeout_lock);
 
 			t = first();
 		} while ((t != NULL) && (t->dticks == 0));
-
 		announce_remaining -= dt;
 	}
 

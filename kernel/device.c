@@ -15,12 +15,21 @@
 #include <zephyr/toolchain.h>
 #include <zephyr/pm/device_runtime.h>
 
+#ifdef CONFIG_TC32
+#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+#else
+#define Z_TC32_BRANCH_TARGET(fn) (fn)
+#endif
+
 int do_device_init(const struct device *dev)
 {
 	int rc = 0;
 
 	if (dev->ops.init != NULL) {
-		rc = dev->ops.init(dev);
+		int (*init_fn)(const struct device *) =
+			(int (*)(const struct device *))Z_TC32_BRANCH_TARGET(dev->ops.init);
+
+		rc = init_fn(dev);
 		/* If initialization failed, record in dev->state->init_res
 		 * the POSITIVE value of the resulting errno
 		 */
