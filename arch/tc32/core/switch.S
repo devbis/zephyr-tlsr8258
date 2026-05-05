@@ -85,6 +85,30 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 .Lthread_kernel:
 	.word _kernel
 
+SECTION_FUNC(TEXT, z_thread_entry)
+	tmov r4, r0
+	tmov r0, r1
+	tmov r1, r2
+	tmov r2, r3
+	tjl .Lz_thread_entry_call
+	nop
+	nop
+.Lz_thread_entry_finished:
+	tloadr r0, .Lz_thread_entry_kernel
+	tloadr r0, [r0, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
+	tjl z_thread_abort
+	nop
+	nop
+.Lz_thread_entry_returned:
+	tj .Lz_thread_entry_returned
+.Lz_thread_entry_call:
+	tjex r4
+	nop
+	nop
+	.align 2
+.Lz_thread_entry_kernel:
+	.word _kernel
+
 /* void z_tc32_switch_to_main_static(void) */
 SECTION_FUNC(TEXT, z_tc32_switch_to_main_static)
 	tloadr r0, .Lmain_thread
