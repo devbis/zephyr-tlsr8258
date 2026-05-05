@@ -12,6 +12,7 @@ GTEXT(z_tc32_switch_to_main_static)
 GTEXT(z_tc32_switch_to_thread)
 GTEXT(z_tc32_switch_to_main)
 GTEXT(z_thread_entry)
+GTEXT(z_thread_abort)
 GTEXT(main)
 
 /* void z_tc32_switch(struct k_thread *new, struct k_thread *old) */
@@ -59,18 +60,30 @@ SECTION_FUNC(TEXT, z_tc32_switch)
 
 SECTION_FUNC(TEXT, z_tc32_thread_start)
 	tmov r5, r13
-	tloadr r0, [r5, #__struct_arch_esf_r0_OFFSET]
-	tloadr r1, [r5, #__struct_arch_esf_r1_OFFSET]
-	tloadr r2, [r5, #__struct_arch_esf_r2_OFFSET]
-	tloadr r3, [r5, #__struct_arch_esf_r3_OFFSET]
-	tloadr r4, [r5, #__struct_arch_esf_pc_OFFSET]
+	tloadr r4, [r5, #__struct_arch_esf_r0_OFFSET]
+	tloadr r0, [r5, #__struct_arch_esf_r1_OFFSET]
+	tloadr r1, [r5, #__struct_arch_esf_r2_OFFSET]
+	tloadr r2, [r5, #__struct_arch_esf_r3_OFFSET]
 	tadd r5, r5, #__struct_arch_esf_SIZEOF
 	tmov r13, r5
 	tjl .Lthread_entry_call
+	nop
+	nop
+.Lthread_finished:
+	tloadr r0, .Lthread_kernel
+	tloadr r0, [r0, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
+	tjl z_thread_abort
+	nop
+	nop
 .Lthread_returned:
 	tj .Lthread_returned
 .Lthread_entry_call:
 	tjex r4
+	nop
+	nop
+	.align 2
+.Lthread_kernel:
+	.word _kernel
 
 /* void z_tc32_switch_to_main_static(void) */
 SECTION_FUNC(TEXT, z_tc32_switch_to_main_static)

@@ -9,6 +9,8 @@
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
+#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+
 FUNC_NORETURN void z_irq_spurious(const void *unused)
 {
 	ARG_UNUSED(unused);
@@ -25,7 +27,7 @@ static ALWAYS_INLINE void enter_irq(unsigned int irq)
 		sys_trace_isr_enter();
 	}
 
-	ite->isr(ite->arg);
+	((void (*)(const void *))Z_TC32_BRANCH_TARGET(ite->isr))(ite->arg);
 
 	if (IS_ENABLED(CONFIG_TRACING_ISR)) {
 		sys_trace_isr_exit();
