@@ -20,15 +20,16 @@ void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	stack_init = (struct arch_esf *)Z_STACK_PTR_ALIGN(
 		Z_STACK_PTR_TO_FRAME(struct arch_esf, stack_ptr));
 
-	stack_init->r0 = (uint32_t)entry;
+	/* The synthetic frame carries raw TC32 branch targets, not ABI-tagged pointers. */
+	stack_init->r0 = (uint32_t)entry & ~1u;
 	stack_init->r1 = (uint32_t)p1;
 	stack_init->r2 = (uint32_t)p2;
 	stack_init->r3 = (uint32_t)p3;
-	stack_init->pc = (uint32_t)z_thread_entry;
+	stack_init->pc = (uint32_t)z_thread_entry & ~1u;
 	stack_init->sr = 1u;
 
 	thread->callee_saved.sp = (uint32_t)stack_init;
-	thread->callee_saved.lr = (uint32_t)z_tc32_thread_start;
+	thread->callee_saved.lr = (uint32_t)z_tc32_thread_start & ~1u;
 	thread->switch_handle = thread;
 }
 
