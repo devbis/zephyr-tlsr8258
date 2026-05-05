@@ -6,12 +6,26 @@
 #include <zephyr/linker/sections.h>
 
 GTEXT(__start)
+GTEXT(__reset)
 GTEXT(__irq)
 GTEXT(z_tc32_irq_entry)
 GTEXT(z_prep_c)
 GTEXT(z_tc32_handle_irqs)
 
 SECTION_FUNC(vectors, __start)
+	.org 0x0
+	tj __reset
+	.word 0
+
+	.org 0x8
+	.word 0x544c4e4b
+	.word 0x00880170
+
+	.org 0x10
+	tj __irq
+
+	.org 0x20
+__reset:
 	tloadr r0, .Lstack_end
 	tmov sp, r0
 	tjl z_prep_c

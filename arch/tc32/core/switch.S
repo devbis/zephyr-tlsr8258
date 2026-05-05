@@ -8,6 +8,11 @@
 
 GTEXT(z_tc32_switch)
 GTEXT(z_tc32_thread_start)
+GTEXT(z_tc32_switch_to_main_static)
+GTEXT(z_tc32_switch_to_thread)
+GTEXT(z_tc32_switch_to_main)
+GTEXT(z_thread_entry)
+GTEXT(main)
 
 /* void z_tc32_switch(struct k_thread *new, struct k_thread *old) */
 SECTION_FUNC(TEXT, z_tc32_switch)
@@ -62,3 +67,51 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	tadd r5, r5, #__struct_arch_esf_SIZEOF
 	tmov r13, r5
 	tjex r4
+
+/* void z_tc32_switch_to_main_static(void) */
+SECTION_FUNC(TEXT, z_tc32_switch_to_main_static)
+	tloadr r0, .Lmain_thread
+	tloadr r1, .Lkernel
+	tstorer r0, [r1, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
+	tloadr r2, [r0, #_thread_offset_to_sp]
+	tmov r13, r2
+	tjl main
+.Lmain_returned:
+	tj .Lmain_returned
+
+	.align 2
+.Lmain_thread:
+	.word z_main_thread
+.Lkernel:
+	.word _kernel
+
+/* void z_tc32_switch_to_thread(struct k_thread *thread) */
+SECTION_FUNC(TEXT, z_tc32_switch_to_thread)
+	tloadr r2, [r0, #_thread_offset_to_sp]
+	tmov r13, r2
+	tloadr r2, [r0, #_thread_offset_to_lr]
+	tmov r14, r2
+	tloadr r4, [r0, #_thread_offset_to_r4]
+	tloadr r5, [r0, #_thread_offset_to_r5]
+	tloadr r6, [r0, #_thread_offset_to_r6]
+	tloadr r7, [r0, #_thread_offset_to_r7]
+	tloadr r2, [r0, #_thread_offset_to_r8]
+	tmov r8, r2
+	tloadr r2, [r0, #_thread_offset_to_r9]
+	tmov r9, r2
+	tloadr r2, [r0, #_thread_offset_to_r10]
+	tmov r10, r2
+	tloadr r2, [r0, #_thread_offset_to_r11]
+	tmov r11, r2
+	tloadr r2, [r0, #_thread_offset_to_r12]
+	tmov r12, r2
+	tjex lr
+
+/* void z_tc32_switch_to_main(char *stack_ptr, k_thread_entry_t entry) */
+SECTION_FUNC(TEXT, z_tc32_switch_to_main)
+	tmov r13, r0
+	tmov r0, r1
+	tmov r1, #0
+	tmov r2, #0
+	tmov r3, #0
+	tjl z_thread_entry
