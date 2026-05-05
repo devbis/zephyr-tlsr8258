@@ -115,6 +115,8 @@ SECTION_FUNC(TEXT, z_tc32_switch_to_thread)
 SECTION_FUNC(TEXT, z_tc32_switch_to_main)
 	tmov r13, r0
 	tmov r0, r1
+	tmov r4, #1
+	tbclr r0, r4
 	tmov r1, #0
 	tmov r2, #0
 	tmov r3, #0
