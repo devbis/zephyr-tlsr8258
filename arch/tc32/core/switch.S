@@ -66,6 +66,10 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	tloadr r4, [r5, #__struct_arch_esf_pc_OFFSET]
 	tadd r5, r5, #__struct_arch_esf_SIZEOF
 	tmov r13, r5
+	tjl .Lthread_entry_call
+.Lthread_returned:
+	tj .Lthread_returned
+.Lthread_entry_call:
 	tjex r4
 
 /* void z_tc32_switch_to_main_static(void) */
