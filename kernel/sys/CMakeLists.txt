@@ -5,6 +5,4 @@ if(NOT CONFIG_USERSPACE)
   zephyr_sources(sem.c)
 endif()
 
-zephyr_sources(
-  thread_entry.c
-)
+zephyr_sources_ifndef(CONFIG_TC32 thread_entry.c)
