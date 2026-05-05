@@ -416,7 +416,17 @@ static struct stack_geometry compute_stack_geometry(k_thread_stack_t *stack,
 #endif /* CONFIG_USERSPACE */
 	{
 		/* Object cannot host a user mode thread */
+#ifdef CONFIG_TC32
+		/*
+		 * TC32 stack declarations already apply K_KERNEL_STACK_LEN().
+		 * Keeping the runtime value plain avoids a current TC32 codegen
+		 * issue in ROUND_UP(size, 8) where the entry argument register is
+		 * used in place of the alignment constant.
+		 */
+		geo.obj_size = stack_size;
+#else
 		geo.obj_size = K_KERNEL_STACK_LEN(stack_size);
+#endif
 		geo.buf_start = K_KERNEL_STACK_BUFFER(stack);
 		geo.buf_size = geo.obj_size - K_KERNEL_STACK_RESERVED;
 
