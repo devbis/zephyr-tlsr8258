@@ -400,7 +400,17 @@ static char *setup_thread_stack(struct k_thread *new_thread,
 #endif /* CONFIG_USERSPACE */
 	{
 		/* Object cannot host a user mode thread */
+#ifdef CONFIG_TC32
+		/*
+		 * TC32 stack declarations already apply K_KERNEL_STACK_LEN().
+		 * Keeping the runtime value plain avoids a current TC32 codegen
+		 * issue in ROUND_UP(size, 8) where the entry argument register is
+		 * used in place of the alignment constant.
+		 */
+		stack_obj_size = stack_size;
+#else
 		stack_obj_size = K_KERNEL_STACK_LEN(stack_size);
+#endif
 		stack_buf_start = K_KERNEL_STACK_BUFFER(stack);
 		stack_buf_size = stack_obj_size - K_KERNEL_STACK_RESERVED;
 
