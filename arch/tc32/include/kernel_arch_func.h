@@ -25,8 +25,16 @@ static ALWAYS_INLINE void arch_switch(void *switch_to, void **switched_from)
 	struct k_thread *new_thread = switch_to;
 	struct k_thread *old_thread = CONTAINER_OF(switched_from, struct k_thread,
 						   switch_handle);
+	register struct k_thread *r0 __asm__("r0") = new_thread;
+	register struct k_thread *r1 __asm__("r1") = old_thread;
 
-	z_tc32_switch(new_thread, old_thread);
+	__asm__ volatile (
+		"tjl z_tc32_switch\n\t"
+		"nop\n\t"
+		"nop"
+		: "+r" (r0), "+r" (r1)
+		:
+		: "r2", "r3", "memory");
 }
 
 FUNC_NORETURN void z_tc32_fatal_error(unsigned int reason, const struct arch_esf *esf);
