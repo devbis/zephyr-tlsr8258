@@ -10,6 +10,8 @@
 
 void z_prep_c(void)
 {
+	void (*volatile cstart)(void) = z_cstart;
+
 	if (IS_ENABLED(CONFIG_ARCH_CACHE)) {
 		arch_cache_init();
 	}
@@ -17,6 +19,8 @@ void z_prep_c(void)
 	soc_prep_hook();
 	arch_bss_zero();
 	arch_data_copy();
-	z_cstart();
-	CODE_UNREACHABLE;
+	cstart();
+	for (;;) {
+		__asm__ volatile("tmov r8, r8");
+	}
 }
