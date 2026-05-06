@@ -37,6 +37,56 @@
 			interrupt-parent = <&intc>;
 		};
 
+		gpioa: gpio@800580 {
+			compatible = "telink,tlsr8258-gpio";
+			reg = <0x00800580 0x00000008>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <18>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
+		gpiob: gpio@800588 {
+			compatible = "telink,tlsr8258-gpio";
+			reg = <0x00800588 0x00000008>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <18>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
+		gpioc: gpio@800590 {
+			compatible = "telink,tlsr8258-gpio";
+			reg = <0x00800590 0x00000008>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <18>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
+		gpiod: gpio@800598 {
+			compatible = "telink,tlsr8258-gpio";
+			reg = <0x00800598 0x00000008>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <18>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
+		gpioe: gpio@8005a0 {
+			compatible = "telink,tlsr8258-gpio";
+			reg = <0x008005a0 0x00000008>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <18>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
 		sram0: memory@840000 {
 			compatible = "mmio-sram";
 			reg = <0x00840000 0x00010000>;
