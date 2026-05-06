@@ -117,7 +117,7 @@
  */
 #if defined(CONFIG_ARCH_POSIX)
 #define GROUP_ROM_LINK_IN(vregion, lregion)
-#elif defined(K_MEM_IS_VM_KERNEL)
+#elif defined(K_MEM_IS_VM_KERNEL) || defined(CONFIG_TC32)
 #define GROUP_ROM_LINK_IN(vregion, lregion) > vregion AT > lregion
 #else
 #define GROUP_ROM_LINK_IN(vregion, lregion) > lregion
