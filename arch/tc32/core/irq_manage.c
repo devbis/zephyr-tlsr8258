@@ -39,6 +39,17 @@ static ALWAYS_INLINE bool irq_is_valid(unsigned int irq)
 	return (BIT(irq) & TLSR8258_IRQ_VALID_MASK) != 0u;
 }
 
+static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
+{
+	unsigned int irq = 0u;
+
+	while ((pending & BIT(irq)) == 0u) {
+		irq++;
+	}
+
+	return irq;
+}
+
 void z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
@@ -46,7 +57,7 @@ void z_tc32_handle_irqs(void)
 	_kernel.cpus[0].nested++;
 
 	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
-		unsigned int irq = find_lsb_set(pending) - 1u;
+		unsigned int irq = pending_lsb_index(pending);
 
 		if (!irq_is_valid(irq)) {
 			break;
