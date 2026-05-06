@@ -17,6 +17,35 @@ GTEXT(z_tc32_handle_irqs)
 GTEXT(z_get_next_switch_handle)
 GTEXT(z_tc32_switch)
 
+.macro TC32_ANALOG_WRITE addr, value
+	tmov r0, #\addr
+	tstorerb r0, [r1]
+	nop
+	nop
+	tmov r0, #\value
+	tstorerb r0, [r1, #1]
+	nop
+	nop
+	tmov r0, #0x60
+	tstorerb r0, [r1, #2]
+	nop
+	nop
+1:
+	tloadrb r0, [r1, #2]
+	nop
+	nop
+	tmov r2, #1
+	tand r0, r2
+	tcmp r0, #0
+	nop
+	nop
+	tjne 1b
+	tmov r0, #0
+	tstorerb r0, [r1, #2]
+	nop
+	nop
+.endm
+
 SECTION_FUNC(vectors, __start)
 	.org 0x0
 	tj __reset
@@ -63,6 +92,27 @@ z_prep_c:
 	 * debugging has shown unstable behavior around early backward tjl/call
 	 * returns before C runtime setup.
 	 *
+	 * Match the direct register part of vendor cpu_wakeup_init(): release
+	 * peripheral resets and enable clock gates before PRE_KERNEL devices.
+	 */
+	tloadr r1, .Lrst_clk
+	tloadr r0, .Lrst_clk_0
+	nop
+	nop
+	tstorer r0, [r1]
+	tloadr r0, .Lrst_clk_1
+	nop
+	nop
+	tstorer r0, [r1, #4]
+
+	tloadr r1, .Lanalog_base
+	TC32_ANALOG_WRITE 0x82, 0x64
+	TC32_ANALOG_WRITE 0x34, 0x80
+	TC32_ANALOG_WRITE 0x0b, 0x38
+	TC32_ANALOG_WRITE 0x8c, 0x02
+	TC32_ANALOG_WRITE 0x02, 0xa2
+
+	/*
 	 * Match soc_prep_hook(): clear watchdog enable in reg_tmr_ctrl
 	 * (0x800620 bit 23) before BSS/data setup.
 	 */
@@ -143,6 +193,14 @@ z_prep_c:
 	.word __data_region_start
 .Ldata_end:
 	.word __data_region_end
+.Lrst_clk:
+	.word 0x00800060
+.Lrst_clk_0:
+	.word 0xff000000
+.Lrst_clk_1:
+	.word 0x0006ffff
+.Lanalog_base:
+	.word 0x008000b8
 
 SECTION_FUNC(ram_code, __irq)
 z_tc32_irq_entry:
