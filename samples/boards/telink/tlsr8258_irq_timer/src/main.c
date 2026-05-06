@@ -23,6 +23,15 @@ void tlsr8258_stimer_debug_tick(void)
 	tlsr_irq_count++;
 }
 
+static FUNC_NORETURN void park_with_marker(uint32_t marker)
+{
+	tlsr_irq_marker = marker;
+
+	for (;;) {
+		compiler_barrier();
+	}
+}
+
 int main(void)
 {
 	uint32_t before;
@@ -33,8 +42,7 @@ int main(void)
 
 	k_sleep(K_MSEC(100));
 	if (tlsr_irq_count == before) {
-		tlsr_irq_marker = 0x8258e001u;
-		return 1;
+		park_with_marker(0x8258e001u);
 	}
 
 	irq_disable(TLSR8258_IRQ_SYSTEM_TIMER);
@@ -42,18 +50,15 @@ int main(void)
 	after_disable = tlsr_irq_count;
 	wait_ms_by_cycles(50u);
 	if (tlsr_irq_count != after_disable) {
-		tlsr_irq_marker = 0x8258e002u;
-		return 2;
+		park_with_marker(0x8258e002u);
 	}
 
 	irq_enable(TLSR8258_IRQ_SYSTEM_TIMER);
 	before = tlsr_irq_count;
 	k_sleep(K_MSEC(100));
 	if (tlsr_irq_count == before) {
-		tlsr_irq_marker = 0x8258e003u;
-		return 3;
+		park_with_marker(0x8258e003u);
 	}
 
-	tlsr_irq_marker = 0x82580000u;
-	return 0;
+	park_with_marker(0x82580000u);
 }
