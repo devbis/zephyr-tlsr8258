@@ -21,6 +21,7 @@
 
 #define RAM_BASE CONFIG_SRAM_BASE_ADDRESS
 #define RAM_SIZE (CONFIG_SRAM_SIZE * 1K)
+#define TC32_BOOT_MIRROR_SIZE 0x4000
 
 #define MPU_MIN_SIZE_ALIGN
 #define MPU_ALIGN(region_size) . = ALIGN(4)
@@ -28,7 +29,8 @@
 MEMORY
 {
 	FLASH (rx)  : ORIGIN = ROM_BASE, LENGTH = ROM_SIZE
-	RAM   (rwx) : ORIGIN = RAM_BASE, LENGTH = RAM_SIZE
+	BOOT_MIRROR (rwx) : ORIGIN = RAM_BASE, LENGTH = TC32_BOOT_MIRROR_SIZE
+	RAM   (rwx) : ORIGIN = RAM_BASE + TC32_BOOT_MIRROR_SIZE, LENGTH = RAM_SIZE - TC32_BOOT_MIRROR_SIZE
 	RAM_CODE (rwx) : ORIGIN = 0x00880000, LENGTH = 64K
 	LINKER_DT_REGIONS()
 	IDT_LIST (wx) : ORIGIN = 0xFFFFF7FF, LENGTH = 2K
@@ -36,8 +38,8 @@ MEMORY
 
 ENTRY(CONFIG_KERNEL_ENTRY)
 
-PROVIDE(__memory_base = RAM_BASE);
-PROVIDE(__memory_size = RAM_SIZE);
+PROVIDE(__memory_base = ORIGIN(RAM));
+PROVIDE(__memory_size = LENGTH(RAM));
 
 SECTIONS
 {
@@ -85,7 +87,7 @@ SECTIONS
 
 	__text_region_end = .;
 	_tc32_rom_data_lma_start = .;
-	. = RAM_BASE + 0x900 + _ramcode_size_align_256_;
+	. = ORIGIN(RAM);
 	__rodata_region_start = .;
 
 #include <zephyr/linker/common-rom.ld>
@@ -113,7 +115,7 @@ SECTIONS
 	__rodata_region_load_start = _tc32_rom_data_lma_start;
 	_tc32_rom_data_lma_end = LOADADDR(_RODATA_SECTION_NAME) + SIZEOF(_RODATA_SECTION_NAME);
 
-	_image_ram_start = RAM_BASE;
+	_image_ram_start = ORIGIN(RAM);
 
 #include <snippets-ram-sections.ld>
 
@@ -179,4 +181,5 @@ SECTIONS
 	PROVIDE(_tc32_boot_copy_size_ = _tc32_data_lma_end);
 	PROVIDE(_tc32_boot_copy_size_align_256_ = ((_tc32_boot_copy_size_ + 255) / 256) * 256);
 	PROVIDE(_tc32_boot_copy_size_div_16_align_256_ = _tc32_boot_copy_size_align_256_ / 16);
+	ASSERT(_tc32_boot_copy_size_align_256_ <= TC32_BOOT_MIRROR_SIZE, "TC32 boot mirror reserve is too small")
 }
