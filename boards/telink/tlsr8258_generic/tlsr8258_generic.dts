@@ -5,13 +5,30 @@
 /dts-v1/;
 
 #include <telink/tlsr8258.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Telink TLSR8258 Generic";
 	compatible = "telink,tlsr8258-generic";
 
+	aliases {
+		led0 = &led0;
+	};
+
 	chosen {
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&gpioa {
+	status = "okay";
 };
