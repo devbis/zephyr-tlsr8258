@@ -11,13 +11,11 @@
 volatile uint32_t tlsr_irq_count;
 volatile uint32_t tlsr_irq_marker;
 
+extern void tc32_delay_cycles(uint32_t cycles);
+
 static void wait_ms_by_cycles(uint32_t delay_ms)
 {
-	uint32_t start = k_cycle_get_32();
-	uint32_t wait_cycles = k_ms_to_cyc_ceil32(delay_ms);
-
-	while ((k_cycle_get_32() - start) < wait_cycles) {
-	}
+	tc32_delay_cycles(k_ms_to_cyc_ceil32(delay_ms));
 }
 
 void tlsr8258_stimer_debug_tick(void)

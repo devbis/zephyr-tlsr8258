@@ -29,6 +29,7 @@ MEMORY
 {
 	FLASH (rx)  : ORIGIN = ROM_BASE, LENGTH = ROM_SIZE
 	RAM   (rwx) : ORIGIN = RAM_BASE, LENGTH = RAM_SIZE
+	RAM_CODE (rwx) : ORIGIN = 0x00880000, LENGTH = 64K
 	LINKER_DT_REGIONS()
 	IDT_LIST (wx) : ORIGIN = 0xFFFFF7FF, LENGTH = 2K
 }
@@ -51,6 +52,15 @@ SECTIONS
 		KEEP(*(".vectors.*"))
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
+	. = ALIGN(4);
+	_tc32_flash_copy_lma_start = .;
+	.tc32_flash_copy ORIGIN(RAM_CODE) + _tc32_flash_copy_lma_start :
+	{
+		*(.tc32_flash_copy)
+		*(".tc32_flash_copy.*")
+	} GROUP_DATA_LINK_IN(RAM_CODE, ROMABLE_REGION)
+	. = _tc32_flash_copy_lma_start + SIZEOF(.tc32_flash_copy);
+
 	SECTION_PROLOGUE(.ram_code,,)
 	{
 		. = ALIGN(4);
@@ -64,6 +74,7 @@ SECTIONS
 	PROVIDE(_rstored_ = .);
 	PROVIDE(_ramcode_size_ = .);
 	PROVIDE(_ramcode_size_align_256_ = ((. + 255) / 256) * 256);
+	PROVIDE(_ramcode_size_div_16_align_256_ = _ramcode_size_align_256_ / 16);
 
 	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
 	{
@@ -73,6 +84,8 @@ SECTIONS
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	__text_region_end = .;
+	_tc32_rom_data_lma_start = .;
+	. = RAM_BASE + 0x900 + _ramcode_size_align_256_;
 	__rodata_region_start = .;
 
 #include <zephyr/linker/common-rom.ld>
@@ -91,16 +104,20 @@ SECTIONS
 #include <snippets-rodata.ld>
 #include <zephyr/linker/kobject-rom.ld>
 		. = ALIGN(4);
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 #include <zephyr/linker/cplusplus-rom.ld>
 
+	__rodata_region_start = ADDR(initlevel);
 	__rodata_region_end = .;
+	__rodata_region_load_start = _tc32_rom_data_lma_start;
+	_tc32_rom_data_lma_end = LOADADDR(_RODATA_SECTION_NAME) + SIZEOF(_RODATA_SECTION_NAME);
+
 	_image_ram_start = RAM_BASE;
 
 #include <snippets-ram-sections.ld>
 
-	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME, RAM_BASE + 0x900 + _ramcode_size_align_256_,)
+	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
 	{
 		. = ALIGN(4);
 		__data_region_start = .;
@@ -119,6 +136,7 @@ SECTIONS
 	__data_size = __data_end - __data_start;
 	__data_load_start = LOADADDR(_DATA_SECTION_NAME);
 	__data_region_load_start = LOADADDR(_DATA_SECTION_NAME);
+	_tc32_data_lma_end = LOADADDR(_DATA_SECTION_NAME) + SIZEOF(_DATA_SECTION_NAME);
 
 #include <zephyr/linker/common-ram.ld>
 #include <zephyr/linker/kobject-data.ld>
@@ -158,4 +176,7 @@ SECTIONS
 
 	PROVIDE(_stack_end_ = RAM_BASE + RAM_SIZE);
 	PROVIDE(_ram_end_ = .);
+	PROVIDE(_tc32_boot_copy_size_ = _tc32_data_lma_end);
+	PROVIDE(_tc32_boot_copy_size_align_256_ = ((_tc32_boot_copy_size_ + 255) / 256) * 256);
+	PROVIDE(_tc32_boot_copy_size_div_16_align_256_ = _tc32_boot_copy_size_align_256_ / 16);
 }

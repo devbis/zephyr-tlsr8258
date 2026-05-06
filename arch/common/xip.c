@@ -11,6 +11,11 @@
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/arch/common/init.h>
 
+#ifdef CONFIG_TC32
+extern char __rodata_region_load_start[];
+void tc32_flash_read(uintptr_t addr, uint8_t *dst, size_t len);
+#endif
+
 #ifdef CONFIG_REQUIRES_STACK_CANARIES
 #ifdef CONFIG_STACK_CANARIES_TLS
 extern Z_THREAD_LOCAL volatile uintptr_t __stack_chk_guard;
@@ -26,8 +31,17 @@ extern volatile uintptr_t __stack_chk_guard;
  */
 void arch_data_copy(void)
 {
+#ifdef CONFIG_TC32
+	tc32_flash_read((uintptr_t)__rodata_region_load_start,
+			(uint8_t *)&__rodata_region_start,
+			__rodata_region_end - __rodata_region_start);
+	tc32_flash_read((uintptr_t)&__data_region_load_start,
+			(uint8_t *)&__data_region_start,
+			__data_region_end - __data_region_start);
+#else
 	arch_early_memcpy(&__data_region_start, &__data_region_load_start,
 		       __data_region_end - __data_region_start);
+#endif
 #ifdef CONFIG_ARCH_HAS_RAMFUNC_SUPPORT
 	arch_early_memcpy(&__ramfunc_region_start, &__ramfunc_load_start,
 		       __ramfunc_end - __ramfunc_region_start);
