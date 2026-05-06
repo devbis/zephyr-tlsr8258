@@ -4,6 +4,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/kernel_structs.h>
+#include <ksched.h>
 
 void z_thread_entry(k_thread_entry_t thread, void *arg1, void *arg2, void *arg3);
 void z_tc32_switch_to_main(char *stack_ptr, k_thread_entry_t entry);
@@ -46,6 +47,7 @@ void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
 	ARG_UNUSED(entry);
 
 	_kernel.cpus[0].current = main_thread;
+	z_sched_unready_locked(main_thread);
 	z_tc32_switch_to_thread(main_thread);
 	CODE_UNREACHABLE;
 }
