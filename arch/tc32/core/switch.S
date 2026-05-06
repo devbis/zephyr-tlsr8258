@@ -39,22 +39,36 @@ SECTION_FUNC(TEXT, z_tc32_switch)
 	tstorer r1, [r1, #___thread_t_switch_handle_OFFSET]
 
 	tloadr r2, [r0, #_thread_offset_to_sp]
+	nop
+	nop
 	tmov r13, r2
 	tloadr r2, [r0, #_thread_offset_to_lr]
+	nop
+	nop
 	tmov r14, r2
 	tloadr r4, [r0, #_thread_offset_to_r4]
 	tloadr r5, [r0, #_thread_offset_to_r5]
 	tloadr r6, [r0, #_thread_offset_to_r6]
 	tloadr r7, [r0, #_thread_offset_to_r7]
 	tloadr r2, [r0, #_thread_offset_to_r8]
+	nop
+	nop
 	tmov r8, r2
 	tloadr r2, [r0, #_thread_offset_to_r9]
+	nop
+	nop
 	tmov r9, r2
 	tloadr r2, [r0, #_thread_offset_to_r10]
+	nop
+	nop
 	tmov r10, r2
 	tloadr r2, [r0, #_thread_offset_to_r11]
+	nop
+	nop
 	tmov r11, r2
 	tloadr r2, [r0, #_thread_offset_to_r12]
+	nop
+	nop
 	tmov r12, r2
 	tjex lr
 
@@ -71,6 +85,8 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	nop
 .Lthread_finished:
 	tloadr r0, .Lthread_kernel
+	nop
+	nop
 	tloadr r0, [r0, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
 	tjl z_thread_abort
 	nop
@@ -95,6 +111,8 @@ SECTION_FUNC(TEXT, z_thread_entry)
 	nop
 .Lz_thread_entry_finished:
 	tloadr r0, .Lz_thread_entry_kernel
+	nop
+	nop
 	tloadr r0, [r0, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
 	tjl z_thread_abort
 	nop
@@ -113,8 +131,12 @@ SECTION_FUNC(TEXT, z_thread_entry)
 SECTION_FUNC(TEXT, z_tc32_switch_to_main_static)
 	tloadr r0, .Lmain_thread
 	tloadr r1, .Lkernel
+	nop
+	nop
 	tstorer r0, [r1, #(___kernel_t_cpus_OFFSET + ___cpu_t_current_OFFSET)]
 	tloadr r2, [r0, #_thread_offset_to_sp]
+	nop
+	nop
 	tmov r13, r2
 	tjl main
 .Lmain_returned:
@@ -129,22 +151,36 @@ SECTION_FUNC(TEXT, z_tc32_switch_to_main_static)
 /* void z_tc32_switch_to_thread(struct k_thread *thread) */
 SECTION_FUNC(TEXT, z_tc32_switch_to_thread)
 	tloadr r2, [r0, #_thread_offset_to_sp]
+	nop
+	nop
 	tmov r13, r2
 	tloadr r2, [r0, #_thread_offset_to_lr]
+	nop
+	nop
 	tmov r14, r2
 	tloadr r4, [r0, #_thread_offset_to_r4]
 	tloadr r5, [r0, #_thread_offset_to_r5]
 	tloadr r6, [r0, #_thread_offset_to_r6]
 	tloadr r7, [r0, #_thread_offset_to_r7]
 	tloadr r2, [r0, #_thread_offset_to_r8]
+	nop
+	nop
 	tmov r8, r2
 	tloadr r2, [r0, #_thread_offset_to_r9]
+	nop
+	nop
 	tmov r9, r2
 	tloadr r2, [r0, #_thread_offset_to_r10]
+	nop
+	nop
 	tmov r10, r2
 	tloadr r2, [r0, #_thread_offset_to_r11]
+	nop
+	nop
 	tmov r11, r2
 	tloadr r2, [r0, #_thread_offset_to_r12]
+	nop
+	nop
 	tmov r12, r2
 	tjex lr
 
