@@ -16,6 +16,7 @@ GTEXT(tc32_flash_read)
 GTEXT(z_tc32_handle_irqs)
 GTEXT(z_get_next_switch_handle)
 GTEXT(z_tc32_switch)
+GDATA(z_interrupt_stacks)
 
 .macro TC32_ANALOG_WRITE addr, value
 	tmov r0, #\addr
@@ -66,20 +67,34 @@ SECTION_FUNC(vectors, __start)
 
 	.org 0x20
 __reset:
+	tloadr r0, .Lirq_mode
+	tmcsr r0
+	tloadr r0, .Lirq_stack_end
+	tmov sp, r0
+
+	tloadr r0, .Lsvc_mode
+	tmcsr r0
+	tloadr r0, .Lstack_end
+	tmov sp, r0
+
 	tloadr r0, .Lirq_en
 	tmov r1, #0
 	tstorerb r1, [r0]
 	tloadr r0, .Lirq_mask
 	tstorer r1, [r0]
-	tloadr r0, .Lstack_end
-	tmov sp, r0
 	tjl z_prep_c
 .Lhang:
 	tj .Lhang
 
 	.align 2
+.Lirq_mode:
+	.word 0x12
+.Lsvc_mode:
+	.word 0x13
 .Lstack_end:
 	.word _stack_end_
+.Lirq_stack_end:
+	.word z_interrupt_stacks + __z_interrupt_stack_SIZEOF
 .Lirq_en:
 	.word 0x00800643
 .Lirq_mask:
