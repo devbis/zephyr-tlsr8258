@@ -11,8 +11,8 @@ GTEXT(__reset)
 GTEXT(__irq)
 GTEXT(z_tc32_irq_entry)
 GTEXT(z_prep_c)
-GTEXT(arch_data_copy)
 GTEXT(z_cstart)
+GTEXT(tc32_flash_read)
 GTEXT(z_tc32_handle_irqs)
 GTEXT(z_get_next_switch_handle)
 GTEXT(z_tc32_switch)
@@ -24,10 +24,16 @@ SECTION_FUNC(vectors, __start)
 
 	.org 0x8
 	.word 0x544c4e4b
-	.word 0x00880000 + _ramcode_size_div_16_align_256_
+	.word 0x00880000 + _tc32_boot_copy_size_div_16_align_256_
 
 	.org 0x10
 	tj __irq
+
+	.org 0x18
+.Lirq_low_call_target:
+	.word z_tc32_handle_irqs - 1
+.Lirq_low_ret_target:
+	.word .Lirq_restore
 
 	.org 0x20
 __reset:
@@ -91,23 +97,52 @@ z_prep_c:
 	tsub r2, #1
 	tj .Lbss_loop
 .Lbss_done:
+	tloadr r0, .Lrodata_lma_start
+	tloadr r1, .Lrodata_start
+	tloadr r2, .Lrodata_end
+	nop
+	nop
+	tsub r2, r2, r1
+	tjl .Lcall_flash_read
 
-	tjl arch_data_copy
+	tloadr r0, .Ldata_lma_start
+	tloadr r1, .Ldata_start
+	tloadr r2, .Ldata_end
 	nop
 	nop
-	nop
-	nop
+	tsub r2, r2, r1
+	tjl .Lcall_flash_read
 
 	tjl z_cstart
 
 .Lprep_hang:
 	tj .Lprep_hang
 
+.Lcall_flash_read:
+	tloadr r4, .Lflash_read
+	nop
+	nop
+	tjex r4
+
 	.align 2
+.Lflash_read:
+	.word tc32_flash_read - 1
 .Lbss_start:
 	.word __bss_start
 .Lbss_end:
 	.word __bss_end
+.Lrodata_lma_start:
+	.word __rodata_region_load_start
+.Lrodata_start:
+	.word __rodata_region_start
+.Lrodata_end:
+	.word __rodata_region_end
+.Ldata_lma_start:
+	.word __data_region_load_start
+.Ldata_start:
+	.word __data_region_start
+.Ldata_end:
+	.word __data_region_end
 
 SECTION_FUNC(ram_code, __irq)
 z_tc32_irq_entry:
@@ -122,7 +157,24 @@ z_tc32_irq_entry:
 	tmov r5, r12
 	tpush {r0-r5}
 
-	tjl z_tc32_handle_irqs
+	/*
+	 * IRQ vectors may execute from the TLSR boot mirror alias at 0x880000.
+	 * A relative call from there would enter z_tc32_handle_irqs through the
+	 * same alias, where PC-relative literal loads are not valid data reads.
+	 * Registers are already saved, so branch by absolute low code address.
+	 */
+	tmov r1, #0x84
+	tshftl r1, r1, #16
+	tmov r0, #0x18
+	tadd r1, r1, r0
+	tloadr r0, [r1, #0x4]
+	nop
+	nop
+	tmov r14, r0
+	tloadr r0, [r1]
+	nop
+	nop
+	tjex r0
 
 #ifdef CONFIG_MULTITHREADING
 .Lno_irq_reschedule:
