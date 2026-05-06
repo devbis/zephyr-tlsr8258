@@ -54,14 +54,24 @@ static void u64_sub(union u64_words *lhs, union u64_words rhs)
 	lhs->word.hi = lhs->word.hi - rhs.word.hi - borrow;
 }
 
+static int __attribute__((noinline)) u32_nonzero(uint32_t value)
+{
+	return value != 0U;
+}
+
+static int __attribute__((noinline)) u32_bit0_set(uint32_t value)
+{
+	return (value & 1U) != 0U;
+}
+
 uint64_t __muldi3(uint64_t a, uint64_t b)
 {
 	union u64_words multiplicand = { .value = a };
 	union u64_words multiplier = { .value = b };
 	union u64_words result = { .value = 0 };
 
-	while ((multiplier.word.lo != 0U) || (multiplier.word.hi != 0U)) {
-		if ((multiplier.word.lo & 1U) != 0U) {
+	while (u32_nonzero(multiplier.word.lo) || u32_nonzero(multiplier.word.hi)) {
+		if (u32_bit0_set(multiplier.word.lo)) {
 			uint32_t carry = UINT32_MAX - result.word.lo < multiplicand.word.lo;
 
 			result.word.lo += multiplicand.word.lo;
