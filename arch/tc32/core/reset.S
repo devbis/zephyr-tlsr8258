@@ -158,8 +158,9 @@ z_prep_c:
 	nop
 	tjeq .Lbss_done
 	tstorerb r1, [r0]
-	tadd r0, #1
-	tsub r2, #1
+	tmov r3, #1
+	tadd r0, r0, r3
+	tsub r2, r2, r3
 	tj .Lbss_loop
 .Lbss_done:
 	tloadr r0, .Lrodata_lma_start
