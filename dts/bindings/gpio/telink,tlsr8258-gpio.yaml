@@ -13,6 +13,12 @@ properties:
   "#gpio-cells":
     const: 2
 
+  interrupts:
+    required: true
+
+  interrupt-parent:
+    required: true
+
 gpio-cells:
   - pin
   - flags
