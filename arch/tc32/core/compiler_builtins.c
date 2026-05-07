@@ -3,6 +3,7 @@
  */
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <zephyr/sys/util.h>
 
 union u64_words {
@@ -54,6 +55,41 @@ static void u64_sub(union u64_words *lhs, union u64_words rhs)
 	lhs->word.hi = lhs->word.hi - rhs.word.hi - borrow;
 }
 
+static void u64_negate(union u64_words *value)
+{
+	value->word.lo = ~value->word.lo + 1U;
+	value->word.hi = ~value->word.hi + (value->word.lo == 0U ? 1U : 0U);
+}
+
+static union u64_words u64_divmod_u64(union u64_words numerator, union u64_words denominator,
+				      union u64_words *remainder_out)
+{
+	union u64_words quotient = { .value = 0 };
+	union u64_words remainder = { .value = 0 };
+
+	if ((denominator.word.lo == 0U) && (denominator.word.hi == 0U)) {
+		quotient.word.lo = UINT32_MAX;
+		quotient.word.hi = UINT32_MAX;
+		remainder = numerator;
+	} else {
+		for (int bit = 63; bit >= 0; bit--) {
+			u64_shl1(&remainder);
+			remainder.word.lo |= u64_get_bit(numerator, bit);
+
+			if (u64_ge(remainder, denominator)) {
+				u64_sub(&remainder, denominator);
+				u64_set_bit(&quotient, bit);
+			}
+		}
+	}
+
+	if (remainder_out != NULL) {
+		*remainder_out = remainder;
+	}
+
+	return quotient;
+}
+
 static int __attribute__((noinline)) u32_nonzero(uint32_t value)
 {
 	return value != 0U;
@@ -90,24 +126,116 @@ uint64_t __udivdi3(uint64_t dividend, uint64_t divisor)
 {
 	union u64_words numerator = { .value = dividend };
 	union u64_words denominator = { .value = divisor };
-	union u64_words quotient = { .value = 0 };
-	union u64_words remainder = { .value = 0 };
 
-	if ((denominator.word.lo == 0U) && (denominator.word.hi == 0U)) {
-		return UINT64_MAX;
+	return u64_divmod_u64(numerator, denominator, NULL).value;
+}
+
+uint64_t __umoddi3(uint64_t dividend, uint64_t divisor)
+{
+	union u64_words numerator = { .value = dividend };
+	union u64_words denominator = { .value = divisor };
+	union u64_words remainder;
+
+	(void)u64_divmod_u64(numerator, denominator, &remainder);
+
+	return remainder.value;
+}
+
+int64_t __divdi3(int64_t dividend, int64_t divisor)
+{
+	union u64_words numerator = { .value = (uint64_t)dividend };
+	union u64_words denominator = { .value = (uint64_t)divisor };
+	bool negative = false;
+
+	if ((numerator.word.hi & BIT(31)) != 0U) {
+		negative = !negative;
+		u64_negate(&numerator);
+	}
+	if ((denominator.word.hi & BIT(31)) != 0U) {
+		negative = !negative;
+		u64_negate(&denominator);
 	}
 
-	for (int bit = 63; bit >= 0; bit--) {
-		u64_shl1(&remainder);
-		remainder.word.lo |= u64_get_bit(numerator, bit);
+	union u64_words quotient = u64_divmod_u64(numerator, denominator, NULL);
 
-		if (u64_ge(remainder, denominator)) {
-			u64_sub(&remainder, denominator);
-			u64_set_bit(&quotient, bit);
-		}
+	if (negative) {
+		u64_negate(&quotient);
 	}
 
-	return quotient.value;
+	return (int64_t)quotient.value;
+}
+
+int64_t __moddi3(int64_t dividend, int64_t divisor)
+{
+	union u64_words numerator = { .value = (uint64_t)dividend };
+	union u64_words denominator = { .value = (uint64_t)divisor };
+	bool negative = false;
+	union u64_words remainder;
+
+	if ((numerator.word.hi & BIT(31)) != 0U) {
+		negative = true;
+		u64_negate(&numerator);
+	}
+	if ((denominator.word.hi & BIT(31)) != 0U) {
+		u64_negate(&denominator);
+	}
+
+	(void)u64_divmod_u64(numerator, denominator, &remainder);
+
+	if (negative) {
+		u64_negate(&remainder);
+	}
+
+	return (int64_t)remainder.value;
+}
+
+uint64_t __ashldi3(uint64_t value, int shift)
+{
+	union u64_words result = { .value = value };
+	unsigned int amount = (unsigned int)shift & 63U;
+
+	if (amount >= 32U) {
+		result.word.hi = result.word.lo << (amount - 32U);
+		result.word.lo = 0U;
+	} else if (amount != 0U) {
+		result.word.hi = (result.word.hi << amount) | (result.word.lo >> (32U - amount));
+		result.word.lo <<= amount;
+	}
+
+	return result.value;
+}
+
+uint64_t __lshrdi3(uint64_t value, int shift)
+{
+	union u64_words result = { .value = value };
+	unsigned int amount = (unsigned int)shift & 63U;
+
+	if (amount >= 32U) {
+		result.word.lo = result.word.hi >> (amount - 32U);
+		result.word.hi = 0U;
+	} else if (amount != 0U) {
+		result.word.lo = (result.word.lo >> amount) | (result.word.hi << (32U - amount));
+		result.word.hi >>= amount;
+	}
+
+	return result.value;
+}
+
+int64_t __ashrdi3(int64_t value, int shift)
+{
+	union u64_words result = { .value = (uint64_t)value };
+	unsigned int amount = (unsigned int)shift & 63U;
+	uint32_t sign = (result.word.hi & BIT(31)) != 0U ? UINT32_MAX : 0U;
+
+	if (amount >= 32U) {
+		result.word.lo = (int32_t)result.word.hi >> (amount - 32U);
+		result.word.hi = sign;
+	} else if (amount != 0U) {
+		result.word.lo = (result.word.lo >> amount) | (result.word.hi << (32U - amount));
+		result.word.hi = (uint32_t)((int32_t)result.word.hi >> amount);
+	}
+
+	return (int64_t)result.value;
 }
 
 uint32_t __udivsi3(uint32_t a, uint32_t b)

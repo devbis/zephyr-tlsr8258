@@ -36,7 +36,9 @@ SECTION_FUNC(TEXT, z_tc32_switch)
 	tmov r2, r12
 	tstorer r2, [r1, #_thread_offset_to_r12]
 
-	tstorer r1, [r1, #___thread_t_switch_handle_OFFSET]
+	tmov r2, #___thread_t_switch_handle_OFFSET
+	tadd r2, r2, r1
+	tstorer r1, [r2]
 
 	tloadr r2, [r0, #_thread_offset_to_sp]
 	nop
