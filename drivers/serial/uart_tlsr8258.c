@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
@@ -60,6 +61,9 @@ struct tlsr8258_uart_config {
 	uint32_t current_speed;
 	uint32_t tx_pin;
 	uint32_t rx_pin;
+#ifdef CONFIG_PINCTRL
+	const struct pinctrl_dev_config *pcfg;
+#endif
 };
 
 struct tlsr8258_uart_data {
@@ -268,6 +272,12 @@ static int tlsr8258_uart_init(const struct device *dev)
 	data->tx_index = 0u;
 	data->rx_index = 0u;
 
+#ifdef CONFIG_PINCTRL
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+	if (ret < 0) {
+		return ret;
+	}
+#else
 	ret = tlsr8258_uart_configure_pin(config->tx_pin);
 	if (ret < 0) {
 		return ret;
@@ -277,6 +287,7 @@ static int tlsr8258_uart_init(const struct device *dev)
 	if (ret < 0) {
 		return ret;
 	}
+#endif
 
 	tlsr8258_uart_hw_init(config->clock_frequency, config->current_speed);
 
@@ -321,12 +332,23 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 	.err_check = tlsr8258_uart_err_check,
 };
 
+#ifdef CONFIG_PINCTRL
+#define TLSR8258_UART_PINCTRL_DEFINE(n) PINCTRL_DT_INST_DEFINE(n);
+#define TLSR8258_UART_PINCTRL_CONFIG(n) \
+	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),
+#else
+#define TLSR8258_UART_PINCTRL_DEFINE(n)
+#define TLSR8258_UART_PINCTRL_CONFIG(n)
+#endif
+
 #define TLSR8258_UART_INIT(n)							\
+	TLSR8258_UART_PINCTRL_DEFINE(n)					\
 	static const struct tlsr8258_uart_config tlsr8258_uart_config_##n = {	\
 		.clock_frequency = DT_INST_PROP(n, clock_frequency),		\
 		.current_speed = DT_INST_PROP(n, current_speed),		\
 		.tx_pin = DT_INST_PROP(n, tx_pin),				\
 		.rx_pin = DT_INST_PROP_OR(n, rx_pin, 0),			\
+		TLSR8258_UART_PINCTRL_CONFIG(n)				\
 	};									\
 										\
 	static struct tlsr8258_uart_data tlsr8258_uart_data_##n;		\

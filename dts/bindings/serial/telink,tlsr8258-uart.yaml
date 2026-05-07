@@ -4,13 +4,16 @@ description: Telink TLSR8258 UART
 
 compatible: "telink,tlsr8258-uart"
 
-include: uart-controller.yaml
+include: [uart-controller.yaml, pinctrl-device.yaml]
 
 properties:
   reg:
     required: true
 
   interrupts:
+    required: true
+
+  clocks:
     required: true
 
   clock-frequency:
