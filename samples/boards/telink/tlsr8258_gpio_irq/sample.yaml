@@ -1,0 +1,14 @@
+sample:
+  name: TLSR8258 GPIO IRQ smoke
+tests:
+  sample.board.telink.tlsr8258_gpio_irq:
+    build_only: true
+    platform_allow:
+      - tlsr8258_generic
+    integration_platforms:
+      - tlsr8258_generic
+    tags:
+      - telink
+      - tlsr8258
+      - gpio
+      - irq
