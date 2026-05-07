@@ -35,9 +35,10 @@ SECTION_FUNC(tc32_flash_copy, tc32_flash_read)
 	nop
 	nop
 	tstorer r3, [r1]
-	tsub r2, #4
-	tadd r0, #4
-	tadd r1, #4
+	tmov r3, #4
+	tsub r2, r2, r3
+	tadd r0, r0, r3
+	tadd r1, r1, r3
 	tj .Lword_loop
 
 .Lread_loop:
@@ -49,9 +50,10 @@ SECTION_FUNC(tc32_flash_copy, tc32_flash_read)
 	nop
 	nop
 	tstorerb r3, [r1]
-	tsub r2, #1
-	tadd r0, #1
-	tadd r1, #1
+	tmov r3, #1
+	tsub r2, r2, r3
+	tadd r0, r0, r3
+	tadd r1, r1, r3
 	tj .Lread_loop
 
 .Ldone:
