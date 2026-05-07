@@ -17,8 +17,9 @@ SECTION_FUNC(TEXT, arch_early_memset)
 	nop
 	tjeq .Lmemset_done
 	tstorerb r1, [r0]
-	tadd r0, #1
-	tsub r2, #1
+	tmov r3, #1
+	tadd r0, r0, r3
+	tsub r2, r2, r3
 	tj .Lmemset_loop
 .Lmemset_done:
 	tjex lr
@@ -34,9 +35,10 @@ SECTION_FUNC(TEXT, arch_early_memcpy)
 	nop
 	nop
 	tstorerb r3, [r0]
-	tadd r0, #1
-	tadd r1, #1
-	tsub r2, #1
+	tmov r3, #1
+	tadd r0, r0, r3
+	tadd r1, r1, r3
+	tsub r2, r2, r3
 	tj .Lmemcpy_loop
 .Lmemcpy_done:
 	tjex lr
@@ -48,7 +50,8 @@ SECTION_FUNC(TEXT, tc32_delay_cycles)
 	nop
 	nop
 	tjeq .Ldelay_done
-	tsub r0, #1
+	tmov r1, #1
+	tsub r0, r0, r1
 	tj .Ldelay_loop
 .Ldelay_done:
 	tjex lr
