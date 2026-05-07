@@ -1,0 +1,288 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#define DT_DRV_COMPAT telink_tlsr8258_flash
+
+#include <errno.h>
+#include <string.h>
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
+
+#define TLSR8258_FLASH_PAGE_SIZE   256u
+#define TLSR8258_FLASH_SECTOR_SIZE 4096u
+
+#define TLSR8258_FLASH_CMD_WRITE_ENABLE 0x06u
+#define TLSR8258_FLASH_CMD_READ_STATUS  0x05u
+#define TLSR8258_FLASH_CMD_PAGE_PROGRAM 0x02u
+#define TLSR8258_FLASH_CMD_SECTOR_ERASE 0x20u
+
+#define TLSR8258_REG8(addr) (*(volatile uint8_t *)(addr))
+
+#define TLSR8258_REG_MSPI_DATA TLSR8258_REG8(0x0080000cu)
+#define TLSR8258_REG_MSPI_CTRL TLSR8258_REG8(0x0080000du)
+
+#define TLSR8258_FLD_MSPI_CS   BIT(0)
+#define TLSR8258_FLD_MSPI_RD   BIT(3)
+#define TLSR8258_FLD_MSPI_BUSY BIT(4)
+
+struct tlsr8258_flash_config {
+	uintptr_t base;
+	size_t size;
+};
+
+struct tlsr8258_flash_data {
+	struct k_sem lock;
+	struct flash_pages_layout layout;
+};
+
+static const struct flash_parameters tlsr8258_flash_parameters = {
+	.write_block_size = 1,
+	.erase_value = 0xff,
+};
+
+static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
+{
+	while ((TLSR8258_REG_MSPI_CTRL & TLSR8258_FLD_MSPI_BUSY) != 0u) {
+	}
+}
+
+static ALWAYS_INLINE void tlsr8258_mspi_high(void)
+{
+	TLSR8258_REG_MSPI_CTRL = TLSR8258_FLD_MSPI_CS;
+}
+
+static ALWAYS_INLINE void tlsr8258_mspi_low(void)
+{
+	TLSR8258_REG_MSPI_CTRL = 0u;
+}
+
+static ALWAYS_INLINE void tlsr8258_mspi_write(uint8_t value)
+{
+	TLSR8258_REG_MSPI_DATA = value;
+}
+
+static ALWAYS_INLINE uint8_t tlsr8258_mspi_get(void)
+{
+	return TLSR8258_REG_MSPI_DATA;
+}
+
+static ALWAYS_INLINE uint8_t tlsr8258_mspi_read(void)
+{
+	tlsr8258_mspi_write(0u);
+	tlsr8258_mspi_wait();
+	return tlsr8258_mspi_get();
+}
+
+static ALWAYS_INLINE void tlsr8258_flash_ram_delay(void)
+{
+	for (volatile uint32_t i = 0; i < 32u; i++) {
+	}
+}
+
+static __ramfunc void tlsr8258_flash_send_cmd(uint8_t cmd)
+{
+	tlsr8258_mspi_high();
+	tlsr8258_flash_ram_delay();
+	tlsr8258_mspi_low();
+	tlsr8258_mspi_write(cmd);
+	tlsr8258_mspi_wait();
+}
+
+static __ramfunc void tlsr8258_flash_send_addr(uint32_t addr)
+{
+	tlsr8258_mspi_write((uint8_t)(addr >> 16));
+	tlsr8258_mspi_wait();
+	tlsr8258_mspi_write((uint8_t)(addr >> 8));
+	tlsr8258_mspi_wait();
+	tlsr8258_mspi_write((uint8_t)addr);
+	tlsr8258_mspi_wait();
+}
+
+static __ramfunc int tlsr8258_flash_wait_done(void)
+{
+	tlsr8258_flash_ram_delay();
+	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_STATUS);
+
+	for (uint32_t i = 0; i < 10000000u; i++) {
+		if ((tlsr8258_mspi_read() & BIT(0)) == 0u) {
+			tlsr8258_mspi_high();
+			return 0;
+		}
+	}
+
+	tlsr8258_mspi_high();
+	return -ETIMEDOUT;
+}
+
+static __ramfunc int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf,
+						   size_t len)
+{
+	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_PAGE_PROGRAM);
+	tlsr8258_flash_send_addr(addr);
+
+	for (size_t i = 0; i < len; i++) {
+		tlsr8258_mspi_write(buf[i]);
+		tlsr8258_mspi_wait();
+	}
+
+	tlsr8258_mspi_high();
+	return tlsr8258_flash_wait_done();
+}
+
+static __ramfunc int tlsr8258_flash_erase_sector_ram(uint32_t addr)
+{
+	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_SECTOR_ERASE);
+	tlsr8258_flash_send_addr(addr);
+	tlsr8258_mspi_high();
+
+	return tlsr8258_flash_wait_done();
+}
+
+static bool tlsr8258_flash_range_valid(const struct tlsr8258_flash_config *config,
+				       off_t offset, size_t len)
+{
+	return offset >= 0 && (size_t)offset <= config->size &&
+	       len <= (config->size - (size_t)offset);
+}
+
+static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *data,
+			       size_t len)
+{
+	const struct tlsr8258_flash_config *config = dev->config;
+
+	if (!tlsr8258_flash_range_valid(config, offset, len)) {
+		return -EINVAL;
+	}
+
+	memcpy(data, (const void *)(config->base + (uintptr_t)offset), len);
+	return 0;
+}
+
+static int tlsr8258_flash_write(const struct device *dev, off_t offset,
+				const void *data, size_t len)
+{
+	const struct tlsr8258_flash_config *config = dev->config;
+	struct tlsr8258_flash_data *dev_data = dev->data;
+	const uint8_t *src = data;
+	uint8_t page_buf[TLSR8258_FLASH_PAGE_SIZE];
+	int ret = 0;
+
+	if (!tlsr8258_flash_range_valid(config, offset, len)) {
+		return -EINVAL;
+	}
+
+	k_sem_take(&dev_data->lock, K_FOREVER);
+
+	while (len > 0u) {
+		size_t page_off = (size_t)offset & (TLSR8258_FLASH_PAGE_SIZE - 1u);
+		size_t chunk = MIN(len, TLSR8258_FLASH_PAGE_SIZE - page_off);
+		unsigned int key;
+
+		memcpy(page_buf, src, chunk);
+		key = irq_lock();
+		ret = tlsr8258_flash_write_page_ram((uint32_t)offset, page_buf, chunk);
+		irq_unlock(key);
+		if (ret < 0) {
+			break;
+		}
+
+		offset += chunk;
+		src += chunk;
+		len -= chunk;
+	}
+
+	k_sem_give(&dev_data->lock);
+	return ret;
+}
+
+static int tlsr8258_flash_erase(const struct device *dev, off_t offset, size_t len)
+{
+	const struct tlsr8258_flash_config *config = dev->config;
+	struct tlsr8258_flash_data *dev_data = dev->data;
+	int ret = 0;
+
+	if (!tlsr8258_flash_range_valid(config, offset, len) ||
+	    !IS_ALIGNED((size_t)offset, TLSR8258_FLASH_SECTOR_SIZE) ||
+	    !IS_ALIGNED(len, TLSR8258_FLASH_SECTOR_SIZE)) {
+		return -EINVAL;
+	}
+
+	k_sem_take(&dev_data->lock, K_FOREVER);
+
+	while (len > 0u) {
+		unsigned int key = irq_lock();
+
+		ret = tlsr8258_flash_erase_sector_ram((uint32_t)offset);
+		irq_unlock(key);
+		if (ret < 0) {
+			break;
+		}
+
+		offset += TLSR8258_FLASH_SECTOR_SIZE;
+		len -= TLSR8258_FLASH_SECTOR_SIZE;
+	}
+
+	k_sem_give(&dev_data->lock);
+	return ret;
+}
+
+static const struct flash_parameters *tlsr8258_flash_get_parameters(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return &tlsr8258_flash_parameters;
+}
+
+#ifdef CONFIG_FLASH_PAGE_LAYOUT
+static void tlsr8258_flash_page_layout(const struct device *dev,
+				       const struct flash_pages_layout **layout,
+				       size_t *layout_size)
+{
+	struct tlsr8258_flash_data *data = dev->data;
+
+	*layout = &data->layout;
+	*layout_size = 1u;
+}
+#endif
+
+static int tlsr8258_flash_init(const struct device *dev)
+{
+	const struct tlsr8258_flash_config *config = dev->config;
+	struct tlsr8258_flash_data *data = dev->data;
+
+	k_sem_init(&data->lock, 1, 1);
+	data->layout.pages_count = config->size / TLSR8258_FLASH_SECTOR_SIZE;
+	data->layout.pages_size = TLSR8258_FLASH_SECTOR_SIZE;
+
+	return 0;
+}
+
+static DEVICE_API(flash, tlsr8258_flash_api) = {
+	.read = tlsr8258_flash_read,
+	.write = tlsr8258_flash_write,
+	.erase = tlsr8258_flash_erase,
+	.get_parameters = tlsr8258_flash_get_parameters,
+#ifdef CONFIG_FLASH_PAGE_LAYOUT
+	.page_layout = tlsr8258_flash_page_layout,
+#endif
+};
+
+#define TLSR8258_FLASH_INIT(n)							\
+	static const struct tlsr8258_flash_config tlsr8258_flash_config_##n = {	\
+		.base = DT_INST_REG_ADDR(n),					\
+		.size = DT_INST_REG_SIZE(n),					\
+	};									\
+	static struct tlsr8258_flash_data tlsr8258_flash_data_##n;		\
+										\
+	DEVICE_DT_INST_DEFINE(n, tlsr8258_flash_init, NULL,			\
+			      &tlsr8258_flash_data_##n,			\
+			      &tlsr8258_flash_config_##n, POST_KERNEL,		\
+			      CONFIG_FLASH_INIT_PRIORITY, &tlsr8258_flash_api);
+
+DT_INST_FOREACH_STATUS_OKAY(TLSR8258_FLASH_INIT)
