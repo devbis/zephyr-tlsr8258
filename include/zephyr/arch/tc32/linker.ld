@@ -86,6 +86,7 @@ SECTIONS
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	__text_region_end = .;
+	. = ALIGN(4);
 	_tc32_rom_data_lma_start = .;
 	. = ORIGIN(RAM);
 	__rodata_region_start = .;
