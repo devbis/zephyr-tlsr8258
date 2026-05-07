@@ -12,6 +12,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
+#include <tlsr825x/irq.h>
 
 #define TLSR8258_REG8(addr)  (*(volatile uint8_t *)(addr))
 #define TLSR8258_REG16(addr) (*(volatile uint16_t *)(addr))
@@ -23,10 +24,12 @@
 #define TLSR8258_REG_UART_CLK_DIV     TLSR8258_REG16(0x00800094u)
 #define TLSR8258_REG_UART_CTRL0       TLSR8258_REG8(0x00800096u)
 #define TLSR8258_REG_UART_CTRL1       TLSR8258_REG8(0x00800097u)
+#define TLSR8258_REG_UART_CTRL3       TLSR8258_REG8(0x00800099u)
 #define TLSR8258_REG_UART_RX_TIMEOUT0 TLSR8258_REG8(0x0080009au)
 #define TLSR8258_REG_UART_RX_TIMEOUT1 TLSR8258_REG8(0x0080009bu)
 #define TLSR8258_REG_UART_BUF_CNT     TLSR8258_REG8(0x0080009cu)
 #define TLSR8258_REG_UART_STATUS0     TLSR8258_REG8(0x0080009du)
+#define TLSR8258_REG_UART_STATUS1     TLSR8258_REG8(0x0080009eu)
 
 #define TLSR8258_REG_GPIO_IE(pin)   TLSR8258_REG8(0x00800581u + (((pin) >> 8) << 3))
 #define TLSR8258_REG_GPIO_FUNC(pin) TLSR8258_REG8(0x00800586u + (((pin) >> 8) << 3))
@@ -40,12 +43,24 @@
 #define FLD_CLK0_UART_EN     BIT(2)
 #define FLD_UART_CLK_DIV_EN  BIT(15)
 #define FLD_UART_BPWC        GENMASK(3, 0)
+#define FLD_UART_RX_IRQ_EN   BIT(6)
+#define FLD_UART_TX_IRQ_EN   BIT(7)
 #define FLD_UART_TIMEOUT_MUL GENMASK(1, 0)
+#define FLD_UART_MASK_TXDONE_IRQ BIT(6)
+#define FLD_UART_MASK_ERR_IRQ BIT(7)
 #define FLD_UART_PARITY_EN   BIT(2)
 #define FLD_UART_STOP_BIT    GENMASK(5, 4)
+#define FLD_UART_RX_IRQ_TRIG_LEV GENMASK(3, 0)
+#define FLD_UART_TX_IRQ_TRIG_LEV GENMASK(7, 4)
 #define FLD_UART_RX_BUF_CNT  GENMASK(3, 0)
 #define FLD_UART_TX_BUF_CNT  GENMASK(7, 4)
+#define FLD_UART_IRQ_FLAG    BIT(3)
+#define FLD_UART_CLEAR_RX_FLAG BIT(6)
 #define FLD_UART_RX_ERR_FLAG BIT(7)
+#define FLD_UART_TX_DONE     BIT(0)
+#define FLD_UART_TX_BUF_IRQ  BIT(1)
+#define FLD_UART_RX_DONE     BIT(2)
+#define FLD_UART_RX_BUF_IRQ  BIT(3)
 #define FLD_ANA_BUSY         BIT(0)
 #define FLD_ANA_RW           BIT(5)
 #define FLD_ANA_CYC0         BIT(6)
@@ -54,6 +69,8 @@
 #define GPIO_PA2 BIT(2)
 #define UART_TX_BUF_CNT_MAX 8u
 #define UART_DATA_BUF_COUNT 4u
+#define UART_RX_IRQ_TRIGGER_LEVEL 1u
+#define UART_TX_IRQ_TRIGGER_LEVEL 4u
 #define PM_PIN_PULLUP_10K 3u
 
 struct tlsr8258_uart_config {
@@ -61,6 +78,9 @@ struct tlsr8258_uart_config {
 	uint32_t current_speed;
 	uint32_t tx_pin;
 	uint32_t rx_pin;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	void (*irq_config_func)(const struct device *dev);
+#endif
 #ifdef CONFIG_PINCTRL
 	const struct pinctrl_dev_config *pcfg;
 #endif
@@ -69,8 +89,14 @@ struct tlsr8258_uart_config {
 struct tlsr8258_uart_data {
 	uint8_t tx_index;
 	uint8_t rx_index;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	uart_irq_callback_user_data_t callback;
+	void *callback_data;
+	uint8_t irq_status;
+#endif
 };
 
+#ifndef CONFIG_PINCTRL
 static void tlsr8258_analog_wait(void)
 {
 	while ((TLSR8258_REG_ANA_CTRL & FLD_ANA_BUSY) != 0u) {
@@ -103,6 +129,7 @@ static void tlsr8258_analog_write(uint8_t addr, uint8_t value)
 	TLSR8258_REG_ANA_CTRL = 0u;
 	irq_unlock(key);
 }
+#endif /* CONFIG_PINCTRL */
 
 static bool tlsr8258_uart_is_prime(uint32_t n)
 {
@@ -190,6 +217,7 @@ static uint8_t tlsr8258_uart_rx_count(void)
 	return TLSR8258_REG_UART_BUF_CNT & FLD_UART_RX_BUF_CNT;
 }
 
+#ifndef CONFIG_PINCTRL
 static void tlsr8258_uart_pullup(uint32_t pin)
 {
 	uint8_t base = 0x0eu + ((pin >> 8) << 1) + ((pin & 0xf0u) ? 1u : 0u);
@@ -243,6 +271,7 @@ static int tlsr8258_uart_configure_pin(uint32_t pin)
 
 	return tlsr8258_uart_set_pin_func(pin);
 }
+#endif /* CONFIG_PINCTRL */
 
 static void tlsr8258_uart_hw_init(uint32_t clock, uint32_t baudrate)
 {
@@ -257,11 +286,27 @@ static void tlsr8258_uart_hw_init(uint32_t clock, uint32_t baudrate)
 
 	TLSR8258_REG_UART_CTRL0 = (TLSR8258_REG_UART_CTRL0 & (uint8_t)~FLD_UART_BPWC) | bwpc;
 	TLSR8258_REG_UART_CLK_DIV = divider | FLD_UART_CLK_DIV_EN;
+	TLSR8258_REG_UART_CTRL3 = (UART_RX_IRQ_TRIGGER_LEVEL & FLD_UART_RX_IRQ_TRIG_LEV) |
+				  ((UART_TX_IRQ_TRIGGER_LEVEL << 4) & FLD_UART_TX_IRQ_TRIG_LEV);
 	TLSR8258_REG_UART_RX_TIMEOUT0 = (bwpc + 1u) * 12u;
 	TLSR8258_REG_UART_RX_TIMEOUT1 =
-		(TLSR8258_REG_UART_RX_TIMEOUT1 & (uint8_t)~FLD_UART_TIMEOUT_MUL) | 1u;
+		(TLSR8258_REG_UART_RX_TIMEOUT1 & (uint8_t)~FLD_UART_TIMEOUT_MUL) |
+		FLD_UART_MASK_TXDONE_IRQ | FLD_UART_MASK_ERR_IRQ | 1u;
 	TLSR8258_REG_UART_CTRL1 &= (uint8_t)~(FLD_UART_PARITY_EN | FLD_UART_STOP_BIT);
+	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~(FLD_UART_RX_IRQ_EN | FLD_UART_TX_IRQ_EN);
 }
+
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+static void tlsr8258_uart_parent_irq_update(void)
+{
+	if ((TLSR8258_REG_UART_CTRL0 & (FLD_UART_RX_IRQ_EN | FLD_UART_TX_IRQ_EN)) != 0u ||
+	    (TLSR8258_REG_UART_RX_TIMEOUT1 & FLD_UART_MASK_ERR_IRQ) == 0u) {
+		irq_enable(TLSR8258_IRQ_UART);
+	} else {
+		irq_disable(TLSR8258_IRQ_UART);
+	}
+}
+#endif
 
 static int tlsr8258_uart_init(const struct device *dev)
 {
@@ -271,6 +316,11 @@ static int tlsr8258_uart_init(const struct device *dev)
 
 	data->tx_index = 0u;
 	data->rx_index = 0u;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	data->callback = NULL;
+	data->callback_data = NULL;
+	data->irq_status = 0u;
+#endif
 
 #ifdef CONFIG_PINCTRL
 	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
@@ -290,6 +340,11 @@ static int tlsr8258_uart_init(const struct device *dev)
 #endif
 
 	tlsr8258_uart_hw_init(config->clock_frequency, config->current_speed);
+
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	config->irq_config_func(dev);
+	irq_disable(TLSR8258_IRQ_UART);
+#endif
 
 	return 0;
 }
@@ -326,10 +381,197 @@ static int tlsr8258_uart_err_check(const struct device *dev)
 	return (TLSR8258_REG_UART_STATUS0 & FLD_UART_RX_ERR_FLAG) != 0u ? 1 : 0;
 }
 
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+static int tlsr8258_uart_fifo_fill(const struct device *dev, const uint8_t *tx_data, int len)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+	int num_tx = 0;
+
+	while (num_tx < len && tlsr8258_uart_tx_count() < UART_TX_BUF_CNT_MAX) {
+		TLSR8258_REG_UART_DATA_BUF(data->tx_index) = tx_data[num_tx++];
+		data->tx_index = (data->tx_index + 1u) % UART_DATA_BUF_COUNT;
+	}
+
+	return num_tx;
+}
+
+static int tlsr8258_uart_fifo_read(const struct device *dev, uint8_t *rx_data, const int size)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+	int num_rx = 0;
+
+	while (num_rx < size && tlsr8258_uart_rx_count() != 0u) {
+		rx_data[num_rx++] = TLSR8258_REG_UART_DATA_BUF(data->rx_index);
+		data->rx_index = (data->rx_index + 1u) % UART_DATA_BUF_COUNT;
+	}
+
+	if (tlsr8258_uart_rx_count() == 0u) {
+		TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	}
+
+	return num_rx;
+}
+
+static void tlsr8258_uart_irq_tx_enable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_CTRL0 |= FLD_UART_TX_IRQ_EN;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static void tlsr8258_uart_irq_tx_disable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~FLD_UART_TX_IRQ_EN;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static int tlsr8258_uart_irq_tx_ready(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return ((TLSR8258_REG_UART_CTRL0 & FLD_UART_TX_IRQ_EN) != 0u &&
+		tlsr8258_uart_tx_count() < UART_TX_BUF_CNT_MAX) ? 1 : 0;
+}
+
+static void tlsr8258_uart_irq_rx_enable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	TLSR8258_REG_UART_CTRL0 |= FLD_UART_RX_IRQ_EN;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static void tlsr8258_uart_irq_rx_disable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~FLD_UART_RX_IRQ_EN;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static int tlsr8258_uart_irq_tx_complete(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return (tlsr8258_uart_tx_count() == 0u &&
+		(TLSR8258_REG_UART_STATUS1 & FLD_UART_TX_DONE) != 0u) ? 1 : 0;
+}
+
+static int tlsr8258_uart_irq_rx_ready(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return ((TLSR8258_REG_UART_CTRL0 & FLD_UART_RX_IRQ_EN) != 0u &&
+		tlsr8258_uart_rx_count() != 0u) ? 1 : 0;
+}
+
+static void tlsr8258_uart_irq_err_enable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_RX_TIMEOUT1 &= (uint8_t)~FLD_UART_MASK_ERR_IRQ;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static void tlsr8258_uart_irq_err_disable(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	unsigned int key = irq_lock();
+
+	TLSR8258_REG_UART_RX_TIMEOUT1 |= FLD_UART_MASK_ERR_IRQ;
+	tlsr8258_uart_parent_irq_update();
+	irq_unlock(key);
+}
+
+static int tlsr8258_uart_irq_is_pending(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	bool rx_pending = (TLSR8258_REG_UART_CTRL0 & FLD_UART_RX_IRQ_EN) != 0u &&
+			  tlsr8258_uart_rx_count() != 0u;
+	bool tx_pending = (TLSR8258_REG_UART_CTRL0 & FLD_UART_TX_IRQ_EN) != 0u &&
+			  tlsr8258_uart_tx_count() <= UART_TX_IRQ_TRIGGER_LEVEL;
+	bool err_pending = (TLSR8258_REG_UART_RX_TIMEOUT1 & FLD_UART_MASK_ERR_IRQ) == 0u &&
+			   (TLSR8258_REG_UART_STATUS0 & FLD_UART_RX_ERR_FLAG) != 0u;
+
+	return (rx_pending || tx_pending || err_pending) ? 1 : 0;
+}
+
+static int tlsr8258_uart_irq_update(const struct device *dev)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+
+	data->irq_status = TLSR8258_REG_UART_STATUS1;
+	return 1;
+}
+
+static void tlsr8258_uart_irq_callback_set(const struct device *dev,
+					   uart_irq_callback_user_data_t cb,
+					   void *user_data)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+
+	data->callback = cb;
+	data->callback_data = user_data;
+}
+
+static void tlsr8258_uart_isr(const void *arg)
+{
+	const struct device *dev = arg;
+	struct tlsr8258_uart_data *data = dev->data;
+
+	data->irq_status = TLSR8258_REG_UART_STATUS1;
+
+	if (data->callback != NULL) {
+		data->callback(dev, data->callback_data);
+	} else {
+		TLSR8258_REG_UART_CTRL0 &= (uint8_t)~(FLD_UART_RX_IRQ_EN | FLD_UART_TX_IRQ_EN);
+		TLSR8258_REG_UART_RX_TIMEOUT1 |= FLD_UART_MASK_ERR_IRQ;
+		tlsr8258_uart_parent_irq_update();
+	}
+}
+#endif /* CONFIG_UART_INTERRUPT_DRIVEN */
+
 static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 	.poll_in = tlsr8258_uart_poll_in,
 	.poll_out = tlsr8258_uart_poll_out,
 	.err_check = tlsr8258_uart_err_check,
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	.fifo_fill = tlsr8258_uart_fifo_fill,
+	.fifo_read = tlsr8258_uart_fifo_read,
+	.irq_tx_enable = tlsr8258_uart_irq_tx_enable,
+	.irq_tx_disable = tlsr8258_uart_irq_tx_disable,
+	.irq_tx_ready = tlsr8258_uart_irq_tx_ready,
+	.irq_rx_enable = tlsr8258_uart_irq_rx_enable,
+	.irq_rx_disable = tlsr8258_uart_irq_rx_disable,
+	.irq_tx_complete = tlsr8258_uart_irq_tx_complete,
+	.irq_rx_ready = tlsr8258_uart_irq_rx_ready,
+	.irq_err_enable = tlsr8258_uart_irq_err_enable,
+	.irq_err_disable = tlsr8258_uart_irq_err_disable,
+	.irq_is_pending = tlsr8258_uart_irq_is_pending,
+	.irq_update = tlsr8258_uart_irq_update,
+	.irq_callback_set = tlsr8258_uart_irq_callback_set,
+#endif
 };
 
 #ifdef CONFIG_PINCTRL
@@ -341,13 +583,30 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 #define TLSR8258_UART_PINCTRL_CONFIG(n)
 #endif
 
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+#define TLSR8258_UART_IRQ_CONFIG_DEFINE(n)					\
+	static void tlsr8258_uart_irq_config_##n(const struct device *dev)	\
+	{									\
+		ARG_UNUSED(dev);						\
+		IRQ_CONNECT(DT_INST_IRQN(n), 0, tlsr8258_uart_isr,		\
+			    DEVICE_DT_INST_GET(n), 0);				\
+	}
+#define TLSR8258_UART_IRQ_CONFIG(n) \
+	.irq_config_func = tlsr8258_uart_irq_config_##n,
+#else
+#define TLSR8258_UART_IRQ_CONFIG_DEFINE(n)
+#define TLSR8258_UART_IRQ_CONFIG(n)
+#endif
+
 #define TLSR8258_UART_INIT(n)							\
 	TLSR8258_UART_PINCTRL_DEFINE(n)					\
+	TLSR8258_UART_IRQ_CONFIG_DEFINE(n)				\
 	static const struct tlsr8258_uart_config tlsr8258_uart_config_##n = {	\
 		.clock_frequency = DT_INST_PROP(n, clock_frequency),		\
 		.current_speed = DT_INST_PROP(n, current_speed),		\
 		.tx_pin = DT_INST_PROP(n, tx_pin),				\
 		.rx_pin = DT_INST_PROP_OR(n, rx_pin, 0),			\
+		TLSR8258_UART_IRQ_CONFIG(n)				\
 		TLSR8258_UART_PINCTRL_CONFIG(n)				\
 	};									\
 										\

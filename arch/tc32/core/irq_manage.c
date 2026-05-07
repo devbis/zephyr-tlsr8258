@@ -36,12 +36,12 @@ static ALWAYS_INLINE void enter_irq(unsigned int irq)
 
 static ALWAYS_INLINE bool irq_is_valid(unsigned int irq)
 {
-	return (BIT(irq) & TLSR8258_IRQ_VALID_MASK) != 0u;
+	return tlsr8258_irq_is_valid(irq);
 }
 
 static ALWAYS_INLINE bool irq_clear_is_arch_owned(unsigned int irq)
 {
-	return (BIT(irq) & TLSR8258_IRQ_TIMER_MASK) != 0u;
+	return (tlsr8258_irq_bit(irq) & TLSR8258_IRQ_TIMER_MASK) != 0u;
 }
 
 static ALWAYS_INLINE void irq_clear_arch_owned(unsigned int irq)

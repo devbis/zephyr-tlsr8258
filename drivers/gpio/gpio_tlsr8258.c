@@ -169,7 +169,7 @@ static void tlsr8258_gpio_ie_update(const struct device *dev, uint8_t mask, bool
 
 static void tlsr8258_gpio_clear_source(void)
 {
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_GPIO);
+	tlsr8258_irq_clear_edge(TLSR8258_IRQ_GPIO);
 }
 
 static void tlsr8258_gpio_dispatch(const struct device *dev)
