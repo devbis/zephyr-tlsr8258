@@ -19,6 +19,25 @@
 
 #define TLSR8258_GPIO_WAKEUP_IRQ ((volatile uint8_t *)0x008005b5u)
 
+#define TLSR8258_REG8(addr) (*(volatile uint8_t *)(addr))
+
+#define TLSR8258_REG_ANA_ADDR TLSR8258_REG8(0x008000b8u)
+#define TLSR8258_REG_ANA_DATA TLSR8258_REG8(0x008000b9u)
+#define TLSR8258_REG_ANA_CTRL TLSR8258_REG8(0x008000bau)
+
+#define TLSR8258_FLD_ANA_BUSY BIT(0)
+#define TLSR8258_FLD_ANA_RW   BIT(5)
+#define TLSR8258_FLD_ANA_CYC0 BIT(6)
+
+#define TLSR8258_GPIO_PULL_FLOAT      0u
+#define TLSR8258_GPIO_PULL_UP_10K     3u
+#define TLSR8258_GPIO_PULL_DOWN_100K  2u
+#define TLSR8258_GPIO_GROUP_A         0u
+#define TLSR8258_GPIO_GROUP_B         1u
+#define TLSR8258_GPIO_GROUP_C         2u
+#define TLSR8258_GPIO_ANALOG_PB_IE    0xbdu
+#define TLSR8258_GPIO_ANALOG_PC_IE    0xc0u
+
 struct tlsr8258_gpio_regs {
 	uint8_t input;
 	uint8_t ie;
@@ -33,11 +52,15 @@ struct tlsr8258_gpio_regs {
 struct tlsr8258_gpio_config {
 	struct gpio_driver_config common;
 	uintptr_t base;
+	uint8_t group;
 };
 
 struct tlsr8258_gpio_data {
 	struct gpio_driver_data common;
 	sys_slist_t callbacks;
+	gpio_port_pins_t pin_int_en;
+	gpio_port_pins_t trig_low;
+	gpio_port_pins_t trig_both;
 };
 
 static volatile struct tlsr8258_gpio_regs *tlsr8258_gpio_regs(const struct device *dev)
@@ -52,6 +75,98 @@ static bool tlsr8258_gpio_pin_valid(gpio_pin_t pin)
 	return pin <= TLSR8258_GPIO_MAX_PIN;
 }
 
+static void tlsr8258_analog_wait(void)
+{
+	while ((TLSR8258_REG_ANA_CTRL & TLSR8258_FLD_ANA_BUSY) != 0u) {
+	}
+}
+
+static uint8_t tlsr8258_analog_read(uint8_t addr)
+{
+	uint32_t key = irq_lock();
+	uint8_t data;
+
+	TLSR8258_REG_ANA_ADDR = addr;
+	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0;
+	tlsr8258_analog_wait();
+	data = TLSR8258_REG_ANA_DATA;
+	TLSR8258_REG_ANA_CTRL = 0u;
+	irq_unlock(key);
+
+	return data;
+}
+
+static void tlsr8258_analog_write(uint8_t addr, uint8_t value)
+{
+	uint32_t key = irq_lock();
+
+	TLSR8258_REG_ANA_ADDR = addr;
+	TLSR8258_REG_ANA_DATA = value;
+	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0 | TLSR8258_FLD_ANA_RW;
+	tlsr8258_analog_wait();
+	TLSR8258_REG_ANA_CTRL = 0u;
+	irq_unlock(key);
+}
+
+static uint16_t tlsr8258_gpio_vendor_pin(const struct device *dev, gpio_pin_t pin)
+{
+	const struct tlsr8258_gpio_config *config = dev->config;
+
+	return ((uint16_t)config->group << 8) | (uint16_t)BIT(pin);
+}
+
+static void tlsr8258_gpio_pull(uint16_t vendor_pin, uint8_t pull)
+{
+	uint8_t reg = 0x0eu + ((vendor_pin >> 8) << 1) +
+		      (((vendor_pin & 0xf0u) != 0u) ? 1u : 0u);
+	uint8_t shift;
+	uint8_t mask;
+
+	if ((vendor_pin & 0x11u) != 0u) {
+		shift = 0u;
+		mask = 0xfcu;
+	} else if ((vendor_pin & 0x22u) != 0u) {
+		shift = 2u;
+		mask = 0xf3u;
+	} else if ((vendor_pin & 0x44u) != 0u) {
+		shift = 4u;
+		mask = 0xcfu;
+	} else if ((vendor_pin & 0x88u) != 0u) {
+		shift = 6u;
+		mask = 0x3fu;
+	} else {
+		return;
+	}
+
+	tlsr8258_analog_write(reg, (tlsr8258_analog_read(reg) & mask) | (pull << shift));
+}
+
+static void tlsr8258_gpio_ie_update(const struct device *dev, uint8_t mask, bool enable)
+{
+	const struct tlsr8258_gpio_config *config = dev->config;
+	volatile struct tlsr8258_gpio_regs *regs = tlsr8258_gpio_regs(dev);
+	uint8_t analog_reg;
+
+	if (config->group == TLSR8258_GPIO_GROUP_B) {
+		analog_reg = TLSR8258_GPIO_ANALOG_PB_IE;
+	} else if (config->group == TLSR8258_GPIO_GROUP_C) {
+		analog_reg = TLSR8258_GPIO_ANALOG_PC_IE;
+	} else {
+		if (enable) {
+			regs->ie |= mask;
+		} else {
+			regs->ie &= (uint8_t)~mask;
+		}
+		return;
+	}
+
+	if (enable) {
+		tlsr8258_analog_write(analog_reg, tlsr8258_analog_read(analog_reg) | mask);
+	} else {
+		tlsr8258_analog_write(analog_reg, tlsr8258_analog_read(analog_reg) & (uint8_t)~mask);
+	}
+}
+
 static void tlsr8258_gpio_clear_source(void)
 {
 	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_GPIO);
@@ -61,10 +176,20 @@ static void tlsr8258_gpio_dispatch(const struct device *dev)
 {
 	volatile struct tlsr8258_gpio_regs *regs = tlsr8258_gpio_regs(dev);
 	struct tlsr8258_gpio_data *data = dev->data;
-	gpio_port_pins_t pins = regs->irq_en;
+	gpio_port_pins_t input = regs->input;
+	gpio_port_pins_t active_high = data->pin_int_en & ~data->trig_low;
+	gpio_port_pins_t active_low = data->pin_int_en & data->trig_low;
+	gpio_port_pins_t pins = (input & active_high) | ((~input) & active_low);
 
 	if (pins != 0u) {
 		gpio_fire_callbacks(&data->callbacks, dev, pins);
+	}
+
+	if ((pins & data->trig_both) != 0u) {
+		data->trig_low = (data->trig_low & ~pins) | (input & pins);
+		regs->polarity = (regs->polarity & (uint8_t)~pins) |
+				 (uint8_t)(data->trig_low & pins);
+		tlsr8258_gpio_clear_source();
 	}
 }
 
@@ -86,7 +211,11 @@ static void tlsr8258_gpio_irq_connect(void)
 
 static int tlsr8258_gpio_init(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_gpio_data *data = dev->data;
+
+	data->pin_int_en = 0u;
+	data->trig_low = 0u;
+	data->trig_both = 0u;
 
 	tlsr8258_gpio_irq_connect();
 	return 0;
@@ -96,9 +225,15 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 				       gpio_flags_t flags)
 {
 	volatile struct tlsr8258_gpio_regs *regs = tlsr8258_gpio_regs(dev);
+	uint16_t vendor_pin;
 	uint8_t mask;
 
 	if (!tlsr8258_gpio_pin_valid(pin)) {
+		return -EINVAL;
+	}
+
+	if ((flags & (GPIO_SINGLE_ENDED | GPIO_PULL_UP | GPIO_PULL_DOWN)) ==
+	    (GPIO_PULL_UP | GPIO_PULL_DOWN)) {
 		return -EINVAL;
 	}
 
@@ -107,6 +242,7 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 	}
 
 	mask = (uint8_t)BIT(pin);
+	vendor_pin = tlsr8258_gpio_vendor_pin(dev, pin);
 
 	if ((flags & GPIO_OUTPUT_INIT_HIGH) != 0u) {
 		regs->output |= mask;
@@ -123,9 +259,17 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 	}
 
 	if ((flags & GPIO_INPUT) != 0u) {
-		regs->ie |= mask;
+		tlsr8258_gpio_ie_update(dev, mask, true);
 	} else {
-		regs->ie &= (uint8_t)~mask;
+		tlsr8258_gpio_ie_update(dev, mask, false);
+	}
+
+	if ((flags & GPIO_PULL_UP) != 0u) {
+		tlsr8258_gpio_pull(vendor_pin, TLSR8258_GPIO_PULL_UP_10K);
+	} else if ((flags & GPIO_PULL_DOWN) != 0u) {
+		tlsr8258_gpio_pull(vendor_pin, TLSR8258_GPIO_PULL_DOWN_100K);
+	} else {
+		tlsr8258_gpio_pull(vendor_pin, TLSR8258_GPIO_PULL_FLOAT);
 	}
 
 	return 0;
@@ -183,6 +327,7 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 						 enum gpio_int_trig trig)
 {
 	volatile struct tlsr8258_gpio_regs *regs = tlsr8258_gpio_regs(dev);
+	struct tlsr8258_gpio_data *data = dev->data;
 	unsigned int key;
 	uint8_t mask;
 
@@ -190,7 +335,7 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 		return -EINVAL;
 	}
 
-	if (mode == GPIO_INT_MODE_LEVEL || trig == GPIO_INT_TRIG_BOTH) {
+	if (mode == GPIO_INT_MODE_LEVEL) {
 		return -ENOTSUP;
 	}
 
@@ -198,6 +343,8 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 	key = irq_lock();
 
 	regs->irq_en &= (uint8_t)~mask;
+	data->pin_int_en &= ~mask;
+	data->trig_both &= ~mask;
 
 	if (mode == GPIO_INT_MODE_DISABLED) {
 		tlsr8258_gpio_clear_source();
@@ -206,9 +353,22 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 	}
 
 	if (trig == GPIO_INT_TRIG_HIGH) {
+		data->trig_low &= ~mask;
 		regs->polarity &= (uint8_t)~mask;
 	} else if (trig == GPIO_INT_TRIG_LOW) {
+		data->trig_low |= mask;
 		regs->polarity |= mask;
+	} else if (trig == GPIO_INT_TRIG_BOTH) {
+		uint8_t input = regs->input;
+
+		data->trig_both |= mask;
+		if ((input & mask) != 0u) {
+			data->trig_low |= mask;
+			regs->polarity |= mask;
+		} else {
+			data->trig_low &= ~mask;
+			regs->polarity &= (uint8_t)~mask;
+		}
 	} else {
 		irq_unlock(key);
 		return -ENOTSUP;
@@ -219,6 +379,7 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 	/* Vendor sequence: set polarity, clear source, enable mask, then enable pin. */
 	tlsr8258_gpio_clear_source();
 	irq_enable(TLSR8258_IRQ_GPIO);
+	data->pin_int_en |= mask;
 	regs->irq_en |= mask;
 
 	irq_unlock(key);
@@ -249,6 +410,7 @@ static DEVICE_API(gpio, tlsr8258_gpio_api) = {
 	static const struct tlsr8258_gpio_config tlsr8258_gpio_config_##n = {	\
 		.common = GPIO_COMMON_CONFIG_FROM_DT_INST(n),			\
 		.base = DT_INST_REG_ADDR(n),					\
+		.group = (DT_INST_REG_ADDR(n) - 0x00800580u) / 8u,		\
 	};									\
 	static struct tlsr8258_gpio_data tlsr8258_gpio_data_##n;		\
 										\

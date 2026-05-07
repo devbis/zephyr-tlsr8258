@@ -2,9 +2,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/dt-bindings/pinctrl/tlsr8258-pinctrl.h>
+
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
+
+	clocks {
+		sys_clk: clock-24m {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <24000000>;
+		};
+	};
+
+	pinctrl: pinctrl {
+		compatible = "telink,tlsr8258-pinctrl";
+
+		uart0_default: uart0_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA2,
+						  TLSR8258_FUNC_UART)>;
+			bias-pull-up;
+			input-enable;
+		};
+	};
 
 	cpus {
 		#address-cells = <1>;
@@ -35,6 +56,7 @@
 			reg = <0x00800740 0x00000010>;
 			interrupts = <20>;
 			interrupt-parent = <&intc>;
+			clocks = <&sys_clk>;
 		};
 
 		uart0: serial@800090 {
@@ -42,9 +64,12 @@
 			reg = <0x00800090 0x00000010>;
 			interrupts = <6>;
 			interrupt-parent = <&intc>;
+			clocks = <&sys_clk>;
 			clock-frequency = <24000000>;
 			current-speed = <115200>;
 			tx-pin = <0x04>; /* PA2, vendor GPIO_PA2 value */
+			pinctrl-0 = <&uart0_default>;
+			pinctrl-names = "default";
 			status = "disabled";
 		};
 
@@ -104,7 +129,7 @@
 		};
 
 		flash: flash@0 {
-			compatible = "soc-nv-flash";
+			compatible = "telink,tlsr8258-flash";
 			reg = <0x00000000 0x00080000>;
 			write-block-size = <1>;
 		};
