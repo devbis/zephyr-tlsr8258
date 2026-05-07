@@ -39,6 +39,18 @@ static ALWAYS_INLINE bool irq_is_valid(unsigned int irq)
 	return (BIT(irq) & TLSR8258_IRQ_VALID_MASK) != 0u;
 }
 
+static ALWAYS_INLINE bool irq_clear_is_arch_owned(unsigned int irq)
+{
+	return (BIT(irq) & TLSR8258_IRQ_TIMER_MASK) != 0u;
+}
+
+static ALWAYS_INLINE void irq_clear_arch_owned(unsigned int irq)
+{
+	/* Vendor order for TMR0..TMR2: clear IRQSRC first, then TMR_STATUS. */
+	*TLSR8258_REG_IRQ_SRC = BIT(irq);
+	*TLSR8258_REG_TMR_STA = BIT(irq);
+}
+
 static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
 {
 	unsigned int irq = 0u;
@@ -63,9 +75,8 @@ void z_tc32_handle_irqs(void)
 			break;
 		}
 
-		if (irq <= TLSR8258_IRQ_TMR2) {
-			*TLSR8258_REG_IRQ_SRC = BIT(irq);
-			*TLSR8258_REG_TMR_STA = BIT(irq);
+		if (irq_clear_is_arch_owned(irq)) {
+			irq_clear_arch_owned(irq);
 		}
 
 		enter_irq(irq);
