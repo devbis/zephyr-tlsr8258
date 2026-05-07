@@ -62,7 +62,7 @@ static void tlsr8258_stimer_irq(const void *unused)
 		elapsed_ticks = 1u;
 	}
 
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_clear_edge(TLSR8258_IRQ_SYSTEM_TIMER);
 #if defined(CONFIG_TLSR8258_STIMER_DEBUG_HOOK)
 	tlsr8258_stimer_debug_tick();
 #endif
@@ -101,7 +101,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 
 	cycles = (cycles / CYCLES_PER_TICK) * CYCLES_PER_TICK;
 
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_clear_edge(TLSR8258_IRQ_SYSTEM_TIMER);
 	tlsr8258_stimer_program_compare(last_announce_cycle + cycles, now);
 	TLSR8258_REG_SYSTEM_TICK_MODE |= FLD_SYSTEM_TICK_IRQ_EN;
 	*TLSR8258_REG_IRQ_MASK |= BIT(TLSR8258_IRQ_SYSTEM_TIMER);
@@ -128,7 +128,7 @@ static int tlsr8258_stimer_init(void)
 	IRQ_CONNECT(TLSR8258_IRQ_SYSTEM_TIMER, 0, tlsr8258_stimer_irq, NULL, 0);
 
 	*TLSR8258_REG_IRQ_MASK &= ~BIT(TLSR8258_IRQ_SYSTEM_TIMER);
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_clear_edge(TLSR8258_IRQ_SYSTEM_TIMER);
 	TLSR8258_REG_SYSTEM_TICK = 0u;
 	TLSR8258_REG_SYSTEM_TICK_MODE = 0u;
 	TLSR8258_REG_SYSTEM_TICK_MODE = FLD_SYSTEM_TICK_16M;
