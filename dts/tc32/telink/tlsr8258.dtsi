@@ -37,6 +37,17 @@
 			interrupt-parent = <&intc>;
 		};
 
+		uart0: serial@800090 {
+			compatible = "telink,tlsr8258-uart";
+			reg = <0x00800090 0x00000010>;
+			interrupts = <6>;
+			interrupt-parent = <&intc>;
+			clock-frequency = <24000000>;
+			current-speed = <115200>;
+			tx-pin = <0x04>; /* PA2, vendor GPIO_PA2 value */
+			status = "disabled";
+		};
+
 		gpioa: gpio@800580 {
 			compatible = "telink,tlsr8258-gpio";
 			reg = <0x00800580 0x00000008>;
