@@ -135,6 +135,29 @@ uint32_t __udivsi3(uint32_t a, uint32_t b)
 	return q;
 }
 
+uint32_t __umodsi3(uint32_t a, uint32_t b)
+{
+	if (b == 0U) {
+		return a;
+	}
+	if (a < b) {
+		return a;
+	}
+
+	union u64_words rem = { .value = 0 };
+	union u64_words divisor = { .value = b };
+
+	for (int i = 31; i >= 0; i--) {
+		u64_shl1(&rem);
+		rem.word.lo |= (a >> i) & 1U;
+		if (u64_ge(rem, divisor)) {
+			u64_sub(&rem, divisor);
+		}
+	}
+
+	return rem.word.lo;
+}
+
 int32_t __divsi3(int32_t a, int32_t b)
 {
 	int neg = 0;
@@ -157,4 +180,26 @@ int32_t __divsi3(int32_t a, int32_t b)
 	uint32_t q = __udivsi3(ua, ub);
 
 	return (int32_t)(neg ? (0U - q) : q);
+}
+
+int32_t __modsi3(int32_t a, int32_t b)
+{
+	int neg = 0;
+	uint32_t ua = (uint32_t)a;
+	uint32_t ub = (uint32_t)b;
+
+	if (a < 0) {
+		neg = 1;
+		ua = 0U - ua;
+	}
+	if (b < 0) {
+		ub = 0U - ub;
+	}
+	if (ub == 0U) {
+		return a;
+	}
+
+	uint32_t r = __umodsi3(ua, ub);
+
+	return (int32_t)(neg ? (0U - r) : r);
 }
