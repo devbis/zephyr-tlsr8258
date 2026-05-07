@@ -66,6 +66,12 @@ void z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
 
+	/*
+	 * First-stage TC32 port policy: process all currently pending sources
+	 * with global IRQ still disabled. Hardware nested IRQ entry is not
+	 * enabled here; arch_is_in_isr() observes this counter for the whole
+	 * pending-drain loop.
+	 */
 	_kernel.cpus[0].nested++;
 
 	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
