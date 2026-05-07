@@ -4,6 +4,7 @@ config SOC_SERIES_TLSR825X
 	bool
 	select TC32
 	select HAS_TELINK_DRIVERS
+	select ARCH_HAS_RAMFUNC_SUPPORT if XIP
 	select SOC_PREP_HOOK
 	imply XIP
 
