@@ -174,6 +174,23 @@ config RTT_TX_RETRY_IN_INTERRUPT
 
 endif
 
+config TLSR8258_RTT_CONSOLE
+	bool "Use TLSR8258 RTT-compatible RAM console"
+	depends on SOC_TLSR8258 && !USE_SEGGER_RTT
+	select CONSOLE_HAS_DRIVER
+	help
+	  Emit console messages to a SEGGER RTT-compatible control block in
+	  SRAM. This does not require the external SEGGER module and is intended
+	  for probe-rs over Telink SWS during TLSR8258 bring-up.
+
+config TLSR8258_RTT_CONSOLE_BUFFER_SIZE
+	int "TLSR8258 RTT up-buffer size"
+	default 1024
+	depends on TLSR8258_RTT_CONSOLE
+	help
+	  Size of the target-to-host RTT ring buffer. The usable capacity is one
+	  byte less than this value.
+
 config IPM_CONSOLE_SENDER
 	bool "Inter-processor Mailbox console sender"
 	select CONSOLE_HAS_DRIVER

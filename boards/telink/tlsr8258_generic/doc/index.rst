@@ -36,6 +36,8 @@ Supported Features
      - supported
    * - UART console
      - polling console supported
+   * - RTT console
+     - probe-rs-compatible bring-up console supported
    * - Flash driver
      - not implemented
    * - Power management
@@ -71,6 +73,48 @@ Build with the local LLVM TC32 toolchain:
      -DPython3_EXECUTABLE=$PWD/.venv-zephyr/bin/python \
      -DUSER_CACHE_DIR=/tmp/zephyr-tc32-cache
    cmake --build /tmp/zephyr-tc32-uart
+
+RTT Console
+***********
+
+The board also has a TLSR8258-specific RTT-compatible RAM console for SWS
+debugging with the local ``probe-rs`` tree. It exposes the standard
+``_SEGGER_RTT`` control block in SRAM, but does not require the external SEGGER
+module sources.
+
+Build the RTT smoke sample:
+
+.. code-block:: console
+
+   ZEPHYR_BASE=$PWD/zephyr cmake \
+     -S zephyr/samples/boards/telink/tlsr8258_rtt_console \
+     -B /tmp/zephyr-tc32-rtt \
+     -GNinja \
+     -DBOARD=tlsr8258_generic \
+     -DZEPHYR_TOOLCHAIN_VARIANT=host/llvm \
+     -DLLVM_TOOLCHAIN_PATH=$PWD/toolchains/tc32-stage2/llvm \
+     -DPython3_EXECUTABLE=$PWD/.venv-zephyr/bin/python \
+     -DUSER_CACHE_DIR=/tmp/zephyr-tc32-cache
+   cmake --build /tmp/zephyr-tc32-rtt -v
+
+Attach to a running image with the ELF so ``probe-rs`` can use the exact RTT
+control block address:
+
+.. code-block:: console
+
+   probe-rs/target/debug/probe-rs attach \
+     --chip TLSR8258 \
+     --probe sws:tcp://192.168.70.44:55555 \
+     /tmp/zephyr-tc32-rtt/zephyr/zephyr.elf
+
+Without an ELF, scan the TLSR8258 SRAM range:
+
+.. code-block:: console
+
+   probe-rs/target/debug/probe-rs attach \
+     --chip TLSR8258 \
+     --probe sws:tcp://192.168.70.44:55555 \
+     --scan-region 0x00840000..0x00850000
 
 Flashing
 ********
