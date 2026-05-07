@@ -88,6 +88,8 @@
 #define TLSR8258_IRQ_TIMER_MASK    (BIT(TLSR8258_IRQ_TMR0) | \
 				    BIT(TLSR8258_IRQ_TMR1) | \
 				    BIT(TLSR8258_IRQ_TMR2))
+#define TLSR8258_IRQ_LEVEL_MASK    GENMASK(15, 0)
+#define TLSR8258_IRQ_EDGE_MASK     GENMASK(23, 16)
 #define TLSR8258_IRQ_VALID_MASK    (~TLSR8258_IRQ_RESERVED_MASK & GENMASK(23, 0))
 
 #define TLSR8258_REG_IRQ_MASK  ((volatile uint32_t *)0x00800640u)
@@ -95,5 +97,31 @@
 #define TLSR8258_REG_IRQ_SRC ((volatile uint32_t *)0x00800648u)
 
 #define TLSR8258_REG_TMR_STA ((volatile uint8_t *)0x00800623u)
+
+#ifndef _ASMLANGUAGE
+static inline uint32_t tlsr8258_irq_bit(unsigned int irq)
+{
+	return irq < TLSR8258_NUM_IRQS ? BIT(irq) : 0u;
+}
+
+static inline bool tlsr8258_irq_is_valid(unsigned int irq)
+{
+	return (tlsr8258_irq_bit(irq) & TLSR8258_IRQ_VALID_MASK) != 0u;
+}
+
+static inline bool tlsr8258_irq_is_edge(unsigned int irq)
+{
+	return (tlsr8258_irq_bit(irq) & TLSR8258_IRQ_EDGE_MASK) != 0u;
+}
+
+static inline void tlsr8258_irq_clear_edge(unsigned int irq)
+{
+	uint32_t bit = tlsr8258_irq_bit(irq);
+
+	if ((bit & TLSR8258_IRQ_EDGE_MASK) != 0u) {
+		*TLSR8258_REG_IRQ_SRC = bit;
+	}
+}
+#endif /* _ASMLANGUAGE */
 
 #endif /* SOC_TELINK_TLSR825X_IRQ_H_ */
