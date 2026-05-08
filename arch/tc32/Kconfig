@@ -19,4 +19,13 @@ config GEN_SW_ISR_TABLE
 config ARCH_HAS_SINGLE_THREAD_SUPPORT
 	default y if !SMP
 
+config TC32_BOOT_MIRROR_SIZE
+	hex "TC32 boot mirror SRAM reserve size"
+	default 0x4000
+	help
+	  Size of the low SRAM window reserved for the TLSR boot-ROM flash
+	  mirror. Larger Zephyr images need a larger mirror because the boot
+	  header asks the ROM to copy the image LMA prefix into SRAM before the
+	  TC32 runtime copies RAM data sections to their final addresses.
+
 endmenu
