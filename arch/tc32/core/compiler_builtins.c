@@ -100,6 +100,21 @@ static int __attribute__((noinline)) u32_bit0_set(uint32_t value)
 	return (value & 1U) != 0U;
 }
 
+int __clzsi2(uint32_t value)
+{
+	if (value == 0U) {
+		return 32;
+	}
+
+	int count = 0;
+
+	for (uint32_t bit = BIT(31); (value & bit) == 0U; bit >>= 1) {
+		count++;
+	}
+
+	return count;
+}
+
 uint64_t __muldi3(uint64_t a, uint64_t b)
 {
 	union u64_words multiplicand = { .value = a };
