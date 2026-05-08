@@ -174,7 +174,7 @@ static void tlsr8258_gpio_ie_update(const struct device *dev, uint8_t mask, bool
 
 static void tlsr8258_gpio_clear_source(void)
 {
-	tlsr8258_irq_clear_edge(TLSR8258_IRQ_GPIO);
+	tlsr8258_irq_clear_parent(TLSR8258_IRQ_GPIO);
 }
 
 static void tlsr8258_gpio_dispatch(const struct device *dev)
@@ -432,11 +432,16 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 
 	*TLSR8258_GPIO_WAKEUP_IRQ |= TLSR8258_GPIO_CORE_INTERRUPT_EN;
 
-	/* Vendor sequence: set polarity, clear source, enable mask, then enable pin. */
+	/*
+	 * Clear once after polarity setup and again after enabling the GPIO pin
+	 * source. Some boards latch one parent edge while the pin source is
+	 * enabled; keep the parent mask disabled until that stale edge is gone.
+	 */
 	tlsr8258_gpio_clear_source();
-	irq_enable(TLSR8258_IRQ_GPIO);
 	data->pin_int_en |= mask;
 	regs->irq_en |= mask;
+	tlsr8258_gpio_clear_source();
+	irq_enable(TLSR8258_IRQ_GPIO);
 
 	irq_unlock(key);
 	return 0;
