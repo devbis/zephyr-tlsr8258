@@ -43,11 +43,7 @@ int arch_coprocessors_disable(struct k_thread *thread)
 void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
 				k_thread_entry_t entry)
 {
-	ARG_UNUSED(stack_ptr);
-	ARG_UNUSED(entry);
-
 	_kernel.cpus[0].current = main_thread;
-	z_sched_unready_locked(main_thread);
-	z_tc32_switch_to_thread(main_thread);
+	z_tc32_switch_to_main(stack_ptr, entry);
 	CODE_UNREACHABLE;
 }
