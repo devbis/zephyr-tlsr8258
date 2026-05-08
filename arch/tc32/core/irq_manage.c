@@ -10,6 +10,7 @@
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
 #define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+#define TC32_IRQ_MAX_DRAIN (TLSR8258_NUM_IRQS * 2u)
 
 FUNC_NORETURN void z_irq_spurious(const void *unused)
 {
@@ -65,6 +66,7 @@ static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
 void z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
+	unsigned int drained = 0u;
 
 	/*
 	 * First-stage TC32 port policy: process all currently pending sources
@@ -79,6 +81,11 @@ void z_tc32_handle_irqs(void)
 
 		if (!irq_is_valid(irq)) {
 			break;
+		}
+
+		if (drained++ >= TC32_IRQ_MAX_DRAIN) {
+			_kernel.cpus[0].nested--;
+			z_tc32_fatal_error(K_ERR_SPURIOUS_IRQ, NULL);
 		}
 
 		if (irq_clear_is_arch_owned(irq)) {
