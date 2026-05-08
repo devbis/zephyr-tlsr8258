@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_TELINK_TLSR8258
+	bool "Telink TLSR8258 IEEE 802.15.4 RF driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_ZB_ENABLED
+	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	help
+	  Enable the first-stage IEEE 802.15.4 RF driver for Telink TLSR8258.
+	  The driver follows the vendor Zigbee 250 kbit/s RF init/TX/RX path.
+
+if IEEE802154_TELINK_TLSR8258
+
+config IEEE802154_TLSR8258_INIT_PRIO
+	int "TLSR8258 IEEE 802.15.4 initialization priority"
+	default 80
+
+config IEEE802154_TLSR8258_TX_WAIT_US
+	int "TLSR8258 RF TX wait timeout"
+	default 10000
+	help
+	  Maximum time in microseconds to poll the RF TX done status in direct
+	  transmission mode.
+
+config IEEE802154_TLSR8258_CCA_RSSI_THRESHOLD
+	int "TLSR8258 CCA RSSI threshold in dBm"
+	default -50
+
+config IEEE802154_TLSR8258_RANDOM_MAC
+	bool "Random MAC address"
+	default n
+	help
+	  Generate a locally administered MAC address from Zephyr's random API.
+	  Keep this disabled until the board has an entropy or test-random source
+	  selected by the application.
+
+if !IEEE802154_TLSR8258_RANDOM_MAC
+
+config IEEE802154_TLSR8258_MAC4
+	hex "MAC Address Byte 4"
+	default 0
+	range 0 0xff
+
+config IEEE802154_TLSR8258_MAC5
+	hex "MAC Address Byte 5"
+	default 0
+	range 0 0xff
+
+config IEEE802154_TLSR8258_MAC6
+	hex "MAC Address Byte 6"
+	default 0
+	range 0 0xff
+
+config IEEE802154_TLSR8258_MAC7
+	hex "MAC Address Byte 7"
+	default 0
+	range 0 0xff
+
+endif # !IEEE802154_TLSR8258_RANDOM_MAC
+endif # IEEE802154_TELINK_TLSR8258
