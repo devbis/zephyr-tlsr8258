@@ -73,6 +73,14 @@
 			status = "disabled";
 		};
 
+		zb: ieee802154@800f00 {
+			compatible = "telink,tlsr8258-zb";
+			reg = <0x00800f00 0x00000040>;
+			interrupts = <13>;
+			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
 		gpioa: gpio@800580 {
 			compatible = "telink,tlsr8258-gpio";
 			reg = <0x00800580 0x00000008>;
