@@ -19,8 +19,14 @@
 	pinctrl: pinctrl {
 		compatible = "telink,tlsr8258-pinctrl";
 
-		uart0_default: uart0_default {
-			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA2,
+		uart0_tx_default: uart0_tx_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PB1,
+						  TLSR8258_FUNC_UART)>;
+			output-enable;
+		};
+
+		uart0_rx_default: uart0_rx_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA0,
 						  TLSR8258_FUNC_UART)>;
 			bias-pull-up;
 			input-enable;
@@ -67,8 +73,9 @@
 			clocks = <&sys_clk>;
 			clock-frequency = <24000000>;
 			current-speed = <115200>;
-			tx-pin = <0x04>; /* PA2, vendor GPIO_PA2 value */
-			pinctrl-0 = <&uart0_default>;
+			tx-pin = <TLSR8258_GPIO_PB1>;
+			rx-pin = <TLSR8258_GPIO_PA0>;
+			pinctrl-0 = <&uart0_tx_default &uart0_rx_default>;
 			pinctrl-names = "default";
 			status = "disabled";
 		};

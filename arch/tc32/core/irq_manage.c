@@ -9,7 +9,7 @@
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
-#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn) & ~1u)
+#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn))
 #define TC32_IRQ_MAX_DRAIN (TLSR8258_NUM_IRQS * 2u)
 
 FUNC_NORETURN void z_irq_spurious(const void *unused)

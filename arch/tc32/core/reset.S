@@ -47,6 +47,38 @@ GDATA(z_interrupt_stacks)
 	nop
 .endm
 
+.macro TC32_COPY_FROM_SRAM_MIRROR
+1:
+	tcmp r2, #4
+	nop
+	nop
+	tjlo 2f
+	tloadr r3, [r0]
+	nop
+	nop
+	tstorer r3, [r1]
+	tmov r3, #4
+	tsub r2, r2, r3
+	tadd r0, r0, r3
+	tadd r1, r1, r3
+	tj 1b
+2:
+	tcmp r2, #0
+	nop
+	nop
+	tjeq 3f
+	tloadrb r3, [r0]
+	nop
+	nop
+	tstorerb r3, [r1]
+	tmov r3, #1
+	tsub r2, r2, r3
+	tadd r0, r0, r3
+	tadd r1, r1, r3
+	tj 2b
+3:
+.endm
+
 SECTION_FUNC(vectors, __start)
 	.org 0x0
 	tj __reset
@@ -61,7 +93,7 @@ SECTION_FUNC(vectors, __start)
 
 	.org 0x18
 .Lirq_low_call_target:
-	.word z_tc32_handle_irqs - 1
+	.word z_tc32_handle_irqs
 .Lirq_low_ret_target:
 	.word .Lirq_restore
 
@@ -169,7 +201,7 @@ z_prep_c:
 	nop
 	nop
 	tsub r2, r2, r1
-	tjl .Lcall_flash_read
+	TC32_COPY_FROM_SRAM_MIRROR
 
 	tloadr r0, .Ldata_lma_start
 	tloadr r1, .Ldata_start
@@ -177,34 +209,26 @@ z_prep_c:
 	nop
 	nop
 	tsub r2, r2, r1
-	tjl .Lcall_flash_read
+	TC32_COPY_FROM_SRAM_MIRROR
 
 	tjl z_cstart
 
 .Lprep_hang:
 	tj .Lprep_hang
 
-.Lcall_flash_read:
-	tloadr r4, .Lflash_read
-	nop
-	nop
-	tjex r4
-
 	.align 2
-.Lflash_read:
-	.word tc32_flash_read - 1
 .Lbss_start:
 	.word __bss_start
 .Lbss_end:
 	.word __bss_end
 .Lrodata_lma_start:
-	.word __rodata_region_load_start
+	.word 0x00840000 + __rodata_region_load_start
 .Lrodata_start:
 	.word __rodata_region_start
 .Lrodata_end:
 	.word __rodata_region_end
 .Ldata_lma_start:
-	.word __data_region_load_start
+	.word 0x00840000 + __data_region_load_start
 .Ldata_start:
 	.word __data_region_start
 .Ldata_end:

@@ -147,6 +147,14 @@ static int tlsr8258_gpio_uart_mux(uint32_t pin, uint8_t *mask, uint8_t *value)
 		*mask = (uint8_t)~GENMASK(5, 4);
 		*value = BIT(4);
 		break;
+	case TLSR8258_GPIO_PD0:
+		*mask = (uint8_t)~GENMASK(1, 0);
+		*value = BIT(1);
+		break;
+	case TLSR8258_GPIO_PD7:
+		*mask = (uint8_t)~GENMASK(7, 6);
+		*value = BIT(7);
+		break;
 	default:
 		return -ENOTSUP;
 	}
