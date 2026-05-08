@@ -83,6 +83,7 @@ source "drivers/ieee802154/Kconfig.nrf5"
 source "drivers/ieee802154/Kconfig.rf2xx"
 source "drivers/ieee802154/Kconfig.silabs_efr32"
 source "drivers/ieee802154/Kconfig.stm32wba"
+source "drivers/ieee802154/Kconfig.tlsr8258"
 source "drivers/ieee802154/Kconfig.uart_pipe"
 # zephyr-keep-sorted-stop
 
