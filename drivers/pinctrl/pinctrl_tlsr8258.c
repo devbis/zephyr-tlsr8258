@@ -92,66 +92,62 @@ static int tlsr8258_gpio_uart_mux(uint32_t pin, uint8_t *mask, uint8_t *value)
 {
 	switch (pin) {
 	case TLSR8258_GPIO_PA0:
+		/* UART_RX: 0x5a8[1:0] = 2 */
 		*mask = (uint8_t)~GENMASK(1, 0);
 		*value = BIT(1);
 		break;
-	case TLSR8258_GPIO_PA1:
-		*mask = (uint8_t)~GENMASK(3, 2);
-		*value = BIT(2);
-		break;
 	case TLSR8258_GPIO_PA2:
+		/* UART_TX: 0x5a8[5:4] = 1 */
 		*mask = (uint8_t)~GENMASK(5, 4);
 		*value = BIT(4);
 		break;
-	case TLSR8258_GPIO_PA3:
-		*mask = (uint8_t)~GENMASK(7, 6);
-		*value = BIT(6);
-		break;
-	case TLSR8258_GPIO_PA4:
-		*mask = (uint8_t)~GENMASK(1, 0);
-		*value = BIT(0);
-		break;
-	case TLSR8258_GPIO_PA7:
-		*mask = (uint8_t)~GENMASK(7, 6);
-		*value = BIT(6);
-		break;
 	case TLSR8258_GPIO_PB0:
+		/* UART_RX: 0x5aa[1:0] = 1 */
 		*mask = (uint8_t)~GENMASK(1, 0);
 		*value = BIT(0);
 		break;
 	case TLSR8258_GPIO_PB1:
+		/* UART_TX: 0x5aa[3:2] = 1 */
 		*mask = (uint8_t)~GENMASK(3, 2);
 		*value = BIT(2);
 		break;
-	case TLSR8258_GPIO_PB2:
-		*mask = (uint8_t)~GENMASK(5, 4);
-		*value = BIT(4);
-		break;
-	case TLSR8258_GPIO_PB3:
-		*mask = (uint8_t)~GENMASK(7, 6);
-		*value = BIT(6);
-		break;
-	case TLSR8258_GPIO_PB6:
-		*mask = (uint8_t)~GENMASK(5, 4);
-		*value = BIT(5);
-		break;
 	case TLSR8258_GPIO_PB7:
+		/* UART_RX: 0x5ab[7:6] = 2 */
 		*mask = (uint8_t)~GENMASK(7, 6);
 		*value = BIT(7);
 		break;
-	case TLSR8258_GPIO_PC0:
-		*mask = (uint8_t)~GENMASK(1, 0);
-		*value = BIT(1);
-		break;
 	case TLSR8258_GPIO_PC2:
+		/* 7816_TRX/UART_TX: 0x5ac[5:4] = 1 */
 		*mask = (uint8_t)~GENMASK(5, 4);
 		*value = BIT(4);
 		break;
+	case TLSR8258_GPIO_PC3:
+		/* UART_RX: 0x5ac[7:6] = 1 */
+		*mask = (uint8_t)~GENMASK(7, 6);
+		*value = BIT(6);
+		break;
+	case TLSR8258_GPIO_PC5:
+		/* UART_RX: 0x5ad[3:2] = 1 */
+		*mask = (uint8_t)~GENMASK(3, 2);
+		*value = BIT(2);
+		break;
 	case TLSR8258_GPIO_PD0:
+		/* 7816_TRX/UART_TX: 0x5ae[1:0] = 2 */
 		*mask = (uint8_t)~GENMASK(1, 0);
 		*value = BIT(1);
 		break;
+	case TLSR8258_GPIO_PD3:
+		/* UART_TX7816: 0x5ae[7:6] = 2 */
+		*mask = (uint8_t)~GENMASK(7, 6);
+		*value = BIT(7);
+		break;
+	case TLSR8258_GPIO_PD6:
+		/* UART_RX: 0x5af[5:4] = 1 */
+		*mask = (uint8_t)~GENMASK(5, 4);
+		*value = BIT(4);
+		break;
 	case TLSR8258_GPIO_PD7:
+		/* 7816_TRX/UART_TX: 0x5af[7:6] = 2 */
 		*mask = (uint8_t)~GENMASK(7, 6);
 		*value = BIT(7);
 		break;
