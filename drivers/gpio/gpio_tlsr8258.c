@@ -58,9 +58,14 @@ struct tlsr8258_gpio_config {
 struct tlsr8258_gpio_data {
 	struct gpio_driver_data common;
 	sys_slist_t callbacks;
+	gpio_port_pins_t input_en;
+	gpio_port_pins_t output_en;
 	gpio_port_pins_t pin_int_en;
 	gpio_port_pins_t trig_low;
 	gpio_port_pins_t trig_both;
+#ifdef CONFIG_GPIO_GET_CONFIG
+	gpio_flags_t pin_flags[TLSR8258_GPIO_MAX_PIN + 1u];
+#endif
 };
 
 static volatile struct tlsr8258_gpio_regs *tlsr8258_gpio_regs(const struct device *dev)
@@ -209,13 +214,37 @@ static void tlsr8258_gpio_irq_connect(void)
 	IRQ_CONNECT(TLSR8258_IRQ_GPIO, 0, tlsr8258_gpio_irq_handler, NULL, 0);
 }
 
+static bool tlsr8258_gpio_any_interrupt_enabled(void)
+{
+	bool enabled = false;
+
+#define TLSR8258_GPIO_CHECK_INT(n)						\
+	do {									\
+		const struct device *dev = DEVICE_DT_INST_GET(n);		\
+		const struct tlsr8258_gpio_data *data = dev->data;		\
+										\
+		enabled = enabled || data->pin_int_en != 0u;			\
+	} while (false);
+	DT_INST_FOREACH_STATUS_OKAY(TLSR8258_GPIO_CHECK_INT)
+#undef TLSR8258_GPIO_CHECK_INT
+
+	return enabled;
+}
+
 static int tlsr8258_gpio_init(const struct device *dev)
 {
 	struct tlsr8258_gpio_data *data = dev->data;
 
+	data->input_en = 0u;
+	data->output_en = 0u;
 	data->pin_int_en = 0u;
 	data->trig_low = 0u;
 	data->trig_both = 0u;
+#ifdef CONFIG_GPIO_GET_CONFIG
+	for (uint8_t pin = 0u; pin <= TLSR8258_GPIO_MAX_PIN; pin++) {
+		data->pin_flags[pin] = 0u;
+	}
+#endif
 
 	tlsr8258_gpio_irq_connect();
 	return 0;
@@ -225,6 +254,7 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 				       gpio_flags_t flags)
 {
 	volatile struct tlsr8258_gpio_regs *regs = tlsr8258_gpio_regs(dev);
+	struct tlsr8258_gpio_data *data = dev->data;
 	uint16_t vendor_pin;
 	uint8_t mask;
 
@@ -254,14 +284,18 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 
 	if ((flags & GPIO_OUTPUT) != 0u) {
 		regs->oen &= (uint8_t)~mask;
+		data->output_en |= mask;
 	} else {
 		regs->oen |= mask;
+		data->output_en &= ~mask;
 	}
 
 	if ((flags & GPIO_INPUT) != 0u) {
 		tlsr8258_gpio_ie_update(dev, mask, true);
+		data->input_en |= mask;
 	} else {
 		tlsr8258_gpio_ie_update(dev, mask, false);
+		data->input_en &= ~mask;
 	}
 
 	if ((flags & GPIO_PULL_UP) != 0u) {
@@ -272,8 +306,27 @@ static int tlsr8258_gpio_pin_configure(const struct device *dev, gpio_pin_t pin,
 		tlsr8258_gpio_pull(vendor_pin, TLSR8258_GPIO_PULL_FLOAT);
 	}
 
+#ifdef CONFIG_GPIO_GET_CONFIG
+	data->pin_flags[pin] = flags;
+#endif
+
 	return 0;
 }
+
+#ifdef CONFIG_GPIO_GET_CONFIG
+static int tlsr8258_gpio_pin_get_config(const struct device *dev, gpio_pin_t pin,
+					gpio_flags_t *flags)
+{
+	struct tlsr8258_gpio_data *data = dev->data;
+
+	if (!tlsr8258_gpio_pin_valid(pin)) {
+		return -EINVAL;
+	}
+
+	*flags = data->pin_flags[pin];
+	return 0;
+}
+#endif
 
 static int tlsr8258_gpio_port_get_raw(const struct device *dev,
 				      gpio_port_value_t *value)
@@ -348,6 +401,9 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev,
 
 	if (mode == GPIO_INT_MODE_DISABLED) {
 		tlsr8258_gpio_clear_source();
+		if (!tlsr8258_gpio_any_interrupt_enabled()) {
+			irq_disable(TLSR8258_IRQ_GPIO);
+		}
 		irq_unlock(key);
 		return 0;
 	}
@@ -395,8 +451,30 @@ static int tlsr8258_gpio_manage_callback(const struct device *dev,
 	return gpio_manage_callback(&data->callbacks, callback, set);
 }
 
+#ifdef CONFIG_GPIO_GET_DIRECTION
+static int tlsr8258_gpio_port_get_direction(const struct device *dev,
+					    gpio_port_pins_t map,
+					    gpio_port_pins_t *inputs,
+					    gpio_port_pins_t *outputs)
+{
+	struct tlsr8258_gpio_data *data = dev->data;
+
+	if (inputs != NULL) {
+		*inputs = data->input_en & map;
+	}
+	if (outputs != NULL) {
+		*outputs = data->output_en & map;
+	}
+
+	return 0;
+}
+#endif
+
 static DEVICE_API(gpio, tlsr8258_gpio_api) = {
 	.pin_configure = tlsr8258_gpio_pin_configure,
+#ifdef CONFIG_GPIO_GET_CONFIG
+	.pin_get_config = tlsr8258_gpio_pin_get_config,
+#endif
 	.port_get_raw = tlsr8258_gpio_port_get_raw,
 	.port_set_masked_raw = tlsr8258_gpio_port_set_masked_raw,
 	.port_set_bits_raw = tlsr8258_gpio_port_set_bits_raw,
@@ -404,6 +482,9 @@ static DEVICE_API(gpio, tlsr8258_gpio_api) = {
 	.port_toggle_bits = tlsr8258_gpio_port_toggle_bits,
 	.pin_interrupt_configure = tlsr8258_gpio_pin_interrupt_configure,
 	.manage_callback = tlsr8258_gpio_manage_callback,
+#ifdef CONFIG_GPIO_GET_DIRECTION
+	.port_get_direction = tlsr8258_gpio_port_get_direction,
+#endif
 };
 
 #define TLSR8258_GPIO_INIT(n)							\
