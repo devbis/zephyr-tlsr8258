@@ -48,7 +48,7 @@ static ALWAYS_INLINE bool irq_clear_is_arch_owned(unsigned int irq)
 static ALWAYS_INLINE void irq_clear_arch_owned(unsigned int irq)
 {
 	/* Vendor order for TMR0..TMR2: clear IRQSRC first, then TMR_STATUS. */
-	*TLSR8258_REG_IRQ_SRC = BIT(irq);
+	tlsr8258_irq_clear_parent(irq);
 	*TLSR8258_REG_TMR_STA = BIT(irq);
 }
 

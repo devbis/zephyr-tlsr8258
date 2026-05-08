@@ -13,14 +13,17 @@
 #define REG32(addr) ((volatile uint32_t *)(addr))
 
 #define GPIO_PA0 BIT(0)
+#define GPIO_PB1 BIT(1)
 
 #define GPIO_PA_IN           REG8(0x00800580u)
 #define GPIO_PA_IE           REG8(0x00800581u)
 #define GPIO_PA_OEN          REG8(0x00800582u)
-#define GPIO_PA_OUT          REG8(0x00800583u)
 #define GPIO_PA_POL          REG8(0x00800584u)
 #define GPIO_PA_FUNC         REG8(0x00800586u)
 #define GPIO_PA_IRQ_WAKEUP   REG8(0x00800587u)
+#define GPIO_PB_OEN          REG8(0x0080058au)
+#define GPIO_PB_OUT          REG8(0x0080058bu)
+#define GPIO_PB_FUNC         REG8(0x0080058eu)
 #define GPIO_WAKEUP_IRQ      REG8(0x008005b5u)
 #define GPIO_IRQ_RISC0_PA    REG8(0x008005b8u)
 #define GPIO_IRQ_RISC1_PA    REG8(0x008005c0u)
@@ -49,7 +52,7 @@ static void tiny_delay(void)
 
 static void clear_gpio_source(unsigned int irq)
 {
-	*TLSR8258_REG_IRQ_SRC = BIT(irq);
+	tlsr8258_irq_clear_parent(irq);
 	tlsr_gpio_irq_seen_mask |= BIT(irq);
 	tlsr_gpio_irq_count++;
 }
@@ -86,14 +89,18 @@ static void gpio_pa0_prepare(void)
 
 	*GPIO_PA_FUNC |= GPIO_PA0;
 	*GPIO_PA_IE |= GPIO_PA0;
-	*GPIO_PA_OEN &= (uint8_t)~GPIO_PA0;
-	*GPIO_PA_OUT &= (uint8_t)~GPIO_PA0;
+	*GPIO_PA_OEN |= GPIO_PA0;
+
+	/* Drive PA0 through the board loopback PB1 -> PA0. */
+	*GPIO_PB_FUNC |= GPIO_PB1;
+	*GPIO_PB_OEN &= (uint8_t)~GPIO_PB1;
+	*GPIO_PB_OUT &= (uint8_t)~GPIO_PB1;
 
 	/* Rising-edge mode. Vendor sequence clears source after polarity setup. */
 	*GPIO_PA_POL &= (uint8_t)~GPIO_PA0;
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_GPIO) |
-				 BIT(TLSR8258_IRQ_GPIO_RISC0) |
-				 BIT(TLSR8258_IRQ_GPIO_RISC1);
+	tlsr8258_irq_clear_parent(TLSR8258_IRQ_GPIO);
+	tlsr8258_irq_clear_parent(TLSR8258_IRQ_GPIO_RISC0);
+	tlsr8258_irq_clear_parent(TLSR8258_IRQ_GPIO_RISC1);
 
 	irq_unlock(key);
 	tiny_delay();
@@ -101,11 +108,11 @@ static void gpio_pa0_prepare(void)
 
 static void trigger_pa0_rising_edge(void)
 {
-	*GPIO_PA_OUT &= (uint8_t)~GPIO_PA0;
+	*GPIO_PB_OUT &= (uint8_t)~GPIO_PB1;
 	tiny_delay();
-	*GPIO_PA_OUT |= GPIO_PA0;
+	*GPIO_PB_OUT |= GPIO_PB1;
 	tiny_delay();
-	*GPIO_PA_OUT &= (uint8_t)~GPIO_PA0;
+	*GPIO_PB_OUT &= (uint8_t)~GPIO_PB1;
 	tiny_delay();
 }
 
@@ -114,8 +121,9 @@ static void enable_gpio_irq(unsigned int irq, volatile uint8_t *pin_irq_enable)
 	unsigned int key = irq_lock();
 
 	tlsr_gpio_irq_seen_mask = 0u;
-	*TLSR8258_REG_IRQ_SRC = BIT(irq);
+	tlsr8258_irq_clear_parent(irq);
 	*pin_irq_enable |= GPIO_PA0;
+	tlsr8258_irq_clear_parent(irq);
 	irq_enable(irq);
 
 	irq_unlock(key);
@@ -127,7 +135,7 @@ static void disable_gpio_irq(unsigned int irq, volatile uint8_t *pin_irq_enable)
 
 	irq_disable(irq);
 	*pin_irq_enable &= (uint8_t)~GPIO_PA0;
-	*TLSR8258_REG_IRQ_SRC = BIT(irq);
+	tlsr8258_irq_clear_parent(irq);
 
 	irq_unlock(key);
 }

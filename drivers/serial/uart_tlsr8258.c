@@ -238,9 +238,10 @@ static uint8_t tlsr8258_uart_rx_count(void)
 static void tlsr8258_uart_clear_irq_status(uint8_t mask)
 {
 	TLSR8258_REG_UART_STATUS1 = mask;
-	*TLSR8258_REG_IRQ_SRC = BIT(TLSR8258_IRQ_UART);
+	tlsr8258_irq_clear_parent(TLSR8258_IRQ_UART);
 }
 
+#if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 static void tlsr8258_uart_clear_rx_irq_status(void)
 {
 	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
@@ -251,6 +252,7 @@ static void tlsr8258_uart_clear_tx_irq_status(void)
 {
 	tlsr8258_uart_clear_irq_status(FLD_UART_TX_DONE | FLD_UART_TX_BUF_IRQ);
 }
+#endif /* CONFIG_UART_INTERRUPT_DRIVEN || CONFIG_UART_ASYNC_API */
 
 #ifndef CONFIG_PINCTRL
 static void tlsr8258_uart_pullup(uint32_t pin)
