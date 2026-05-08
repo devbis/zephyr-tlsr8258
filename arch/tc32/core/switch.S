@@ -195,4 +195,13 @@ SECTION_FUNC(TEXT, z_tc32_switch_to_main)
 	tmov r1, #0
 	tmov r2, #0
 	tmov r3, #0
+	tloadr r4, .Lswitch_main_irq_en
+	nop
+	nop
+	tmov r5, #1
+	tstorerb r5, [r4]
 	tjl z_thread_entry
+
+	.align 2
+.Lswitch_main_irq_en:
+	.word 0x00800643
