@@ -7,9 +7,9 @@
  *
  * IRQ  Mask bit   Name          Type    Clear owner
  * ---  --------  ----          ----    ----------
- *  0   0x000001  TMR0          level   arch timer: reg_irq_src, reg_tmr_sta bit0
- *  1   0x000002  TMR1          level   arch timer: reg_irq_src, reg_tmr_sta bit1
- *  2   0x000004  TMR2          level   arch timer: reg_irq_src, reg_tmr_sta bit2
+ *  0   0x000001  TMR0          level   arch timer: parent src, reg_tmr_sta bit0
+ *  1   0x000002  TMR1          level   arch timer: parent src, reg_tmr_sta bit1
+ *  2   0x000004  TMR2          level   arch timer: parent src, reg_tmr_sta bit2
  *  3   0x000008  USB_PWDN      level   USB driver
  *  4   0x000010  DMA           level   DMA driver
  *  5   0x000020  DFIFO         level   DMA FIFO driver
@@ -27,7 +27,7 @@
  * 17   0x020000  USB_RST       edge    USB driver
  * 18   0x040000  GPIO          edge    GPIO driver
  * 19   0x080000  PM            edge    PM driver
- * 20   0x100000  SYSTEM_TIMER  edge    stimer driver: reg_irq_src
+ * 20   0x100000  SYSTEM_TIMER  edge    stimer driver: parent src
  * 21   0x200000  GPIO_RISC0    edge    GPIO driver
  * 22   0x400000  GPIO_RISC1    edge    GPIO driver
  * --   0x800000  (reserved)    --     --
@@ -36,6 +36,10 @@
  * - The arch dispatcher owns only TMR0..TMR2 during this first-stage port.
  * - SYSTEM_TIMER, GPIO, GPIO_RISC and all peripheral IRQ sources are owned by
  *   their drivers/smoke tests. The dispatcher must not clear those sources.
+ * - "Parent src" means the IRQSRC bit at 0x648..0x64a. For edge sources,
+ *   datasheet section 6.2.3 describes clearing through IRQSRC_2 (0x64a);
+ *   vendor SDK uses a 24-bit reg_irq_src write for bits 16..22, so Zephyr
+ *   does the same through tlsr8258_irq_clear_parent().
  *
  * Clear sequence per vendor SDK (irq_handler.c):
  *   TMR0/TMR1: reg_irq_src = FLD_IRQ_TMRx, reg_tmr_sta = FLD_TMR_STA_TMRx, then handler
@@ -114,12 +118,19 @@ static inline bool tlsr8258_irq_is_edge(unsigned int irq)
 	return (tlsr8258_irq_bit(irq) & TLSR8258_IRQ_EDGE_MASK) != 0u;
 }
 
-static inline void tlsr8258_irq_clear_edge(unsigned int irq)
+static inline void tlsr8258_irq_clear_parent(unsigned int irq)
 {
 	uint32_t bit = tlsr8258_irq_bit(irq);
 
-	if ((bit & TLSR8258_IRQ_EDGE_MASK) != 0u) {
+	if ((bit & TLSR8258_IRQ_VALID_MASK) != 0u) {
 		*TLSR8258_REG_IRQ_SRC = bit;
+	}
+}
+
+static inline void tlsr8258_irq_clear_edge(unsigned int irq)
+{
+	if (tlsr8258_irq_is_edge(irq)) {
+		tlsr8258_irq_clear_parent(irq);
 	}
 }
 #endif /* _ASMLANGUAGE */
