@@ -1,0 +1,6 @@
+board:
+  name: tlsr8258_tb03f
+  full_name: Telink TLSR8258 TB03F
+  vendor: telink
+  socs:
+  - name: tlsr8258
