@@ -41,7 +41,7 @@ Supported Features
    * - Flash driver
      - not implemented
    * - Power management
-     - not implemented
+     - experimental explicit suspend-to-idle via RC32K timer wake
    * - Radio
      - not implemented
 
@@ -116,6 +116,31 @@ Without an ELF, scan the TLSR8258 SRAM range:
      --probe sws:tcp://192.168.70.44:55555 \
      --scan-region 0x00840000..0x00850000
 
+Power Management Smoke
+**********************
+
+Build the suspend-to-idle smoke sample:
+
+.. code-block:: console
+
+   ZEPHYR_BASE=$PWD/zephyr cmake \
+     -S zephyr/samples/boards/telink/tlsr8258_pm_timer \
+     -B /tmp/zephyr-tc32-pm-timer \
+     -GNinja \
+     -DBOARD=tlsr8258_generic \
+     -DZEPHYR_TOOLCHAIN_VARIANT=host/llvm \
+     -DLLVM_TOOLCHAIN_PATH=$PWD/toolchains/tc32-stage2/llvm \
+     -DPython3_EXECUTABLE=$PWD/.venv-zephyr/bin/python \
+     -DUSER_CACHE_DIR=/tmp/zephyr-tc32-cache
+   cmake --build /tmp/zephyr-tc32-pm-timer -v
+
+The sample explicitly requests suspend-to-idle, wakes by the 32 kHz timer,
+and leaves a RAM marker for post-run inspection:
+
+- ``0x8258aa00``: timer wakeup path completed
+- ``0x8258e101``: suspend API returned an error
+- ``0x8258e102``: wakeup reason was not timer
+
 Flashing
 ********
 
@@ -166,6 +191,6 @@ Known Limitations
    * - Flash
      - no Zephyr flash driver yet
    * - Power management
-     - sleep and retention modes are not validated
+     - explicit suspend-to-idle is experimental; automatic idle PM, deep retention, and shutdown are not wired yet
    * - Debug
      - use ``TlsrPgm.py`` directly; no Zephyr runner integration yet
