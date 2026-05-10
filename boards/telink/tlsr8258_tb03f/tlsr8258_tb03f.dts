@@ -1,0 +1,117 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <telink/tlsr8258.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Telink TLSR8258 TB03F";
+	compatible = "telink,tlsr8258-tb03f";
+
+	aliases {
+		led0 = &led_y;
+		led1 = &led_w;
+		rgb-r = &rgb_r;
+		rgb-g = &rgb_g;
+		rgb-b = &rgb_b;
+	};
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash;
+		zephyr,console = &uart0;
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_y: led_y {
+			gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+			label = "TB03F Yellow LED";
+		};
+
+		led_w: led_w {
+			gpios = <&gpiob 5 GPIO_ACTIVE_HIGH>;
+			label = "TB03F White LED";
+		};
+
+		rgb_r: rgb_r {
+			gpios = <&gpioc 2 GPIO_ACTIVE_HIGH>;
+			label = "TB03F RGB Red";
+		};
+
+		rgb_g: rgb_g {
+			gpios = <&gpioc 3 GPIO_ACTIVE_HIGH>;
+			label = "TB03F RGB Green";
+		};
+
+		rgb_b: rgb_b {
+			gpios = <&gpioc 4 GPIO_ACTIVE_HIGH>;
+			label = "TB03F RGB Blue";
+		};
+	};
+
+	/*
+	 * The hardware button is on PA7, but it shares the SWS debug line on this
+	 * board. Keep it disabled in the base board DTS or TlsrPgm.py / probe-rs
+	 * attach stops working.
+	 *
+	 * buttons {
+	 *	compatible = "gpio-keys";
+	 *	status = "disabled";
+	 *
+	 *	sw0: button_0 {
+	 *		gpios = <&gpioa 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	 *		label = "TB03F Button";
+	 *	};
+	 * };
+	 */
+};
+
+&flash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00010000>;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 0x00030000>;
+		};
+
+		slot1_partition: partition@40000 {
+			label = "image-1";
+			reg = <0x00040000 0x00030000>;
+		};
+
+		scratch_partition: partition@70000 {
+			label = "image-scratch";
+			reg = <0x00070000 0x00010000>;
+		};
+	};
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&gpiob {
+	status = "okay";
+};
+
+&gpioc {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
