@@ -4,6 +4,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/linker/section_tags.h>
 #include <kswap.h>
 #include <tlsr825x/irq.h>
 
@@ -11,6 +12,16 @@ LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
 #define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn))
 #define TC32_IRQ_MAX_DRAIN (TLSR8258_NUM_IRQS * 2u)
+
+/*
+ * Debug state for hardware IRQ bring-up. Keep this in normal RAM so it can be
+ * inspected over SWS after trapping in z_irq_spurious()/fatal paths.
+ */
+volatile uint32_t __noinit z_tc32_irq_debug_src;
+volatile uint32_t __noinit z_tc32_irq_debug_mask;
+volatile uint32_t __noinit z_tc32_irq_debug_pending;
+volatile uint32_t __noinit z_tc32_irq_debug_irq;
+volatile uint32_t __noinit z_tc32_irq_debug_drained;
 
 FUNC_NORETURN void z_irq_spurious(const void *unused)
 {
@@ -78,6 +89,12 @@ void z_tc32_handle_irqs(void)
 
 	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
 		unsigned int irq = pending_lsb_index(pending);
+
+		z_tc32_irq_debug_src = *TLSR8258_REG_IRQ_SRC;
+		z_tc32_irq_debug_mask = *TLSR8258_REG_IRQ_MASK;
+		z_tc32_irq_debug_pending = pending;
+		z_tc32_irq_debug_irq = irq;
+		z_tc32_irq_debug_drained = drained;
 
 		if (!irq_is_valid(irq)) {
 			break;
