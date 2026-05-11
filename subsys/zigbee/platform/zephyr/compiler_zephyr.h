@@ -14,6 +14,17 @@
 #define _attribute_custom_code_     /* no-op */
 #define _attribute_gpio_wakeup_     /* no-op */
 
+/* SDK code-section attributes — no-op on Zephyr (linker script handles placement) */
+#define _CODE_APS_
+#define _CODE_BDB_
+#define _CODE_ZCL_
+#define _CODE_NWK_
+#define _CODE_ZDO_
+#define _CODE_AF_
+#define _CODE_SS_
+#define _CODE_GP_
+#define _CODE_MAC_
+
 /* Some vendor headers reference u_int8_t */
 #ifndef u_int8_t
 typedef unsigned char u_int8_t;

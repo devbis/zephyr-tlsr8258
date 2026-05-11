@@ -2,8 +2,17 @@
 
 if(CONFIG_ZIGBEE)
 
-zephyr_include_dirs(
+# Only expose the public Zephyr-facing include dir globally.
+# SDK-internal dirs (common, os, mac/includes, etc.) are library-private
+# to avoid shadowing standard headers (e.g. common/string.h vs <string.h>).
+zephyr_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+zephyr_library_named(subsys__zigbee)
+
+# Library-private include dirs — not visible to the rest of the build
+zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
     ${CMAKE_CURRENT_SOURCE_DIR}/os
     ${CMAKE_CURRENT_SOURCE_DIR}/common
@@ -11,8 +20,6 @@ zephyr_include_dirs(
     ${CMAKE_CURRENT_SOURCE_DIR}/zbapi
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
-
-zephyr_library_named(subsys__zigbee)
 
 # Platform / OS abstraction
 zephyr_library_sources(
@@ -32,7 +39,6 @@ zephyr_library_sources(
     common/mempool.c
     common/ringbuffer.c
     common/utility.c
-    common/string.c
 )
 
 # MAC layer
