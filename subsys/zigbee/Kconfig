@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig ZIGBEE
+	bool "Zigbee protocol support"
+	depends on IEEE802154_TELINK_TLSR8258
+	select NET_L2_IEEE802154
+	select NETWORKING
+	select TINYCRYPT
+	select TINYCRYPT_AES
+	select NVS
+	help
+	  Enable Zigbee subsystem for TLSR8258.
+
+if ZIGBEE
+
+choice ZIGBEE_ROLE
+	prompt "Zigbee device role"
+	default ZIGBEE_ED
+
+config ZIGBEE_ED
+	bool "End Device"
+
+config ZIGBEE_ROUTER
+	bool "Router"
+
+config ZIGBEE_COORDINATOR
+	bool "Coordinator"
+
+endchoice
+
+config ZIGBEE_CHANNEL
+	int "Default Zigbee channel"
+	default 15
+	range 11 26
+
+config ZIGBEE_STACK_SIZE
+	int "Zigbee thread stack size"
+	default 2048
+
+config ZIGBEE_THREAD_PRIO
+	int "Zigbee thread priority"
+	default 5
+
+config ZIGBEE_BDB
+	bool "Base Device Behavior"
+	default y
+
+config ZIGBEE_ZCL
+	bool "Zigbee Cluster Library"
+	default y
+
+config ZIGBEE_GP
+	bool "Green Power"
+	default n
+
+config ZIGBEE_OTA
+	bool "OTA firmware update"
+	default n
+
+config ZIGBEE_WWAH
+	bool "Works With All Hubs"
+	default n
+
+config ZIGBEE_NV_SECTOR_COUNT
+	int "NVS sector count for Zigbee storage"
+	default 2
+
+config ZIGBEE_LOG_LEVEL
+	int "Zigbee log level"
+	default 3
+
+endif # ZIGBEE
