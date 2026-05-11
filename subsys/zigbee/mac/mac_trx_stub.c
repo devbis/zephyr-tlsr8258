@@ -9,6 +9,19 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <zephyr/init.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(zigbee_mac_trx_stub, CONFIG_ZIGBEE_LOG_LEVEL);
+
+static int zb_mac_trx_stub_warn_init(void)
+{
+	LOG_WRN("CONFIG_ZIGBEE_MAC_TRX_STUBS is enabled: weak MAC TRX stubs are active");
+	return 0;
+}
+
+SYS_INIT(zb_mac_trx_stub_warn_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+
 sys_diagnostics_t g_sysDiags __attribute__((weak));
 zb_info_t g_zbInfo __attribute__((weak));
 
