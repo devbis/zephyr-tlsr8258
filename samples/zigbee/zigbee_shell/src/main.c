@@ -7,6 +7,6 @@ LOG_MODULE_REGISTER(main);
 int main(void)
 {
 	LOG_INF("Zigbee shell starting on TLSR8258 TB03F");
-	/* Zigbee thread is started via K_THREAD_DEFINE in zb_main.c */
+	LOG_INF("Radio smoke runs in Zigbee thread");
 	return 0;
 }

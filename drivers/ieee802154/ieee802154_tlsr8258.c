@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -117,6 +118,12 @@ static const uint8_t rf_power_level_list[] = {
 };
 
 static struct tlsr8258_radio_data tlsr8258_radio;
+static tlsr8258_zigbee_rx_cb_t tlsr8258_zigbee_rx_cb;
+
+void tlsr8258_zigbee_register_rx_cb(tlsr8258_zigbee_rx_cb_t cb)
+{
+	tlsr8258_zigbee_rx_cb = cb;
+}
 
 static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
 {
@@ -296,15 +303,13 @@ static uint8_t tlsr8258_lqi_from_rssi(int8_t rssi)
 	return (uint8_t)MIN(lqi, 0xff);
 }
 
-static int8_t tlsr8258_last_rssi_dbm(uint8_t *rx)
-{
-	return (int8_t)rx[rx[0] + 2u] - 110;
-}
 #endif /* !CONFIG_IEEE802154_RAW_MODE */
 
 static __ramfunc void tlsr8258_rx_isr(void)
 {
 	uint8_t *rx = tlsr8258_radio.rx_buffer;
+	uint16_t rx_dma_len;
+	int8_t rx_rssi_dbm;
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
 	uint8_t length;
@@ -314,6 +319,18 @@ static __ramfunc void tlsr8258_rx_isr(void)
 
 	TLSR_REG16(0x0f20) = RF_IRQ_RX;
 	tlsr8258_radio.rx_count++;
+
+	if (rx[0] < (TLSR8258_RX_BUF_SIZE - 2u)) {
+		rx_rssi_dbm = (int8_t)rx[rx[0] + 2u] - 110;
+	} else {
+		rx_rssi_dbm = -110;
+	}
+
+	if (tlsr8258_zigbee_rx_cb != NULL) {
+		rx_dma_len = (uint16_t)rx[0] + 4u;
+		rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
+		tlsr8258_zigbee_rx_cb(rx, (uint8_t)rx_dma_len, rx_rssi_dbm);
+	}
 
 #if defined(CONFIG_IEEE802154_RAW_MODE)
 	ARG_UNUSED(rx);
@@ -349,7 +366,7 @@ static __ramfunc void tlsr8258_rx_isr(void)
 		return;
 	}
 
-	rssi = tlsr8258_last_rssi_dbm(rx);
+	rssi = rx_rssi_dbm;
 	net_pkt_set_ieee802154_rssi_dbm(pkt, rssi);
 	net_pkt_set_ieee802154_lqi(pkt, tlsr8258_lqi_from_rssi(rssi));
 

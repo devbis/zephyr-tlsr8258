@@ -6,11 +6,15 @@
 #include <errno.h>
 #include <string.h>
 
+#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
+
+LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 
 struct zb_radio_ctx {
 	const struct device *dev;
@@ -20,6 +24,7 @@ struct zb_radio_ctx {
 	u8 rx_shadow[256];
 	atomic_t tx_done;
 	atomic_t rx_done;
+	u8 last_rx_rssi_raw;
 	u8 trx_state;
 	u8 tx_power;
 };
@@ -29,6 +34,24 @@ static struct zb_radio_ctx g_radio;
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 extern void rf_tx_irq_handler(void);
 
+static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
+{
+	size_t copy_len;
+
+	if (rx_dma == NULL) {
+		return;
+	}
+
+	copy_len = rx_len;
+	memcpy(g_radio.rx_shadow, rx_dma, copy_len);
+	if (rssi_dbm <= -110) {
+		g_radio.last_rx_rssi_raw = 0;
+	} else {
+		g_radio.last_rx_rssi_raw = (uint8_t)(rssi_dbm + 110);
+	}
+	atomic_set(&g_radio.rx_done, 1);
+}
+
 void zb_radio_init(void)
 {
 	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zb));
@@ -37,6 +60,7 @@ void zb_radio_init(void)
 	g_radio.trx_state = RF_MODE_OFF;
 	g_radio.tx_power = ZB_DEFAULT_TX_POWER_IDX;
 	g_radio.rx_next = g_radio.rx_shadow;
+	g_radio.last_rx_rssi_raw = 110u;
 
 	if (!device_is_ready(dev)) {
 		return;
@@ -44,6 +68,30 @@ void zb_radio_init(void)
 
 	g_radio.dev = dev;
 	g_radio.api = (const struct ieee802154_radio_api *)dev->api;
+	tlsr8258_zigbee_register_rx_cb(zb_radio_on_rx);
+}
+
+void zb_radio_smoke_probe(void)
+{
+	static const u8 smoke_psdu[] = {0x61, 0x88, 0x00};
+
+	zb_radio_init();
+	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
+		return;
+	}
+
+	if (g_radio.api->set_channel != NULL) {
+		(void)g_radio.api->set_channel(g_radio.dev, 11u);
+	}
+	if (g_radio.api->start != NULL) {
+		(void)g_radio.api->start(g_radio.dev);
+	}
+	if (g_radio.api->cca != NULL) {
+		(void)g_radio.api->cca(g_radio.dev);
+	}
+	(void)zb_radio_rssi_get();
+	(void)zb_radio_submit_tx(smoke_psdu, ARRAY_SIZE(smoke_psdu));
+	LOG_INF("zigbee radio smoke: init/channel/cca/tx ok");
 }
 
 void zb_radio_reset(void)
@@ -230,5 +278,5 @@ u8 *zb_radio_next_rx_buf_get(void)
 u8 zb_radio_pkt_rssi_get(const u8 *p)
 {
 	ARG_UNUSED(p);
-	return 110u;
+	return g_radio.last_rx_rssi_raw;
 }
