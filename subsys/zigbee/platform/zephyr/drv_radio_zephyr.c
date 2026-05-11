@@ -15,6 +15,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -138,6 +139,7 @@ void zb_radio_smoke_probe(void)
 	}
 
 	LOG_INF("zigbee radio smoke: init/channel/cca/tx ok");
+	printk("zigbee radio smoke: init/channel/cca/tx ok\n");
 }
 
 void zb_radio_reset(void)

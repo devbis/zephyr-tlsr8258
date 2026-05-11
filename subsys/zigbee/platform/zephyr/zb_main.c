@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/zigbee/zb_types.h>
 #include "zb_radio_smoke.h"
 #include "ev_timer.h"
@@ -24,6 +25,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	zb_radio_smoke_probe();
 
 	LOG_INF("Zigbee thread started");
+	printk("Zigbee thread started\n");
 
 	while (1) {
 		/* Wait up to 10 ms so poll handlers run even without events */
