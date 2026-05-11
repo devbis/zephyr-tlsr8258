@@ -26,6 +26,8 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/zigbee/zb_types.h>
+
+/**
  *  @brief Definition for timer event
  */
 #define TIMER_EVENT_NUM         (24)

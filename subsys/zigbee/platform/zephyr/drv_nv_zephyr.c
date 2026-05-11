@@ -10,7 +10,7 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/storage/flash_map.h>
-#include <zephyr/fs/nvs.h>
+#include <zephyr/kvss/nvs.h>
 #include <zephyr/zigbee/zb_types.h>
 #include "drv_nv.h"
 
