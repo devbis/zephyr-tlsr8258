@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Zigbee radio abstraction for Zephyr.
- * Phase 1: stub macros that satisfy the compiler.
- * Phase 2: real implementation wired to ieee802154_tlsr8258 driver.
+ * Staged adapter integration: Task 1 keeps compile-safe shims while
+ * incrementally wiring runtime behavior to the ieee802154 TLSR8258 driver.
  *
  * Mirrors the MCU_CORE_8258 section of tl_zigbee_sdk/proj/drivers/drv_radio.h.
  */

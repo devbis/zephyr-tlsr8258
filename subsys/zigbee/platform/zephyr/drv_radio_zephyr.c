@@ -4,6 +4,7 @@
 
 #include <string.h>
 
+#include <zephyr/devicetree.h>
 #include <zephyr/device.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/sys/atomic.h>
@@ -13,6 +14,7 @@ struct zb_radio_ctx {
 	const struct device *dev;
 	const struct ieee802154_radio_api *api;
 	u8 *rx_target;
+	u8 *rx_next;
 	u8 rx_shadow[256];
 	atomic_t tx_done;
 	atomic_t rx_done;
@@ -24,10 +26,19 @@ static struct zb_radio_ctx g_radio;
 
 void zb_radio_init(void)
 {
+	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zb));
+
 	memset(&g_radio, 0, sizeof(g_radio));
-	g_radio.rx_target = g_radio.rx_shadow;
 	g_radio.trx_state = RF_MODE_OFF;
 	g_radio.tx_power = ZB_DEFAULT_TX_POWER_IDX;
+	g_radio.rx_next = g_radio.rx_shadow;
+
+	if (!device_is_ready(dev)) {
+		return;
+	}
+
+	g_radio.dev = dev;
+	g_radio.api = (const struct ieee802154_radio_api *)dev->api;
 }
 
 void zb_radio_reset(void)
@@ -91,12 +102,29 @@ u8 zb_radio_trx_state_get(void)
 
 void zb_radio_rx_buf_set(u8 *addr)
 {
-	g_radio.rx_target = (addr != NULL) ? addr : g_radio.rx_shadow;
+	if (addr == NULL) {
+		return;
+	}
+
+	if ((g_radio.rx_target != NULL) && (addr != g_radio.rx_target) &&
+	    (g_radio.rx_next == NULL)) {
+		g_radio.rx_next = addr;
+		return;
+	}
+
+	g_radio.rx_target = addr;
+	if (g_radio.rx_next == addr) {
+		g_radio.rx_next = NULL;
+	}
 }
 
 u8 *zb_radio_next_rx_buf_get(void)
 {
-	return (g_radio.rx_target != NULL) ? g_radio.rx_target : g_radio.rx_shadow;
+	if ((g_radio.rx_next != NULL) && (g_radio.rx_next != g_radio.rx_target)) {
+		return g_radio.rx_next;
+	}
+
+	return NULL;
 }
 
 u8 zb_radio_pkt_rssi_get(const u8 *p)
