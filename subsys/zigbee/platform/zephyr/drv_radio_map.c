@@ -20,15 +20,24 @@ uint8_t zb_radio_logical_from_phy_offset(uint8_t phy)
 int zb_radio_extract_psdu(const uint8_t *dma, uint8_t dma_len,
 			  const uint8_t **psdu, uint8_t *psdu_len)
 {
+	uint8_t payload_len;
+	uint8_t available_len;
+
 	if (!dma || !psdu || !psdu_len || dma_len < 7) {
 		return -EINVAL;
 	}
 
-	if (dma[4] < 2) {
+	payload_len = dma[4];
+	if (payload_len < 2) {
 		return -EINVAL;
 	}
 
-	*psdu_len = (uint8_t)(dma[4] - 2);
+	available_len = (uint8_t)(dma_len - 5);
+	if ((uint8_t)(payload_len - 2) > available_len) {
+		return -EINVAL;
+	}
+
+	*psdu_len = (uint8_t)(payload_len - 2);
 	*psdu = &dma[5];
 	return 0;
 }
