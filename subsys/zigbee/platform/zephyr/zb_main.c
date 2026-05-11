@@ -2,6 +2,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_types.h>
+#include "zb_radio_smoke.h"
 #include "ev_timer.h"
 #include "ev_poll.h"
 #include "ev_buffer.h"
@@ -11,7 +12,6 @@ LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 /* Semaphore used to wake the Zigbee thread when events are ready.
  * Also signalled by ev_timer_work_handler after each timer fires. */
 K_SEM_DEFINE(zb_ev_sem, 0, 1);
-extern void zb_radio_smoke_probe(void);
 
 static void zb_thread_fn(void *a, void *b, void *c)
 {
