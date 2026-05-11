@@ -66,4 +66,11 @@ config ZIGBEE_LOG_LEVEL
 	int "Zigbee log level"
 	default 3
 
+config ZIGBEE_MAC_TRX_STUBS
+	bool "Enable weak MAC trx stubs"
+	default n
+	help
+	  Build weak MAC trx stub handlers for incomplete stack integration.
+	  Keep this disabled for normal Zigbee builds.
+
 endif # ZIGBEE
