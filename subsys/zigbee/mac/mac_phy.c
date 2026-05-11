@@ -176,6 +176,8 @@ _attribute_ram_code_ u32 mac_currentTickGet(void)
  */
 void rf_reset(void)
 {
+    ZB_RADIO_INIT();
+
     rf_setTrxState(RF_STATE_OFF);
 
     rf_setTxPower(g_zb_txPowerSet);
