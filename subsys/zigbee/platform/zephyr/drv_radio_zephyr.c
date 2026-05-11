@@ -2,11 +2,14 @@
 
 #include "drv_radio.h"
 #include "drv_radio_map.h"
+#include "zb_radio_smoke.h"
 
 #include <errno.h>
 #include <string.h>
 
+#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
 #include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
+#endif
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
@@ -68,29 +71,72 @@ void zb_radio_init(void)
 
 	g_radio.dev = dev;
 	g_radio.api = (const struct ieee802154_radio_api *)dev->api;
+#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
 	tlsr8258_zigbee_register_rx_cb(zb_radio_on_rx);
+#endif
 }
 
 void zb_radio_smoke_probe(void)
 {
 	static const u8 smoke_psdu[] = {0x61, 0x88, 0x00};
+	int ret;
+	const char *step = "init";
 
 	zb_radio_init();
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
+		ret = -ENODEV;
+		LOG_ERR("zigbee radio smoke failed at %s (rc=%d)", step, ret);
 		return;
 	}
 
-	if (g_radio.api->set_channel != NULL) {
-		(void)g_radio.api->set_channel(g_radio.dev, 11u);
+	step = "set_channel";
+	if (g_radio.api->set_channel == NULL) {
+		ret = -ENOTSUP;
+		LOG_ERR("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
 	}
-	if (g_radio.api->start != NULL) {
-		(void)g_radio.api->start(g_radio.dev);
+
+	ret = g_radio.api->set_channel(g_radio.dev, 11u);
+	if ((ret < 0) && (ret != -EALREADY)) {
+		LOG_WRN("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
 	}
-	if (g_radio.api->cca != NULL) {
-		(void)g_radio.api->cca(g_radio.dev);
+
+	step = "start";
+	if (g_radio.api->start == NULL) {
+		ret = -ENOTSUP;
+		LOG_ERR("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
 	}
+
+	ret = g_radio.api->start(g_radio.dev);
+	if ((ret < 0) && (ret != -EALREADY)) {
+		LOG_WRN("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
+	}
+
+	step = "cca";
+	if (g_radio.api->cca == NULL) {
+		ret = -ENOTSUP;
+		LOG_ERR("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
+	}
+
+	ret = g_radio.api->cca(g_radio.dev);
+	if ((ret < 0) && (ret != -EBUSY)) {
+		LOG_WRN("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
+	}
+
 	(void)zb_radio_rssi_get();
-	(void)zb_radio_submit_tx(smoke_psdu, ARRAY_SIZE(smoke_psdu));
+
+	step = "tx";
+	ret = zb_radio_submit_tx(smoke_psdu, ARRAY_SIZE(smoke_psdu));
+	if (ret < 0) {
+		LOG_WRN("zigbee radio smoke failed at %s (rc=%d)", step, ret);
+		return;
+	}
+
 	LOG_INF("zigbee radio smoke: init/channel/cca/tx ok");
 }
 

@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#ifndef ZEPHYR_SUBSYS_ZIGBEE_PLATFORM_ZEPHYR_ZB_RADIO_SMOKE_H_
+#define ZEPHYR_SUBSYS_ZIGBEE_PLATFORM_ZEPHYR_ZB_RADIO_SMOKE_H_
+
+void zb_radio_smoke_probe(void);
+
+#endif /* ZEPHYR_SUBSYS_ZIGBEE_PLATFORM_ZEPHYR_ZB_RADIO_SMOKE_H_ */
