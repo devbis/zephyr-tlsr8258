@@ -36,24 +36,41 @@ struct zb_radio_ctx {
 static struct zb_radio_ctx g_radio;
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
+extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
 
 static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
 {
 	size_t copy_len;
+	uint8_t *rx_target;
 
-	if (rx_dma == NULL) {
+	if ((rx_dma == NULL) || (rx_len == 0U)) {
 		return;
 	}
 
-	copy_len = rx_len;
-	memcpy(g_radio.rx_shadow, rx_dma, copy_len);
+	copy_len = MIN((size_t)rx_len, sizeof(g_radio.rx_shadow));
+	if (copy_len == 0U) {
+		return;
+	}
+
+	if (g_radio.rx_target == NULL) {
+		g_radio.rx_target = g_radio.rx_shadow;
+	}
+
+	rx_target = g_radio.rx_target;
+	memcpy(rx_target, rx_dma, copy_len);
+	if (rx_target != g_radio.rx_shadow) {
+		memcpy(g_radio.rx_shadow, rx_dma, copy_len);
+	}
+
 	if (rssi_dbm <= -110) {
 		g_radio.last_rx_rssi_raw = 0;
 	} else {
 		g_radio.last_rx_rssi_raw = (uint8_t)(rssi_dbm + 110);
 	}
+
 	atomic_set(&g_radio.rx_done, 1);
+	rf_rx_irq_handler();
 }
 
 void zb_radio_init(void)
@@ -83,6 +100,7 @@ void zb_radio_smoke_probe(void)
 	int ret;
 	const char *step = "init";
 
+	/* Probe driver hooks directly before MAC state/configuration is established. */
 	zb_radio_init();
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
 		ret = -ENODEV;
@@ -206,6 +224,12 @@ void zb_radio_trx_off_auto_mode(void)
 void zb_radio_tx_power_set(u8 level)
 {
 	g_radio.tx_power = level;
+
+	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->set_txpower == NULL)) {
+		return;
+	}
+
+	(void)g_radio.api->set_txpower(g_radio.dev, zb_radio_tx_dbm_from_level(level));
 }
 
 s8 zb_radio_rssi_get(void)
