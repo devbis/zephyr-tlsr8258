@@ -20,12 +20,18 @@
 
 LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 
+#define ZB_RADIO_RX_RING_DEPTH         2U
+#define ZB_RADIO_RX_BUF_SIZE           256U
+#define ZB_RADIO_CCA_BUSY_RSSI_DBM     (-60)
+#define ZB_RADIO_CCA_IDLE_RSSI_DBM     (-96)
+#define ZB_RADIO_RSSI_FALLBACK_DBM     (-110)
+
 struct zb_radio_ctx {
 	const struct device *dev;
 	const struct ieee802154_radio_api *api;
 	u8 *rx_target;
 	u8 *rx_next;
-	u8 rx_shadow[256];
+	u8 rx_ring[ZB_RADIO_RX_RING_DEPTH][ZB_RADIO_RX_BUF_SIZE];
 	atomic_t tx_done;
 	atomic_t rx_done;
 	atomic_t last_rx_rssi_valid;
@@ -41,6 +47,52 @@ extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
 extern u8 *rf_rxBuf;
 
+static u8 *zb_radio_ring_alternate_buf(const u8 *current)
+{
+	if (current == g_radio.rx_ring[0]) {
+		return g_radio.rx_ring[1];
+	}
+
+	if (current == g_radio.rx_ring[1]) {
+		return g_radio.rx_ring[0];
+	}
+
+	if (current != g_radio.rx_ring[0]) {
+		return g_radio.rx_ring[0];
+	}
+
+	return g_radio.rx_ring[1];
+}
+
+static void zb_radio_rx_ring_prime(const u8 *current)
+{
+	g_radio.rx_next = zb_radio_ring_alternate_buf(current);
+}
+
+static bool zb_radio_live_rssi_sample(s8 *rssi)
+{
+	int ret;
+
+	if ((rssi == NULL) || (g_radio.dev == NULL) || (g_radio.api == NULL) ||
+	    (g_radio.api->cca == NULL)) {
+		return false;
+	}
+
+	ret = g_radio.api->cca(g_radio.dev);
+	if (ret == 0) {
+		*rssi = ZB_RADIO_CCA_IDLE_RSSI_DBM;
+		return true;
+	}
+
+	if ((ret == -EBUSY) || (ret > 0)) {
+		*rssi = ZB_RADIO_CCA_BUSY_RSSI_DBM;
+		return true;
+	}
+
+	LOG_DBG("CCA sample unavailable (rc=%d), using RSSI fallback", ret);
+	return false;
+}
+
 static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
 {
 	size_t copy_len;
@@ -48,23 +100,22 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	int16_t rssi_clamped;
 
 	if ((rx_dma == NULL) || (rx_len == 0U)) {
+		LOG_DBG("RX callback ignored invalid frame (buf=%p len=%u)", rx_dma, rx_len);
 		return;
 	}
 
-	copy_len = MIN((size_t)rx_len, sizeof(g_radio.rx_shadow));
+	copy_len = MIN((size_t)rx_len, sizeof(g_radio.rx_ring[0]));
 	if (copy_len == 0U) {
 		return;
 	}
 
 	if (g_radio.rx_target == NULL) {
-		g_radio.rx_target = g_radio.rx_shadow;
+		g_radio.rx_target = g_radio.rx_ring[0];
+		zb_radio_rx_ring_prime(g_radio.rx_target);
 	}
 
 	rx_target = g_radio.rx_target;
 	memcpy(rx_target, rx_dma, copy_len);
-	if (rx_target != g_radio.rx_shadow) {
-		memcpy(g_radio.rx_shadow, rx_dma, copy_len);
-	}
 
 	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
 	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
@@ -83,16 +134,22 @@ void zb_radio_init(void)
 	memset(&g_radio, 0, sizeof(g_radio));
 	g_radio.trx_state = RF_MODE_OFF;
 	g_radio.tx_power = ZB_DEFAULT_TX_POWER_IDX;
-	g_radio.rx_next = g_radio.rx_shadow;
+	g_radio.rx_target = g_radio.rx_ring[0];
+	g_radio.rx_next = g_radio.rx_ring[1];
 	g_radio.last_rx_rssi_raw = 0u;
 	atomic_set(&g_radio.last_rx_rssi_valid, 0);
 
 	if (!device_is_ready(dev)) {
+		LOG_WRN("zigbee radio device not ready");
 		return;
 	}
 
 	g_radio.dev = dev;
 	g_radio.api = (const struct ieee802154_radio_api *)dev->api;
+	if (g_radio.api == NULL) {
+		LOG_WRN("zigbee radio API unavailable");
+		return;
+	}
 #if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
 	tlsr8258_zigbee_register_rx_cb(zb_radio_on_rx);
 #endif
@@ -175,6 +232,7 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 	u8 logical_chn;
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
+		LOG_WRN("TRX switch skipped: radio not initialized");
 		return;
 	}
 
@@ -182,6 +240,7 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 		if (g_radio.api->stop != NULL) {
 			ret = g_radio.api->stop(g_radio.dev);
 			if ((ret < 0) && (ret != -EALREADY)) {
+				LOG_WRN("TRX stop failed (rc=%d)", ret);
 				return;
 			}
 		}
@@ -194,15 +253,22 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 	if (g_radio.api->set_channel != NULL) {
 		ret = g_radio.api->set_channel(g_radio.dev, logical_chn);
 		if ((ret < 0) && (ret != -EALREADY)) {
+			LOG_WRN("set_channel failed (ch=%u rc=%d)", logical_chn, ret);
 			return;
 		}
+	} else {
+		LOG_DBG("set_channel unavailable; keeping current channel");
 	}
 
 	if (g_radio.api->start != NULL) {
 		ret = g_radio.api->start(g_radio.dev);
 		if ((ret < 0) && (ret != -EALREADY)) {
+			LOG_WRN("TRX start failed (rc=%d)", ret);
 			return;
 		}
+	} else {
+		LOG_WRN("TRX start unavailable");
+		return;
 	}
 
 	g_radio.trx_state = mode;
@@ -217,6 +283,7 @@ void zb_radio_trx_off_auto_mode(void)
 		    (g_radio.api->stop != NULL)) {
 			ret = g_radio.api->stop(g_radio.dev);
 			if ((ret < 0) && (ret != -EALREADY)) {
+				LOG_WRN("auto-mode stop failed (rc=%d)", ret);
 				return;
 			}
 		}
@@ -238,8 +305,14 @@ void zb_radio_tx_power_set(u8 level)
 
 s8 zb_radio_rssi_get(void)
 {
+	s8 live_rssi;
+
+	if (zb_radio_live_rssi_sample(&live_rssi)) {
+		return live_rssi;
+	}
+
 	if (atomic_get(&g_radio.last_rx_rssi_valid) == 0) {
-		return -110;
+		return ZB_RADIO_RSSI_FALLBACK_DBM;
 	}
 
 	return (s8)((int16_t)g_radio.last_rx_rssi_raw - 110);
@@ -255,19 +328,24 @@ void zb_radio_tx_start(u8 *tx_buf)
 	atomic_set(&g_radio.tx_done, 0);
 
 	if (tx_buf == NULL) {
+		LOG_WRN("TX start rejected: null DMA buffer");
 		return;
 	}
 
 	dma_len = (uint8_t)(tx_buf[0] + 4U);
 	if (zb_radio_extract_psdu(tx_buf, dma_len, &psdu, &psdu_len) < 0) {
+		LOG_WRN("TX start rejected: invalid DMA payload (dma_len=%u)", dma_len);
 		return;
 	}
 
 	ret = zb_radio_submit_tx(psdu, psdu_len);
-	if (ret == 0) {
-		atomic_set(&g_radio.tx_done, 1);
-		rf_tx_irq_handler();
+	if (ret < 0) {
+		LOG_WRN("TX submit failed (rc=%d len=%u)", ret, psdu_len);
+		return;
 	}
+
+	atomic_set(&g_radio.tx_done, 1);
+	rf_tx_irq_handler();
 }
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
@@ -278,10 +356,12 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	};
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->tx == NULL)) {
+		LOG_WRN("TX unavailable: radio tx API not ready");
 		return -ENODEV;
 	}
 
 	if ((psdu == NULL) || (psdu_len == 0U)) {
+		LOG_WRN("TX rejected: invalid PSDU");
 		return -EINVAL;
 	}
 
@@ -316,28 +396,21 @@ u8 zb_radio_trx_state_get(void)
 void zb_radio_rx_buf_set(u8 *addr)
 {
 	if (addr == NULL) {
-		return;
-	}
-
-	if ((g_radio.rx_target != NULL) && (addr != g_radio.rx_target) &&
-	    (g_radio.rx_next == NULL)) {
-		g_radio.rx_next = addr;
+		LOG_DBG("RX buffer set ignored: null pointer");
 		return;
 	}
 
 	g_radio.rx_target = addr;
-	if (g_radio.rx_next == addr) {
-		g_radio.rx_next = NULL;
-	}
+	zb_radio_rx_ring_prime(addr);
 }
 
 u8 *zb_radio_next_rx_buf_get(void)
 {
-	if ((g_radio.rx_next != NULL) && (g_radio.rx_next != g_radio.rx_target)) {
-		return g_radio.rx_next;
+	if ((g_radio.rx_next == NULL) || (g_radio.rx_next == g_radio.rx_target)) {
+		zb_radio_rx_ring_prime(g_radio.rx_target);
 	}
 
-	return NULL;
+	return g_radio.rx_next;
 }
 
 u8 zb_radio_pkt_rssi_get(const u8 *p)
