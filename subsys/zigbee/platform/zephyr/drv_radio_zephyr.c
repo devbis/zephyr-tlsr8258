@@ -49,7 +49,9 @@ void zb_radio_reset(void)
 
 void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 {
-	ARG_UNUSED(phy_chn);
+	u8 logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
+
+	ARG_UNUSED(logical_chn);
 	g_radio.trx_state = mode;
 }
 
@@ -72,7 +74,23 @@ s8 zb_radio_rssi_get(void)
 
 void zb_radio_tx_start(u8 *tx_buf)
 {
-	ARG_UNUSED(tx_buf);
+	const uint8_t *psdu;
+	uint8_t psdu_len;
+	uint8_t dma_len;
+
+	atomic_set(&g_radio.tx_done, 0);
+
+	if (tx_buf == NULL) {
+		return;
+	}
+
+	dma_len = (uint8_t)(tx_buf[0] + 4U);
+	if (zb_radio_extract_psdu(tx_buf, dma_len, &psdu, &psdu_len) < 0) {
+		return;
+	}
+
+	ARG_UNUSED(psdu);
+	ARG_UNUSED(psdu_len);
 	atomic_set(&g_radio.tx_done, 1);
 }
 
