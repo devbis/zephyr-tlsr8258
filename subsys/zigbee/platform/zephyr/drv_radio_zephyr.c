@@ -28,6 +28,7 @@ struct zb_radio_ctx {
 	u8 rx_shadow[256];
 	atomic_t tx_done;
 	atomic_t rx_done;
+	atomic_t last_rx_rssi_valid;
 	u8 last_rx_rssi_raw;
 	u8 trx_state;
 	u8 tx_power;
@@ -44,6 +45,7 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 {
 	size_t copy_len;
 	uint8_t *rx_target;
+	int16_t rssi_clamped;
 
 	if ((rx_dma == NULL) || (rx_len == 0U)) {
 		return;
@@ -64,11 +66,9 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		memcpy(g_radio.rx_shadow, rx_dma, copy_len);
 	}
 
-	if (rssi_dbm <= -110) {
-		g_radio.last_rx_rssi_raw = 0;
-	} else {
-		g_radio.last_rx_rssi_raw = (uint8_t)(rssi_dbm + 110);
-	}
+	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
+	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
+	atomic_set(&g_radio.last_rx_rssi_valid, 1);
 
 	atomic_set(&g_radio.rx_done, 1);
 	if (rf_rxBuf != NULL) {
@@ -84,7 +84,8 @@ void zb_radio_init(void)
 	g_radio.trx_state = RF_MODE_OFF;
 	g_radio.tx_power = ZB_DEFAULT_TX_POWER_IDX;
 	g_radio.rx_next = g_radio.rx_shadow;
-	g_radio.last_rx_rssi_raw = 110u;
+	g_radio.last_rx_rssi_raw = 0u;
+	atomic_set(&g_radio.last_rx_rssi_valid, 0);
 
 	if (!device_is_ready(dev)) {
 		return;
@@ -237,22 +238,11 @@ void zb_radio_tx_power_set(u8 level)
 
 s8 zb_radio_rssi_get(void)
 {
-	int ret;
-
-	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->cca == NULL)) {
+	if (atomic_get(&g_radio.last_rx_rssi_valid) == 0) {
 		return -110;
 	}
 
-	ret = g_radio.api->cca(g_radio.dev);
-	if (ret == 0) {
-		return -100;
-	}
-
-	if (ret == -EBUSY) {
-		return -40;
-	}
-
-	return -110;
+	return (s8)((int16_t)g_radio.last_rx_rssi_raw - 110);
 }
 
 void zb_radio_tx_start(u8 *tx_buf)
@@ -353,5 +343,10 @@ u8 *zb_radio_next_rx_buf_get(void)
 u8 zb_radio_pkt_rssi_get(const u8 *p)
 {
 	ARG_UNUSED(p);
+
+	if (atomic_get(&g_radio.last_rx_rssi_valid) == 0) {
+		return 0;
+	}
+
 	return g_radio.last_rx_rssi_raw;
 }
