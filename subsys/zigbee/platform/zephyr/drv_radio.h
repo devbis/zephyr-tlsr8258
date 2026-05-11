@@ -45,22 +45,43 @@ static inline bool clock_time_exceed(u32 ref, u32 span_us)
 	return (u32)(clock_time() - ref) >= (span_us * S_TIMER_CLOCK_1US);
 }
 
-/* ─── Stub implementations (Phase 1) ─────────────────────────────── */
+/* ─── Adapter contract (Phase 2) ─────────────────────────────────── */
+void zb_radio_init(void);
+void zb_radio_reset(void);
+void zb_radio_trx_switch(u8 mode, u8 phy_chn);
+void zb_radio_trx_off_auto_mode(void);
+void zb_radio_tx_power_set(u8 level);
+s8 zb_radio_rssi_get(void);
+void zb_radio_tx_start(u8 *tx_buf);
+u8 zb_radio_tx_done_get(void);
+void zb_radio_tx_done_clear(void);
+u8 zb_radio_rx_done_get(void);
+void zb_radio_rx_done_clear(void);
+u8 zb_radio_trx_state_get(void);
+void zb_radio_rx_buf_set(u8 *addr);
+u8 *zb_radio_next_rx_buf_get(void);
+u8 zb_radio_pkt_rssi_get(const u8 *p);
 
-#define ZB_RADIO_RESET()                      do { } while (0)
+#define ZB_RADIO_INIT()                       zb_radio_init()
+#define ZB_RADIO_RESET()                      zb_radio_reset()
+#define ZB_RADIO_TRX_SWITCH(mode, chn)        zb_radio_trx_switch((mode), (chn))
+#define ZB_RADIO_TRX_OFF_AUTO_MODE()          zb_radio_trx_off_auto_mode()
+#define ZB_RADIO_TX_POWER_SET(level)          zb_radio_tx_power_set(level)
+#define ZB_RADIO_RSSI_GET()                   zb_radio_rssi_get()
+#define ZB_RADIO_TX_START(txBuf)              zb_radio_tx_start(txBuf)
+#define ZB_RADIO_TX_DONE                      zb_radio_tx_done_get()
+#define ZB_RADIO_TX_DONE_CLR                  zb_radio_tx_done_clear()
+#define ZB_RADIO_RX_DONE                      zb_radio_rx_done_get()
+#define ZB_RADIO_RX_DONE_CLR                  zb_radio_rx_done_clear()
+#define ZB_RADIO_TRX_STA_GET()                zb_radio_trx_state_get()
+#define ZB_RADIO_RX_BUF_SET(addr)             zb_radio_rx_buf_set(addr)
+static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
+
+/* Still-stubbed operations used by mac_phy.c */
 #define RF_DMA_BUSY()                         (0)
-#define ZB_RADIO_TRX_SWITCH(mode, chn)        do { } while (0)
-#define ZB_RADIO_TRX_OFF_AUTO_MODE()          do { } while (0)
 #define ZB_RADIO_SRX_START(tick)              do { } while (0)
-#define ZB_RADIO_TX_POWER_SET(level)          do { } while (0)
 #define ZB_RADIO_MODE_MAX_GAIN()              do { } while (0)
 #define ZB_RADIO_MODE_AUTO_GAIN()             do { } while (0)
-#define ZB_RADIO_RSSI_GET()                   (-80)
-#define ZB_RADIO_TX_START(txBuf)              do { } while (0)
-#define ZB_RADIO_TX_DONE                      (1)
-#define ZB_RADIO_TX_DONE_CLR                  do { } while (0)
-#define ZB_RADIO_RX_DONE                      (0)
-#define ZB_RADIO_RX_DONE_CLR                  do { } while (0)
 #define RFDMA_TX_ENABLE                       do { } while (0)
 #define RFDMA_TX_DISABLE                      do { } while (0)
 #define RFDMA_RX_ENABLE                       do { } while (0)
@@ -71,12 +92,9 @@ static inline bool clock_time_exceed(u32 ref, u32 span_us)
 #define ZB_RADIO_RX_DISABLE                   RFDMA_RX_DISABLE
 #define ZB_RADIO_IRQ_MASK_CLR                 do { } while (0)
 #define ZB_RADIO_IRQ_MASK_SET                 do { } while (0)
-#define ZB_RADIO_TRX_STA_GET()                RF_MODE_OFF
-#define ZB_RADIO_RX_BUF_SET(addr)             do { } while (0)
 #define ZB_RADIO_RX_MAX_LEN_SET(len)          do { } while (0)
 #define ZB_TIMESTAMP_ENABLE                   do { } while (0)
 #define ZB_TIMER_INIT()                       do { } while (0)
-#define ZB_RADIO_INIT()                       do { } while (0)
 
 #define ZB_RADIO_RX_BUF_CLEAR(p) do { \
 	(p)[0] = 0; \
@@ -94,7 +112,6 @@ static inline bool clock_time_exceed(u32 ref, u32 span_us)
 #define ZB_RADIO_TRX_CFG(size)                do { } while (0)
 
 /* Stubs for hardware functions used by mac_phy.c */
-static inline u8 *tl_getRxBuf(void) { return NULL; }
 #define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
 static inline void WaitUs(u32 us) { k_busy_wait(us); }
 
@@ -103,7 +120,7 @@ static inline void WaitUs(u32 us) { k_busy_wait(us); }
 #define ZB_RADIO_CRC_OK(p)              (1)
 #define ZB_RADIO_PACKET_LENGTH_OK(p)    ((p)[4] >= 5 && (p)[4] <= 127)
 #define ZB_RADIO_TIMESTAMP_GET(p)       (0u)
-#define ZB_RADION_PKT_RSSI_GET(p)       (110u)
+#define ZB_RADION_PKT_RSSI_GET(p)       zb_radio_pkt_rssi_get(p)
 
 /* RSSI → LQI conversion (same formula as SDK for 8258) */
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi) do { \

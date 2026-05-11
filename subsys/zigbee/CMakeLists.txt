@@ -29,6 +29,7 @@ zephyr_library_sources(
     platform/zephyr/ev_poll_zephyr.c
     platform/zephyr/zb_main.c
     platform/zephyr/drv_hw_zephyr.c
+    platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
     platform/zephyr/drv_security_zephyr.c
 )
