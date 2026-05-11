@@ -51,6 +51,7 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 {
 	u8 logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
 
+	/* Task 3 will wire logical_chn into the radio channel API call. */
 	ARG_UNUSED(logical_chn);
 	g_radio.trx_state = mode;
 }
