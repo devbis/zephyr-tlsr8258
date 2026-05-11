@@ -83,6 +83,15 @@
 			reg = <0x00000000 0x0007e000>;
 		};
 
+		slot1_partition: partition@40000 {
+			label = "image-1";
+			reg = <0x00040000 0x00030000>;
+		};
+
+		scratch_partition: partition@70000 {
+			label = "image-scratch";
+			reg = <0x00070000 0x0000e000>;
+		};
 		nvs_storage: partition@7e000 {
 			label = "nvs_storage";
 			reg = <0x0007e000 0x00002000>;
@@ -103,5 +112,9 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&zb {
 	status = "okay";
 };
