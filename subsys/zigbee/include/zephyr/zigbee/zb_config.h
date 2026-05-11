@@ -2,6 +2,14 @@
 /* Default Zigbee stack config — replaces zigbee/common/includes/zb_config.h defaults */
 #pragma once
 
+/* Security / CCM constants (from tl_zigbee_sdk zigbee/common/includes/zb_config.h) */
+#ifndef CCM_KEY_SIZE
+#define CCM_KEY_SIZE                            16
+#endif
+#ifndef SECUR_N_SECUR_MATERIAL
+#define SECUR_N_SECUR_MATERIAL                  2
+#endif
+
 /* APS binding */
 #ifndef APS_BINDING_TABLE_NUM
 #define APS_BINDING_TABLE_NUM           8
@@ -36,4 +44,15 @@
 /* MAC constants */
 #ifndef MAC_MCPS_DATA_REQ_TABLE_SIZE
 #define MAC_MCPS_DATA_REQ_TABLE_SIZE    4
+#endif
+
+/* Security constants */
+#ifndef SEC_KEY_LEN
+#define SEC_KEY_LEN                     16
+#endif
+
+/* Default device role — used by zb_af.c node descriptor initialisation.
+ * Can be overridden by application Kconfig before including this header. */
+#if !defined(ZB_COORDINATOR_ROLE) && !defined(ZB_ROUTER_ROLE) && !defined(ZB_ED_ROLE)
+#define ZB_ROUTER_ROLE                  1
 #endif
