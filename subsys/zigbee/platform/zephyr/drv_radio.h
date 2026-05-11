@@ -17,13 +17,6 @@
 #define RF_MODE_AUTO   2
 #define RF_MODE_OFF    3
 
-/* RF state used by mac_phy.c rfMode variable */
-#define RF_STATE_TX    RF_MODE_TX
-#define RF_STATE_RX    RF_MODE_RX
-#define RF_STATE_AUTO  RF_MODE_AUTO
-#define RF_STATE_OFF   RF_MODE_OFF
-#define RF_STATE_ED    4
-
 /* TX/RX packet buffer layout (5-byte DMA header for TLSR8258) */
 #define ZB_RADIO_TX_HDR_LEN    5
 #define ZB_RADIO_RX_HDR_LEN    5
@@ -99,6 +92,11 @@ static inline bool clock_time_exceed(u32 ref, u32 span_us)
 } while (0)
 
 #define ZB_RADIO_TRX_CFG(size)                do { } while (0)
+
+/* Stubs for hardware functions used by mac_phy.c */
+static inline u8 *tl_getRxBuf(void) { return NULL; }
+#define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
+static inline void WaitUs(u32 us) { k_busy_wait(us); }
 
 /* Packet field accessors — stub values from fixed offsets used by TLSR8258 RF */
 #define ZB_RADIO_ACTUAL_PAYLOAD_LEN(p)  ((p)[4])
