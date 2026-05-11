@@ -41,3 +41,16 @@ int zb_radio_extract_psdu(const uint8_t *dma, uint8_t dma_len,
 	*psdu = &dma[5];
 	return 0;
 }
+
+int16_t zb_radio_tx_dbm_from_level(uint8_t level)
+{
+	if (level == 23U) {
+		return 0;
+	}
+
+	if (level <= 11U) {
+		return (int16_t)level;
+	}
+
+	return 0;
+}

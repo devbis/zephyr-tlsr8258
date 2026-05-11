@@ -29,6 +29,7 @@ zephyr_library_sources(
     platform/zephyr/ev_poll_zephyr.c
     platform/zephyr/zb_main.c
     platform/zephyr/drv_hw_zephyr.c
+    platform/zephyr/drv_radio_map.c
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
     platform/zephyr/drv_security_zephyr.c
@@ -46,6 +47,7 @@ zephyr_library_sources(
 zephyr_library_sources(
     mac/mac_phy.c
     mac/mac_pib.c
+    mac/mac_trx_stub.c
 )
 
 # Upper layers (open-source SDK files)

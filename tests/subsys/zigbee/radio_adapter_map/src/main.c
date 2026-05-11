@@ -54,4 +54,12 @@ ZTEST(radio_adapter_map, test_extract_psdu_returns_payload)
 	zassert_mem_equal(psdu, &dma[5], psdu_len);
 }
 
+ZTEST(radio_adapter_map, test_tx_power_level_mapping)
+{
+	zassert_equal(zb_radio_tx_dbm_from_level(23), 0);
+	zassert_equal(zb_radio_tx_dbm_from_level(0), 0);
+	zassert_equal(zb_radio_tx_dbm_from_level(7), 7);
+	zassert_equal(zb_radio_tx_dbm_from_level(11), 11);
+}
+
 ZTEST_SUITE(radio_adapter_map, NULL, NULL, NULL, NULL, NULL);
