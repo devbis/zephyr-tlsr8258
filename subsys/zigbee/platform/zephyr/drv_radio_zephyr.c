@@ -38,6 +38,7 @@ static struct zb_radio_ctx g_radio;
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
+extern u8 *rf_rxBuf;
 
 static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
 {
@@ -70,7 +71,9 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	}
 
 	atomic_set(&g_radio.rx_done, 1);
-	rf_rx_irq_handler();
+	if (rf_rxBuf != NULL) {
+		rf_rx_irq_handler();
+	}
 }
 
 void zb_radio_init(void)
