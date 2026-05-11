@@ -23,6 +23,7 @@ ZTEST(radio_adapter_map, test_extract_psdu_rejects_invalid_input)
 	const uint8_t dma_short_len[6] = {0};
 	const uint8_t dma_bad_size[7] = {0, 0, 0, 0, 1, 0, 0};
 	const uint8_t dma_oversized_len[7] = {0, 0, 0, 0, 6, 0, 0};
+	const uint8_t dma_fcs_truncated[8] = {0, 0, 0, 0, 5, 0, 0, 0};
 	const uint8_t *psdu = NULL;
 	uint8_t psdu_len = 0;
 
@@ -35,6 +36,9 @@ ZTEST(radio_adapter_map, test_extract_psdu_rejects_invalid_input)
 		      -EINVAL);
 	zassert_equal(
 		zb_radio_extract_psdu(dma_oversized_len, sizeof(dma_oversized_len), &psdu, &psdu_len),
+		-EINVAL);
+	zassert_equal(
+		zb_radio_extract_psdu(dma_fcs_truncated, sizeof(dma_fcs_truncated), &psdu, &psdu_len),
 		-EINVAL);
 }
 

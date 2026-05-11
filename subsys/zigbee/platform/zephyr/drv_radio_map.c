@@ -33,7 +33,7 @@ int zb_radio_extract_psdu(const uint8_t *dma, uint8_t dma_len,
 	}
 
 	available_len = (uint8_t)(dma_len - 5);
-	if ((uint8_t)(payload_len - 2) > available_len) {
+	if (payload_len > available_len) {
 		return -EINVAL;
 	}
 
