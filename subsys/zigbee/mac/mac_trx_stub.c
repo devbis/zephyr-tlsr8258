@@ -18,7 +18,7 @@ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt)
 	ARG_UNUSED(len);
 
 	if (needDrop != NULL) {
-		*needDrop = 1;
+		*needDrop = 0;
 	}
 
 	if (ackPkt != NULL) {
