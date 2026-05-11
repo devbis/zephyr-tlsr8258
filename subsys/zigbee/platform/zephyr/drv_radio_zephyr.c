@@ -26,7 +26,7 @@ struct zb_radio_ctx {
 
 static struct zb_radio_ctx g_radio;
 
-int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
+static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 extern void rf_tx_irq_handler(void);
 
 void zb_radio_init(void)
@@ -53,18 +53,11 @@ void zb_radio_reset(void)
 
 void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 {
-	u8 logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
 	int ret;
+	u8 logical_chn;
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
 		return;
-	}
-
-	if (g_radio.api->set_channel != NULL) {
-		ret = g_radio.api->set_channel(g_radio.dev, logical_chn);
-		if ((ret < 0) && (ret != -EALREADY)) {
-			return;
-		}
 	}
 
 	if (mode == RF_MODE_OFF) {
@@ -77,6 +70,14 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 
 		g_radio.trx_state = RF_MODE_OFF;
 		return;
+	}
+
+	logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
+	if (g_radio.api->set_channel != NULL) {
+		ret = g_radio.api->set_channel(g_radio.dev, logical_chn);
+		if ((ret < 0) && (ret != -EALREADY)) {
+			return;
+		}
 	}
 
 	if (g_radio.api->start != NULL) {
@@ -156,9 +157,12 @@ void zb_radio_tx_start(u8 *tx_buf)
 	}
 }
 
-int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
+static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 {
-	struct net_buf frag = { 0 };
+	struct net_buf frag = {
+		.data = (uint8_t *)psdu,
+		.len = psdu_len,
+	};
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->tx == NULL)) {
 		return -ENODEV;
@@ -167,11 +171,6 @@ int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	if ((psdu == NULL) || (psdu_len == 0U)) {
 		return -EINVAL;
 	}
-
-	frag.data = (uint8_t *)psdu;
-	frag.len = psdu_len;
-	frag.size = psdu_len;
-	frag.__buf = (uint8_t *)psdu;
 
 	return g_radio.api->tx(g_radio.dev, IEEE802154_TX_MODE_DIRECT, NULL, &frag);
 }
