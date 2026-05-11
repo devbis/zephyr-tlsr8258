@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include "drv_radio_map.h"
+
+#include <errno.h>
+
+uint8_t zb_radio_logical_from_phy_offset(uint8_t phy)
+{
+	if (phy < 5) {
+		return 11;
+	}
+
+	if (phy > 80) {
+		return 26;
+	}
+
+	return (uint8_t)(10 + (phy / 5));
+}
+
+int zb_radio_extract_psdu(const uint8_t *dma, uint8_t dma_len,
+			  const uint8_t **psdu, uint8_t *psdu_len)
+{
+	if (!dma || !psdu || !psdu_len || dma_len < 7) {
+		return -EINVAL;
+	}
+
+	if (dma[4] < 2) {
+		return -EINVAL;
+	}
+
+	*psdu_len = (uint8_t)(dma[4] - 2);
+	*psdu = &dma[5];
+	return 0;
+}
