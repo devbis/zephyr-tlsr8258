@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 /* Semaphore used to wake the Zigbee thread when events are ready.
  * Also signalled by ev_timer_work_handler after each timer fires. */
 K_SEM_DEFINE(zb_ev_sem, 0, 1);
+extern void zb_radio_smoke_probe(void);
 
 static void zb_thread_fn(void *a, void *b, void *c)
 {
@@ -20,6 +21,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 
 	ev_buf_init();
 	ev_timer_init();
+	zb_radio_smoke_probe();
 
 	LOG_INF("Zigbee thread started");
 
