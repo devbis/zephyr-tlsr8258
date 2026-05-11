@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "drv_radio.h"
+#include "drv_radio_map.h"
 
 #include <string.h>
 
