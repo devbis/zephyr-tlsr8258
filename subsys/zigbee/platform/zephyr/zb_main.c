@@ -19,6 +19,9 @@ LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 K_SEM_DEFINE(zb_ev_sem, 0, 1);
 
 static bool zb_bootstrap_done;
+static bool zb_core_init_done;
+static bool zb_commissioning_pending;
+static bool zb_waiting_for_radio_log;
 
 void __weak zb_platform_app_bootstrap_ready(void)
 {
@@ -44,12 +47,28 @@ static void zb_core_bootstrap_once(void)
 		return;
 	}
 
-	/* Deterministic ED bootstrap order. */
-	ev_buf_init();
-	ev_timer_init();
-	zdo_init();
-	af_init();
+	if (!zb_core_init_done) {
+		/* Deterministic ED bootstrap order. */
+		ev_buf_init();
+		ev_timer_init();
+		zdo_init();
+		af_init();
+		zb_core_init_done = true;
+	}
+
 	zb_radio_init();
+	if (!zb_radio_is_ready()) {
+		if (!zb_waiting_for_radio_log) {
+			LOG_WRN("Zigbee bootstrap waiting for radio readiness");
+			zb_waiting_for_radio_log = true;
+		}
+		return;
+	}
+
+	if (zb_waiting_for_radio_log) {
+		LOG_INF("Zigbee radio ready; completing bootstrap");
+		zb_waiting_for_radio_log = false;
+	}
 
 	zb_platform_app_bootstrap_ready();
 
@@ -58,13 +77,24 @@ static void zb_core_bootstrap_once(void)
 	}
 
 	if (zb_platform_app_should_start_commissioning()) {
-		LOG_INF("Zigbee commissioning trigger requested");
-		zb_platform_app_start_commissioning();
+		LOG_INF("Zigbee commissioning trigger queued");
+		zb_commissioning_pending = true;
 	} else {
-		LOG_INF("Zigbee commissioning trigger deferred");
+		LOG_INF("Zigbee commissioning trigger not requested");
 	}
 
 	zb_bootstrap_done = true;
+}
+
+static void zb_process_deferred_commissioning(void)
+{
+	if (!zb_bootstrap_done || !zb_commissioning_pending) {
+		return;
+	}
+
+	zb_commissioning_pending = false;
+	LOG_INF("Zigbee commissioning trigger requested");
+	zb_platform_app_start_commissioning();
 }
 
 static void zb_thread_fn(void *a, void *b, void *c)
@@ -73,15 +103,22 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	ARG_UNUSED(b);
 	ARG_UNUSED(c);
 
-	zb_core_bootstrap_once();
-
 	LOG_INF("Zigbee thread started");
 	printk("Zigbee thread started\n");
 
 	while (1) {
+		if (!zb_bootstrap_done) {
+			zb_core_bootstrap_once();
+			if (!zb_bootstrap_done) {
+				k_sleep(K_MSEC(10));
+				continue;
+			}
+		}
+
 		/* Wait up to 10 ms so poll handlers run even without events */
 		k_sem_take(&zb_ev_sem, K_MSEC(10));
 		ev_poll_process();
+		zb_process_deferred_commissioning();
 	}
 }
 

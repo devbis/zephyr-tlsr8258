@@ -129,6 +129,10 @@ u8 ev_timer_taskCancel(ev_timer_event_t **evt)
 		return FAILURE;
 	}
 
+	if (k_is_in_isr()) {
+		return FAILURE;
+	}
+
 	timer_evt = *evt;
 	was_used = timer_evt->used;
 	timer_evt->isRunning = 0;
