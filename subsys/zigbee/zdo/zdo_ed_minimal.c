@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "zb_common_stub.h"
+#include <stdint.h>
 
 #define ZDO_ED_MINIMAL_POLL_RATE_MS                    1000U
 #define ZDO_ED_MINIMAL_TIME_BTWN_SCANS_MS              100U
@@ -45,6 +46,115 @@ u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
 
 static bool g_zdoUnderRejoinMode = FALSE;
 
+extern void tl_zbNwkEdMinimalRuntimeReset(void);
+extern bool tl_zbNwkEdMinimalDiscoveryStart(u32 scanChannels, u8 scanDuration);
+extern void tl_zbNwkEdMinimalDiscoveryStop(void);
+extern bool tl_zbNwkEdMinimalAssocJoinStart(void);
+extern bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff);
+extern void tl_zbNwkEdMinimalOperationAbort(void);
+extern void tl_zbNwkEdMinimalOperationComplete(u8 status);
+extern bool tl_zbNwkEdMinimalManagerIdle(void);
+extern u32 tl_zbNwkEdMinimalLastScanChannelsGet(void);
+extern u32 tl_zbNwkEdMinimalLastRejoinScanChannelsGet(void);
+
+typedef struct {
+	nwkDiscoveryUserCb_t discoveryCb;
+	bool discoveryPending;
+	u8 discoveryToken;
+	bool joinPending;
+	u8 joinToken;
+	bool rejoinPending;
+	bool rejoinWithBackoff;
+	u8 rejoinToken;
+} zdo_ed_minimal_async_ctx_t;
+
+static zdo_ed_minimal_async_ctx_t g_zdoEdAsync;
+
+static u8 zdo_ed_minimal_next_token(u8 *token)
+{
+	*token = (u8)(*token + 1U);
+	if (*token == 0U) {
+		*token = 1U;
+	}
+
+	return *token;
+}
+
+static zdo_start_device_confirm_t zdo_ed_minimal_build_start_dev_cnf(u8 status, bool rejoinMode)
+{
+	zdo_start_device_confirm_t cnf = {
+		.status = status,
+		.channel_num = 0xFFU,
+		.pan_id = MAC_INVALID_PANID,
+		.short_addr = MAC_SHORT_ADDR_NONE,
+	};
+	u32 scanChannels = rejoinMode ? tl_zbNwkEdMinimalLastRejoinScanChannelsGet() :
+			tl_zbNwkEdMinimalLastScanChannelsGet();
+
+	cnf.channel_num = zdo_channel_page2num(scanChannels);
+	cnf.pan_id = g_zbNIB.panId;
+	cnf.short_addr = g_zbNIB.nwkAddr;
+
+	return cnf;
+}
+
+static void zdo_ed_minimal_discovery_done(void *arg)
+{
+	u8 token = (u8)(uintptr_t)arg;
+	nwkDiscoveryUserCb_t cb;
+
+	if (!g_zdoEdAsync.discoveryPending || g_zdoEdAsync.discoveryToken != token) {
+		return;
+	}
+
+	cb = g_zdoEdAsync.discoveryCb;
+	g_zdoEdAsync.discoveryPending = FALSE;
+	g_zdoEdAsync.discoveryCb = NULL;
+	tl_zbNwkEdMinimalOperationComplete(ZDO_SUCCESS);
+
+	if (cb != NULL) {
+		cb();
+	}
+}
+
+static void zdo_ed_minimal_assoc_join_done(void *arg)
+{
+	u8 token = (u8)(uintptr_t)arg;
+	zdo_start_device_confirm_t cnf;
+
+	if (!g_zdoEdAsync.joinPending || g_zdoEdAsync.joinToken != token) {
+		return;
+	}
+
+	g_zdoEdAsync.joinPending = FALSE;
+	cnf = zdo_ed_minimal_build_start_dev_cnf(ZDO_NOT_SUPPORTED, FALSE);
+	tl_zbNwkEdMinimalOperationComplete(cnf.status);
+
+	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
+		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
+	}
+}
+
+static void zdo_ed_minimal_rejoin_done(void *arg)
+{
+	u8 token = (u8)(uintptr_t)arg;
+	zdo_start_device_confirm_t cnf;
+
+	if (!g_zdoEdAsync.rejoinPending || g_zdoEdAsync.rejoinToken != token) {
+		return;
+	}
+
+	g_zdoEdAsync.rejoinPending = FALSE;
+	g_zdoEdAsync.rejoinWithBackoff = FALSE;
+	g_zdoUnderRejoinMode = FALSE;
+	cnf = zdo_ed_minimal_build_start_dev_cnf(ZDO_NOT_SUPPORTED, TRUE);
+	tl_zbNwkEdMinimalOperationComplete(cnf.status);
+
+	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
+		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
+	}
+}
+
 void zdo_zdpCbTblRegister(zdo_appIndCb_t *cbTbl)
 {
 	zdoAppIndCbLst = cbTbl;
@@ -60,6 +170,8 @@ void zdo_init(void)
 	zdo_cfg_attributes = (zdo_attrCfg_t)ZDO_ED_MINIMAL_CFG_INIT;
 	TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
 	g_zdoUnderRejoinMode = FALSE;
+	memset(&g_zdoEdAsync, 0, sizeof(g_zdoEdAsync));
+	tl_zbNwkEdMinimalRuntimeReset();
 }
 
 u8 zdo_af_get_link_retry_threshold(void)
@@ -223,41 +335,118 @@ zdo_status_t zdo_nwkRouterStart(void)
 
 zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_t cb)
 {
-	ARG_UNUSED(pReq);
-	ARG_UNUSED(cb);
+	u8 token;
+	u8 rc;
 
-	return ZDO_NOT_SUPPORTED;
+	if (pReq == NULL || cb == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+	if (!tl_zbNwkEdMinimalDiscoveryStart(pReq->scanChannels, pReq->scanDuration)) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.discoveryToken);
+	g_zdoEdAsync.discoveryCb = cb;
+	g_zdoEdAsync.discoveryPending = TRUE;
+	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_discovery_done, (void *)(uintptr_t)token);
+	if (rc != RET_OK) {
+		g_zdoEdAsync.discoveryPending = FALSE;
+		g_zdoEdAsync.discoveryCb = NULL;
+		tl_zbNwkEdMinimalOperationAbort();
+		return ZDO_NOT_SUPPORTED;
+	}
+
+	return ZDO_SUCCESS;
 }
 
 void zdo_nwkDiscoveryStop(void)
 {
+	if (g_zdoEdAsync.discoveryPending) {
+		g_zdoEdAsync.discoveryPending = FALSE;
+		g_zdoEdAsync.discoveryCb = NULL;
+		tl_zbNwkEdMinimalDiscoveryStop();
+	}
 }
 
 zdo_status_t zdo_nwkAssocJoinStart(void)
 {
-	return ZDO_NOT_SUPPORTED;
+	u8 token;
+	u8 rc;
+
+	if (!tl_zbNwkEdMinimalAssocJoinStart()) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.joinToken);
+	g_zdoEdAsync.joinPending = TRUE;
+	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_assoc_join_done, (void *)(uintptr_t)token);
+	if (rc != RET_OK) {
+		g_zdoEdAsync.joinPending = FALSE;
+		tl_zbNwkEdMinimalOperationAbort();
+		return ZDO_NOT_SUPPORTED;
+	}
+
+	return ZDO_SUCCESS;
 }
 
 zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
 {
-	ARG_UNUSED(scanChannels);
-	ARG_UNUSED(scanDuration);
+	u8 token;
+	u8 rc;
 
-	g_zdoUnderRejoinMode = FALSE;
-	return ZDO_NOT_SUPPORTED;
+	if (!tl_zbNwkEdMinimalRejoinStart(scanChannels, scanDuration, FALSE)) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	g_zdoUnderRejoinMode = TRUE;
+	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.rejoinToken);
+	g_zdoEdAsync.rejoinPending = TRUE;
+	g_zdoEdAsync.rejoinWithBackoff = FALSE;
+	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_rejoin_done, (void *)(uintptr_t)token);
+	if (rc != RET_OK) {
+		g_zdoEdAsync.rejoinPending = FALSE;
+		g_zdoEdAsync.rejoinWithBackoff = FALSE;
+		g_zdoUnderRejoinMode = FALSE;
+		tl_zbNwkEdMinimalOperationAbort();
+		return ZDO_NOT_SUPPORTED;
+	}
+
+	return ZDO_SUCCESS;
 }
 
 zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 {
-	ARG_UNUSED(scanChannels);
-	ARG_UNUSED(scanDuration);
+	u8 token;
+	u8 rc;
 
-	g_zdoUnderRejoinMode = FALSE;
-	return ZDO_NOT_SUPPORTED;
+	if (!tl_zbNwkEdMinimalRejoinStart(scanChannels, scanDuration, TRUE)) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	g_zdoUnderRejoinMode = TRUE;
+	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.rejoinToken);
+	g_zdoEdAsync.rejoinPending = TRUE;
+	g_zdoEdAsync.rejoinWithBackoff = TRUE;
+	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_rejoin_done, (void *)(uintptr_t)token);
+	if (rc != RET_OK) {
+		g_zdoEdAsync.rejoinPending = FALSE;
+		g_zdoEdAsync.rejoinWithBackoff = FALSE;
+		g_zdoUnderRejoinMode = FALSE;
+		tl_zbNwkEdMinimalOperationAbort();
+		return ZDO_NOT_SUPPORTED;
+	}
+
+	return ZDO_SUCCESS;
 }
 
 void zdo_nwkRejoinWithBackOffStop(void)
 {
+	if (g_zdoEdAsync.rejoinPending && g_zdoEdAsync.rejoinWithBackoff) {
+		g_zdoEdAsync.rejoinPending = FALSE;
+		g_zdoEdAsync.rejoinWithBackoff = FALSE;
+		tl_zbNwkEdMinimalOperationAbort();
+	}
+
 	g_zdoUnderRejoinMode = FALSE;
 }
 
@@ -284,5 +473,5 @@ void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 
 bool zdo_ifZdoNwkManagerIdle(void)
 {
-	return TRUE;
+	return tl_zbNwkEdMinimalManagerIdle();
 }
