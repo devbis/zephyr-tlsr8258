@@ -155,6 +155,11 @@ void zb_radio_init(void)
 #endif
 }
 
+bool zb_radio_is_ready(void)
+{
+	return (g_radio.dev != NULL) && (g_radio.api != NULL);
+}
+
 void zb_radio_smoke_probe(void)
 {
 	static const u8 smoke_psdu[] = {0x61, 0x88, 0x00};
