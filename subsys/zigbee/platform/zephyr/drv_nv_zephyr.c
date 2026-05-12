@@ -121,10 +121,13 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	if (rc < 0) {
 		return NV_DATA_CHECK_ERROR;
 	}
+	if (expected_len > len) {
+		return NV_DATA_CHECK_ERROR;
+	}
 	if (rc < expected_len) {
 		return NV_DATA_CHECK_ERROR;
 	}
-	rc = nvs_read(&zb_nvs, nv_key(id, itemId), buf, expected_len);
+	rc = nvs_read(&zb_nvs, nv_key(id, itemId), buf, len);
 
 	if (rc == -ENOENT) {
 		return NV_ITEM_NOT_FOUND;
