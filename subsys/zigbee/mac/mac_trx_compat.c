@@ -17,6 +17,13 @@
 sys_diagnostics_t g_sysDiags;
 zb_info_t g_zbInfo;
 
+__attribute__((weak)) void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
+{
+	ARG_UNUSED(macPld);
+	ARG_UNUSED(len);
+	ARG_UNUSED(rssi);
+}
+
 static u8 zb_mac_src_addr_ptr(u16 frame_ctrl, u8 len, u8 *has_src_addr, u8 *malformed)
 {
 	u8 idx = MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN;
@@ -96,11 +103,10 @@ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt)
 void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
 {
 	ARG_UNUSED(rxBuf);
-	ARG_UNUSED(data);
-	ARG_UNUSED(len);
 	ARG_UNUSED(ackPkt);
 	ARG_UNUSED(timestamp);
-	ARG_UNUSED(rssi);
+
+	tl_zbNwkEdMinimalMacRxIndicate(data, len, rssi);
 }
 
 void zb_macDataSendHandler(void)

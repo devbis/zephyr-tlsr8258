@@ -9,6 +9,8 @@
 #pragma clang diagnostic pop
 #endif
 
+extern void rf_setChannel(u8 chn);
+
 const addrExt_t g_zero_addr __attribute__((weak)) = {0};
 const addrExt_t g_invalid_addr __attribute__((weak)) = {0xFF, 0xFF, 0xFF, 0xFF,
 						       0xFF, 0xFF, 0xFF, 0xFF};
@@ -29,6 +31,8 @@ ss_info_base_t ss_ib __attribute__((weak)) = {
 	.securityLevel = 0,
 	.trust_center_address = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
 };
+
+ss_dev_keyPair_t g_ssDevKeyPair __attribute__((weak));
 
 nwk_ctx_t g_zbNwkCtx __attribute__((weak)) = {
 	.is_factory_new = 1,
@@ -96,6 +100,7 @@ __attribute__((weak)) u8 is_device_factory_new(void)
 __attribute__((weak)) void tl_zbMacChannelSet(u8 chan)
 {
 	g_zbInfo.macPib.phyChannelCur = chan;
+	rf_setChannel(chan);
 }
 
 __attribute__((weak)) zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_descriptor_req_t *pReq,

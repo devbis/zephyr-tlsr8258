@@ -11,6 +11,16 @@ zephyr_include_directories(
 
 zephyr_library_named(subsys__zigbee)
 
+zephyr_library_compile_definitions(
+    ZB_ED_ROLE=1
+    END_DEVICE=1
+    ROUTER=0
+    COORDINATOR=0
+    NV_ENABLE=1
+    SECURITY_ENABLE=1
+    DEFAULT_CHANNEL=${CONFIG_ZIGBEE_CHANNEL}
+)
+
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
@@ -34,6 +44,7 @@ zephyr_library_sources(
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
     platform/zephyr/drv_security_zephyr.c
+    platform/zephyr/zb_persistence_zephyr.c
 )
 
 # Common utilities
@@ -60,6 +71,7 @@ zephyr_library_sources(
 )
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_GP
     gp/gp.c gp/gp_proxy.c gp/gp_sink.c
