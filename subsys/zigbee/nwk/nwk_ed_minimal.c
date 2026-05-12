@@ -88,8 +88,7 @@ void tl_zbNwkEdMinimalDiscoveryStop(void)
 
 bool tl_zbNwkEdMinimalAssocJoinStart(void)
 {
-	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE &&
-	    g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_DISCOVERY) {
+	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE) {
 		return FALSE;
 	}
 
