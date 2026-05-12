@@ -9,6 +9,29 @@
 #ifndef SECUR_N_SECUR_MATERIAL
 #define SECUR_N_SECUR_MATERIAL                  2
 #endif
+#ifndef ZB_SECURITY
+#define ZB_SECURITY                             1
+#endif
+#ifndef APS_FRAME_SECURITY
+#define APS_FRAME_SECURITY
+#endif
+
+/* Polling defaults used by ED/ZLL commissioning paths */
+#ifndef POLL_RATE_QUARTERSECONDS
+#define POLL_RATE_QUARTERSECONDS                250
+#endif
+#ifndef POLL_RATE
+#define POLL_RATE                               (4 * POLL_RATE_QUARTERSECONDS)
+#endif
+#ifndef RESPONSE_POLL_RATE
+#define RESPONSE_POLL_RATE                      POLL_RATE_QUARTERSECONDS
+#endif
+#ifndef QUEUE_POLL_RATE
+#define QUEUE_POLL_RATE                         POLL_RATE_QUARTERSECONDS
+#endif
+#ifndef REJOIN_POLL_RATE
+#define REJOIN_POLL_RATE                        (2 * POLL_RATE_QUARTERSECONDS)
+#endif
 
 /* APS binding */
 #ifndef APS_BINDING_TABLE_NUM
@@ -54,5 +77,5 @@
 /* Default device role — used by zb_af.c node descriptor initialisation.
  * Can be overridden by application Kconfig before including this header. */
 #if !defined(ZB_COORDINATOR_ROLE) && !defined(ZB_ROUTER_ROLE) && !defined(ZB_ED_ROLE)
-#define ZB_ROUTER_ROLE                  1
+#define ZB_ED_ROLE                      1
 #endif

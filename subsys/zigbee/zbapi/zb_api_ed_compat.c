@@ -6,6 +6,10 @@ extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 short
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
 
+nwk_ctx_t g_zbNwkCtx __attribute__((weak)) = {
+	.is_factory_new = 1,
+};
+
 __attribute__((weak)) u8 zb_nwkFormation(u32 scanChannels, u8 scanDuration)
 {
 	return (u8)zdo_nwkFormationStart(scanChannels, scanDuration);
@@ -46,6 +50,17 @@ __attribute__((weak)) u8 zb_rejoinReqWithBackOff(u32 scanChannels, u8 scanDurati
 	return (u8)zdo_nwkRejoinWithBackOff(scanChannels, scanDuration);
 }
 
+__attribute__((weak)) u8 zb_setPollRate(u32 newRate)
+{
+	zdo_af_set_syn_rate(newRate);
+	return RET_OK;
+}
+
+__attribute__((weak)) u32 zb_getPollRate(void)
+{
+	return zdo_af_get_syn_rate();
+}
+
 __attribute__((weak)) void zb_rejoinSecModeSet(u8 mode)
 {
 	ARG_UNUSED(mode);
@@ -72,4 +87,9 @@ __attribute__((weak)) void zb_joinAFixedNetwork(u8 channel, u16 panId, u16 short
 	} else {
 		(void)zdo_nwkAssocJoinStart();
 	}
+}
+
+__attribute__((weak)) s32 nwk_parentNodeInfoStore(void)
+{
+	return RET_OK;
 }
