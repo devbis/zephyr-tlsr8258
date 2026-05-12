@@ -213,6 +213,28 @@ sizeof(readback), readback), NV_DATA_CHECK_ERROR);
 return true;
 }
 
+static bool test_length_contract_rejects_registered_len_larger_than_request(void)
+{
+	uint8_t stored_data[16] = {
+		0, 1, 2, 3, 4, 5, 6, 7,
+		8, 9, 10, 11, 12, 13, 14, 15
+	};
+	uint8_t readback[16];
+	uint8_t untouched[sizeof(readback)];
+
+	setup_test();
+	memset(readback, 0xA5, sizeof(readback));
+	memset(untouched, 0xA5, sizeof(untouched));
+	nv_itemLengthCheckAdd(NV_ITEM_ZCL_SCENE_TABLE, sizeof(stored_data));
+	EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+				   sizeof(stored_data), stored_data), NV_SUCC);
+	EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+				  8, readback), NV_DATA_CHECK_ERROR);
+	EXPECT_TRUE(memcmp(readback, untouched, sizeof(readback)) == 0);
+
+	return true;
+}
+
 static bool test_read_by_index_does_not_alias_other_item(void)
 {
 uint8_t value[4] = { 9, 9, 9, 9 };
@@ -272,6 +294,8 @@ bool (*fn)(void);
 { "module_reset_isolated", test_module_reset_isolated },
 { "length_contract_registered", test_length_contract_rejects_short_registered_item },
 { "length_contract_requested", test_length_contract_rejects_short_requested_item },
+{ "length_contract_registered_gt_requested",
+  test_length_contract_rejects_registered_len_larger_than_request },
 { "read_by_index_no_alias", test_read_by_index_does_not_alias_other_item },
 { "delete_by_index_no_alias", test_delete_by_index_does_not_alias_other_item },
 { "index_zero_behavior", test_read_delete_by_index_zero_behaves_like_item },
