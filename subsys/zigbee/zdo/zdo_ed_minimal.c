@@ -1,0 +1,288 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include "zb_common_stub.h"
+
+#define ZDO_ED_MINIMAL_POLL_RATE_MS                    1000U
+#define ZDO_ED_MINIMAL_TIME_BTWN_SCANS_MS              100U
+#define ZDO_ED_MINIMAL_SCAN_ATTEMPTS                   5U
+#define ZDO_ED_MINIMAL_PERMIT_JOIN_DURATION            0U
+#define ZDO_ED_MINIMAL_PARENT_LINK_RETRY_THRESHOLD     3U
+#define ZDO_ED_MINIMAL_REJOIN_TIMES                    0U
+#define ZDO_ED_MINIMAL_REJOIN_DURATION_S               0U
+#define ZDO_ED_MINIMAL_REJOIN_BACKOFF_S                0U
+#define ZDO_ED_MINIMAL_MAX_REJOIN_BACKOFF_S            0U
+#define ZDO_ED_MINIMAL_REJOIN_BACKOFF_ITERATION        0U
+#define ZDO_ED_MINIMAL_ACCEPT_NWK_UPDATE_PAN_ID        0xFFFFU
+#define ZDO_ED_MINIMAL_ACCEPT_NWK_UPDATE_CHANNEL       0xFFU
+#define ZDO_ED_MINIMAL_USE_MGMT_LEAVE_APS_SEC          FALSE
+#define ZDO_ED_MINIMAL_USE_TC_SEC_ON_KEY_ROTATION      FALSE
+#define ZDO_ED_MINIMAL_SCAN_DURATION                   5U
+#define ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS      5000U
+
+#define ZDO_ED_MINIMAL_CFG_INIT                        \
+	{                                              \
+		.config_nwk_indirectPollRate = ZDO_ED_MINIMAL_POLL_RATE_MS,      \
+		.config_nwk_time_btwn_scans = ZDO_ED_MINIMAL_TIME_BTWN_SCANS_MS, \
+		.config_nwk_scan_attempts = ZDO_ED_MINIMAL_SCAN_ATTEMPTS,         \
+		.config_permit_join_duration = ZDO_ED_MINIMAL_PERMIT_JOIN_DURATION, \
+		.config_parent_link_retry_threshold = ZDO_ED_MINIMAL_PARENT_LINK_RETRY_THRESHOLD, \
+		.config_rejoin_times = ZDO_ED_MINIMAL_REJOIN_TIMES,               \
+		.config_rejoin_duration = ZDO_ED_MINIMAL_REJOIN_DURATION_S,       \
+		.config_rejoin_backoff_time = ZDO_ED_MINIMAL_REJOIN_BACKOFF_S,    \
+		.config_max_rejoin_backoff_time = ZDO_ED_MINIMAL_MAX_REJOIN_BACKOFF_S, \
+		.config_rejoin_backoff_iteration = ZDO_ED_MINIMAL_REJOIN_BACKOFF_ITERATION, \
+		.config_accept_nwk_update_pan_id = ZDO_ED_MINIMAL_ACCEPT_NWK_UPDATE_PAN_ID, \
+		.config_accept_nwk_update_channel = ZDO_ED_MINIMAL_ACCEPT_NWK_UPDATE_CHANNEL, \
+		.config_mgmt_leave_use_aps_sec = ZDO_ED_MINIMAL_USE_MGMT_LEAVE_APS_SEC, \
+		.config_use_tc_sec_on_nwk_key_rotation = ZDO_ED_MINIMAL_USE_TC_SEC_ON_KEY_ROTATION, \
+		.config_nwk_scan_duration = ZDO_ED_MINIMAL_SCAN_DURATION,          \
+	}
+
+zdo_appIndCb_t *zdoAppIndCbLst = NULL;
+zdo_touchLinkCb_t *zdoTouchLinkCb = NULL;
+zdo_attrCfg_t zdo_cfg_attributes = ZDO_ED_MINIMAL_CFG_INIT;
+u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
+
+static bool g_zdoUnderRejoinMode = FALSE;
+
+void zdo_zdpCbTblRegister(zdo_appIndCb_t *cbTbl)
+{
+	zdoAppIndCbLst = cbTbl;
+}
+
+void zdo_touchLinkCbRegister(zdo_touchLinkCb_t *cbTbl)
+{
+	zdoTouchLinkCb = cbTbl;
+}
+
+void zdo_init(void)
+{
+	zdo_cfg_attributes = (zdo_attrCfg_t)ZDO_ED_MINIMAL_CFG_INIT;
+	TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
+	g_zdoUnderRejoinMode = FALSE;
+}
+
+u8 zdo_af_get_link_retry_threshold(void)
+{
+	return zdo_cfg_attributes.config_parent_link_retry_threshold;
+}
+
+void zdo_af_set_link_retry_threshold(u8 threshold)
+{
+	zdo_cfg_attributes.config_parent_link_retry_threshold = threshold;
+}
+
+u32 zdo_af_get_syn_rate(void)
+{
+	return zdo_cfg_attributes.config_nwk_indirectPollRate;
+}
+
+void zdo_af_set_syn_rate(u32 newRate)
+{
+	zdo_cfg_attributes.config_nwk_indirectPollRate = newRate;
+}
+
+u8 zdo_af_get_rejoin_times(void)
+{
+	return zdo_cfg_attributes.config_rejoin_times;
+}
+
+void zdo_af_set_rejoin_times(u8 times)
+{
+	zdo_cfg_attributes.config_rejoin_times = times;
+}
+
+u16 zdo_af_get_rejoin_duration(void)
+{
+	return zdo_cfg_attributes.config_rejoin_duration;
+}
+
+void zdo_af_set_rejoin_duration(u16 duration)
+{
+	zdo_cfg_attributes.config_rejoin_duration = duration;
+}
+
+u16 zdo_af_get_rejoin_backoff_time(void)
+{
+	return zdo_cfg_attributes.config_rejoin_backoff_time;
+}
+
+void zdo_af_set_rejoin_backoff_time(u16 interval)
+{
+	zdo_cfg_attributes.config_rejoin_backoff_time = interval;
+}
+
+u16 zdo_af_get_max_rejoin_backoff_time(void)
+{
+	return zdo_cfg_attributes.config_max_rejoin_backoff_time;
+}
+
+void zdo_af_set_max_rejoin_backoff_time(u16 interval)
+{
+	zdo_cfg_attributes.config_max_rejoin_backoff_time = interval;
+}
+
+u16 zdo_af_get_rejoin_backoff_iteration(void)
+{
+	return zdo_cfg_attributes.config_rejoin_backoff_iteration;
+}
+
+void zdo_af_set_rejoin_backoff_iteration(u16 iteration)
+{
+	zdo_cfg_attributes.config_rejoin_backoff_iteration = iteration;
+}
+
+u8 zdo_af_get_scan_attempts(void)
+{
+	return zdo_cfg_attributes.config_nwk_scan_attempts;
+}
+
+void zdo_af_set_scan_attempts(u8 attempts)
+{
+	zdo_cfg_attributes.config_nwk_scan_attempts = (attempts == 0U) ? 1U : attempts;
+}
+
+u16 zdo_af_get_nwk_time_btwn_scans(void)
+{
+	return zdo_cfg_attributes.config_nwk_time_btwn_scans;
+}
+
+u8 zdo_af_get_permit_join_duration(void)
+{
+	return zdo_cfg_attributes.config_permit_join_duration;
+}
+
+void zdo_af_set_accept_nwk_update_pan_id(u16 panId)
+{
+	zdo_cfg_attributes.config_accept_nwk_update_pan_id = panId;
+}
+
+u16 zdo_af_get_accept_nwk_update_pan_id(void)
+{
+	return zdo_cfg_attributes.config_accept_nwk_update_pan_id;
+}
+
+void zdo_af_set_accept_nwk_update_channel(u8 channel)
+{
+	zdo_cfg_attributes.config_accept_nwk_update_channel = channel;
+}
+
+u8 zdo_af_get_accept_nwk_update_channel(void)
+{
+	return zdo_cfg_attributes.config_accept_nwk_update_channel;
+}
+
+void zdo_af_set_mgmtLeave_use_aps_sec(bool enable)
+{
+	zdo_cfg_attributes.config_mgmt_leave_use_aps_sec = enable;
+}
+
+bool zdo_af_get_mgmtLeave_use_aps_sec(void)
+{
+	return zdo_cfg_attributes.config_mgmt_leave_use_aps_sec;
+}
+
+void zdo_af_set_use_tc_sec_on_nwk_key_rotation(bool enable)
+{
+	zdo_cfg_attributes.config_use_tc_sec_on_nwk_key_rotation = enable;
+}
+
+bool zdo_af_get_use_tc_sec_on_nwk_key_rotation(void)
+{
+	return zdo_cfg_attributes.config_use_tc_sec_on_nwk_key_rotation;
+}
+
+bool zb_isUnderRejoinMode(void)
+{
+	return g_zdoUnderRejoinMode;
+}
+
+u8 zdo_channel_page2num(u32 chp)
+{
+	for (u8 i = 0; i < 32; i++) {
+		if (chp & ((u32)1 << i)) {
+			return i;
+		}
+	}
+
+	return 0xFF;
+}
+
+zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
+{
+	ARG_UNUSED(scanChannels);
+	ARG_UNUSED(scanDuration);
+
+	return ZDO_NOT_SUPPORTED;
+}
+
+zdo_status_t zdo_nwkRouterStart(void)
+{
+	return ZDO_NOT_SUPPORTED;
+}
+
+zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_t cb)
+{
+	ARG_UNUSED(pReq);
+	ARG_UNUSED(cb);
+
+	return ZDO_NOT_SUPPORTED;
+}
+
+void zdo_nwkDiscoveryStop(void)
+{
+}
+
+zdo_status_t zdo_nwkAssocJoinStart(void)
+{
+	return ZDO_NOT_SUPPORTED;
+}
+
+zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
+{
+	ARG_UNUSED(scanChannels);
+	ARG_UNUSED(scanDuration);
+
+	g_zdoUnderRejoinMode = FALSE;
+	return ZDO_NOT_SUPPORTED;
+}
+
+zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
+{
+	ARG_UNUSED(scanChannels);
+	ARG_UNUSED(scanDuration);
+
+	g_zdoUnderRejoinMode = FALSE;
+	return ZDO_NOT_SUPPORTED;
+}
+
+void zdo_nwkRejoinWithBackOffStop(void)
+{
+	g_zdoUnderRejoinMode = FALSE;
+}
+
+zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
+{
+	ARG_UNUSED(scanChannels);
+	ARG_UNUSED(scanDuration);
+
+	return ZDO_NOT_SUPPORTED;
+}
+
+zdo_status_t zdo_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq)
+{
+	ARG_UNUSED(pReq);
+
+	return ZDO_NOT_SUPPORTED;
+}
+
+void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
+{
+	ARG_UNUSED(nodeIeeeAddr);
+	ARG_UNUSED(rejoin);
+}
+
+bool zdo_ifZdoNwkManagerIdle(void)
+{
+	return TRUE;
+}
