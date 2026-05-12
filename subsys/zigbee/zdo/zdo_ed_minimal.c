@@ -52,7 +52,6 @@ extern void tl_zbNwkEdMinimalDiscoveryStop(void);
 extern bool tl_zbNwkEdMinimalAssocJoinStart(void);
 extern bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff);
 extern void tl_zbNwkEdMinimalOperationAbort(void);
-extern void tl_zbNwkEdMinimalOperationComplete(u8 status);
 extern bool tl_zbNwkEdMinimalManagerIdle(void);
 extern u32 tl_zbNwkEdMinimalLastScanChannelsGet(void);
 extern u32 tl_zbNwkEdMinimalLastRejoinScanChannelsGet(void);
@@ -60,25 +59,12 @@ extern u32 tl_zbNwkEdMinimalLastRejoinScanChannelsGet(void);
 typedef struct {
 	nwkDiscoveryUserCb_t discoveryCb;
 	bool discoveryPending;
-	u8 discoveryToken;
 	bool joinPending;
-	u8 joinToken;
 	bool rejoinPending;
 	bool rejoinWithBackoff;
-	u8 rejoinToken;
 } zdo_ed_minimal_async_ctx_t;
 
 static zdo_ed_minimal_async_ctx_t g_zdoEdAsync;
-
-static u8 zdo_ed_minimal_next_token(u8 *token)
-{
-	*token = (u8)(*token + 1U);
-	if (*token == 0U) {
-		*token = 1U;
-	}
-
-	return *token;
-}
 
 static zdo_start_device_confirm_t zdo_ed_minimal_build_start_dev_cnf(u8 status, bool rejoinMode)
 {
@@ -98,60 +84,68 @@ static zdo_start_device_confirm_t zdo_ed_minimal_build_start_dev_cnf(u8 status, 
 	return cnf;
 }
 
-static void zdo_ed_minimal_discovery_done(void *arg)
+static void zdo_ed_minimal_discovery_done(u8 status)
 {
-	u8 token = (u8)(uintptr_t)arg;
 	nwkDiscoveryUserCb_t cb;
 
-	if (!g_zdoEdAsync.discoveryPending || g_zdoEdAsync.discoveryToken != token) {
+	if (!g_zdoEdAsync.discoveryPending) {
 		return;
 	}
 
 	cb = g_zdoEdAsync.discoveryCb;
 	g_zdoEdAsync.discoveryPending = FALSE;
 	g_zdoEdAsync.discoveryCb = NULL;
-	tl_zbNwkEdMinimalOperationComplete(ZDO_SUCCESS);
 
 	if (cb != NULL) {
 		cb();
 	}
 }
 
-static void zdo_ed_minimal_assoc_join_done(void *arg)
+static void zdo_ed_minimal_assoc_join_done(u8 status)
 {
-	u8 token = (u8)(uintptr_t)arg;
 	zdo_start_device_confirm_t cnf;
 
-	if (!g_zdoEdAsync.joinPending || g_zdoEdAsync.joinToken != token) {
+	if (!g_zdoEdAsync.joinPending) {
 		return;
 	}
 
 	g_zdoEdAsync.joinPending = FALSE;
-	cnf = zdo_ed_minimal_build_start_dev_cnf(ZDO_NOT_SUPPORTED, FALSE);
-	tl_zbNwkEdMinimalOperationComplete(cnf.status);
+	cnf = zdo_ed_minimal_build_start_dev_cnf(status, FALSE);
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
 		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
 	}
 }
 
-static void zdo_ed_minimal_rejoin_done(void *arg)
+static void zdo_ed_minimal_rejoin_done(u8 status)
 {
-	u8 token = (u8)(uintptr_t)arg;
 	zdo_start_device_confirm_t cnf;
 
-	if (!g_zdoEdAsync.rejoinPending || g_zdoEdAsync.rejoinToken != token) {
+	if (!g_zdoEdAsync.rejoinPending) {
 		return;
 	}
 
 	g_zdoEdAsync.rejoinPending = FALSE;
 	g_zdoEdAsync.rejoinWithBackoff = FALSE;
 	g_zdoUnderRejoinMode = FALSE;
-	cnf = zdo_ed_minimal_build_start_dev_cnf(ZDO_NOT_SUPPORTED, TRUE);
-	tl_zbNwkEdMinimalOperationComplete(cnf.status);
+	cnf = zdo_ed_minimal_build_start_dev_cnf(status, TRUE);
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
 		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
+	}
+}
+
+void tl_zdoEdMinimalDiscoveryDone(u8 status)
+{
+	zdo_ed_minimal_discovery_done(status);
+}
+
+void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode)
+{
+	if (rejoinMode) {
+		zdo_ed_minimal_rejoin_done(status);
+	} else {
+		zdo_ed_minimal_assoc_join_done(status);
 	}
 }
 
@@ -335,25 +329,19 @@ zdo_status_t zdo_nwkRouterStart(void)
 
 zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_t cb)
 {
-	u8 token;
-	u8 rc;
-
 	if (pReq == NULL || cb == NULL) {
 		return ZDO_INVALID_REQUEST;
 	}
-	if (!tl_zbNwkEdMinimalDiscoveryStart(pReq->scanChannels, pReq->scanDuration)) {
-		return ZDO_INVALID_REQUEST;
+	if (g_zdoEdAsync.discoveryPending) {
+		return ZDO_NOT_PERMITTED;
 	}
 
-	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.discoveryToken);
 	g_zdoEdAsync.discoveryCb = cb;
 	g_zdoEdAsync.discoveryPending = TRUE;
-	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_discovery_done, (void *)(uintptr_t)token);
-	if (rc != RET_OK) {
+	if (!tl_zbNwkEdMinimalDiscoveryStart(pReq->scanChannels, pReq->scanDuration)) {
 		g_zdoEdAsync.discoveryPending = FALSE;
 		g_zdoEdAsync.discoveryCb = NULL;
-		tl_zbNwkEdMinimalOperationAbort();
-		return ZDO_NOT_SUPPORTED;
+		return ZDO_INVALID_REQUEST;
 	}
 
 	return ZDO_SUCCESS;
@@ -370,20 +358,14 @@ void zdo_nwkDiscoveryStop(void)
 
 zdo_status_t zdo_nwkAssocJoinStart(void)
 {
-	u8 token;
-	u8 rc;
-
-	if (!tl_zbNwkEdMinimalAssocJoinStart()) {
-		return ZDO_INVALID_REQUEST;
+	if (g_zdoEdAsync.joinPending) {
+		return ZDO_NOT_PERMITTED;
 	}
 
-	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.joinToken);
 	g_zdoEdAsync.joinPending = TRUE;
-	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_assoc_join_done, (void *)(uintptr_t)token);
-	if (rc != RET_OK) {
+	if (!tl_zbNwkEdMinimalAssocJoinStart()) {
 		g_zdoEdAsync.joinPending = FALSE;
-		tl_zbNwkEdMinimalOperationAbort();
-		return ZDO_NOT_SUPPORTED;
+		return ZDO_INVALID_REQUEST;
 	}
 
 	return ZDO_SUCCESS;
@@ -391,50 +373,34 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
 
 zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
 {
-	u8 token;
-	u8 rc;
+	if (g_zdoEdAsync.rejoinPending) {
+		return ZDO_NOT_PERMITTED;
+	}
 
 	if (!tl_zbNwkEdMinimalRejoinStart(scanChannels, scanDuration, FALSE)) {
 		return ZDO_INVALID_REQUEST;
 	}
 
 	g_zdoUnderRejoinMode = TRUE;
-	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.rejoinToken);
 	g_zdoEdAsync.rejoinPending = TRUE;
 	g_zdoEdAsync.rejoinWithBackoff = FALSE;
-	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_rejoin_done, (void *)(uintptr_t)token);
-	if (rc != RET_OK) {
-		g_zdoEdAsync.rejoinPending = FALSE;
-		g_zdoEdAsync.rejoinWithBackoff = FALSE;
-		g_zdoUnderRejoinMode = FALSE;
-		tl_zbNwkEdMinimalOperationAbort();
-		return ZDO_NOT_SUPPORTED;
-	}
 
 	return ZDO_SUCCESS;
 }
 
 zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 {
-	u8 token;
-	u8 rc;
+	if (g_zdoEdAsync.rejoinPending) {
+		return ZDO_NOT_PERMITTED;
+	}
 
 	if (!tl_zbNwkEdMinimalRejoinStart(scanChannels, scanDuration, TRUE)) {
 		return ZDO_INVALID_REQUEST;
 	}
 
 	g_zdoUnderRejoinMode = TRUE;
-	token = zdo_ed_minimal_next_token(&g_zdoEdAsync.rejoinToken);
 	g_zdoEdAsync.rejoinPending = TRUE;
 	g_zdoEdAsync.rejoinWithBackoff = TRUE;
-	rc = TL_SCHEDULE_TASK(zdo_ed_minimal_rejoin_done, (void *)(uintptr_t)token);
-	if (rc != RET_OK) {
-		g_zdoEdAsync.rejoinPending = FALSE;
-		g_zdoEdAsync.rejoinWithBackoff = FALSE;
-		g_zdoUnderRejoinMode = FALSE;
-		tl_zbNwkEdMinimalOperationAbort();
-		return ZDO_NOT_SUPPORTED;
-	}
 
 	return ZDO_SUCCESS;
 }
