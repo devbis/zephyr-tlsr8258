@@ -219,4 +219,5 @@ extern zb_info_t g_zbInfo;
 extern const u8 tcLinkKeyCentralDefault[];
 extern const u8 linkKeyDistributedCertification[];
 extern const u8 linkKeyDistributedMaster[];
+void zb_info_save(void *arg);
 void zb_reset(void);
