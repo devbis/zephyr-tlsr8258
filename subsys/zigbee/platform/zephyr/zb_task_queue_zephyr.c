@@ -15,19 +15,21 @@ struct zb_task_item {
 static struct zb_task_item task_queue[32];
 static u8 task_wptr;
 static u8 task_rptr;
+static u8 task_count;
 static struct k_spinlock task_lock;
 
 static bool zb_taskq_pop(struct zb_task_item *item)
 {
 	k_spinlock_key_t key = k_spin_lock(&task_lock);
 
-	if (task_rptr == task_wptr) {
+	if (task_count == 0U) {
 		k_spin_unlock(&task_lock, key);
 		return false;
 	}
 
-	*item = task_queue[task_rptr % ARRAY_SIZE(task_queue)];
-	task_rptr++;
+	*item = task_queue[task_rptr];
+	task_rptr = (u8)((task_rptr + 1U) % ARRAY_SIZE(task_queue));
+	task_count--;
 	k_spin_unlock(&task_lock, key);
 	return true;
 }
@@ -53,17 +55,18 @@ u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
 	}
 
 	key = k_spin_lock(&task_lock);
-	next = (u8)(task_wptr + 1U);
-	if (next == task_rptr) {
+	if (task_count == ARRAY_SIZE(task_queue)) {
 		k_spin_unlock(&task_lock, key);
 		return RET_BUSY;
 	}
 
-	task_queue[task_wptr % ARRAY_SIZE(task_queue)] = (struct zb_task_item){
+	task_queue[task_wptr] = (struct zb_task_item){
 		.fn = fn,
 		.arg = arg,
 	};
+	next = (u8)((task_wptr + 1U) % ARRAY_SIZE(task_queue));
 	task_wptr = next;
+	task_count++;
 	k_spin_unlock(&task_lock, key);
 
 	k_sem_give(&zb_ev_sem);
