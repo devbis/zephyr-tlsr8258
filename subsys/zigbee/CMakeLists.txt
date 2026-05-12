@@ -27,6 +27,7 @@ zephyr_library_sources(
     platform/zephyr/ev_queue_zephyr.c
     platform/zephyr/ev_timer_zephyr.c
     platform/zephyr/ev_poll_zephyr.c
+    platform/zephyr/zb_task_queue_zephyr.c
     platform/zephyr/zb_main.c
     platform/zephyr/drv_hw_zephyr.c
     platform/zephyr/drv_radio_map.c
