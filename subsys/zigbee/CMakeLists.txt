@@ -71,8 +71,9 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_WWAH wwah/wwah.c wwah/wwahEpCfg.c)
 # ZCL
 add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 
-# Minimal NWK / ZDO runtime for ED no-join scope
-zephyr_library_sources(
+# End Device runtime is the only role currently wired.
+# Router/Coordinator runtime sources are intentionally not added yet.
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     nwk/nwk_ed_minimal.c
     zdo/zdo_ed_minimal.c
 )
