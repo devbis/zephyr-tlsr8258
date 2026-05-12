@@ -71,10 +71,10 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_WWAH wwah/wwah.c wwah/wwahEpCfg.c)
 # ZCL
 add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 
-# NWK / ZDO stubs (replaced in Phase 3-4)
+# Minimal NWK / ZDO runtime for ED no-join scope
 zephyr_library_sources(
-    nwk/nwk_stub.c
-    zdo/zdo_stub.c
+    nwk/nwk_ed_minimal.c
+    zdo/zdo_ed_minimal.c
 )
 
 endif() # CONFIG_ZIGBEE
