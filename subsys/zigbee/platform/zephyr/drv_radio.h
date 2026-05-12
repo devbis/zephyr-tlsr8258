@@ -47,6 +47,7 @@ static inline bool clock_time_exceed(u32 ref, u32 span_us)
 
 /* ─── Adapter contract (Phase 2) ─────────────────────────────────── */
 void zb_radio_init(void);
+bool zb_radio_is_ready(void);
 void zb_radio_reset(void);
 void zb_radio_trx_switch(u8 mode, u8 phy_chn);
 void zb_radio_trx_off_auto_mode(void);
