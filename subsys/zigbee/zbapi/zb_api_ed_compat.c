@@ -1,0 +1,75 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include "zb_common_stub.h"
+
+extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
+						 const u8 *extPanId, const u8 *nwkKey,
+						 const u8 *tcAddr);
+
+__attribute__((weak)) u8 zb_nwkFormation(u32 scanChannels, u8 scanDuration)
+{
+	return (u8)zdo_nwkFormationStart(scanChannels, scanDuration);
+}
+
+__attribute__((weak)) u8 zb_routerStart(void)
+{
+	return (u8)zdo_nwkRouterStart();
+}
+
+__attribute__((weak)) u8 zb_nwkDiscovery(u32 scanChannels, u8 scanDuration, nwkDiscoveryUserCb_t cb)
+{
+	nlme_nwkDisc_req_t req = {
+		.scanChannels = scanChannels,
+		.scanDuration = scanDuration,
+	};
+
+	return (u8)zdo_nwkDiscoveryStart(&req, cb);
+}
+
+__attribute__((weak)) void zb_nwkDiscoveryStop(void)
+{
+	zdo_nwkDiscoveryStop();
+}
+
+__attribute__((weak)) u8 zb_assocJoinReq(void)
+{
+	return (u8)zdo_nwkAssocJoinStart();
+}
+
+__attribute__((weak)) u8 zb_rejoinReq(u32 scanChannels, u8 scanDuration)
+{
+	return (u8)zdo_nwkRejoinStart(scanChannels, scanDuration);
+}
+
+__attribute__((weak)) u8 zb_rejoinReqWithBackOff(u32 scanChannels, u8 scanDuration)
+{
+	return (u8)zdo_nwkRejoinWithBackOff(scanChannels, scanDuration);
+}
+
+__attribute__((weak)) void zb_rejoinSecModeSet(u8 mode)
+{
+	ARG_UNUSED(mode);
+}
+
+__attribute__((weak)) u8 zb_directJoinReq(u32 scanChannels, u8 scanDuration)
+{
+	return (u8)zdo_nwkDirectJoinStart(scanChannels, scanDuration);
+}
+
+__attribute__((weak)) u8 zb_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq)
+{
+	return (u8)zdo_nwkDirectJoinAccept(pReq);
+}
+
+__attribute__((weak)) void zb_joinAFixedNetwork(u8 channel, u16 panId, u16 shortAddr,
+						 u8 *extPanId, u8 *nwkKey, u8 *tcAddr)
+{
+	u32 scanChannels = (channel < 32U) ? ((u32)1U << channel) : 0U;
+
+	tl_zbNwkEdMinimalSetFixedJoinTarget(channel, panId, shortAddr, extPanId, nwkKey, tcAddr);
+	if (scanChannels != 0U) {
+		(void)zdo_nwkRejoinStart(scanChannels, zdo_cfg_attributes.config_nwk_scan_duration);
+	} else {
+		(void)zdo_nwkAssocJoinStart();
+	}
+}

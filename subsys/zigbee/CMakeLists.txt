@@ -74,6 +74,7 @@ add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 # End Device runtime is the only role currently wired.
 # Router/Coordinator runtime sources are intentionally not added yet.
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
+    zbapi/zb_api_ed_compat.c
     nwk/nwk_ed_minimal.c
     zdo/zdo_ed_minimal.c
 )
