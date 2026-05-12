@@ -47,8 +47,8 @@ zephyr_library_sources(
 zephyr_library_sources(
     mac/mac_phy.c
     mac/mac_pib.c
-    mac/mac_trx_compat.c
 )
+zephyr_library_sources_ifndef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_compat.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_stub.c)
 
 # Upper layers (open-source SDK files)
