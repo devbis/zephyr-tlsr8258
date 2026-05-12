@@ -58,20 +58,7 @@ void drv_generateRandomData(u8 *pData, u8 len);
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);
 
-/* Flash stub declarations (Phase 1: no-op stubs for compilation) */
-static inline void flash_read(u32 addr, u32 len, u8 *buf)
-{
-	(void)addr; (void)len;
-	if (buf) { __builtin_memset(buf, 0xFF, len); }
-}
-static inline void flash_write(u32 addr, u32 len, u8 *buf)
-{
-	(void)addr; (void)len; (void)buf;
-}
-static inline void flash_erase(u32 addr) { (void)addr; }
-
-/* IEEE address from hardware (Phase 1: stub returning false) */
-static inline bool drv_get_primary_ieee_addr(u8 *addr)
-{
-	(void)addr; return false;
-}
+void flash_read(u32 addr, u32 len, u8 *buf);
+void flash_write(u32 addr, u32 len, u8 *buf);
+void flash_erase(u32 addr);
+bool drv_get_primary_ieee_addr(u8 *addr);
