@@ -6,9 +6,12 @@
 #include <zephyr/random/random.h>
 #include <zephyr/drivers/hwinfo.h>
 #include <zephyr/storage/flash_map.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_types.h>
 #include "drv_hw.h"
 #include "drv_nv.h"
+
+LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
 
 /* 24 MHz system clock → 24 ticks per microsecond */
 u32 sysTimerPerUs = 24;
@@ -118,6 +121,26 @@ static int flash_area_for_addr(u32 addr, const struct flash_area **fa,
 	return 0;
 }
 
+static bool flash_area_write_allowed(const struct flash_area *fa)
+{
+	if (fa == NULL) {
+		return false;
+	}
+
+#if FIXED_PARTITION_EXISTS(nvs_storage)
+	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(nvs_storage))) {
+		return true;
+	}
+#endif
+#if FIXED_PARTITION_EXISTS(slot1_partition)
+	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(slot1_partition))) {
+		return true;
+	}
+#endif
+
+	return false;
+}
+
 void flash_read(u32 addr, u32 len, u8 *buf)
 {
 	u32 cur_addr = addr;
@@ -135,12 +158,14 @@ void flash_read(u32 addr, u32 len, u8 *buf)
 		size_t chunk;
 
 		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
+			LOG_ERR("flash_read: invalid addr 0x%08x len=%u", cur_addr, remaining);
 			memset(dst, 0xFF, remaining);
 			return;
 		}
 
 		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
 		if (flash_area_read(fa, off, dst, chunk) < 0) {
+			LOG_ERR("flash_read: backend failed addr=0x%08x len=%u", cur_addr, (u32)chunk);
 			memset(dst, 0xFF, remaining);
 			return;
 		}
@@ -168,11 +193,17 @@ void flash_write(u32 addr, u32 len, u8 *buf)
 		size_t chunk;
 
 		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
+			LOG_ERR("flash_write: invalid addr 0x%08x len=%u", cur_addr, remaining);
+			return;
+		}
+		if (!flash_area_write_allowed(fa)) {
+			LOG_ERR("flash_write: denied partition id=%u addr=0x%08x", fa->fa_id, cur_addr);
 			return;
 		}
 
 		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
 		if (flash_area_write(fa, off, src, chunk) < 0) {
+			LOG_ERR("flash_write: backend failed addr=0x%08x len=%u", cur_addr, (u32)chunk);
 			return;
 		}
 
@@ -194,11 +225,17 @@ void flash_erase(u32 addr)
 		size_t chunk;
 
 		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
+			LOG_ERR("flash_erase: invalid addr 0x%08x len=%u", cur_addr, remaining);
+			return;
+		}
+		if (!flash_area_write_allowed(fa)) {
+			LOG_ERR("flash_erase: denied partition id=%u addr=0x%08x", fa->fa_id, cur_addr);
 			return;
 		}
 
 		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
 		if (flash_area_erase(fa, off, chunk) < 0) {
+			LOG_ERR("flash_erase: backend failed addr=0x%08x len=%u", cur_addr, (u32)chunk);
 			return;
 		}
 
