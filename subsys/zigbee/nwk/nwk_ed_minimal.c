@@ -1,6 +1,21 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "zb_common_stub.h"
+#include "mac/includes/mac_phy.h"
+#include "os/ev_timer.h"
+
+#include <string.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/spinlock.h>
+#include <zephyr/sys/util.h>
+
+LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
+
+#define NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS 200U
+#define NWK_ED_MINIMAL_SCAN_WINDOW_MAX_MS 1500U
+#define NWK_ED_MINIMAL_JOIN_POLL_MS       200U
+#define NWK_ED_MINIMAL_JOIN_POLL_MAX      20U
+#define NWK_ED_MINIMAL_RX_EVT_Q_LEN       4U
 
 typedef enum {
 	NWK_ED_MINIMAL_STATE_IDLE = 0,
@@ -29,12 +44,531 @@ typedef struct {
 	extPANId_t fixedJoinExtPanId;
 	u8 fixedJoinNwkKey[SEC_KEY_LEN];
 	addrExt_t fixedJoinTcAddr;
+
+	u32 remainingScanChannels;
+	u8 activeScanChannel;
+	bool haveBeaconCandidate;
+	s8 bestBeaconRssi;
+	u16 candidatePanId;
+	u16 candidateShortAddr;
+	extPANId_t candidateExtPanId;
+	bool discoveryForRejoin;
+
+	u8 activeChannel;
+	u16 activePanId;
+	u16 activeParentShortAddr;
+	extPANId_t activeExtPanId;
+	u8 assocPollCount;
+
+	ev_timer_event_t opTimer;
 } nwk_ed_minimal_ctx_t;
 
 static nwk_ed_minimal_ctx_t g_nwkEdCtx;
+static struct k_spinlock g_nwkEdRxEvtLock;
+
+typedef enum {
+	NWK_ED_MINIMAL_RX_EVT_NONE = 0,
+	NWK_ED_MINIMAL_RX_EVT_BEACON,
+	NWK_ED_MINIMAL_RX_EVT_ASSOC_RSP,
+} nwk_ed_minimal_rx_evt_type_t;
+
+typedef struct {
+	nwk_ed_minimal_rx_evt_type_t type;
+	s8 rssi;
+	union {
+		struct {
+			u16 panId;
+			u16 parentShortAddr;
+			extPANId_t extPanId;
+			u8 channel;
+		} beacon;
+		struct {
+			u8 macStatus;
+			u16 assignedShortAddr;
+			bool dstExtValid;
+			addrExt_t dstExtAddr;
+			bool dstShortValid;
+			u16 dstShortAddr;
+			bool srcShortValid;
+			u16 srcShortAddr;
+		} assocRsp;
+	};
+} nwk_ed_minimal_rx_evt_t;
+
+static nwk_ed_minimal_rx_evt_t g_nwkEdRxEvtQ[NWK_ED_MINIMAL_RX_EVT_Q_LEN];
+static u8 g_nwkEdRxEvtHead;
+static u8 g_nwkEdRxEvtTail;
+static u8 g_nwkEdRxEvtCount;
+
+extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
+extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
+
+static u16 nwk_ed_minimal_u16_from_le(const u8 *buf)
+{
+	return ((u16)buf[1] << 8) | (u16)buf[0];
+}
+
+static bool nwk_ed_minimal_channel_mask_contains(u32 mask, u8 ch)
+{
+	return (ch <= 31U) && ((mask & ((u32)1U << ch)) != 0U);
+}
+
+static u8 nwk_ed_minimal_next_scan_channel(u32 mask, u8 startExclusive)
+{
+	for (u8 ch = (u8)(startExclusive + 1U); ch <= TL_ZB_MAC_CHANNEL_STOP; ch++) {
+		if (nwk_ed_minimal_channel_mask_contains(mask, ch)) {
+			return ch;
+		}
+	}
+
+	return 0xFFU;
+}
+
+static u32 nwk_ed_minimal_scan_window_ms(u8 scanDuration)
+{
+	u8 bounded = (scanDuration > 8U) ? 8U : scanDuration;
+	u32 window = 16U * (((u32)1U << bounded) + 1U);
+
+	if (window < NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS) {
+		return NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS;
+	}
+	if (window > NWK_ED_MINIMAL_SCAN_WINDOW_MAX_MS) {
+		return NWK_ED_MINIMAL_SCAN_WINDOW_MAX_MS;
+	}
+
+	return window;
+}
+
+static void nwk_ed_minimal_timer_cancel(void)
+{
+	ev_unon_timer(&g_nwkEdCtx.opTimer);
+}
+
+static void nwk_ed_minimal_timer_start(u32 timeoutMs);
+
+typedef struct {
+	u16 fcf;
+	u8 frameType;
+	u8 srcAddrMode;
+	u8 dstAddrMode;
+	u8 headerLen;
+	bool srcPanValid;
+	u16 srcPanId;
+	bool srcShortValid;
+	u16 srcShortAddr;
+	bool dstShortValid;
+	u16 dstShortAddr;
+	bool dstExtValid;
+	addrExt_t dstExtAddr;
+} nwk_ed_minimal_mac_hdr_t;
+
+static bool nwk_ed_minimal_parse_mac_header(const u8 *psdu, u8 len, nwk_ed_minimal_mac_hdr_t *out)
+{
+	u16 fcf;
+	u8 idx = MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN;
+	u16 dstPanId = MAC_INVALID_PANID;
+
+	if (psdu == NULL || out == NULL || len < idx) {
+		return FALSE;
+	}
+
+	memset(out, 0, sizeof(*out));
+	fcf = nwk_ed_minimal_u16_from_le(psdu);
+	out->fcf = fcf;
+	out->frameType = (u8)((fcf & MAC_FCF_FRAME_TYPE_MASK) >> MAC_FCF_FRAME_TYPE_POS);
+	out->dstAddrMode = (u8)((fcf & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
+	out->srcAddrMode = (u8)((fcf & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
+
+	if (out->dstAddrMode != ZB_ADDR_NO_ADDR) {
+		u8 dstAddrLen;
+
+		if (idx + MAC_PAN_ID_FIELD_LEN > len) {
+			return FALSE;
+		}
+		dstPanId = nwk_ed_minimal_u16_from_le(&psdu[idx]);
+		idx += MAC_PAN_ID_FIELD_LEN;
+
+		if (out->dstAddrMode == ZB_ADDR_16BIT_DEV_OR_BROADCAST) {
+			dstAddrLen = MAC_SHORT_ADDR_FIELD_LEN;
+			if (idx + dstAddrLen > len) {
+				return FALSE;
+			}
+			out->dstShortAddr = nwk_ed_minimal_u16_from_le(&psdu[idx]);
+			out->dstShortValid = TRUE;
+		} else if (out->dstAddrMode == ZB_ADDR_64BIT_DEV) {
+			dstAddrLen = MAC_EXT_ADDR_FIELD_LEN;
+			if (idx + dstAddrLen > len) {
+				return FALSE;
+			}
+			memcpy(out->dstExtAddr, &psdu[idx], sizeof(out->dstExtAddr));
+			out->dstExtValid = TRUE;
+		} else {
+			return FALSE;
+		}
+
+		idx += dstAddrLen;
+	}
+
+	if (out->srcAddrMode != ZB_ADDR_NO_ADDR) {
+		u8 srcAddrLen;
+
+		if ((fcf & MAC_FCF_INTRA_PAN_MASK) != 0U && out->dstAddrMode != ZB_ADDR_NO_ADDR) {
+			out->srcPanId = dstPanId;
+			out->srcPanValid = TRUE;
+		} else {
+			if (idx + MAC_PAN_ID_FIELD_LEN > len) {
+				return FALSE;
+			}
+			out->srcPanId = nwk_ed_minimal_u16_from_le(&psdu[idx]);
+			out->srcPanValid = TRUE;
+			idx += MAC_PAN_ID_FIELD_LEN;
+		}
+
+		if (out->srcAddrMode == ZB_ADDR_16BIT_DEV_OR_BROADCAST) {
+			srcAddrLen = MAC_SHORT_ADDR_FIELD_LEN;
+			if (idx + srcAddrLen > len) {
+				return FALSE;
+			}
+			out->srcShortAddr = nwk_ed_minimal_u16_from_le(&psdu[idx]);
+			out->srcShortValid = TRUE;
+		} else if (out->srcAddrMode == ZB_ADDR_64BIT_DEV) {
+			srcAddrLen = MAC_EXT_ADDR_FIELD_LEN;
+			if (idx + srcAddrLen > len) {
+				return FALSE;
+			}
+		} else {
+			return FALSE;
+		}
+
+		idx += srcAddrLen;
+	}
+
+	out->headerLen = idx;
+	return TRUE;
+}
+
+static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
+						  const nwk_ed_minimal_mac_hdr_t *hdr,
+						  u16 *panId, u16 *coordShortAddr, extPANId_t extPanId)
+{
+	u8 idx;
+	u8 gtsSpec;
+	u8 pendingSpec;
+	u8 gtsDescCount;
+	u8 pendingShortCount;
+	u8 pendingExtCount;
+	u8 superframeSpec2;
+
+	if (psdu == NULL || hdr == NULL || panId == NULL || coordShortAddr == NULL ||
+	    extPanId == NULL || !hdr->srcPanValid || !hdr->srcShortValid) {
+		return FALSE;
+	}
+
+	idx = hdr->headerLen;
+	if (idx + 3U > len) {
+		return FALSE;
+	}
+
+	/* Superframe specification: association permit is bit 7 of second byte. */
+	superframeSpec2 = psdu[idx + 1U];
+	if ((superframeSpec2 & BIT(7)) == 0U) {
+		return FALSE;
+	}
+
+	idx += 2U;
+	gtsSpec = psdu[idx++];
+	gtsDescCount = (u8)(gtsSpec & 0x07U);
+	if (gtsDescCount > 0U) {
+		u8 gtsLen = (u8)(1U + (gtsDescCount * 3U));
+		if (idx + gtsLen > len) {
+			return FALSE;
+		}
+		idx = (u8)(idx + gtsLen);
+	}
+
+	if (idx + 1U > len) {
+		return FALSE;
+	}
+	pendingSpec = psdu[idx++];
+	pendingShortCount = (u8)(pendingSpec & 0x07U);
+	pendingExtCount = (u8)((pendingSpec >> 4) & 0x07U);
+
+	if (idx + (pendingShortCount * 2U) + (pendingExtCount * 8U) + 11U > len) {
+		return FALSE;
+	}
+	idx = (u8)(idx + (pendingShortCount * 2U) + (pendingExtCount * 8U));
+
+	/* Beacon payload: protocol_id(1), stack/version(1), capacity/depth(1), extPAN(8), ... */
+	memcpy(extPanId, &psdu[idx + 3U], sizeof(extPANId_t));
+	*panId = hdr->srcPanId;
+	*coordShortAddr = hdr->srcShortAddr;
+
+	return TRUE;
+}
+
+static void nwk_ed_minimal_channel_set(u8 channel)
+{
+	rf_setChannel(channel);
+	(void)tl_zbMacAttrSet(MAC_PHY_ATTR_CURRENT_CHANNEL, &channel, sizeof(channel));
+}
+
+static bool nwk_ed_minimal_rx_evt_push(const nwk_ed_minimal_rx_evt_t *evt)
+{
+	k_spinlock_key_t key;
+
+	if (evt == NULL) {
+		return FALSE;
+	}
+
+	key = k_spin_lock(&g_nwkEdRxEvtLock);
+	if (g_nwkEdRxEvtCount >= NWK_ED_MINIMAL_RX_EVT_Q_LEN) {
+		k_spin_unlock(&g_nwkEdRxEvtLock, key);
+		return FALSE;
+	}
+
+	g_nwkEdRxEvtQ[g_nwkEdRxEvtHead] = *evt;
+	g_nwkEdRxEvtHead = (u8)((g_nwkEdRxEvtHead + 1U) % NWK_ED_MINIMAL_RX_EVT_Q_LEN);
+	g_nwkEdRxEvtCount++;
+	k_spin_unlock(&g_nwkEdRxEvtLock, key);
+
+	return TRUE;
+}
+
+static bool nwk_ed_minimal_rx_evt_pop(nwk_ed_minimal_rx_evt_t *evt)
+{
+	k_spinlock_key_t key;
+
+	if (evt == NULL) {
+		return FALSE;
+	}
+
+	key = k_spin_lock(&g_nwkEdRxEvtLock);
+	if (g_nwkEdRxEvtCount == 0U) {
+		k_spin_unlock(&g_nwkEdRxEvtLock, key);
+		return FALSE;
+	}
+
+	*evt = g_nwkEdRxEvtQ[g_nwkEdRxEvtTail];
+	g_nwkEdRxEvtTail = (u8)((g_nwkEdRxEvtTail + 1U) % NWK_ED_MINIMAL_RX_EVT_Q_LEN);
+	g_nwkEdRxEvtCount--;
+	k_spin_unlock(&g_nwkEdRxEvtLock, key);
+
+	return TRUE;
+}
+
+static void nwk_ed_minimal_finish_discovery(u8 status)
+{
+	bool rejoinFlow = g_nwkEdCtx.discoveryForRejoin;
+
+	nwk_ed_minimal_timer_cancel();
+	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
+	g_nwkEdCtx.lastJoinStatus = status;
+
+	if (!rejoinFlow) {
+		tl_zdoEdMinimalDiscoveryDone(status);
+	}
+}
+
+static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
+{
+	nwk_ed_minimal_timer_cancel();
+	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
+	g_nwkEdCtx.rejoinWithBackoff = FALSE;
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
+	g_nwkEdCtx.lastJoinStatus = status;
+
+	if (status != ZDO_SUCCESS && !rejoinMode) {
+		g_zbNwkCtx.joined = 0;
+	}
+
+	tl_zdoEdMinimalJoinDone(status, rejoinMode);
+}
+
+static bool nwk_ed_minimal_send_data_request(void)
+{
+	u8 frame[MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN + MAC_PAN_ID_FIELD_LEN +
+		 MAC_SHORT_ADDR_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN + 1U];
+	u8 idx = 0;
+	u16 fcf = 0;
+
+	fcf |= MAC_FRAME_COMMAND;
+	fcf |= MAC_FCF_ACK_REQ_BIT;
+	fcf |= MAC_FCF_INTRA_PAN_MASK;
+	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
+	fcf |= (u16)ZB_ADDR_64BIT_DEV << MAC_FCF_SRC_ADDR_MODE_POS;
+
+	COPY_U16TOBUFFER(&frame[idx], fcf);
+	idx += MAC_FCF_FIELD_LEN;
+	frame[idx++] = ZB_MAC_DSN();
+	ZB_INC_MAC_DSN();
+	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activePanId);
+	idx += MAC_PAN_ID_FIELD_LEN;
+	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activeParentShortAddr);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+	memcpy(&frame[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
+	idx += sizeof(addrExt_t);
+	frame[idx++] = MAC_CMD_DATA_REQUEST;
+
+	rf802154_tx_ready(frame, idx);
+	rf802154_tx();
+
+	return TRUE;
+}
+
+static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
+{
+	u8 frame[MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN + MAC_PAN_ID_FIELD_LEN +
+		 MAC_SHORT_ADDR_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN + 2U];
+	u8 idx = 0;
+	u16 fcf = 0;
+	u8 capability = 0;
+	u16 parentShortAddr;
+	u16 panId;
+	extPANId_t extPanId;
+	u8 channel;
+
+	if (g_nwkEdCtx.parentCandidateValid) {
+		parentShortAddr = g_nwkEdCtx.parentCandidateShortAddr;
+		panId = g_nwkEdCtx.candidatePanId;
+		ZB_EXTPANID_COPY(extPanId, g_nwkEdCtx.candidateExtPanId);
+		channel = g_nwkEdCtx.activeScanChannel;
+	} else if (g_nwkEdCtx.fixedJoinValid) {
+		parentShortAddr = g_nwkEdCtx.fixedJoinShortAddr;
+		panId = g_nwkEdCtx.fixedJoinPanId;
+		ZB_EXTPANID_COPY(extPanId, g_nwkEdCtx.fixedJoinExtPanId);
+		channel = g_nwkEdCtx.fixedJoinChannel;
+	} else {
+		LOG_WRN("join start rejected: no parent candidate");
+		return FALSE;
+	}
+
+	g_nwkEdCtx.activeChannel = channel;
+	g_nwkEdCtx.activePanId = panId;
+	g_nwkEdCtx.activeParentShortAddr = parentShortAddr;
+	ZB_EXTPANID_COPY(g_nwkEdCtx.activeExtPanId, extPanId);
+	g_nwkEdCtx.assocPollCount = 0U;
+
+	nwk_ed_minimal_channel_set(channel);
+
+	fcf |= MAC_FRAME_COMMAND;
+	fcf |= MAC_FCF_ACK_REQ_BIT;
+	fcf |= MAC_FCF_INTRA_PAN_MASK;
+	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
+	fcf |= (u16)ZB_ADDR_64BIT_DEV << MAC_FCF_SRC_ADDR_MODE_POS;
+
+	COPY_U16TOBUFFER(&frame[idx], fcf);
+	idx += MAC_FCF_FIELD_LEN;
+	frame[idx++] = ZB_MAC_DSN();
+	ZB_INC_MAC_DSN();
+	COPY_U16TOBUFFER(&frame[idx], panId);
+	idx += MAC_PAN_ID_FIELD_LEN;
+	COPY_U16TOBUFFER(&frame[idx], parentShortAddr);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+	memcpy(&frame[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
+	idx += sizeof(addrExt_t);
+	frame[idx++] = MAC_CMD_ASSOCIATION_REQUEST;
+
+	capability |= g_zbNIB.capabilityInfo.altPanCoord ? BIT(0) : 0U;
+	capability |= g_zbNIB.capabilityInfo.devType ? BIT(1) : 0U;
+	capability |= g_zbNIB.capabilityInfo.powerSrc ? BIT(2) : 0U;
+	capability |= g_zbMacPib.rxOnWhenIdle ? BIT(3) : 0U;
+	capability |= g_zbNIB.capabilityInfo.secuCapability ? BIT(6) : 0U;
+	capability |= BIT(7); /* allocate short address */
+	frame[idx++] = capability;
+
+	rf802154_tx_ready(frame, idx);
+	rf802154_tx();
+
+	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
+	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
+	LOG_INF("%s started: pan 0x%04x parent 0x%04x ch %u",
+		rejoinMode ? "rejoin" : "join", panId, parentShortAddr, channel);
+
+	return TRUE;
+}
+
+static bool nwk_ed_minimal_start_scan_channel(void)
+{
+	u8 nextChannel = nwk_ed_minimal_next_scan_channel(g_nwkEdCtx.remainingScanChannels,
+							   g_nwkEdCtx.activeScanChannel);
+
+	if (nextChannel == 0xFFU) {
+		return FALSE;
+	}
+
+	g_nwkEdCtx.remainingScanChannels &= ~((u32)1U << nextChannel);
+	g_nwkEdCtx.activeScanChannel = nextChannel;
+	nwk_ed_minimal_channel_set(nextChannel);
+	nwk_ed_minimal_timer_start(nwk_ed_minimal_scan_window_ms(g_nwkEdCtx.lastScanDuration));
+	LOG_INF("discovery scanning channel %u", nextChannel);
+
+	return TRUE;
+}
+
+static void nwk_ed_minimal_timer_task(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY) {
+		if (g_nwkEdCtx.haveBeaconCandidate) {
+			if (g_nwkEdCtx.discoveryForRejoin) {
+				if (!nwk_ed_minimal_start_assoc(TRUE)) {
+					nwk_ed_minimal_finish_join(ZDO_NETWORK_LOST, TRUE);
+				}
+			} else {
+				nwk_ed_minimal_finish_discovery(ZDO_SUCCESS);
+			}
+			return;
+		}
+
+		if (!nwk_ed_minimal_start_scan_channel()) {
+			if (g_nwkEdCtx.discoveryForRejoin) {
+				nwk_ed_minimal_finish_join(ZDO_NETWORK_LOST, TRUE);
+			} else {
+				LOG_WRN("discovery finished without beacon candidate");
+				nwk_ed_minimal_finish_discovery(ZDO_NO_MATCH);
+			}
+		}
+		return;
+	}
+
+	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_JOINING ||
+	    g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_REJOIN) {
+		bool rejoinMode = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_REJOIN);
+
+		if (g_nwkEdCtx.assocPollCount >= NWK_ED_MINIMAL_JOIN_POLL_MAX) {
+			LOG_WRN("%s timed out waiting assoc response", rejoinMode ? "rejoin" : "join");
+			nwk_ed_minimal_finish_join(rejoinMode ? ZDO_NETWORK_LOST : ZDO_TIMEOUT, rejoinMode);
+			return;
+		}
+
+		(void)nwk_ed_minimal_send_data_request();
+		g_nwkEdCtx.assocPollCount++;
+		nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
+	}
+}
+
+static int nwk_ed_minimal_timer_cb(void *arg)
+{
+	ARG_UNUSED(arg);
+	(void)TL_SCHEDULE_TASK(nwk_ed_minimal_timer_task, NULL);
+	return -1;
+}
+
+static void nwk_ed_minimal_timer_start(u32 timeoutMs)
+{
+	if (g_nwkEdCtx.opTimer.cb == NULL) {
+		memset(&g_nwkEdCtx.opTimer, 0, sizeof(g_nwkEdCtx.opTimer));
+		g_nwkEdCtx.opTimer.cb = nwk_ed_minimal_timer_cb;
+	}
+
+	ev_on_timer(&g_nwkEdCtx.opTimer, timeoutMs);
+}
 
 static void nwk_ed_minimal_runtime_reset(void)
 {
+	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.lastScanChannels = 0U;
 	g_nwkEdCtx.lastScanDuration = 0U;
@@ -52,6 +586,22 @@ static void nwk_ed_minimal_runtime_reset(void)
 	memset(g_nwkEdCtx.fixedJoinExtPanId, 0, sizeof(g_nwkEdCtx.fixedJoinExtPanId));
 	memset(g_nwkEdCtx.fixedJoinNwkKey, 0, sizeof(g_nwkEdCtx.fixedJoinNwkKey));
 	ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.fixedJoinTcAddr);
+	g_nwkEdCtx.remainingScanChannels = 0U;
+	g_nwkEdCtx.activeScanChannel = 0xFFU;
+	g_nwkEdCtx.haveBeaconCandidate = FALSE;
+	g_nwkEdCtx.bestBeaconRssi = -127;
+	g_nwkEdCtx.candidatePanId = MAC_INVALID_PANID;
+	g_nwkEdCtx.candidateShortAddr = MAC_SHORT_ADDR_NONE;
+	memset(g_nwkEdCtx.candidateExtPanId, 0, sizeof(g_nwkEdCtx.candidateExtPanId));
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
+	g_nwkEdCtx.activeChannel = 0xFFU;
+	g_nwkEdCtx.activePanId = MAC_INVALID_PANID;
+	g_nwkEdCtx.activeParentShortAddr = MAC_SHORT_ADDR_NONE;
+	memset(g_nwkEdCtx.activeExtPanId, 0, sizeof(g_nwkEdCtx.activeExtPanId));
+	g_nwkEdCtx.assocPollCount = 0U;
+	g_nwkEdRxEvtHead = 0U;
+	g_nwkEdRxEvtTail = 0U;
+	g_nwkEdRxEvtCount = 0U;
 }
 
 static void nwk_ed_minimal_reset(bool warmStart)
@@ -68,21 +618,40 @@ void tl_zbNwkEdMinimalRuntimeReset(void)
 
 bool tl_zbNwkEdMinimalDiscoveryStart(u32 scanChannels, u8 scanDuration)
 {
+	u32 supportedMask = scanChannels & (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) - 1U);
+
 	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE) {
+		return FALSE;
+	}
+	if (supportedMask == 0U) {
 		return FALSE;
 	}
 
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_DISCOVERY;
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
 	g_nwkEdCtx.lastScanChannels = scanChannels;
 	g_nwkEdCtx.lastScanDuration = scanDuration;
+	g_nwkEdCtx.remainingScanChannels = supportedMask;
+	g_nwkEdCtx.activeScanChannel = 10U;
 	g_nwkEdCtx.parentCandidateValid = FALSE;
+	g_nwkEdCtx.haveBeaconCandidate = FALSE;
+	g_nwkEdCtx.bestBeaconRssi = -127;
+	g_nwkEdCtx.candidatePanId = MAC_INVALID_PANID;
+	g_nwkEdCtx.candidateShortAddr = MAC_SHORT_ADDR_NONE;
+	memset(g_nwkEdCtx.candidateExtPanId, 0, sizeof(g_nwkEdCtx.candidateExtPanId));
+
+	if (!nwk_ed_minimal_start_scan_channel()) {
+		g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
 void tl_zbNwkEdMinimalDiscoveryStop(void)
 {
 	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY) {
-		g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
+		nwk_ed_minimal_finish_discovery(ZDO_TIMEOUT);
 	}
 }
 
@@ -92,27 +661,62 @@ bool tl_zbNwkEdMinimalAssocJoinStart(void)
 		return FALSE;
 	}
 
-	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_JOINING;
-	return TRUE;
+	return nwk_ed_minimal_start_assoc(FALSE);
 }
 
 bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff)
 {
+	u32 supportedMask = scanChannels & (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) - 1U);
+
 	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE) {
 		return FALSE;
 	}
 
-	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_REJOIN;
 	g_nwkEdCtx.lastRejoinScanChannels = scanChannels;
 	g_nwkEdCtx.lastRejoinScanDuration = scanDuration;
 	g_nwkEdCtx.rejoinWithBackoff = withBackoff;
+
+	if (g_nwkEdCtx.parentCandidateValid || g_nwkEdCtx.fixedJoinValid) {
+		if (!nwk_ed_minimal_start_assoc(TRUE)) {
+			g_nwkEdCtx.rejoinWithBackoff = FALSE;
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+	if (supportedMask == 0U) {
+		g_nwkEdCtx.rejoinWithBackoff = FALSE;
+		return FALSE;
+	}
+
+	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_DISCOVERY;
+	g_nwkEdCtx.discoveryForRejoin = TRUE;
+	g_nwkEdCtx.lastScanChannels = scanChannels;
+	g_nwkEdCtx.lastScanDuration = scanDuration;
+	g_nwkEdCtx.remainingScanChannels = supportedMask;
+	g_nwkEdCtx.activeScanChannel = 10U;
+	g_nwkEdCtx.haveBeaconCandidate = FALSE;
+	g_nwkEdCtx.bestBeaconRssi = -127;
+	g_nwkEdCtx.candidatePanId = MAC_INVALID_PANID;
+	g_nwkEdCtx.candidateShortAddr = MAC_SHORT_ADDR_NONE;
+	memset(g_nwkEdCtx.candidateExtPanId, 0, sizeof(g_nwkEdCtx.candidateExtPanId));
+
+	if (!nwk_ed_minimal_start_scan_channel()) {
+		g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
+		g_nwkEdCtx.discoveryForRejoin = FALSE;
+		g_nwkEdCtx.rejoinWithBackoff = FALSE;
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
 void tl_zbNwkEdMinimalOperationAbort(void)
 {
+	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
 }
 
 void tl_zbNwkEdMinimalOperationComplete(u8 status)
@@ -120,6 +724,7 @@ void tl_zbNwkEdMinimalOperationComplete(u8 status)
 	g_nwkEdCtx.lastJoinStatus = status;
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
+	g_nwkEdCtx.discoveryForRejoin = FALSE;
 }
 
 bool tl_zbNwkEdMinimalManagerIdle(void)
@@ -243,4 +848,185 @@ void tl_zbNwkNlmeResetRequestHandler(void *arg)
 
 void tl_zbNwkTaskProc(void)
 {
+}
+
+static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *evt)
+{
+	if (evt == NULL || g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_DISCOVERY) {
+		return;
+	}
+
+	if (!g_nwkEdCtx.haveBeaconCandidate || (evt->rssi > g_nwkEdCtx.bestBeaconRssi)) {
+		g_nwkEdCtx.haveBeaconCandidate = TRUE;
+		g_nwkEdCtx.bestBeaconRssi = evt->rssi;
+		g_nwkEdCtx.candidatePanId = evt->beacon.panId;
+		g_nwkEdCtx.candidateShortAddr = evt->beacon.parentShortAddr;
+		ZB_EXTPANID_COPY(g_nwkEdCtx.candidateExtPanId, evt->beacon.extPanId);
+		tl_zbNwkEdMinimalParentCandidateSet(evt->beacon.parentShortAddr, NULL);
+		tl_zbNwkEdMinimalSetFixedJoinTarget(evt->beacon.channel, evt->beacon.panId,
+						    evt->beacon.parentShortAddr, evt->beacon.extPanId,
+						    NULL, NULL);
+		LOG_INF("beacon candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
+			evt->beacon.panId, evt->beacon.parentShortAddr, evt->beacon.channel,
+			evt->rssi);
+	}
+}
+
+static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t *evt)
+{
+	u8 zdoStatus;
+	bool rejoinMode;
+
+	if (evt == NULL) {
+		return;
+	}
+	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_JOINING &&
+	    g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_REJOIN) {
+		return;
+	}
+
+	rejoinMode = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_REJOIN);
+	if (evt->assocRsp.srcShortValid &&
+	    evt->assocRsp.srcShortAddr != g_nwkEdCtx.activeParentShortAddr) {
+		return;
+	}
+	if (evt->assocRsp.dstExtValid &&
+	    memcmp(evt->assocRsp.dstExtAddr, g_zbMacPib.extAddress, sizeof(addrExt_t)) != 0) {
+		return;
+	}
+	if (evt->assocRsp.dstShortValid &&
+	    evt->assocRsp.dstShortAddr != MAC_SHORT_ADDR_BROADCAST &&
+	    evt->assocRsp.dstShortAddr != g_zbMacPib.shortAddress) {
+		return;
+	}
+
+	if (evt->assocRsp.macStatus == MAC_SUCCESS) {
+		g_zbMacPib.panId = g_nwkEdCtx.activePanId;
+		g_zbMacPib.shortAddress = evt->assocRsp.assignedShortAddr;
+		g_zbMacPib.coordShortAddress = g_nwkEdCtx.activeParentShortAddr;
+		g_zbMacPib.associatedPanCoord = TRUE;
+
+		g_zbNIB.panId = g_nwkEdCtx.activePanId;
+		g_zbNIB.nwkAddr = evt->assocRsp.assignedShortAddr;
+		g_zbNIB.depth = 1U;
+		ZB_EXTPANID_COPY(g_zbNIB.extPANId, g_nwkEdCtx.activeExtPanId);
+
+		g_zbNwkCtx.joined = 1U;
+		g_zbNwkCtx.is_factory_new = 0U;
+		g_zbNwkCtx.parentIsChanged = 0U;
+		g_zbNwkCtx.state = NLME_STATE_IDLE;
+		g_zbNwkCtx.user_state = NLME_IDLE;
+		zb_info_save(NULL);
+
+		LOG_INF("%s success: short 0x%04x pan 0x%04x parent 0x%04x",
+			rejoinMode ? "rejoin" : "join", evt->assocRsp.assignedShortAddr,
+			g_nwkEdCtx.activePanId, g_nwkEdCtx.activeParentShortAddr);
+		nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
+		return;
+	}
+
+	switch (evt->assocRsp.macStatus) {
+	case MAC_STA_PAN_AT_CAPACITY:
+		zdoStatus = ZDO_TABLE_FULL;
+		break;
+	case MAC_STA_PAN_ACCESS_DENIED:
+		zdoStatus = ZDO_NOT_PERMITTED;
+		break;
+	default:
+		zdoStatus = ZDO_NOT_SUPPORTED;
+		break;
+	}
+
+	LOG_WRN("%s association rejected: mac status 0x%02x",
+		rejoinMode ? "rejoin" : "join", evt->assocRsp.macStatus);
+	nwk_ed_minimal_finish_join(zdoStatus, rejoinMode);
+}
+
+static void nwk_ed_minimal_rx_event_task(void *arg)
+{
+	nwk_ed_minimal_rx_evt_t evt;
+
+	ARG_UNUSED(arg);
+	while (nwk_ed_minimal_rx_evt_pop(&evt)) {
+		switch (evt.type) {
+		case NWK_ED_MINIMAL_RX_EVT_BEACON:
+			nwk_ed_minimal_handle_beacon_event(&evt);
+			break;
+		case NWK_ED_MINIMAL_RX_EVT_ASSOC_RSP:
+			nwk_ed_minimal_handle_assoc_rsp_event(&evt);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
+{
+	nwk_ed_minimal_mac_hdr_t hdr;
+	u8 payloadLen;
+	nwk_ed_minimal_rx_evt_t evt;
+
+	if (macPld == NULL || len < (MAC_MIN_HDR_LEN + 2U)) {
+		return;
+	}
+
+	/* Incoming PSDU includes FCS bytes at the end. */
+	payloadLen = (u8)(len - 2U);
+	if (!nwk_ed_minimal_parse_mac_header(macPld, payloadLen, &hdr)) {
+		return;
+	}
+
+	if (hdr.frameType == MAC_FRAME_BEACON) {
+		u16 panId = MAC_INVALID_PANID;
+		u16 parentShortAddr = MAC_SHORT_ADDR_NONE;
+		extPANId_t extPanId = {0};
+
+		if (!nwk_ed_minimal_parse_beacon_candidate(macPld, payloadLen, &hdr, &panId,
+							   &parentShortAddr, extPanId)) {
+			return;
+		}
+
+		memset(&evt, 0, sizeof(evt));
+		evt.type = NWK_ED_MINIMAL_RX_EVT_BEACON;
+		evt.rssi = rssi;
+		evt.beacon.panId = panId;
+		evt.beacon.parentShortAddr = parentShortAddr;
+		evt.beacon.channel = rf_getChannel();
+		ZB_EXTPANID_COPY(evt.beacon.extPanId, extPanId);
+		if (nwk_ed_minimal_rx_evt_push(&evt)) {
+			(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
+		}
+		return;
+	}
+
+	if (hdr.frameType == MAC_FRAME_COMMAND) {
+		u8 cmdIdx = hdr.headerLen;
+		u8 cmdId;
+		u8 assocStatus;
+
+		if (cmdIdx + 4U > payloadLen) {
+			return;
+		}
+		cmdId = macPld[cmdIdx];
+		if (cmdId != MAC_CMD_ASSOCIATION_RESPONSE) {
+			return;
+		}
+		memset(&evt, 0, sizeof(evt));
+		evt.type = NWK_ED_MINIMAL_RX_EVT_ASSOC_RSP;
+		assocStatus = macPld[cmdIdx + 3U];
+		evt.assocRsp.macStatus = assocStatus;
+		evt.assocRsp.assignedShortAddr = nwk_ed_minimal_u16_from_le(&macPld[cmdIdx + 1U]);
+		evt.assocRsp.srcShortValid = hdr.srcShortValid;
+		evt.assocRsp.srcShortAddr = hdr.srcShortAddr;
+		evt.assocRsp.dstExtValid = hdr.dstExtValid;
+		evt.assocRsp.dstShortValid = hdr.dstShortValid;
+		evt.assocRsp.dstShortAddr = hdr.dstShortAddr;
+		if (hdr.dstExtValid) {
+			ZB_IEEE_ADDR_COPY(evt.assocRsp.dstExtAddr, hdr.dstExtAddr);
+		}
+		if (nwk_ed_minimal_rx_evt_push(&evt)) {
+			(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
+		}
+	}
 }
