@@ -34,7 +34,7 @@ static void ev_timer_work_handler(struct k_work *work)
 	}
 
 	/* Periodic: non-negative return means reschedule */
-	if (ret >= 0 && evt->period > 0) {
+	if (ret >= 0 && evt->period > 0 && evt->used) {
 		evt->isRunning = 1;
 		k_work_schedule(&evt->zb_work, K_MSEC(evt->period));
 	}
@@ -121,11 +121,23 @@ ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_m
 
 u8 ev_timer_taskCancel(ev_timer_event_t **evt)
 {
+	struct k_work_sync cancel_sync;
+	bool was_used;
+	ev_timer_event_t *timer_evt;
+
 	if (evt == NULL || *evt == NULL) {
 		return FAILURE;
 	}
-	ev_unon_timer(*evt);
-	ev_buf_free((u8 *)*evt);
+
+	timer_evt = *evt;
+	was_used = timer_evt->used;
+	timer_evt->isRunning = 0;
+	timer_evt->used = 0;
+	if (was_used) {
+		(void)k_work_cancel_delayable_sync(&timer_evt->zb_work, &cancel_sync);
+	}
+
+	ev_buf_free((u8 *)timer_evt);
 	*evt = NULL;
 	return SUCCESS;
 }
