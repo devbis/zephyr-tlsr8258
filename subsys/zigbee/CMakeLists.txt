@@ -78,5 +78,8 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     nwk/nwk_ed_minimal.c
     zdo/zdo_ed_minimal.c
 )
+if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
+    zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
+endif()
 
 endif() # CONFIG_ZIGBEE
