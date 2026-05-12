@@ -22,13 +22,10 @@ typedef struct zb_buf_s zb_buf_t;
 #define SEC_KEY_LEN 16
 #endif
 
-/* Task queue stub matching SDK's tl_zb_callback_t / tl_zbTaskPost signature */
+/* Task queue API matching SDK's tl_zb_callback_t / tl_zbTaskPost signature */
 typedef void (*tl_zb_callback_t)(void *arg);
-static inline u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
-{
-	(void)fn; (void)arg; return 0;
-}
-#define TL_SCHEDULE_TASK  tl_zbTaskPost
+u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg);
+#define TL_SCHEDULE_TASK tl_zbTaskPost
 
 /* Generic return codes used broadly across SDK sources. */
 enum {
