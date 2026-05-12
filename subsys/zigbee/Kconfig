@@ -4,6 +4,9 @@ menuconfig ZIGBEE
 	bool "Zigbee protocol support"
 	depends on IEEE802154_TELINK_TLSR8258
 	select NVS
+	select FLASH
+	select FLASH_MAP
+	select HWINFO
 	help
 	  Enable Zigbee subsystem for TLSR8258.
 	  AES-128 is provided by the TLSR8258 hardware accelerator.
