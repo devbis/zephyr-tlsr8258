@@ -63,6 +63,7 @@ def test_runner_imports():
         'sy1xx',
         'teensy',
         'trace32',
+        'tlsrpgm',
         'uf2',
         'wchisp',
         'wlink',

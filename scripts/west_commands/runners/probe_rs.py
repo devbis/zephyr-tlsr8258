@@ -3,7 +3,7 @@
 
 '''Runner for probe-rs.'''
 
-from runners.core import FileType, RunnerCaps, ZephyrBinaryRunner
+from runners.core import BuildConfiguration, FileType, RunnerCaps, ZephyrBinaryRunner
 
 DEFAULT_PROBE_RS_GDB_HOST = 'localhost'
 DEFAULT_PROBE_RS_GDB_PORT = 1337
@@ -16,6 +16,7 @@ class ProbeRsBinaryRunner(ZephyrBinaryRunner):
                  gdb_host=DEFAULT_PROBE_RS_GDB_HOST,
                  gdb_port=DEFAULT_PROBE_RS_GDB_PORT,
                  dev_id=None,
+                 flash_addr=0x0,
                  erase=False,
                  reset=False,
                  protocol='swd',
@@ -26,6 +27,7 @@ class ProbeRsBinaryRunner(ZephyrBinaryRunner):
         super().__init__(cfg)
 
         self.probe_rs = probe_rs
+        self.flash_addr = flash_addr
         self.erase = erase
         self.reset = reset
         self.protocol = protocol
@@ -69,6 +71,7 @@ class ProbeRsBinaryRunner(ZephyrBinaryRunner):
     def capabilities(cls):
         return RunnerCaps(commands={'flash', 'debug', 'debugserver', 'attach'},
                           dev_id=True,
+                          flash_addr=True,
                           erase=True,
                           reset=True,
                           tool_opt=True,
@@ -105,9 +108,12 @@ class ProbeRsBinaryRunner(ZephyrBinaryRunner):
 
     @classmethod
     def do_create(cls, cfg, args):
+        build_conf = BuildConfiguration(cfg.build_dir)
+        flash_addr = cls.get_flash_address(args, build_conf)
         return ProbeRsBinaryRunner(cfg, args.chip,
                                    probe_rs=args.probe_rs,
                                    dev_id=args.dev_id,
+                                   flash_addr=flash_addr,
                                    erase=args.erase,
                                    reset=args.reset,
                                    protocol=args.protocol,
@@ -152,11 +158,25 @@ class ProbeRsBinaryRunner(ZephyrBinaryRunner):
             flash_file = self.bin_name
             flash_format = 'bin'
         else:
-            self.ensure_output('hex')
-            flash_file = self.hex_name
-            flash_format = 'hex'
+            # Prefer fully-described artifacts when west did not choose an
+            # explicit file type for this build.
+            if self.elf_name is not None:
+                self.ensure_output('elf')
+                flash_file = self.elf_name
+                flash_format = 'elf'
+            elif self.hex_name is not None:
+                self.ensure_output('hex')
+                flash_file = self.hex_name
+                flash_format = 'hex'
+            else:
+                self.ensure_output('bin')
+                flash_file = self.bin_name
+                flash_format = 'bin'
 
-        download_args += ['--binary-format', flash_format, flash_file]
+        download_args += ['--binary-format', flash_format]
+        if flash_format == 'bin':
+            download_args += ['--base-address', hex(self.flash_addr)]
+        download_args += [flash_file]
 
         self.check_call([self.probe_rs, 'download']
                         + self.args + download_args)
