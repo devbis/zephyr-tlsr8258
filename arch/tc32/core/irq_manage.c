@@ -74,7 +74,7 @@ static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
 	return irq;
 }
 
-void z_tc32_handle_irqs(void)
+void __attribute__((section(".ram_code"))) z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
 	unsigned int drained = 0u;
