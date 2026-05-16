@@ -242,16 +242,6 @@ static void tlsr8258_rf_init(void)
 	tlsr8258_load_tbl(tbl_rf_zigbee_250k, ARRAY_SIZE(tbl_rf_zigbee_250k));
 
 	TLSR_REG8(0x0c20) |= DMA_CHN_RF_RX | DMA_CHN_RF_TX;
-	TLSR_REG8(0x0401) = 0u;
-	TLSR_REG8(0x0404) &= (uint8_t)~BIT(5);
-	TLSR_REG32(0x0408) = 0x29417671u;
-	TLSR_REG8(0x0405) |= BIT(7);
-	TLSR_REG8(0x0f15) = 0xf0u;
-	TLSR_REG16(0x0f04) = 113u;
-	TLSR_REG8(0x0f03) &= (uint8_t)~BIT(2);
-	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	tlsr8258_rf_rx_buffer_set(tlsr8258_radio.rx_buffer, sizeof(tlsr8258_radio.rx_buffer));
-	tlsr8258_rf_set_power_level(rf_power_level_list[23]);
 }
 
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
@@ -505,6 +495,15 @@ static int tlsr8258_start(const struct device *dev)
 		return -EALREADY;
 	}
 
+	TLSR_REG8(0x0401) = 0u;
+	TLSR_REG8(0x0404) &= (uint8_t)~BIT(5);
+	TLSR_REG32(0x0408) = 0x29417671u;
+	TLSR_REG8(0x0405) |= BIT(7);
+	TLSR_REG8(0x0f15) = 0xf0u;
+	TLSR_REG16(0x0f04) = 113u;
+	TLSR_REG8(0x0f03) &= (uint8_t)~BIT(2);
+	tlsr8258_rf_rx_buffer_set(tlsr8258_radio.rx_buffer, sizeof(tlsr8258_radio.rx_buffer));
+	tlsr8258_rf_set_power_level(rf_power_level_list[23]);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	TLSR_REG16(0x0f1c) = RF_IRQ_RX | RF_IRQ_RX_TIMEOUT | RF_IRQ_FSM_TIMEOUT;
 	tlsr8258_rf_set_rxmode();
