@@ -72,6 +72,7 @@ _names = [
     'sy1xx',
     'teensy',
     'trace32',
+    'tlsrpgm',
     'uf2',
     'wchisp',
     'wlink',

@@ -8,7 +8,8 @@ SoCs using the TC32 core.
 
 This target is currently intended for low-level port validation. It uses the
 local LLVM-based TC32 toolchain and ``TlsrPgm.py`` for flashing and hardware
-inspection.
+inspection. The board boots Zephyr directly from flash address ``0x0``; the
+TLSR8258 boot SRAM mirror is only used for the minimal early startup prefix.
 
 Hardware
 ********
@@ -55,6 +56,15 @@ The default board configuration enables:
 - GPIO port A
 - UART0 polling console at 115200 baud
 - UART0 TX on PA2
+- direct application boot from flash offset ``0x0``
+
+Flash Layout
+============
+
+The default flash partition layout is:
+
+- application image at ``0x0`` with size ``0x7e000``
+- NVS storage at ``0x7e000`` with size ``0x2000``
 
 Building
 ********
@@ -144,11 +154,30 @@ and leaves a RAM marker for post-run inspection:
 Flashing
 ********
 
-Flash with ``TlsrPgm.py``. For a TCP-connected SWS probe:
+The board uses ``probe-rs`` as the default west flash runner. Flash with a
+Telink SWS probe selected through ``--dev-id``:
 
 .. code-block:: console
 
-   python3 TlsrPgm.py \
+   west flash -d /tmp/zephyr-tc32-uart \
+     --dev-id 'sws:tcp://192.168.70.44:55555'
+
+Add ``--erase`` for a full chip erase before programming, or ``--reset`` to
+issue a final target reset after flashing.
+
+The explicit ``tlsrpgm`` runner remains available when needed:
+
+.. code-block:: console
+
+   west flash -d /tmp/zephyr-tc32-uart --runner tlsrpgm -- \
+     --probe tcp://192.168.70.44:55555 \
+     --python $PWD/.venv-zephyr/bin/python
+
+Manual ``TlsrPgm.py`` flashing also remains available:
+
+.. code-block:: console
+
+   $PWD/.venv-zephyr/bin/python TlsrPgm.py \
      -p tcp://192.168.70.44:55555 \
      -d 20 \
      -t 500 \
@@ -159,7 +188,7 @@ If the command uses ``-s``, the CPU is left halted. Resume or reboot explicitly:
 
 .. code-block:: console
 
-   python3 TlsrPgm.py -p tcp://192.168.70.44:55555 -d 20 -r
+   $PWD/.venv-zephyr/bin/python TlsrPgm.py -p tcp://192.168.70.44:55555 -d 20 -r
 
 Debug Inspection
 ****************
@@ -168,7 +197,7 @@ RAM markers used by board-local smoke samples can be inspected with ``ds``:
 
 .. code-block:: console
 
-   python3 TlsrPgm.py -p tcp://192.168.70.44:55555 -d 20 ds <address> <size>
+   $PWD/.venv-zephyr/bin/python TlsrPgm.py -p tcp://192.168.70.44:55555 -d 20 ds <address> <size>
 
 Useful low-level checks:
 
@@ -193,4 +222,4 @@ Known Limitations
    * - Power management
      - explicit suspend-to-idle is experimental; automatic idle PM, deep retention, and shutdown are not wired yet
    * - Debug
-     - use ``TlsrPgm.py`` directly; no Zephyr runner integration yet
+     - ``west flash`` defaults to ``probe-rs``; the SWS probe selector must still be supplied explicitly
