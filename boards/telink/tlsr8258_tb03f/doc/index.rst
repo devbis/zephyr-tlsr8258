@@ -8,7 +8,8 @@ hardware using the TC32 core.
 
 This board definition is derived from the local TLSR8258 bring-up target, but
 adds TB03F-specific GPIO naming for the discrete white/yellow LEDs, the RGB
-LED lines, and the default UART routing.
+LED lines, and the default UART routing. Like the generic TLSR8258 target, it
+boots Zephyr directly from flash address ``0x0``.
 
 Hardware
 ********
@@ -49,6 +50,33 @@ Build with the local LLVM TC32 toolchain:
      -DPython3_EXECUTABLE=$PWD/.venv-zephyr/bin/python \
      -DUSER_CACHE_DIR=/tmp/zephyr-tc32-cache
    cmake --build /tmp/zephyr-tc32-tb03f -v
+
+Flashing
+********
+
+The board uses ``probe-rs`` as the default west flash runner. Flash with a
+Telink SWS probe selected through ``--dev-id``:
+
+.. code-block:: console
+
+   west flash -d /tmp/zephyr-tc32-tb03f \
+     --dev-id 'sws:tcp://192.168.70.44:55555'
+
+Add ``--erase`` for a full chip erase before programming, or ``--reset`` to
+issue a final reset after flashing.
+
+The explicit ``tlsrpgm`` runner remains available when needed:
+
+.. code-block:: console
+
+   west flash -d /tmp/zephyr-tc32-tb03f --runner tlsrpgm -- \
+     --probe tcp://192.168.70.44:55555 \
+     --python $PWD/.venv-zephyr/bin/python
+
+The default flash partition layout is the same as the generic TLSR8258 target:
+
+- application image at ``0x0`` with size ``0x7e000``
+- NVS storage at ``0x7e000`` with size ``0x2000``
 
 Current Scope
 *************
