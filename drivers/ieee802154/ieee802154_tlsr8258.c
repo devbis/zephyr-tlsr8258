@@ -129,7 +129,7 @@ static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
 	}
 }
 
-static void tlsr8258_rf_set_channel_offset(uint8_t chn)
+static __ramfunc void tlsr8258_rf_set_channel_offset(uint8_t chn)
 {
 	int16_t ch = (int16_t)chn + 0x960;
 	uint8_t vco_cap_step = 0u;
@@ -191,7 +191,7 @@ static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size)
 	TLSR_REG8(0x0c0b) = 1u;
 }
 
-static void tlsr8258_rf_tx_pkt(uint8_t *packet)
+static __ramfunc void tlsr8258_rf_tx_pkt(uint8_t *packet)
 {
 	uintptr_t addr = (uintptr_t)packet;
 
@@ -200,7 +200,7 @@ static void tlsr8258_rf_tx_pkt(uint8_t *packet)
 	TLSR_REG8(0x0c24) |= DMA_CHN_RF_TX;
 }
 
-static void tlsr8258_rf_set_rxmode(void)
+static __ramfunc void tlsr8258_rf_set_rxmode(void)
 {
 	TLSR_REG8(0x0f00) = 0x80u;
 	TLSR_REG8(0x0f16) = 0x29u;
@@ -211,7 +211,7 @@ static void tlsr8258_rf_set_rxmode(void)
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
 }
 
-static void tlsr8258_rf_set_txmode(void)
+static __ramfunc void tlsr8258_rf_set_txmode(void)
 {
 	TLSR_REG8(0x0f00) = 0x80u;
 	TLSR_REG8(0x0f16) = 0x19u;
@@ -221,7 +221,7 @@ static void tlsr8258_rf_set_txmode(void)
 	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
 }
 
-static void tlsr8258_rf_off(void)
+static __ramfunc void tlsr8258_rf_off(void)
 {
 	TLSR_REG8(0x0f00) = 0x80u;
 	TLSR_REG8(0x0f16) = 0x29u;
@@ -302,7 +302,7 @@ static int8_t tlsr8258_last_rssi_dbm(uint8_t *rx)
 }
 #endif /* !CONFIG_IEEE802154_RAW_MODE */
 
-static void tlsr8258_rx_isr(void)
+static __ramfunc void tlsr8258_rx_isr(void)
 {
 	uint8_t *rx = tlsr8258_radio.rx_buffer;
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
@@ -359,7 +359,7 @@ static void tlsr8258_rx_isr(void)
 #endif
 }
 
-static void tlsr8258_rf_isr(const void *unused)
+static __ramfunc void tlsr8258_rf_isr(const void *unused)
 {
 	uint16_t irq = TLSR_REG16(0x0f20);
 
@@ -403,7 +403,7 @@ static enum ieee802154_hw_caps tlsr8258_get_capabilities(const struct device *de
 	return IEEE802154_HW_FCS | IEEE802154_HW_FILTER;
 }
 
-static int tlsr8258_cca(const struct device *dev)
+static __ramfunc int tlsr8258_cca(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
