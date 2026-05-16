@@ -22,6 +22,13 @@
 #define RAM_BASE DT_CHOSEN_SRAM_ADDR
 #define RAM_SIZE DT_CHOSEN_SRAM_SIZE
 #define TC32_BOOT_MIRROR_SIZE CONFIG_TC32_BOOT_MIRROR_SIZE
+/*
+ * Vendor TLSR825x boot layouts reserve extra low SRAM immediately after the
+ * boot-mirrored prefix for instruction-cache tag/data scratch:
+ *   IC tag  = 0x100 bytes
+ *   IC data = 0x800 bytes
+ */
+#define TC32_BOOT_ICACHE_SCRATCH_SIZE 0x900
 
 #define MPU_MIN_SIZE_ALIGN
 #define MPU_ALIGN(region_size) . = ALIGN(4)
@@ -73,6 +80,7 @@ SECTIONS
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	. = ALIGN(16);
+	_tc32_boot_copy_lma_end = .;
 	PROVIDE(_rstored_ = .);
 	PROVIDE(_ramcode_size_ = .);
 	PROVIDE(_ramcode_size_align_256_ = ((. + 255) / 256) * 256);
@@ -88,8 +96,12 @@ SECTIONS
 	__text_region_end = .;
 	. = ALIGN(4);
 	_tc32_rom_data_lma_start = .;
+#if defined(CONFIG_XIP)
+	__rodata_region_start = .;
+#else
 	. = ORIGIN(RAM);
 	__rodata_region_start = .;
+#endif
 
 #include <zephyr/linker/common-rom.ld>
 #include <snippets-rom-sections.ld>
@@ -107,16 +119,28 @@ SECTIONS
 #include <snippets-rodata.ld>
 #include <zephyr/linker/kobject-rom.ld>
 		. = ALIGN(4);
-	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+	}
+#if defined(CONFIG_XIP)
+	GROUP_LINK_IN(ROMABLE_REGION)
+#else
+	GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#endif
 
 #include <zephyr/linker/cplusplus-rom.ld>
 
+#if defined(CONFIG_XIP)
+	__rodata_region_end = .;
+#else
 	__rodata_region_start = ADDR(initlevel);
 	__rodata_region_end = .;
+#endif
 	__rodata_region_load_start = _tc32_rom_data_lma_start;
 	_tc32_rom_data_lma_end = LOADADDR(_RODATA_SECTION_NAME) + SIZEOF(_RODATA_SECTION_NAME);
 
 	_image_ram_start = ORIGIN(RAM);
+#if defined(CONFIG_XIP)
+	. = ORIGIN(RAM);
+#endif
 
 #include <snippets-ram-sections.ld>
 
@@ -180,11 +204,19 @@ SECTIONS
 	PROVIDE(_stack_end_ = RAM_BASE + RAM_SIZE);
 	PROVIDE(_ram_end_ = .);
 	/*
-	 * Mirror only the bootstrap/XIP prefix that must execute from the TLSR
-	 * low SRAM alias before startup switches back to flash.
+	 * Mirror only the early bootstrap prefix that must execute from the TLSR
+	 * low SRAM alias before reset.S switches to the canonical flash/XIP path.
+	 * Normal .text now runs directly from flash under XIP. The low SRAM
+	 * reserve must still leave room after that prefix for the TLSR825x
+	 * instruction-cache tag/data scratch window used by the flash execution
+	 * path.
 	 */
-	PROVIDE(_tc32_boot_copy_size_ = _tc32_rom_data_lma_start);
+	PROVIDE(_tc32_boot_copy_size_ = _tc32_boot_copy_lma_end);
 	PROVIDE(_tc32_boot_copy_size_align_256_ = ((_tc32_boot_copy_size_ + 255) / 256) * 256);
 	PROVIDE(_tc32_boot_copy_size_div_16_align_256_ = _tc32_boot_copy_size_align_256_ / 16);
-	ASSERT(_tc32_boot_copy_size_align_256_ <= TC32_BOOT_MIRROR_SIZE, "TC32 boot mirror reserve is too small")
+	PROVIDE(_tc32_icache_lines_ = _tc32_boot_copy_size_align_256_ / 256);
+	PROVIDE(_ictag_start_ = RAM_BASE + _tc32_boot_copy_size_align_256_);
+	PROVIDE(_ictag_end_ = _ictag_start_ + 0x100);
+	PROVIDE(_tc32_boot_mirror_runtime_min_ = _tc32_boot_copy_size_align_256_ + TC32_BOOT_ICACHE_SCRATCH_SIZE);
+	ASSERT(_tc32_boot_mirror_runtime_min_ <= TC32_BOOT_MIRROR_SIZE, "TC32 boot mirror reserve is too small for XIP bootstrap + icache scratch")
 }
