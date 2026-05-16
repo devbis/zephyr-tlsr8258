@@ -179,7 +179,11 @@ SECTIONS
 
 	PROVIDE(_stack_end_ = RAM_BASE + RAM_SIZE);
 	PROVIDE(_ram_end_ = .);
-	PROVIDE(_tc32_boot_copy_size_ = _tc32_rom_data_lma_start + (__data_region_end - __rodata_region_start));
+	/*
+	 * Mirror only the bootstrap/XIP prefix that must execute from the TLSR
+	 * low SRAM alias before startup switches back to flash.
+	 */
+	PROVIDE(_tc32_boot_copy_size_ = _tc32_rom_data_lma_start);
 	PROVIDE(_tc32_boot_copy_size_align_256_ = ((_tc32_boot_copy_size_ + 255) / 256) * 256);
 	PROVIDE(_tc32_boot_copy_size_div_16_align_256_ = _tc32_boot_copy_size_align_256_ / 16);
 	ASSERT(_tc32_boot_copy_size_align_256_ <= TC32_BOOT_MIRROR_SIZE, "TC32 boot mirror reserve is too small")
