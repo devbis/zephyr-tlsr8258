@@ -124,7 +124,13 @@ __reset:
 .Lsvc_mode:
 	.word 0x13
 .Lstack_end:
-	.word _stack_end_
+	/*
+	 * Reuse the interrupt stack as the early SVC boot stack until
+	 * arch_switch_to_main_thread() installs the main thread stack. Large
+	 * TLSR8258 builds can leave only a few hundred bytes between _end and
+	 * _stack_end_, which is not enough for C startup.
+	 */
+	.word z_interrupt_stacks + __z_interrupt_stack_SIZEOF
 .Lirq_stack_end:
 	.word z_interrupt_stacks + __z_interrupt_stack_SIZEOF
 .Lirq_en:
@@ -142,6 +148,32 @@ z_prep_c:
 	 * Match the direct register part of vendor cpu_wakeup_init(): release
 	 * peripheral resets and enable clock gates before PRE_KERNEL devices.
 	 */
+	tloadr r0, .Lictag_start
+	tloadr r1, .Lictag_end
+	nop
+	nop
+	tmov r2, #0
+.Lictag_clear:
+	tmov r3, r1
+	tsub r3, r3, r0
+	tcmp r3, #0
+	nop
+	nop
+	tjeq .Lictag_done
+	tstorer r2, [r0]
+	tmov r3, #4
+	tadd r0, r0, r3
+	tj .Lictag_clear
+.Lictag_done:
+	tloadr r1, .Licache_ctrl
+	tloadr r0, .Licache_lines
+	nop
+	nop
+	tstorerb r0, [r1]
+	tmov r2, #1
+	tadd r0, r0, r2
+	tstorerb r0, [r1, #1]
+
 	tloadr r1, .Lrst_clk
 	tloadr r0, .Lrst_clk_0
 	nop
@@ -151,6 +183,23 @@ z_prep_c:
 	nop
 	nop
 	tstorer r0, [r1, #4]
+	tloadr r1, .Lflash_ctrl
+	tmov r0, #0
+	tstorerb r0, [r1, #1]
+	tmov r0, #0xab
+	tstorerb r0, [r1]
+	tmov r3, #7
+.Lflash_wakeup_delay:
+	tcmp r3, #0
+	nop
+	nop
+	tjeq .Lflash_wakeup_done
+	tmov r2, #1
+	tsub r3, r3, r2
+	tj .Lflash_wakeup_delay
+.Lflash_wakeup_done:
+	tmov r0, #1
+	tstorerb r0, [r1, #1]
 
 	tloadr r1, .Lanalog_base
 	TC32_ANALOG_WRITE 0x82, 0x64
@@ -196,6 +245,16 @@ z_prep_c:
 	.word 0xff000000
 .Lrst_clk_1:
 	.word 0x0006ffff
+.Lictag_start:
+	.word _ictag_start_
+.Lictag_end:
+	.word _ictag_end_
+.Licache_lines:
+	.word _tc32_icache_lines_
+.Licache_ctrl:
+	.word 0x0080060c
+.Lflash_ctrl:
+	.word 0x0080000c
 .Lanalog_base:
 	.word 0x008000b8
 
@@ -217,6 +276,7 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	tsub r2, r2, r3
 	tj .Lbss_loop
 .Lbss_done:
+#ifndef CONFIG_XIP
 	tloadr r0, .Lrodata_lma_start
 	tloadr r1, .Lrodata_start
 	tloadr r2, .Lrodata_end
@@ -224,6 +284,7 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	nop
 	tsub r2, r2, r1
 	TC32_COPY_FROM_SRAM_MIRROR
+#endif
 
 	tloadr r0, .Ldata_lma_start
 	tloadr r1, .Ldata_start
@@ -232,7 +293,6 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	nop
 	tsub r2, r2, r1
 	TC32_COPY_FROM_SRAM_MIRROR
-
 	tjl z_cstart
 
 .Lprep_hang:
