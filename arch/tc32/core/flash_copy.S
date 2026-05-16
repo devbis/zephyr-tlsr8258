@@ -14,12 +14,9 @@ GTEXT(tc32_flash_read)
  * from C runtime state and literal pools: early .rodata/.data copy happens
  * before RAM sections are valid.
  *
- * The reset path passes addresses in the 0x840000 SRAM mirror. TC32 executes the
- * boot copy through the 0x880000 alias, but data loads must use the 0x840000
- * data view. Low flash/code data loads produced stale opcode bytes during early
- * startup debug. Avoid manual MSPI here as well; vendor flash access requires a
- * full CS/wait sequence and using it this early stalled the CPU while still
- * inside the RAM helper.
+ * The caller passes flash-visible LMAs or other readable source addresses and
+ * this helper copies them into SRAM while still executing from the boot-copied
+ * 0x880000 alias. Keep it independent from C runtime state and literal pools.
  */
 SECTION_FUNC(tc32_flash_copy, tc32_flash_read)
 .Lword_loop:

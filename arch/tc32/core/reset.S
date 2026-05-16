@@ -178,6 +178,28 @@ z_prep_c:
 	tbclr r2, r0
 	tstorer r2, [r1]
 
+	/*
+	 * The ROM entered us from the boot SRAM mirror. Switch to the canonical
+	 * flash/XIP mapping before copying init sections from their LMAs.
+	 */
+	tloadr r0, .Lflash_prep_continue
+	nop
+	nop
+	tjex r0
+
+	.align 2
+.Lflash_prep_continue:
+	.word z_prep_c_flash_continue
+.Lrst_clk:
+	.word 0x00800060
+.Lrst_clk_0:
+	.word 0xff000000
+.Lrst_clk_1:
+	.word 0x0006ffff
+.Lanalog_base:
+	.word 0x008000b8
+
+SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	tloadr r0, .Lbss_start
 	tloadr r2, .Lbss_end
 	nop
@@ -222,25 +244,17 @@ z_prep_c:
 .Lbss_end:
 	.word __bss_end
 .Lrodata_lma_start:
-	.word 0x00840000 + __rodata_region_load_start
+	.word __rodata_region_load_start
 .Lrodata_start:
 	.word __rodata_region_start
 .Lrodata_end:
 	.word __rodata_region_end
 .Ldata_lma_start:
-	.word 0x00840000 + __data_region_load_start
+	.word __data_region_load_start
 .Ldata_start:
 	.word __data_region_start
 .Ldata_end:
 	.word __data_region_end
-.Lrst_clk:
-	.word 0x00800060
-.Lrst_clk_0:
-	.word 0xff000000
-.Lrst_clk_1:
-	.word 0x0006ffff
-.Lanalog_base:
-	.word 0x008000b8
 
 SECTION_FUNC(ram_code, __irq)
 z_tc32_irq_entry:
