@@ -29,7 +29,6 @@
 #include "tl_platform.h"
 #include "zb_common_stub.h"
 
-
 #define RF_SRX_MODE                             0
 
 /**********************************************************************
@@ -178,7 +177,11 @@ void rf_reset(void)
 {
     ZB_RADIO_INIT();
 
-    rf_setTrxState(RF_STATE_OFF);
+    if (ZB_RADIO_TRX_STA_GET() != RF_MODE_OFF) {
+        rf_setTrxState(RF_STATE_OFF);
+    } else {
+        rfMode = RF_STATE_OFF;
+    }
 
     rf_setTxPower(g_zb_txPowerSet);
 
