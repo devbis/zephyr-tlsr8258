@@ -284,7 +284,7 @@ u8 rf_TrxStateGet(void)
  *
  * @return  none
  */
-_attribute_ram_code_ void rf_setTrxState(u8 state)
+void rf_setTrxState(u8 state)
 {
 #ifndef WIN32
     if (RF_STATE_RX == state || RF_STATE_ED == state) {
