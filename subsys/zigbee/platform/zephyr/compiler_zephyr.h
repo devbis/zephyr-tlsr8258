@@ -7,7 +7,7 @@
 #define _attribute_packed_          __packed
 #define _attribute_aligned_(n)      __aligned(n)
 #define _attribute_session_(s)      /* no-op on Zephyr */
-#define _attribute_ram_code_        /* no-op: Zephyr handles RAMFUNC via linker */
+#define _attribute_ram_code_        __ramfunc
 #define _attribute_no_inline_       __attribute__((noinline))
 #define _attribute_always_inline_   __attribute__((always_inline)) static inline
 #define _attribute_data_retention_  /* no-op */
