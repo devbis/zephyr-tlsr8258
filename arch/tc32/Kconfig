@@ -24,8 +24,9 @@ config TC32_BOOT_MIRROR_SIZE
 	default 0x4000
 	help
 	  Size of the low SRAM window reserved for the TLSR boot-ROM flash
-	  mirror. Larger Zephyr images need a larger mirror because the boot
-	  header asks the ROM to copy the image LMA prefix into SRAM before the
-	  TC32 runtime copies RAM data sections to their final addresses.
+	  mirror. Under the current XIP startup flow this window must cover the
+	  small reset/IRQ bootstrap prefix and the adjacent low-SRAM instruction
+	  cache tag/data scratch area used by the TLSR825x flash execution path
+	  before normal RAM placement begins.
 
 endmenu
