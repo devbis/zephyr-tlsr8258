@@ -98,6 +98,27 @@ static void zb_platform_bdb_apply_fixed_target(void)
 		target.channel, target.pan_id, target.short_addr);
 }
 
+static void zb_platform_bdb_apply_join_profile(void)
+{
+	struct zb_platform_bdb_join_profile profile;
+
+	if (g_zbNwkCtx.joined) {
+		return;
+	}
+
+	memset(&profile, 0, sizeof(profile));
+	if (!zb_platform_app_get_join_profile(&profile)) {
+		return;
+	}
+
+	if (profile.channel_mask != 0U) {
+		g_bdbAttrs.primaryChannelSet = profile.channel_mask;
+		g_bdbAttrs.secondaryChannelSet = 0U;
+		LOG_INF("zb bdb join profile applied: channels=0x%08x",
+			(unsigned int)profile.channel_mask);
+	}
+}
+
 #endif
 
 int zb_platform_bdb_init_default(void)
@@ -142,6 +163,7 @@ int zb_platform_bdb_init_default(void)
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
 	zb_platform_bdb_apply_fixed_target();
+	zb_platform_bdb_apply_join_profile();
 	BDB_STATE_SET(BDB_STATE_IDLE);
 
 	zb_bdb_bootstrap_ready = true;
