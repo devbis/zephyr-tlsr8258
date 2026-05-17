@@ -760,7 +760,8 @@ _CODE_BDB_ static u8 bdb_commissioningNetworkFormation(void)
             ss_securityModeSet(SS_SEMODE_DISTRIBUTED);
 #endif
 
-            u32 scanChannels = aps_ib.aps_channel_mask;
+            u32 scanChannels = g_bdbAttrs.primaryChannelSet ? g_bdbAttrs.primaryChannelSet :
+                               aps_ib.aps_channel_mask;
 
             /* network formation */
             zb_nwkFormation(scanChannels, g_bdbAttrs.scanDuration);
@@ -1030,7 +1031,8 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
 _CODE_BDB_ static void bdb_networkSteerFactoryNew(void)
 {
     //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_IN_PROGRESS;
-    u32 scanChannels = aps_ib.aps_channel_mask;
+    u32 scanChannels = g_bdbAttrs.primaryChannelSet ? g_bdbAttrs.primaryChannelSet :
+                       aps_ib.aps_channel_mask;
     u8 scanDuration = g_bdbAttrs.scanDuration;
 
     /* perform join work flow */
@@ -1998,4 +2000,3 @@ _CODE_BDB_ void bdb_preInstallCodeAdd(addrExt_t ieeeAddr, u8 *pInstallCode)
 
     ss_devKeyPairSave(&keyPair);
 }
-

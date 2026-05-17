@@ -3,7 +3,10 @@
 #include "zb_common_stub.h"
 
 #include <errno.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+
+LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #if defined(CONFIG_ZIGBEE_BDB)
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
@@ -59,6 +62,42 @@ static af_simple_descriptor_t zb_shell_simple_desc = {
 	.app_out_cluster_lst = NULL,
 };
 
+static void zb_platform_bdb_apply_fixed_target(void)
+{
+	struct zb_platform_bdb_fixed_target target;
+	const u8 *tc_addr = NULL;
+
+	if (g_zbNwkCtx.joined) {
+		return;
+	}
+
+	memset(&target, 0, sizeof(target));
+	if (!zb_platform_app_get_fixed_join_target(&target)) {
+		return;
+	}
+
+	if (target.channel < 11U || target.channel > 26U) {
+		LOG_WRN("zb bdb fixed target ignored: invalid channel %u", target.channel);
+		return;
+	}
+
+	if (target.tc_addr_valid) {
+		tc_addr = target.tc_addr;
+	}
+
+	tl_zbNwkEdMinimalSetFixedJoinTarget(target.channel,
+					    target.pan_id,
+					    target.short_addr,
+					    target.ext_pan_id,
+					    target.network_key,
+					    tc_addr);
+	g_bdbAttrs.primaryChannelSet = ((u32)1U << target.channel);
+	g_bdbAttrs.secondaryChannelSet = 0U;
+
+	LOG_INF("zb bdb fixed target applied: ch=%u pan=0x%04x parent=0x%04x",
+		target.channel, target.pan_id, target.short_addr);
+}
+
 #endif
 
 int zb_platform_bdb_init_default(void)
@@ -102,6 +141,7 @@ int zb_platform_bdb_init_default(void)
 
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
+	zb_platform_bdb_apply_fixed_target();
 	BDB_STATE_SET(BDB_STATE_IDLE);
 
 	zb_bdb_bootstrap_ready = true;
@@ -114,10 +154,17 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return 0xFFU;
 #else
+	u8 status;
+
+	LOG_INF("zb bdb steer: request");
 	if (zb_platform_bdb_init_default() != 0) {
+		LOG_ERR("zb bdb steer: init failed");
 		return 0xFFU;
 	}
 
-	return bdb_networkSteerStart();
+	LOG_INF("zb bdb steer: start");
+	status = bdb_networkSteerStart();
+	LOG_INF("zb bdb steer start status=0x%02x", status);
+	return status;
 #endif
 }

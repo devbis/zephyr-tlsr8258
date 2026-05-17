@@ -8,10 +8,21 @@
  * Optional application hooks invoked by the Zigbee platform bootstrap thread.
  * Applications may override any of these functions.
  */
+struct zb_platform_bdb_fixed_target {
+	uint8_t channel;
+	uint16_t pan_id;
+	uint16_t short_addr;
+	uint8_t ext_pan_id[8];
+	uint8_t network_key[16];
+	uint8_t tc_addr[8];
+	bool tc_addr_valid;
+};
+
 void zb_platform_app_bootstrap_ready(void);
 bool zb_platform_app_enable_radio_smoke_probe(void);
 bool zb_platform_app_should_start_commissioning(void);
 void zb_platform_app_start_commissioning(void);
+bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target);
 
 /*
  * Platform-managed BDB helpers used by lightweight samples.
