@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
@@ -9,6 +10,15 @@ LOG_MODULE_REGISTER(main);
 #if defined(CONFIG_ZIGBEE_BDB)
 static bool commissioning_start_requested;
 static bool bdb_runtime_ready;
+
+static const uint8_t zigbee_shell_fixed_ext_pan_id[8] = {
+	59, 9, 157, 6, 79, 143, 238, 112,
+};
+
+static const uint8_t zigbee_shell_fixed_network_key[16] = {
+	76, 228, 73, 183, 178, 113, 243, 139,
+	176, 183, 186, 153, 50, 177, 238, 220,
+};
 #else
 static bool radio_validation_started;
 static struct k_work_delayable radio_probe_work;
@@ -43,6 +53,30 @@ reschedule:
 	(void)k_work_schedule(&radio_probe_work, K_SECONDS(1));
 }
 #endif
+
+bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
+{
+#if !defined(CONFIG_ZIGBEE_BDB)
+	ARG_UNUSED(target);
+	return false;
+#else
+	if (target == NULL) {
+		return false;
+	}
+
+	memset(target, 0, sizeof(*target));
+	target->channel = CONFIG_ZIGBEE_CHANNEL;
+	target->pan_id = 23335U;
+	target->short_addr = 0x0000U;
+	memcpy(target->ext_pan_id, zigbee_shell_fixed_ext_pan_id,
+	       sizeof(zigbee_shell_fixed_ext_pan_id));
+	memcpy(target->network_key, zigbee_shell_fixed_network_key,
+	       sizeof(zigbee_shell_fixed_network_key));
+	target->tc_addr_valid = false;
+
+	return true;
+#endif
+}
 
 void zb_platform_app_bootstrap_ready(void)
 {
