@@ -55,6 +55,8 @@ struct zb_radio_ctx {
 static struct zb_radio_ctx g_radio;
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
+static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
+				      const uint8_t **psdu, uint8_t *psdu_len);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
 extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
@@ -196,11 +198,40 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
 
 	atomic_set(&g_radio.rx_done, 1);
-	if (zb_radio_extract_psdu(rx_target, (uint8_t)copy_len, &psdu, &psdu_len) == 0) {
+	if (zb_radio_extract_rx_psdu(rx_target, (uint8_t)copy_len, &psdu, &psdu_len) == 0) {
 		zb_macDataRecvHandler(rx_target, (u8 *)psdu, psdu_len, 0U, 0U, g_radio.last_rx_rssi_dbm);
 	} else if (rf_rxBuf != NULL) {
 		rf_rx_irq_handler();
 	}
+}
+
+static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
+				      const uint8_t **psdu, uint8_t *psdu_len)
+{
+	uint8_t payload_len;
+	uint8_t available_len;
+
+	if ((dma == NULL) || (psdu == NULL) || (psdu_len == NULL) || (dma_len < 7U)) {
+		return -EINVAL;
+	}
+
+	payload_len = dma[4];
+	if (payload_len < 2U) {
+		return -EINVAL;
+	}
+
+	available_len = (uint8_t)(dma_len - 5U);
+	if (payload_len > available_len) {
+		return -EINVAL;
+	}
+
+	/*
+	 * Legacy Zigbee RX path expects the incoming PSDU to still include the
+	 * FCS bytes and accounts for them internally.
+	 */
+	*psdu = &dma[5];
+	*psdu_len = payload_len;
+	return 0;
 }
 
 void zb_radio_init(void)
