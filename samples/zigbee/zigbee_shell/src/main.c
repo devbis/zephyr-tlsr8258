@@ -3,18 +3,59 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
-#include <stdint.h>
 
 LOG_MODULE_REGISTER(main);
 
 #if defined(CONFIG_ZIGBEE_BDB)
 static bool commissioning_start_requested;
 static bool bdb_runtime_ready;
+#else
+static bool radio_validation_started;
+static struct k_work_delayable radio_probe_work;
+
+static void zigbee_shell_radio_probe(struct k_work *work)
+{
+	struct zb_platform_radio_diag_snapshot snapshot;
+	int rc;
+
+	ARG_UNUSED(work);
+
+	rc = zb_platform_radio_start_on_channel(CONFIG_ZIGBEE_CHANNEL);
+	if (rc < 0) {
+		LOG_ERR("radio probe start failed (ch=%d rc=%d)", CONFIG_ZIGBEE_CHANNEL, rc);
+		goto reschedule;
+	}
+
+	rc = zb_platform_radio_send_beacon_request();
+	if (rc < 0) {
+		LOG_ERR("radio probe beacon request failed (rc=%d)", rc);
+	}
+
+	if (zb_platform_radio_diag_get(&snapshot) == 0) {
+		LOG_INF("radio diag: ch=%u started=%u tx=%u/%u fail=%u rx=%u drop=%u err=%u rssi=%d",
+			snapshot.channel, snapshot.started, snapshot.tx_success,
+			snapshot.tx_attempts, snapshot.tx_failures, snapshot.rx_accept_count,
+			snapshot.rx_drop_count, snapshot.last_error,
+			snapshot.last_rx_rssi_dbm);
+	}
+
+reschedule:
+	(void)k_work_schedule(&radio_probe_work, K_SECONDS(1));
+}
 #endif
 
 void zb_platform_app_bootstrap_ready(void)
 {
 	LOG_INF("zigbee_shell bootstrap hook: core init complete");
+#if !defined(CONFIG_ZIGBEE_BDB)
+	if (!radio_validation_started) {
+		k_work_init_delayable(&radio_probe_work, zigbee_shell_radio_probe);
+		radio_validation_started = true;
+		(void)k_work_schedule(&radio_probe_work, K_MSEC(250));
+		LOG_INF("zigbee_shell radio validation scheduled on channel %d",
+			CONFIG_ZIGBEE_CHANNEL);
+	}
+#endif
 #if defined(CONFIG_ZIGBEE_BDB)
 	if (!bdb_runtime_ready) {
 		int err = zb_platform_bdb_init_default();
@@ -82,6 +123,7 @@ int main(void)
 {
 	LOG_INF("Zigbee shell starting on TLSR8258 TB03F");
 	printk("Zigbee shell starting on TLSR8258 TB03F\n");
-	LOG_INF("Waiting for Zigbee bootstrap callbacks");
+	LOG_INF("Waiting for Zigbee bootstrap callbacks (default channel %d)",
+		CONFIG_ZIGBEE_CHANNEL);
 	return 0;
 }

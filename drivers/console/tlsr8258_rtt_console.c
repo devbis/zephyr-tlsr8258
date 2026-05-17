@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <zephyr/init.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
@@ -31,32 +32,25 @@ struct tlsr8258_rtt_control_block {
 };
 
 static char tlsr8258_rtt_up_buffer[CONFIG_TLSR8258_RTT_CONSOLE_BUFFER_SIZE];
+static char tlsr8258_rtt_down_buffer[1];
 
-__aligned(16) struct tlsr8258_rtt_control_block _SEGGER_RTT = {
-	.id = "SEGGER RTT",
-	.max_up_channels = 1u,
-	.max_down_channels = 1u,
-	.up = {
-		{
-			.name = NULL,
-			.buffer = tlsr8258_rtt_up_buffer,
-			.size = sizeof(tlsr8258_rtt_up_buffer),
-			.write_offset = 0u,
-			.read_offset = 0u,
-			.flags = TLSR8258_RTT_MODE_NO_BLOCK_SKIP,
-		},
-	},
-	.down = {
-		{
-			.name = NULL,
-			.buffer = NULL,
-			.size = 0u,
-			.write_offset = 0u,
-			.read_offset = 0u,
-			.flags = TLSR8258_RTT_MODE_NO_BLOCK_SKIP,
-		},
-	},
-};
+__aligned(16) struct tlsr8258_rtt_control_block _SEGGER_RTT;
+
+static void tlsr8258_rtt_control_block_init(void)
+{
+	memset(&_SEGGER_RTT, 0, sizeof(_SEGGER_RTT));
+	memcpy(_SEGGER_RTT.id, "SEGGER RTT", sizeof("SEGGER RTT"));
+	_SEGGER_RTT.max_up_channels = 1u;
+	_SEGGER_RTT.max_down_channels = 1u;
+	_SEGGER_RTT.up[0].name = "Terminal";
+	_SEGGER_RTT.up[0].buffer = tlsr8258_rtt_up_buffer;
+	_SEGGER_RTT.up[0].size = sizeof(tlsr8258_rtt_up_buffer);
+	_SEGGER_RTT.up[0].flags = TLSR8258_RTT_MODE_NO_BLOCK_SKIP;
+	_SEGGER_RTT.down[0].name = "Terminal";
+	_SEGGER_RTT.down[0].buffer = tlsr8258_rtt_down_buffer;
+	_SEGGER_RTT.down[0].size = sizeof(tlsr8258_rtt_down_buffer);
+	_SEGGER_RTT.down[0].flags = TLSR8258_RTT_MODE_NO_BLOCK_SKIP;
+}
 
 static size_t tlsr8258_rtt_write_no_lock(const char *data, size_t len)
 {
@@ -107,6 +101,7 @@ static int tlsr8258_rtt_console_out(int character)
 
 static int tlsr8258_rtt_console_init(void)
 {
+	tlsr8258_rtt_control_block_init();
 #ifdef CONFIG_PRINTK
 	__printk_hook_install(tlsr8258_rtt_console_out);
 #endif
