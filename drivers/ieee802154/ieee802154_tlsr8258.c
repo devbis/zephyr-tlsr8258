@@ -65,7 +65,6 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_DEST_ADDR_TYPE_IEEE 0x0cu
 #define TLSR8258_PAN_ID_OFFSET 3u
 #define TLSR8258_DEST_ADDR_OFFSET 5u
-#define TLSR8258_LOGIC_CHANNEL_TO_OFFSET_MHZ(ch) (((ch) - 10u) * 5u)
 #define TLSR8258_RSSI_TO_LQI_MIN -87
 #define TLSR8258_RSSI_TO_LQI_SCALE 3
 
@@ -107,6 +106,11 @@ static const struct tblcmdset tbl_rf_zigbee_250k[] = {
 	{0x040b, 0x00, 0xc3}, {0x0460, 0x36, 0xc3}, {0x0461, 0x46, 0xc3},
 	{0x0462, 0x51, 0xc3}, {0x0463, 0x61, 0xc3}, {0x0464, 0x6d, 0xc3},
 	{0x0465, 0x78, 0xc3},
+};
+
+static const uint8_t tlsr8258_rf_chn_table[] = {
+	0x05, 0x09, 0x0d, 0x11, 0x16, 0x1a, 0x1e, 0x23,
+	0x28, 0x2d, 0x32, 0x37, 0x3c, 0x41, 0x46, 0x4c,
 };
 
 static const uint8_t rf_power_level_list[] = {
@@ -171,6 +175,11 @@ static void tlsr8258_rf_set_channel_offset(uint8_t chn)
 	TLSR_REG8(0x1229) = (uint8_t)((TLSR_REG8(0x1229) & 0xc3u) | vco_cap_step);
 }
 
+static uint8_t tlsr8258_rf_channel_from_logical(uint16_t channel)
+{
+	return tlsr8258_rf_chn_table[channel - 11u];
+}
+
 static void tlsr8258_rf_set_power_level(uint8_t level)
 {
 	uint8_t power_code = level & 0x3fu;
@@ -204,28 +213,27 @@ static void tlsr8258_rf_tx_pkt(uint8_t *packet)
 
 	TLSR_REG8(0x0c43) = (uint8_t)((addr >> 16) & 0x0fu);
 	TLSR_REG16(0x0c0c) = (uint16_t)addr;
-	TLSR_REG8(0x0c24) |= DMA_CHN_RF_TX;
+	TLSR_REG8(0x0c5b) |= BIT(3);
 }
 
 static void tlsr8258_rf_set_rxmode(void)
 {
-	TLSR_REG8(0x0f00) = 0x80u;
-	TLSR_REG8(0x0f16) = 0x29u;
-	TLSR_REG8(0x0428) = RF_TRX_MODE;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	tlsr8258_rf_set_channel_offset(TLSR8258_LOGIC_CHANNEL_TO_OFFSET_MHZ(tlsr8258_radio.current_channel));
+	tlsr8258_rf_set_channel_offset(tlsr8258_rf_channel_from_logical(tlsr8258_radio.current_channel));
+	TLSR_REG32(0x0408) = 0x29417671u;
+	TLSR_REG8(0x0405) |= BIT(7);
 	TLSR_REG8(0x0428) = RF_TRX_MODE | BIT(0);
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
 }
 
 static void tlsr8258_rf_set_txmode(void)
 {
-	TLSR_REG8(0x0f00) = 0x80u;
-	TLSR_REG8(0x0f16) = 0x19u;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	tlsr8258_rf_set_channel_offset(TLSR8258_LOGIC_CHANNEL_TO_OFFSET_MHZ(tlsr8258_radio.current_channel));
-	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
+	tlsr8258_rf_set_channel_offset(tlsr8258_rf_channel_from_logical(tlsr8258_radio.current_channel));
+	TLSR_REG32(0x0408) = 0x29417671u;
+	TLSR_REG8(0x0405) |= BIT(7);
 	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
+	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
 }
 
 static void tlsr8258_rf_off(void)
@@ -504,8 +512,11 @@ static int tlsr8258_start(const struct device *dev)
 	TLSR_REG8(0x0f03) &= (uint8_t)~BIT(2);
 	tlsr8258_rf_rx_buffer_set(tlsr8258_radio.rx_buffer, sizeof(tlsr8258_radio.rx_buffer));
 	tlsr8258_rf_set_power_level(rf_power_level_list[23]);
+	TLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	TLSR_REG16(0x0f1c) = RF_IRQ_RX | RF_IRQ_RX_TIMEOUT | RF_IRQ_FSM_TIMEOUT;
+	TLSR_REG16(0x0f1c) = 0u;
+	TLSR_REG16(0x0f1c) = RF_IRQ_RX | RF_IRQ_TX;
+	TLSR_REG32(0x0640) |= BIT(13);
 	tlsr8258_rf_set_rxmode();
 	irq_enable(TLSR8258_IRQ_ZB_RT);
 	tlsr8258_radio.started = true;
@@ -536,6 +547,7 @@ static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len)
 		return -EINVAL;
 	}
 
+	/* TLSR8258 Zigbee SDK uses a simple DMA header: len+1, then zero padding. */
 	tlsr8258_radio.tx_buffer[0] = payload_len + 1u;
 	tlsr8258_radio.tx_buffer[1] = 0u;
 	tlsr8258_radio.tx_buffer[2] = 0u;
@@ -575,9 +587,9 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		return ret;
 	}
 
-	irq_disable(TLSR8258_IRQ_ZB_RT);
 	tlsr8258_rf_set_txmode();
-	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	k_busy_wait(120);
+	TLSR_REG16(0x0f20) = RF_IRQ_TX | RF_IRQ_RX;
 	tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);
 
 	while (waited < CONFIG_IEEE802154_TLSR8258_TX_WAIT_US) {
@@ -587,14 +599,12 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 			TLSR_REG16(0x0f20) = irq;
 			tlsr8258_radio.tx_count++;
 			tlsr8258_rf_set_rxmode();
-			irq_enable(TLSR8258_IRQ_ZB_RT);
 			return 0;
 		}
 
 		if ((irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
 			TLSR_REG16(0x0f20) = irq;
 			tlsr8258_rf_set_rxmode();
-			irq_enable(TLSR8258_IRQ_ZB_RT);
 			return -EIO;
 		}
 
@@ -603,7 +613,6 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	}
 
 	tlsr8258_rf_set_rxmode();
-	irq_enable(TLSR8258_IRQ_ZB_RT);
 	return -EIO;
 }
 
@@ -667,7 +676,7 @@ static int tlsr8258_init(const struct device *dev)
 	tlsr8258_radio.current_channel = 11u;
 
 	tlsr8258_rf_init();
-	tlsr8258_rf_set_channel_offset(TLSR8258_LOGIC_CHANNEL_TO_OFFSET_MHZ(tlsr8258_radio.current_channel));
+	tlsr8258_rf_set_channel_offset(tlsr8258_rf_channel_from_logical(tlsr8258_radio.current_channel));
 	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, NULL, 0);
 	irq_disable(TLSR8258_IRQ_ZB_RT);
 
