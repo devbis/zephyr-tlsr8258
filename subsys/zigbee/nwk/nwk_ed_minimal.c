@@ -8,6 +8,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/spinlock.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -312,6 +313,36 @@ static void nwk_ed_minimal_channel_set(u8 channel)
 	(void)tl_zbMacAttrSet(MAC_PHY_ATTR_CURRENT_CHANNEL, &channel, sizeof(channel));
 }
 
+static bool nwk_ed_minimal_get_join_profile(struct zb_platform_bdb_join_profile *profile)
+{
+	if (profile == NULL) {
+		return FALSE;
+	}
+
+	memset(profile, 0, sizeof(*profile));
+	return zb_platform_app_get_join_profile(profile) ? TRUE : FALSE;
+}
+
+static bool nwk_ed_minimal_beacon_matches_join_profile(
+	const nwk_ed_minimal_rx_evt_t *evt,
+	const struct zb_platform_bdb_join_profile *profile)
+{
+	if (evt == NULL || profile == NULL) {
+		return FALSE;
+	}
+
+	if (profile->pan_id_valid && evt->beacon.panId != profile->pan_id) {
+		return FALSE;
+	}
+
+	if (profile->ext_pan_id_valid &&
+	    memcmp(evt->beacon.extPanId, profile->ext_pan_id, sizeof(evt->beacon.extPanId)) != 0) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static bool nwk_ed_minimal_rx_evt_push(const nwk_ed_minimal_rx_evt_t *evt)
 {
 	k_spinlock_key_t key;
@@ -488,6 +519,30 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	return TRUE;
 }
 
+static void nwk_ed_minimal_send_beacon_request(void)
+{
+	u8 frame[MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN + MAC_PAN_ID_FIELD_LEN +
+		 MAC_SHORT_ADDR_FIELD_LEN + 1U];
+	u8 idx = 0;
+	u16 fcf = 0;
+
+	fcf |= MAC_FRAME_COMMAND;
+	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
+
+	COPY_U16TOBUFFER(&frame[idx], fcf);
+	idx += MAC_FCF_FIELD_LEN;
+	frame[idx++] = ZB_MAC_DSN();
+	ZB_INC_MAC_DSN();
+	COPY_U16TOBUFFER(&frame[idx], MAC_PAN_ID_BROADCAST);
+	idx += MAC_PAN_ID_FIELD_LEN;
+	COPY_U16TOBUFFER(&frame[idx], MAC_SHORT_ADDR_BROADCAST);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+	frame[idx++] = MAC_CMD_BEACON_REQUEST;
+
+	rf802154_tx_ready(frame, idx);
+	rf802154_tx();
+}
+
 static bool nwk_ed_minimal_start_scan_channel(void)
 {
 	u8 nextChannel = nwk_ed_minimal_next_scan_channel(g_nwkEdCtx.remainingScanChannels,
@@ -500,6 +555,8 @@ static bool nwk_ed_minimal_start_scan_channel(void)
 	g_nwkEdCtx.remainingScanChannels &= ~((u32)1U << nextChannel);
 	g_nwkEdCtx.activeScanChannel = nextChannel;
 	nwk_ed_minimal_channel_set(nextChannel);
+	rf_setTrxState(RF_STATE_RX);
+	nwk_ed_minimal_send_beacon_request();
 	nwk_ed_minimal_timer_start(nwk_ed_minimal_scan_window_ms(g_nwkEdCtx.lastScanDuration));
 	LOG_INF("discovery scanning channel %u", nextChannel);
 
@@ -852,7 +909,15 @@ void tl_zbNwkTaskProc(void)
 
 static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *evt)
 {
+	struct zb_platform_bdb_join_profile profile;
+	bool have_profile;
+
 	if (evt == NULL || g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_DISCOVERY) {
+		return;
+	}
+
+	have_profile = nwk_ed_minimal_get_join_profile(&profile);
+	if (have_profile && !nwk_ed_minimal_beacon_matches_join_profile(evt, &profile)) {
 		return;
 	}
 
@@ -865,10 +930,17 @@ static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *ev
 		tl_zbNwkEdMinimalParentCandidateSet(evt->beacon.parentShortAddr, NULL);
 		tl_zbNwkEdMinimalSetFixedJoinTarget(evt->beacon.channel, evt->beacon.panId,
 						    evt->beacon.parentShortAddr, evt->beacon.extPanId,
-						    NULL, NULL);
-		LOG_INF("beacon candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
-			evt->beacon.panId, evt->beacon.parentShortAddr, evt->beacon.channel,
-			evt->rssi);
+						    have_profile && profile.network_key_valid ? profile.network_key : NULL,
+						    have_profile && profile.tc_addr_valid ? profile.tc_addr : NULL);
+		if (have_profile) {
+			LOG_INF("matched beacon candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
+				evt->beacon.panId, evt->beacon.parentShortAddr, evt->beacon.channel,
+				evt->rssi);
+		} else {
+			LOG_INF("beacon candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
+				evt->beacon.panId, evt->beacon.parentShortAddr, evt->beacon.channel,
+				evt->rssi);
+		}
 	}
 }
 

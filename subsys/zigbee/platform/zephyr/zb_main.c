@@ -48,6 +48,12 @@ bool __weak zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_t
 	return false;
 }
 
+bool __weak zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile)
+{
+	ARG_UNUSED(profile);
+	return false;
+}
+
 static void zb_core_bootstrap_once(void)
 {
 	if (zb_bootstrap_done) {
