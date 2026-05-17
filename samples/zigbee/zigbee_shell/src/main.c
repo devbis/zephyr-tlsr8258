@@ -60,19 +60,31 @@ bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *
 	ARG_UNUSED(target);
 	return false;
 #else
-	if (target == NULL) {
+	ARG_UNUSED(target);
+	return false;
+#endif
+}
+
+bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile)
+{
+#if !defined(CONFIG_ZIGBEE_BDB)
+	ARG_UNUSED(profile);
+	return false;
+#else
+	if (profile == NULL) {
 		return false;
 	}
 
-	memset(target, 0, sizeof(*target));
-	target->channel = CONFIG_ZIGBEE_CHANNEL;
-	target->pan_id = 23335U;
-	target->short_addr = 0x0000U;
-	memcpy(target->ext_pan_id, zigbee_shell_fixed_ext_pan_id,
+	memset(profile, 0, sizeof(*profile));
+	profile->channel_mask = ((uint32_t)1U << CONFIG_ZIGBEE_CHANNEL);
+	profile->pan_id = 23335U;
+	profile->pan_id_valid = true;
+	memcpy(profile->ext_pan_id, zigbee_shell_fixed_ext_pan_id,
 	       sizeof(zigbee_shell_fixed_ext_pan_id));
-	memcpy(target->network_key, zigbee_shell_fixed_network_key,
+	profile->ext_pan_id_valid = true;
+	memcpy(profile->network_key, zigbee_shell_fixed_network_key,
 	       sizeof(zigbee_shell_fixed_network_key));
-	target->tc_addr_valid = false;
+	profile->network_key_valid = true;
 
 	return true;
 #endif
