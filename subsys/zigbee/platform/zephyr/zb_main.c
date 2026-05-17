@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/printk.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_types.h>
@@ -13,6 +12,8 @@
 #include "zb_common_stub.h"
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
+
+extern void rf_init(void);
 
 /* Semaphore used to wake the Zigbee thread when events are ready.
  * Also signalled by ev_timer_work_handler after each timer fires. */
@@ -53,6 +54,7 @@ static void zb_core_bootstrap_once(void)
 		ev_timer_init();
 		zdo_init();
 		af_init();
+		rf_init();
 		zb_core_init_done = true;
 	}
 
@@ -104,7 +106,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	ARG_UNUSED(c);
 
 	LOG_INF("Zigbee thread started");
-	printk("Zigbee thread started\n");
 
 	while (1) {
 		if (!zb_bootstrap_done) {

@@ -45,6 +45,15 @@ static int zb_nvs_init(void)
 	zb_nvs.sector_count = CONFIG_ZIGBEE_NV_SECTOR_COUNT;
 	flash_area_close(fa);
 
+#ifdef CONFIG_TC32
+	/*
+	 * TC32 bring-up still trips inside Zephyr NVS mount path.
+	 * Keep Zigbee booting without persistent storage for now:
+	 * all NV entry points already degrade cleanly when zb_nvs_ready == false.
+	 */
+	return 0;
+#endif
+
 	rc = nvs_mount(&zb_nvs);
 	if (rc == 0) {
 		zb_nvs_ready = true;

@@ -28,6 +28,7 @@
  */
 #include "tl_platform.h"
 #include "zb_common_stub.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 #define RF_SRX_MODE                             0
 
@@ -507,8 +508,17 @@ void rf802154_tx_ready(u8 *buf, u8 len)
     memcpy(rf_tx_buf + 5, buf, len);
 }
 
-_attribute_ram_code_ void rf802154_tx(void)
+void rf802154_tx(void)
 {
+#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
+    uint8_t psdu_len = (rf_tx_buf[4] >= 2U) ? (uint8_t)(rf_tx_buf[4] - 2U) : 0U;
+
+    if (psdu_len != 0U) {
+        (void)zb_platform_radio_send_raw_psdu(&rf_tx_buf[5], psdu_len);
+    }
+    return;
+#endif
+
     rf_setTrxState(RF_STATE_TX);
 
     ZB_RADIO_TX_DONE_CLR;
