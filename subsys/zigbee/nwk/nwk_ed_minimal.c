@@ -54,7 +54,6 @@ typedef struct {
 	u16 candidateShortAddr;
 	extPANId_t candidateExtPanId;
 	bool discoveryForRejoin;
-
 	u8 activeChannel;
 	u16 activePanId;
 	u16 activeParentShortAddr;
@@ -422,6 +421,7 @@ static bool nwk_ed_minimal_send_data_request(void)
 		 MAC_SHORT_ADDR_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN + 1U];
 	u8 idx = 0;
 	u16 fcf = 0;
+	int rc;
 
 	fcf |= MAC_FRAME_COMMAND;
 	fcf |= MAC_FCF_ACK_REQ_BIT;
@@ -441,8 +441,11 @@ static bool nwk_ed_minimal_send_data_request(void)
 	idx += sizeof(addrExt_t);
 	frame[idx++] = MAC_CMD_DATA_REQUEST;
 
-	rf802154_tx_ready(frame, idx);
-	rf802154_tx();
+	rc = zb_platform_radio_send_raw_psdu(frame, idx);
+	if (rc < 0) {
+		LOG_WRN("data request tx failed (rc=%d len=%u)", rc, idx);
+		return FALSE;
+	}
 
 	return TRUE;
 }
@@ -458,6 +461,7 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	u16 panId;
 	extPANId_t extPanId;
 	u8 channel;
+	int rc;
 
 	if (g_nwkEdCtx.parentCandidateValid) {
 		parentShortAddr = g_nwkEdCtx.parentCandidateShortAddr;
@@ -508,8 +512,11 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	capability |= BIT(7); /* allocate short address */
 	frame[idx++] = capability;
 
-	rf802154_tx_ready(frame, idx);
-	rf802154_tx();
+	rc = zb_platform_radio_send_raw_psdu(frame, idx);
+	if (rc < 0) {
+		LOG_WRN("association request tx failed (rc=%d len=%u ch=%u)", rc, idx, channel);
+		return FALSE;
+	}
 
 	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
@@ -521,26 +528,11 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 
 static void nwk_ed_minimal_send_beacon_request(void)
 {
-	u8 frame[MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN + MAC_PAN_ID_FIELD_LEN +
-		 MAC_SHORT_ADDR_FIELD_LEN + 1U];
-	u8 idx = 0;
-	u16 fcf = 0;
+	int rc = zb_platform_radio_send_beacon_request();
 
-	fcf |= MAC_FRAME_COMMAND;
-	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
-
-	COPY_U16TOBUFFER(&frame[idx], fcf);
-	idx += MAC_FCF_FIELD_LEN;
-	frame[idx++] = ZB_MAC_DSN();
-	ZB_INC_MAC_DSN();
-	COPY_U16TOBUFFER(&frame[idx], MAC_PAN_ID_BROADCAST);
-	idx += MAC_PAN_ID_FIELD_LEN;
-	COPY_U16TOBUFFER(&frame[idx], MAC_SHORT_ADDR_BROADCAST);
-	idx += MAC_SHORT_ADDR_FIELD_LEN;
-	frame[idx++] = MAC_CMD_BEACON_REQUEST;
-
-	rf802154_tx_ready(frame, idx);
-	rf802154_tx();
+	if (rc < 0) {
+		LOG_WRN("beacon request tx failed (rc=%d ch=%u)", rc, g_nwkEdCtx.activeScanChannel);
+	}
 }
 
 static bool nwk_ed_minimal_start_scan_channel(void)
