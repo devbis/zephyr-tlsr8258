@@ -50,6 +50,7 @@ typedef struct {
  * GLOBAL VARIABLES
  */
 bdb_ctx_t g_bdbCtx = {0};
+extern void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
 
 /**********************************************************************
  * CONSTANT
@@ -786,6 +787,8 @@ _CODE_BDB_ static u8 bdb_commissioningNetworkFormation(void)
  */
 _CODE_BDB_ static void bdb_mgmtPermitJoiningConfirm(void *arg)
 {
+    ARG_UNUSED(arg);
+
 #if ZB_ROUTER_ROLE
     /* Enable permit join for more than bdbcMinCommissioningTime seconds */
 #if ZB_COORDINATOR_ROLE
@@ -868,7 +871,6 @@ _CODE_BDB_ void bdb_retrieveTcLinkKeyDone(u8 status)
         g_bdbAttrs.nodeIsOnANetwork = 0;
         evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH;
     }
-
     TL_SCHEDULE_TASK(bdb_task, (void *)evt);
 }
 
@@ -921,6 +923,40 @@ _CODE_BDB_ static void bdb_nodeDescRespHandler(void *arg)
  */
 _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
 {
+#if defined(CONFIG_IEEE802154_RAW_MODE)
+    ss_apsmeRequestKeyReq_t requestKey;
+
+    ARG_UNUSED(arg);
+
+    if (g_bdbAttrs.tcLinkKeyExchangeAttempts++ < g_bdbAttrs.tcLinkKeyExchangeAttemptsMax) {
+        TL_SETSTRUCTCONTENT(requestKey, 0);
+        requestKey.keyType = SS_KEYREQ_TYPE_TCLK;
+        requestKey.dstAddr.shortAddr = 0x0000;
+        requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+        if (zb_apsmeRequestKeyReq(&requestKey) == RET_OK) {
+            g_bdbAttrs.nodeIsOnANetwork = 0;
+            return 0;
+        }
+    }
+
+    if (!zb_isDeviceJoinedNwk()) {
+        g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
+        g_bdbCtx.retrieveTcLkKeyTimer = NULL;
+        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
+        return -1;
+    }
+
+    nlme_leave_req_t req;
+    ZB_IEEE_ADDR_COPY(req.deviceAddr, g_zbMacPib.extAddress);
+    req.rejoin = 0;
+    req.removeChildren = 0;
+    if (!g_bdbCtx.leaveDoing) {
+        if (RET_OK == zb_nlmeLeaveReq(&req)) {
+            g_bdbCtx.leaveDoing = 1;
+        }
+    }
+    return 3 * 1000;
+#else
     if (g_bdbAttrs.tcLinkKeyExchangeAttempts++ < g_bdbAttrs.tcLinkKeyExchangeAttemptsMax) {
         /* send node description */
         u8 sn = 0;
@@ -948,6 +984,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
         }
         return 3 * 1000;
     }
+#endif
 }
 
 /*********************************************************************
@@ -961,6 +998,30 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
  */
 _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
 {
+#if defined(CONFIG_IEEE802154_RAW_MODE)
+    ss_apsmeRequestKeyReq_t requestKey;
+
+    ARG_UNUSED(arg);
+
+    TL_SETSTRUCTCONTENT(requestKey, 0);
+    requestKey.keyType = SS_KEYREQ_TYPE_TCLK;
+    requestKey.dstAddr.shortAddr = 0x0000;
+    requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+
+    g_bdbCtx.leaveDoing = 0;
+    g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
+    g_bdbAttrs.tcLinkKeyExchangeAttemptsMax = 3;
+    if (zb_apsmeRequestKeyReq(&requestKey) == RET_OK) {
+        g_bdbAttrs.nodeIsOnANetwork = 0;
+        if (!g_bdbCtx.retrieveTcLkKeyTimer) {
+            g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyTimeout,
+                                                                 NULL,
+                                                                 BDBC_TC_LINK_KEY_EXCHANGE_TIMEOUT * 1000);
+        }
+    } else {
+        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
+    }
+#else
     if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
         /* send node description */
         u8 sn = 0;
@@ -980,6 +1041,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
     } else {
         bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
     }
+#endif
 
     return -1;
 }
@@ -1002,6 +1064,8 @@ _CODE_BDB_ static void bdb_networkSteerNonFactoryNew(void)
 
 _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
 {
+    u8 status;
+
 #if 0
     u8 addNebNum = g_zb_neighborTbl.additionNeighborNum;
 
@@ -1014,8 +1078,11 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
         printf("lqi = %x\n", g_zb_neighborTbl.additionNeighborTbl[i].lqi);
     }
 #endif
-
-    zb_assocJoinReq();
+    status = zb_assocJoinReq();
+    if (status != SUCCESS) {
+        BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
+        TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
+    }
 }
 
 
@@ -1177,10 +1244,14 @@ static void bdb_task(void *arg)
         if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY) {
             TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyStart, NULL, 1000);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN) {
+            u8 devAnnStatus = zb_zdoSendDevAnnance();
+            if (devAnnStatus == ZDO_SUCCESS) {
+                tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+            }
 #if ZB_ROUTER_ROLE
             g_zbNwkCtx.joinAccept = 1;
-#endif
             zb_mgmtPermitJoinReq(0xfffc, BDBC_MIN_COMMISSIONING_TIME, 0x01, &sn, NULL);
+#endif
             TL_SCHEDULE_TASK(bdb_mgmtPermitJoiningConfirm,NULL);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH) {
             status = bdb_commissioningNetworkFormation();
@@ -1319,8 +1390,9 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
                 evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN;
                 bdb_globalLinkKeySet(ss_ib.distributeLinkKey);
             }
-
-            TL_ZB_TIMER_SCHEDULE(bdb_task_delay, (void *)evt, 200);
+            if (TL_ZB_TIMER_SCHEDULE(bdb_task_delay, (void *)evt, 200) == NULL) {
+                TL_SCHEDULE_TASK(bdb_task, (void *)evt);
+            }
         } else {
             //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_NO_NETWORK;
             BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
