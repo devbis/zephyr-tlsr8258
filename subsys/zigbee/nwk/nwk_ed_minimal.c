@@ -5,6 +5,7 @@
 #include "os/ev_timer.h"
 
 #include <string.h>
+#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/spinlock.h>
 #include <zephyr/sys/util.h>
@@ -12,10 +13,12 @@
 
 LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 
-#define NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS 200U
-#define NWK_ED_MINIMAL_SCAN_WINDOW_MAX_MS 1500U
+#define NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS 3000U
+#define NWK_ED_MINIMAL_SCAN_WINDOW_MAX_MS 5000U
 #define NWK_ED_MINIMAL_JOIN_POLL_MS       200U
 #define NWK_ED_MINIMAL_JOIN_POLL_MAX      20U
+#define NWK_ED_MINIMAL_INTERVIEW_POLL_MS  200U
+#define NWK_ED_MINIMAL_INTERVIEW_POLL_MAX 20U
 #define NWK_ED_MINIMAL_RX_EVT_Q_LEN       4U
 
 typedef enum {
@@ -23,6 +26,7 @@ typedef enum {
 	NWK_ED_MINIMAL_STATE_DISCOVERY,
 	NWK_ED_MINIMAL_STATE_JOINING,
 	NWK_ED_MINIMAL_STATE_REJOIN,
+	NWK_ED_MINIMAL_STATE_INTERVIEW,
 } nwk_ed_minimal_state_t;
 
 typedef struct {
@@ -59,6 +63,9 @@ typedef struct {
 	u16 activeParentShortAddr;
 	extPANId_t activeExtPanId;
 	u8 assocPollCount;
+	bool interviewRejoinMode;
+	u8 interviewPollCount;
+	u32 interviewPollIntervalMs;
 
 	ev_timer_event_t opTimer;
 } nwk_ed_minimal_ctx_t;
@@ -69,6 +76,7 @@ static struct k_spinlock g_nwkEdRxEvtLock;
 typedef enum {
 	NWK_ED_MINIMAL_RX_EVT_NONE = 0,
 	NWK_ED_MINIMAL_RX_EVT_BEACON,
+	NWK_ED_MINIMAL_RX_EVT_TRAFFIC_CANDIDATE,
 	NWK_ED_MINIMAL_RX_EVT_ASSOC_RSP,
 } nwk_ed_minimal_rx_evt_type_t;
 
@@ -83,8 +91,15 @@ typedef struct {
 			u8 channel;
 		} beacon;
 		struct {
+			u16 panId;
+			u16 parentShortAddr;
+			u8 channel;
+		} traffic;
+		struct {
 			u8 macStatus;
 			u16 assignedShortAddr;
+			bool srcExtValid;
+			addrExt_t srcExtAddr;
 			bool dstExtValid;
 			addrExt_t dstExtAddr;
 			bool dstShortValid;
@@ -154,6 +169,8 @@ typedef struct {
 	u8 headerLen;
 	bool srcPanValid;
 	u16 srcPanId;
+	bool srcExtValid;
+	addrExt_t srcExtAddr;
 	bool srcShortValid;
 	u16 srcShortAddr;
 	bool dstShortValid;
@@ -236,6 +253,8 @@ static bool nwk_ed_minimal_parse_mac_header(const u8 *psdu, u8 len, nwk_ed_minim
 			if (idx + srcAddrLen > len) {
 				return FALSE;
 			}
+			memcpy(out->srcExtAddr, &psdu[idx], sizeof(out->srcExtAddr));
+			out->srcExtValid = TRUE;
 		} else {
 			return FALSE;
 		}
@@ -245,6 +264,34 @@ static bool nwk_ed_minimal_parse_mac_header(const u8 *psdu, u8 len, nwk_ed_minim
 
 	out->headerLen = idx;
 	return TRUE;
+}
+
+static void nwk_ed_minimal_apply_tc_context(void)
+{
+	const u8 *tcAddr = NULL;
+	bool centralized = FALSE;
+
+	if (!ZB_IEEE_ADDR_IS_ZERO(g_nwkEdCtx.fixedJoinTcAddr) &&
+	    !ZB_IEEE_ADDR_IS_INVALID(g_nwkEdCtx.fixedJoinTcAddr)) {
+		tcAddr = g_nwkEdCtx.fixedJoinTcAddr;
+		centralized = TRUE;
+	} else if (!ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) &&
+		   !ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address)) {
+		tcAddr = ss_ib.trust_center_address;
+		centralized = TRUE;
+	}
+
+	if (centralized) {
+		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, tcAddr);
+		ss_securityModeSet(SS_SEMODE_CENTRALIZED);
+		LOG_INF("join security: centralized tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+			tcAddr[0], tcAddr[1], tcAddr[2], tcAddr[3],
+			tcAddr[4], tcAddr[5], tcAddr[6], tcAddr[7]);
+	} else {
+		ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
+		ss_securityModeSet(SS_SEMODE_DISTRIBUTED);
+		LOG_INF("join security: distributed/no tc");
+	}
 }
 
 static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
@@ -389,7 +436,6 @@ static bool nwk_ed_minimal_rx_evt_pop(nwk_ed_minimal_rx_evt_t *evt)
 static void nwk_ed_minimal_finish_discovery(u8 status)
 {
 	bool rejoinFlow = g_nwkEdCtx.discoveryForRejoin;
-
 	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
@@ -415,19 +461,45 @@ static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
 	tl_zdoEdMinimalJoinDone(status, rejoinMode);
 }
 
+static void nwk_ed_minimal_complete_join(bool rejoinMode)
+{
+	g_zbNwkCtx.joined = 1U;
+	g_zbNwkCtx.is_factory_new = 0U;
+	g_zbNwkCtx.parentIsChanged = 0U;
+	g_zbNwkCtx.state = NLME_STATE_IDLE;
+	g_zbNwkCtx.user_state = NLME_IDLE;
+	zb_info_save(NULL);
+
+	LOG_INF("%s complete: short 0x%04x pan 0x%04x parent 0x%04x",
+		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,
+		g_zbMacPib.coordShortAddress);
+	nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
+}
+
+static void nwk_ed_minimal_enter_interview(bool rejoinMode)
+{
+	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_INTERVIEW;
+	g_nwkEdCtx.interviewRejoinMode = rejoinMode;
+	g_nwkEdCtx.assocPollCount = 0U;
+	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_INTERVIEW_POLL_MS);
+}
+
 static bool nwk_ed_minimal_send_data_request(void)
 {
 	u8 frame[MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN + MAC_PAN_ID_FIELD_LEN +
 		 MAC_SHORT_ADDR_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN + 1U];
 	u8 idx = 0;
 	u16 fcf = 0;
+	bool useShortSrc = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_INTERVIEW || g_zbNwkCtx.joined) &&
+			   (g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED);
 	int rc;
 
 	fcf |= MAC_FRAME_COMMAND;
 	fcf |= MAC_FCF_ACK_REQ_BIT;
 	fcf |= MAC_FCF_INTRA_PAN_MASK;
 	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
-	fcf |= (u16)ZB_ADDR_64BIT_DEV << MAC_FCF_SRC_ADDR_MODE_POS;
+	fcf |= (u16)(useShortSrc ? ZB_ADDR_16BIT_DEV_OR_BROADCAST : ZB_ADDR_64BIT_DEV)
+	       << MAC_FCF_SRC_ADDR_MODE_POS;
 
 	COPY_U16TOBUFFER(&frame[idx], fcf);
 	idx += MAC_FCF_FIELD_LEN;
@@ -437,8 +509,13 @@ static bool nwk_ed_minimal_send_data_request(void)
 	idx += MAC_PAN_ID_FIELD_LEN;
 	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activeParentShortAddr);
 	idx += MAC_SHORT_ADDR_FIELD_LEN;
-	memcpy(&frame[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
-	idx += sizeof(addrExt_t);
+	if (useShortSrc) {
+		COPY_U16TOBUFFER(&frame[idx], g_zbNIB.nwkAddr);
+		idx += MAC_SHORT_ADDR_FIELD_LEN;
+	} else {
+		memcpy(&frame[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
+		idx += sizeof(addrExt_t);
+	}
 	frame[idx++] = MAC_CMD_DATA_REQUEST;
 
 	rc = zb_platform_radio_send_raw_psdu(frame, idx);
@@ -446,7 +523,6 @@ static bool nwk_ed_minimal_send_data_request(void)
 		LOG_WRN("data request tx failed (rc=%d len=%u)", rc, idx);
 		return FALSE;
 	}
-
 	return TRUE;
 }
 
@@ -560,14 +636,15 @@ static void nwk_ed_minimal_timer_task(void *arg)
 	ARG_UNUSED(arg);
 
 	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY) {
-		if (g_nwkEdCtx.haveBeaconCandidate) {
-			if (g_nwkEdCtx.discoveryForRejoin) {
+		if (g_nwkEdCtx.discoveryForRejoin) {
+			if (g_nwkEdCtx.haveBeaconCandidate || g_nwkEdCtx.parentCandidateValid) {
 				if (!nwk_ed_minimal_start_assoc(TRUE)) {
 					nwk_ed_minimal_finish_join(ZDO_NETWORK_LOST, TRUE);
 				}
-			} else {
-				nwk_ed_minimal_finish_discovery(ZDO_SUCCESS);
+				return;
 			}
+		} else if (g_nwkEdCtx.haveBeaconCandidate) {
+			nwk_ed_minimal_finish_discovery(ZDO_SUCCESS);
 			return;
 		}
 
@@ -592,9 +669,42 @@ static void nwk_ed_minimal_timer_task(void *arg)
 			return;
 		}
 
-		(void)nwk_ed_minimal_send_data_request();
+		if (!nwk_ed_minimal_send_data_request()) {
+		}
 		g_nwkEdCtx.assocPollCount++;
 		nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
+		return;
+	}
+
+	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_INTERVIEW) {
+
+		if (g_nwkEdCtx.assocPollCount >= NWK_ED_MINIMAL_INTERVIEW_POLL_MAX) {
+			LOG_WRN("%s timed out waiting transport key",
+				g_nwkEdCtx.interviewRejoinMode ? "rejoin" : "join");
+			nwk_ed_minimal_finish_join(g_nwkEdCtx.interviewRejoinMode ?
+						      ZDO_NETWORK_LOST : ZDO_TIMEOUT,
+					       g_nwkEdCtx.interviewRejoinMode);
+			return;
+		}
+
+		if (!nwk_ed_minimal_send_data_request()) {
+		}
+		g_nwkEdCtx.assocPollCount++;
+		nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_INTERVIEW_POLL_MS);
+		return;
+	}
+
+	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_IDLE &&
+	    g_nwkEdCtx.interviewPollCount != 0U &&
+	    g_zbNwkCtx.joined) {
+
+		if (!nwk_ed_minimal_send_data_request()) {
+		}
+
+		g_nwkEdCtx.interviewPollCount--;
+		if (g_nwkEdCtx.interviewPollCount != 0U) {
+			nwk_ed_minimal_timer_start(g_nwkEdCtx.interviewPollIntervalMs);
+		}
 	}
 }
 
@@ -628,13 +738,6 @@ static void nwk_ed_minimal_runtime_reset(void)
 	g_nwkEdCtx.parentCandidateShortAddr = MAC_SHORT_ADDR_NONE;
 	ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.parentCandidateIeee);
 	g_nwkEdCtx.lastJoinStatus = ZDO_NOT_SUPPORTED;
-	g_nwkEdCtx.fixedJoinValid = FALSE;
-	g_nwkEdCtx.fixedJoinChannel = 0xFFU;
-	g_nwkEdCtx.fixedJoinPanId = MAC_INVALID_PANID;
-	g_nwkEdCtx.fixedJoinShortAddr = MAC_SHORT_ADDR_NONE;
-	memset(g_nwkEdCtx.fixedJoinExtPanId, 0, sizeof(g_nwkEdCtx.fixedJoinExtPanId));
-	memset(g_nwkEdCtx.fixedJoinNwkKey, 0, sizeof(g_nwkEdCtx.fixedJoinNwkKey));
-	ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.fixedJoinTcAddr);
 	g_nwkEdCtx.remainingScanChannels = 0U;
 	g_nwkEdCtx.activeScanChannel = 0xFFU;
 	g_nwkEdCtx.haveBeaconCandidate = FALSE;
@@ -648,6 +751,9 @@ static void nwk_ed_minimal_runtime_reset(void)
 	g_nwkEdCtx.activeParentShortAddr = MAC_SHORT_ADDR_NONE;
 	memset(g_nwkEdCtx.activeExtPanId, 0, sizeof(g_nwkEdCtx.activeExtPanId));
 	g_nwkEdCtx.assocPollCount = 0U;
+	g_nwkEdCtx.interviewRejoinMode = FALSE;
+	g_nwkEdCtx.interviewPollCount = 0U;
+	g_nwkEdCtx.interviewPollIntervalMs = NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
 	g_nwkEdRxEvtHead = 0U;
 	g_nwkEdRxEvtTail = 0U;
 	g_nwkEdRxEvtCount = 0U;
@@ -779,6 +885,37 @@ void tl_zbNwkEdMinimalOperationComplete(u8 status)
 bool tl_zbNwkEdMinimalManagerIdle(void)
 {
 	return g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_IDLE;
+}
+
+bool tl_zbNwkEdMinimalCanProcessDataFrames(void)
+{
+	return g_zbNwkCtx.joined || (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_INTERVIEW);
+}
+
+void tl_zbNwkEdMinimalTransportKeyDone(void)
+{
+	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_INTERVIEW) {
+		return;
+	}
+
+	nwk_ed_minimal_complete_join(g_nwkEdCtx.interviewRejoinMode);
+}
+
+void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
+{
+	if (!g_zbNwkCtx.joined || g_nwkEdCtx.activePanId == MAC_INVALID_PANID ||
+	    g_nwkEdCtx.activeParentShortAddr == MAC_SHORT_ADDR_NONE) {
+		return;
+	}
+
+	if (count == 0U) {
+		count = NWK_ED_MINIMAL_INTERVIEW_POLL_MAX;
+	}
+
+	g_nwkEdCtx.interviewPollCount = count;
+	g_nwkEdCtx.interviewPollIntervalMs =
+		(intervalMs != 0U) ? intervalMs : NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
+	nwk_ed_minimal_timer_start(1U);
 }
 
 u32 tl_zbNwkEdMinimalLastScanChannelsGet(void)
@@ -936,6 +1073,43 @@ static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *ev
 	}
 }
 
+static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_rx_evt_t *evt)
+{
+	bool preferNewCandidate;
+
+	if (evt == NULL || g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_DISCOVERY) {
+		return;
+	}
+
+	if (g_nwkEdCtx.haveBeaconCandidate) {
+		return;
+	}
+
+	preferNewCandidate = !g_nwkEdCtx.parentCandidateValid;
+	if (!preferNewCandidate &&
+	    g_nwkEdCtx.candidateShortAddr != MAC_SHORT_ADDR_BROADCAST &&
+	    evt->traffic.parentShortAddr == 0x0000U) {
+		preferNewCandidate = TRUE;
+	}
+	if (!preferNewCandidate && evt->rssi > g_nwkEdCtx.bestBeaconRssi) {
+		preferNewCandidate = TRUE;
+	}
+
+	if (preferNewCandidate) {
+		g_nwkEdCtx.bestBeaconRssi = evt->rssi;
+		g_nwkEdCtx.candidatePanId = evt->traffic.panId;
+		g_nwkEdCtx.candidateShortAddr = evt->traffic.parentShortAddr;
+		memset(g_nwkEdCtx.candidateExtPanId, 0, sizeof(g_nwkEdCtx.candidateExtPanId));
+		tl_zbNwkEdMinimalParentCandidateSet(evt->traffic.parentShortAddr, NULL);
+		tl_zbNwkEdMinimalSetFixedJoinTarget(evt->traffic.channel, evt->traffic.panId,
+						    evt->traffic.parentShortAddr, NULL,
+						    NULL, NULL);
+		LOG_INF("traffic candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
+			evt->traffic.panId, evt->traffic.parentShortAddr,
+			evt->traffic.channel, evt->rssi);
+	}
+}
+
 static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t *evt)
 {
 	u8 zdoStatus;
@@ -965,27 +1139,34 @@ static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t 
 	}
 
 	if (evt->assocRsp.macStatus == MAC_SUCCESS) {
+		if (evt->assocRsp.srcExtValid) {
+			tl_zbNwkEdMinimalParentCandidateSet(g_nwkEdCtx.activeParentShortAddr,
+							      evt->assocRsp.srcExtAddr);
+		}
+		nwk_ed_minimal_apply_tc_context();
+
 		g_zbMacPib.panId = g_nwkEdCtx.activePanId;
 		g_zbMacPib.shortAddress = evt->assocRsp.assignedShortAddr;
 		g_zbMacPib.coordShortAddress = g_nwkEdCtx.activeParentShortAddr;
 		g_zbMacPib.associatedPanCoord = TRUE;
+		tlsr8258_zigbee_update_filters(g_nwkEdCtx.activePanId,
+						 evt->assocRsp.assignedShortAddr,
+						 g_zbMacPib.extAddress);
 
 		g_zbNIB.panId = g_nwkEdCtx.activePanId;
 		g_zbNIB.nwkAddr = evt->assocRsp.assignedShortAddr;
 		g_zbNIB.depth = 1U;
 		ZB_EXTPANID_COPY(g_zbNIB.extPANId, g_nwkEdCtx.activeExtPanId);
 
-		g_zbNwkCtx.joined = 1U;
-		g_zbNwkCtx.is_factory_new = 0U;
-		g_zbNwkCtx.parentIsChanged = 0U;
-		g_zbNwkCtx.state = NLME_STATE_IDLE;
-		g_zbNwkCtx.user_state = NLME_IDLE;
-		zb_info_save(NULL);
+		if (!aps_ib.aps_authenticated) {
+			LOG_INF("%s associated: short 0x%04x pan 0x%04x parent 0x%04x, waiting transport key",
+				rejoinMode ? "rejoin" : "join", evt->assocRsp.assignedShortAddr,
+				g_nwkEdCtx.activePanId, g_nwkEdCtx.activeParentShortAddr);
+			nwk_ed_minimal_enter_interview(rejoinMode);
+			return;
+		}
 
-		LOG_INF("%s success: short 0x%04x pan 0x%04x parent 0x%04x",
-			rejoinMode ? "rejoin" : "join", evt->assocRsp.assignedShortAddr,
-			g_nwkEdCtx.activePanId, g_nwkEdCtx.activeParentShortAddr);
-		nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
+		nwk_ed_minimal_complete_join(rejoinMode);
 		return;
 	}
 
@@ -1016,6 +1197,9 @@ static void nwk_ed_minimal_rx_event_task(void *arg)
 		case NWK_ED_MINIMAL_RX_EVT_BEACON:
 			nwk_ed_minimal_handle_beacon_event(&evt);
 			break;
+		case NWK_ED_MINIMAL_RX_EVT_TRAFFIC_CANDIDATE:
+			nwk_ed_minimal_handle_traffic_candidate_event(&evt);
+			break;
 		case NWK_ED_MINIMAL_RX_EVT_ASSOC_RSP:
 			nwk_ed_minimal_handle_assoc_rsp_event(&evt);
 			break;
@@ -1030,10 +1214,16 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 	nwk_ed_minimal_mac_hdr_t hdr;
 	u8 payloadLen;
 	nwk_ed_minimal_rx_evt_t evt;
+	bool discoveryActive;
+	bool joinActive;
 
 	if (macPld == NULL || len < (MAC_MIN_HDR_LEN + 2U)) {
 		return;
 	}
+
+	discoveryActive = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY);
+	joinActive = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_JOINING) ||
+		     (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_REJOIN);
 
 	/* Incoming PSDU includes FCS bytes at the end. */
 	payloadLen = (u8)(len - 2U);
@@ -1045,6 +1235,10 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		u16 panId = MAC_INVALID_PANID;
 		u16 parentShortAddr = MAC_SHORT_ADDR_NONE;
 		extPANId_t extPanId = {0};
+
+		if (!discoveryActive) {
+			return;
+		}
 
 		if (!nwk_ed_minimal_parse_beacon_candidate(macPld, payloadLen, &hdr, &panId,
 							   &parentShortAddr, extPanId)) {
@@ -1060,6 +1254,25 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		ZB_EXTPANID_COPY(evt.beacon.extPanId, extPanId);
 		if (nwk_ed_minimal_rx_evt_push(&evt)) {
 			(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
+		} else {
+		}
+		return;
+	}
+
+	if (hdr.frameType == MAC_FRAME_DATA && hdr.srcPanValid && hdr.srcShortValid &&
+	    hdr.dstShortValid && hdr.dstShortAddr == MAC_SHORT_ADDR_BROADCAST) {
+		if (!discoveryActive) {
+			return;
+		}
+
+		memset(&evt, 0, sizeof(evt));
+		evt.type = NWK_ED_MINIMAL_RX_EVT_TRAFFIC_CANDIDATE;
+		evt.rssi = rssi;
+		evt.traffic.panId = hdr.srcPanId;
+		evt.traffic.parentShortAddr = hdr.srcShortAddr;
+		evt.traffic.channel = rf_getChannel();
+		if (nwk_ed_minimal_rx_evt_push(&evt)) {
+			(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
 		}
 		return;
 	}
@@ -1073,7 +1286,28 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 			return;
 		}
 		cmdId = macPld[cmdIdx];
+		if (cmdId == MAC_CMD_DATA_REQUEST &&
+		    hdr.srcPanValid &&
+		    hdr.dstShortValid &&
+		    hdr.dstShortAddr != MAC_SHORT_ADDR_BROADCAST) {
+			if (!discoveryActive) {
+				return;
+			}
+			memset(&evt, 0, sizeof(evt));
+			evt.type = NWK_ED_MINIMAL_RX_EVT_TRAFFIC_CANDIDATE;
+			evt.rssi = rssi;
+			evt.traffic.panId = hdr.srcPanId;
+			evt.traffic.parentShortAddr = hdr.dstShortAddr;
+			evt.traffic.channel = rf_getChannel();
+			if (nwk_ed_minimal_rx_evt_push(&evt)) {
+				(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
+			}
+			return;
+		}
 		if (cmdId != MAC_CMD_ASSOCIATION_RESPONSE) {
+			return;
+		}
+		if (!joinActive) {
 			return;
 		}
 		memset(&evt, 0, sizeof(evt));
@@ -1081,11 +1315,15 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		assocStatus = macPld[cmdIdx + 3U];
 		evt.assocRsp.macStatus = assocStatus;
 		evt.assocRsp.assignedShortAddr = nwk_ed_minimal_u16_from_le(&macPld[cmdIdx + 1U]);
+		evt.assocRsp.srcExtValid = hdr.srcExtValid;
 		evt.assocRsp.srcShortValid = hdr.srcShortValid;
 		evt.assocRsp.srcShortAddr = hdr.srcShortAddr;
 		evt.assocRsp.dstExtValid = hdr.dstExtValid;
 		evt.assocRsp.dstShortValid = hdr.dstShortValid;
 		evt.assocRsp.dstShortAddr = hdr.dstShortAddr;
+		if (hdr.srcExtValid) {
+			ZB_IEEE_ADDR_COPY(evt.assocRsp.srcExtAddr, hdr.srcExtAddr);
+		}
 		if (hdr.dstExtValid) {
 			ZB_IEEE_ADDR_COPY(evt.assocRsp.dstExtAddr, hdr.dstExtAddr);
 		}

@@ -11,6 +11,10 @@ zephyr_include_directories(
 
 zephyr_library_named(subsys__zigbee)
 
+set(vendor_ss_tlccm_obj ${CMAKE_CURRENT_SOURCE_DIR}/../../../drivers-zigbee/ss_tlCCM.o)
+set_source_files_properties(${vendor_ss_tlccm_obj} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED FALSE)
+target_sources(subsys__zigbee PRIVATE ${vendor_ss_tlccm_obj})
+
 zephyr_library_compile_definitions(
     ZB_ED_ROLE=1
     END_DEVICE=1
@@ -87,6 +91,7 @@ add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 # Router/Coordinator runtime sources are intentionally not added yet.
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     zbapi/zb_api_ed_compat.c
+    zbapi/zb_api_zdo_send_minimal.c
     nwk/nwk_ed_minimal.c
     zdo/zdo_ed_minimal.c
 )
