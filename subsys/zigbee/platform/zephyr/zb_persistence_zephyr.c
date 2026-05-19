@@ -9,7 +9,7 @@
 
 LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
-#define ZB_PERSIST_BLOB_VERSION 1U
+#define ZB_PERSIST_BLOB_VERSION 2U
 
 typedef struct {
 	u8 version;
