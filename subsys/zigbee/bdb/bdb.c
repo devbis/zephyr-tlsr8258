@@ -60,6 +60,9 @@ extern void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
 #define	BDB_TOUCHLINK_CAP_EN()          (g_bdbAttrs.nodeCommissioningCapability & BDB_NODE_COMMISSION_CAP_TOUCHLINK)
 
 #define POLY                            0x8408
+#define BDB_ED_POST_JOIN_POLL_MS        200U
+#define BDB_ED_TCLK_POLL_COUNT          \
+	((BDBC_TC_LINK_KEY_EXCHANGE_TIMEOUT * 1000U) / BDB_ED_POST_JOIN_POLL_MS + 5U)
 
 /**********************************************************************
  * LOCAL FUNCTIONS
@@ -77,6 +80,7 @@ static u8 bdb_topLevelCommissiongConfirm(void);
 static void bdb_retrieveTcLinkKeyTimerStop(void);
 static void bdb_touchLinkCallback(u8 status, void *arg);
 static void bdb_commssionUtilityCallback(u8 cmd, void *arg);
+static void bdb_ed_post_join_poll_kick(void);
 
 extern void bdb_touchLinkPreCfg(u8 endpoint, bdb_commissionSetting_t *setting, const zcl_touchlinkAppCallbacks_t *tlCb);
 extern void bdb_coordinatorStart(void);
@@ -127,6 +131,12 @@ const zcl_touchlinkAppCallbacks_t bdb_touchlinkCb = {
     bdb_touchLinkCallback,
     bdb_commssionUtilityCallback
 };
+
+static void bdb_ed_post_join_poll_kick(void)
+{
+	tl_zbNwkEdMinimalInterviewPollStart(BDB_ED_TCLK_POLL_COUNT,
+					       BDB_ED_POST_JOIN_POLL_MS);
+}
 
 
 /**********************************************************************
@@ -901,6 +911,7 @@ _CODE_BDB_ static void bdb_nodeDescRespHandler(void *arg)
             requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
 
             if (zb_apsmeRequestKeyReq(&requestKey) == RET_OK) {
+                bdb_ed_post_join_poll_kick();
                 g_bdbAttrs.nodeIsOnANetwork = 0;
                 return;
             }
@@ -934,6 +945,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
         requestKey.dstAddr.shortAddr = 0x0000;
         requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
         if (zb_apsmeRequestKeyReq(&requestKey) == RET_OK) {
+            bdb_ed_post_join_poll_kick();
             g_bdbAttrs.nodeIsOnANetwork = 0;
             return 0;
         }
@@ -999,28 +1011,15 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
 _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
 {
 #if defined(CONFIG_IEEE802154_RAW_MODE)
-    ss_apsmeRequestKeyReq_t requestKey;
-
     ARG_UNUSED(arg);
-
-    TL_SETSTRUCTCONTENT(requestKey, 0);
-    requestKey.keyType = SS_KEYREQ_TYPE_TCLK;
-    requestKey.dstAddr.shortAddr = 0x0000;
-    requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
-
-    g_bdbCtx.leaveDoing = 0;
-    g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
-    g_bdbAttrs.tcLinkKeyExchangeAttemptsMax = 3;
-    if (zb_apsmeRequestKeyReq(&requestKey) == RET_OK) {
-        g_bdbAttrs.nodeIsOnANetwork = 0;
-        if (!g_bdbCtx.retrieveTcLkKeyTimer) {
-            g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyTimeout,
-                                                                 NULL,
-                                                                 BDBC_TC_LINK_KEY_EXCHANGE_TIMEOUT * 1000);
-        }
-    } else {
-        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
-    }
+    /*
+     * The minimal raw-mode join path currently supports network-key transport,
+     * but not the full Trust Center link-key establishment sequence that the
+     * vendor stack runs after join. Kicking APS Request Key here causes the
+     * coordinator to enter a post-join security flow we cannot complete yet,
+     * which in turn stalls interview traffic delivery.
+     */
+    bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
 #else
     if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
         /* send node description */
@@ -1033,6 +1032,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
         g_bdbCtx.leaveDoing = 0;
         g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
         g_bdbAttrs.tcLinkKeyExchangeAttemptsMax = 3;
+        bdb_ed_post_join_poll_kick();
         if (!g_bdbCtx.retrieveTcLkKeyTimer) {
             g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyTimeout,
                                                                  NULL,
@@ -1382,6 +1382,7 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
             BDB_STATUS_SET(BDB_COMMISSION_STA_SUCCESS);
             if (!ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) && ss_ib.securityLevel) {
                 evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY;
+                bdb_ed_post_join_poll_kick();
                 /* add bdb_globalLinkKeySet() for the sdk later than 3.6.8.0,
                  * because the global link maybe be changed to default key but not the pre-config key
                  */

@@ -41,6 +41,12 @@ __attribute__((weak)) void tl_zbNwkEdMinimalTransportKeyDone(void)
 {
 }
 
+__attribute__((weak)) void tl_zbNwkEdMinimalTimeoutRspReceived(u8 status, u8 parentInfo)
+{
+	ARG_UNUSED(status);
+	ARG_UNUSED(parentInfo);
+}
+
 __attribute__((weak)) u8 sys_exceptionPost(u16 line, u8 evt)
 {
 	ARG_UNUSED(line);
@@ -992,14 +998,21 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 		return;
 	}
 
-	if (nwk.frame_type != FRAME_TYPE_DATA) {
-		return;
-	}
-
 	if (nwk.security) {
 		if (!zb_minimal_decrypt_nwk_payload((u8 *)mac.payload, mac.payload_len, &nwk)) {
 			return;
 		}
+	}
+
+	if (nwk.frame_type == FRAME_TYPE_COMMAND) {
+		if ((nwk.payload_len >= 3U) && (nwk.payload[0] == 0x0CU)) {
+			tl_zbNwkEdMinimalTimeoutRspReceived(nwk.payload[1], nwk.payload[2]);
+		}
+		return;
+	}
+
+	if (nwk.frame_type != FRAME_TYPE_DATA) {
+		return;
 	}
 
 	if (!zb_minimal_parse_aps_frame(nwk.payload, nwk.payload_len, &aps)) {
