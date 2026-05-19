@@ -10,15 +10,47 @@ LOG_MODULE_REGISTER(main);
 #if defined(CONFIG_ZIGBEE_BDB)
 static bool commissioning_start_requested;
 static bool bdb_runtime_ready;
-
-static const uint8_t zigbee_shell_fixed_ext_pan_id[8] = {
-	59, 9, 157, 6, 79, 143, 238, 112,
+static struct k_work_delayable commissioning_retry_work;
+static bool commissioning_retry_work_ready;
+static const uint8_t zigbee_shell_fixed_tc_addr[8] = {
+	0x60, 0x2d, 0xce, 0xfe, 0xff, 0x89, 0xc0, 0x1c,
 };
 
-static const uint8_t zigbee_shell_fixed_network_key[16] = {
-	76, 228, 73, 183, 178, 113, 243, 139,
-	176, 183, 186, 153, 50, 177, 238, 220,
-};
+extern bool zb_isDeviceJoinedNwk(void);
+extern uint8_t zb_setPollRate(uint32_t newRate);
+extern uint32_t zb_getPollRate(void);
+
+static void zigbee_shell_activate_poll_rate(void)
+{
+	uint32_t poll_rate = zb_getPollRate();
+
+	if (poll_rate != 0U) {
+		(void)zb_setPollRate(poll_rate);
+	}
+}
+
+static void zigbee_shell_commissioning_retry(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	if (zb_isDeviceJoinedNwk()) {
+		return;
+	}
+
+	commissioning_start_requested = false;
+	zb_platform_app_start_commissioning();
+}
+
+static void zigbee_shell_commissioning_retry_schedule(void)
+{
+	if (!commissioning_retry_work_ready) {
+		k_work_init_delayable(&commissioning_retry_work,
+				      zigbee_shell_commissioning_retry);
+		commissioning_retry_work_ready = true;
+	}
+
+	(void)k_work_reschedule(&commissioning_retry_work, K_SECONDS(5));
+}
 #else
 static bool radio_validation_started;
 static struct k_work_delayable radio_probe_work;
@@ -77,14 +109,9 @@ bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profi
 
 	memset(profile, 0, sizeof(*profile));
 	profile->channel_mask = ((uint32_t)1U << CONFIG_ZIGBEE_CHANNEL);
-	profile->pan_id = 23335U;
-	profile->pan_id_valid = true;
-	memcpy(profile->ext_pan_id, zigbee_shell_fixed_ext_pan_id,
-	       sizeof(zigbee_shell_fixed_ext_pan_id));
-	profile->ext_pan_id_valid = true;
-	memcpy(profile->network_key, zigbee_shell_fixed_network_key,
-	       sizeof(zigbee_shell_fixed_network_key));
-	profile->network_key_valid = true;
+	memcpy(profile->tc_addr, zigbee_shell_fixed_tc_addr,
+	       sizeof(zigbee_shell_fixed_tc_addr));
+	profile->tc_addr_valid = true;
 
 	return true;
 #endif
@@ -108,6 +135,9 @@ void zb_platform_app_bootstrap_ready(void)
 
 		if (err == 0) {
 			bdb_runtime_ready = true;
+			if (zb_isDeviceJoinedNwk()) {
+				zigbee_shell_activate_poll_rate();
+			}
 			LOG_INF("zigbee_shell BDB runtime initialized");
 		} else {
 			LOG_ERR("zigbee_shell BDB runtime init failed (%d)", err);
@@ -119,7 +149,7 @@ void zb_platform_app_bootstrap_ready(void)
 bool zb_platform_app_enable_radio_smoke_probe(void)
 {
 	/* Keep smoke probe as opt-in diagnostics only. */
-	return false;
+	return true;
 }
 
 bool zb_platform_app_should_start_commissioning(void)
@@ -156,12 +186,39 @@ void zb_platform_app_start_commissioning(void)
 	status = zb_platform_bdb_network_steer_start();
 	if (status == 0U) {
 		commissioning_start_requested = true;
+		if (commissioning_retry_work_ready) {
+			(void)k_work_cancel_delayable(&commissioning_retry_work);
+		}
 		LOG_INF("zigbee_shell commissioning start requested (bdb status: 0x%02x)", status);
 	} else {
+		commissioning_start_requested = false;
+		zigbee_shell_commissioning_retry_schedule();
 		LOG_WRN("zigbee_shell commissioning start rejected (bdb status: 0x%02x)", status);
 	}
 #else
 	LOG_INF("zigbee_shell commissioning start: unavailable (BDB disabled)");
+#endif
+}
+
+void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
+{
+#if defined(CONFIG_ZIGBEE_BDB)
+	if (joinedNetwork) {
+		zigbee_shell_activate_poll_rate();
+		commissioning_start_requested = true;
+		if (commissioning_retry_work_ready) {
+			(void)k_work_cancel_delayable(&commissioning_retry_work);
+		}
+		LOG_INF("zigbee_shell joined network (bdb status: 0x%02x)", status);
+		return;
+	}
+
+	commissioning_start_requested = false;
+	LOG_INF("zigbee_shell not joined yet (bdb status: 0x%02x), retry scheduled", status);
+	zigbee_shell_commissioning_retry_schedule();
+#else
+	ARG_UNUSED(status);
+	ARG_UNUSED(joinedNetwork);
 #endif
 }
 

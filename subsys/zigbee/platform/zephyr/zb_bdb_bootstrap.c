@@ -12,12 +12,19 @@ LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
+extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
 #define ZB_SHELL_HA_DEVICE_ID  0x0000U
 #define ZB_SHELL_ENDPOINT      0x01U
 
 static bool zb_bdb_bootstrap_ready;
+
+void __weak zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
+{
+	ARG_UNUSED(status);
+	ARG_UNUSED(joinedNetwork);
+}
 
 static void zb_shell_bdb_init_cb(u8 status, u8 joinedNetwork)
 {
@@ -27,8 +34,9 @@ static void zb_shell_bdb_init_cb(u8 status, u8 joinedNetwork)
 
 static void zb_shell_bdb_commissioning_cb(u8 status, void *arg)
 {
-	ARG_UNUSED(status);
 	ARG_UNUSED(arg);
+	zb_platform_app_bdb_commissioning_status((uint8_t)status,
+						 g_zbNwkCtx.joined ? true : false);
 }
 
 static void zb_shell_bdb_identify_cb(u8 endpoint, u16 srcAddr, u16 identifyTime)
@@ -48,6 +56,10 @@ static bdb_appCb_t zb_shell_bdb_cb = {
 	.bdbcommissioningCb = zb_shell_bdb_commissioning_cb,
 	.bdbIdentifyCb = zb_shell_bdb_identify_cb,
 	.bdbFindBindSuccessCb = zb_shell_bdb_find_bind_cb,
+};
+
+static zdo_appIndCb_t zb_shell_zdo_cb = {
+	.zdpStartDevCnfCb = bdb_zdoStartDevCnf,
 };
 
 static af_simple_descriptor_t zb_shell_simple_desc = {
@@ -117,6 +129,20 @@ static void zb_platform_bdb_apply_join_profile(void)
 		LOG_INF("zb bdb join profile applied: channels=0x%08x",
 			(unsigned int)profile.channel_mask);
 	}
+
+	if (profile.network_key_valid) {
+		zb_preConfigNwkKey(profile.network_key, FALSE);
+		LOG_INF("zb bdb join profile applied: preconfigured nwk key");
+	}
+
+	if (profile.tc_addr_valid) {
+		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, profile.tc_addr);
+		ss_securityModeSet(SS_SEMODE_CENTRALIZED);
+		LOG_INF("zb bdb join profile applied: tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+			profile.tc_addr[0], profile.tc_addr[1], profile.tc_addr[2],
+			profile.tc_addr[3], profile.tc_addr[4], profile.tc_addr[5],
+			profile.tc_addr[6], profile.tc_addr[7]);
+	}
 }
 
 #endif
@@ -159,6 +185,7 @@ int zb_platform_bdb_init_default(void)
 	g_bdbCtx.bdbAppCb = &zb_shell_bdb_cb;
 	g_bdbCtx.simpleDesc = &zb_shell_simple_desc;
 	g_bdbCtx.factoryNew = g_zbNwkCtx.is_factory_new ? 1U : 0U;
+	zdo_zdpCbTblRegister(&zb_shell_zdo_cb);
 
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;

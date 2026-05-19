@@ -15,7 +15,10 @@ const addrExt_t g_zero_addr __attribute__((weak)) = {0};
 const addrExt_t g_invalid_addr __attribute__((weak)) = {0xFF, 0xFF, 0xFF, 0xFF,
 						       0xFF, 0xFF, 0xFF, 0xFF};
 
-const u8 tcLinkKeyCentralDefault[SEC_KEY_LEN] __attribute__((weak)) = {0};
+const u8 tcLinkKeyCentralDefault[SEC_KEY_LEN] __attribute__((weak)) = {
+	'Z', 'i', 'g', 'B', 'e', 'e', 'A', 'l',
+	'l', 'i', 'a', 'n', 'c', 'e', '0', '9',
+};
 const u8 linkKeyDistributedCertification[SEC_KEY_LEN] __attribute__((weak)) = {0};
 const u8 linkKeyDistributedMaster[SEC_KEY_LEN] __attribute__((weak)) = {0};
 
@@ -132,6 +135,28 @@ __attribute__((weak)) u8 zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequest
 {
 	ARG_UNUSED(pRequestKeyReq);
 	return RET_OPERATION_FAILED;
+}
+
+void zb_preConfigNwkKey(u8 *nwkKey, bool enTransKey)
+{
+	ss_material_set_t *material;
+
+	if ((nwkKey == NULL) || !is_device_factory_new()) {
+		return;
+	}
+
+	material = &ss_ib.nwkSecurMaterialSet[0];
+	memcpy(material->key, nwkKey, SEC_KEY_LEN);
+	material->keySeqNum = 0U;
+	material->keyType = 1U;
+
+	ss_ib.activeSecureMaterialIndex = 0U;
+	ss_ib.activeKeySeqNum = 0U;
+	ss_ib.preConfiguredKeyType |= SS_PRECONFIGURED_NWKKEY;
+
+	if (!enTransKey) {
+		aps_ib.aps_authenticated = 1U;
+	}
 }
 
 __attribute__((weak)) bool zb_isDeviceJoinedNwk(void)
