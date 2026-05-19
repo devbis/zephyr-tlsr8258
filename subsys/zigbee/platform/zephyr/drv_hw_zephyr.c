@@ -13,6 +13,10 @@
 
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
 
+volatile int32_t zb_hwinfo_trace[4] = {
+	0x48574945, 0, 0, 0,
+};
+
 /* 24 MHz system clock → 24 ticks per microsecond */
 u32 sysTimerPerUs = 24;
 
@@ -246,16 +250,32 @@ void flash_erase(u32 addr)
 
 bool drv_get_primary_ieee_addr(u8 *addr)
 {
+	int eui64_rc;
 	ssize_t id_len;
 
 	if (addr == NULL) {
+		zb_hwinfo_trace[1] = -EINVAL;
 		return false;
 	}
 
-	if (hwinfo_get_device_eui64(addr) == 0) {
+	eui64_rc = hwinfo_get_device_eui64(addr);
+	zb_hwinfo_trace[1] = eui64_rc;
+	if (eui64_rc == 0) {
+		zb_hwinfo_trace[2] = 1;
+		zb_hwinfo_trace[3] = 8;
+		LOG_HEXDUMP_INF(addr, 8, "hwinfo EUI64");
 		return true;
 	}
 
 	id_len = hwinfo_get_device_id(addr, 8);
-	return id_len >= 8;
+	zb_hwinfo_trace[2] = 2;
+	zb_hwinfo_trace[3] = (int32_t)id_len;
+	if (id_len >= 8) {
+		LOG_HEXDUMP_INF(addr, 8, "hwinfo device_id as IEEE");
+		return true;
+	}
+
+	LOG_WRN("No primary IEEE address from hwinfo: eui64_rc=%d id_len=%d",
+		eui64_rc, (int)id_len);
+	return false;
 }

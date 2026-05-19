@@ -19,7 +19,14 @@ LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ED_MINIMAL_JOIN_POLL_MAX      20U
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MS  200U
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MAX 20U
+#define NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS 200U
 #define NWK_ED_MINIMAL_RX_EVT_Q_LEN       4U
+#define NWK_ED_MINIMAL_NWK_AUX_HDR_LEN    14U
+#define NWK_ED_MINIMAL_NWK_MIC_LEN        4U
+#define NWK_ED_MINIMAL_NWK_SEC_CTRL       0x2DU
+#define NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE  0x28U
+#define NWK_ED_MINIMAL_NWK_TIMEOUT_REQ_CMD_ID 0x0BU
+#define NWK_ED_MINIMAL_NWK_TIMEOUT_RSP_CMD_ID 0x0CU
 
 typedef enum {
 	NWK_ED_MINIMAL_STATE_IDLE = 0,
@@ -66,8 +73,11 @@ typedef struct {
 	bool interviewRejoinMode;
 	u8 interviewPollCount;
 	u32 interviewPollIntervalMs;
+	bool endDevTimeoutRspSeen;
+	bool endDevTimeoutReqScheduled;
 
 	ev_timer_event_t opTimer;
+	ev_timer_event_t timeoutReqTimer;
 } nwk_ed_minimal_ctx_t;
 
 static nwk_ed_minimal_ctx_t g_nwkEdCtx;
@@ -115,8 +125,13 @@ static u8 g_nwkEdRxEvtHead;
 static u8 g_nwkEdRxEvtTail;
 static u8 g_nwkEdRxEvtCount;
 
+static void nwk_ed_minimal_joined_idle_poll_schedule(u32 timeoutMs);
+static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs);
+
 extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
 extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
+extern u8 zb_zdoSendDevAnnance(void);
+extern u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 aStrLen, u8 *aStr, u8 mStrLen, u8 *mStr);
 
 static u16 nwk_ed_minimal_u16_from_le(const u8 *buf)
 {
@@ -159,7 +174,16 @@ static void nwk_ed_minimal_timer_cancel(void)
 	ev_unon_timer(&g_nwkEdCtx.opTimer);
 }
 
+static void nwk_ed_minimal_timeout_req_cancel(void)
+{
+	ev_unon_timer(&g_nwkEdCtx.timeoutReqTimer);
+}
+
 static void nwk_ed_minimal_timer_start(u32 timeoutMs);
+static void nwk_ed_minimal_joined_idle_poll_restart(u32 timeoutMs);
+static void nwk_ed_minimal_post_join_announce_task(void *arg);
+static void nwk_ed_minimal_timeout_req_task(void *arg);
+void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
 
 typedef struct {
 	u16 fcf;
@@ -359,6 +383,121 @@ static void nwk_ed_minimal_channel_set(u8 channel)
 	(void)tl_zbMacAttrSet(MAC_PHY_ATTR_CURRENT_CHANNEL, &channel, sizeof(channel));
 }
 
+static u8 *nwk_ed_minimal_active_nwk_key_get(void)
+{
+	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL) {
+		return NULL;
+	}
+
+	return ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+}
+
+static u8 nwk_ed_minimal_timeout_req_value_get(void)
+{
+	if (g_zbNIB.endDevTimeoutDefault < REQTIMEOUTENUM_INVALID) {
+		return g_zbNIB.endDevTimeoutDefault;
+	}
+
+	return NWK_ENDDEV_TIMEOUT_DEFAULT;
+}
+
+static bool nwk_ed_minimal_send_timeout_request(void)
+{
+	u8 frame[127];
+	u8 nonce[13];
+	u8 *key;
+	u8 timeoutReq;
+	u8 enc_len;
+	u8 nwkHdrLen;
+	u8 *payload;
+	u32 frameCounter;
+	u8 keySeq;
+	u8 idx = 0U;
+	u16 nwkFcf = 0U;
+	u16 macFcf = 0U;
+	int rc;
+
+	if (!g_zbNwkCtx.joined || g_nwkEdCtx.activePanId == MAC_INVALID_PANID ||
+	    g_nwkEdCtx.activeParentShortAddr == MAC_SHORT_ADDR_NONE ||
+	    g_zbNIB.nwkAddr >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		return FALSE;
+	}
+
+	key = nwk_ed_minimal_active_nwk_key_get();
+	if (key == NULL) {
+		LOG_WRN("joined TX: timeout req skipped, no active nwk key");
+		return FALSE;
+	}
+
+	macFcf |= MAC_FRAME_DATA;
+	macFcf |= MAC_FCF_ACK_REQ_BIT;
+	macFcf |= MAC_FCF_INTRA_PAN_MASK;
+	macFcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
+	macFcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_SRC_ADDR_MODE_POS;
+
+	COPY_U16TOBUFFER(&frame[idx], macFcf);
+	idx += MAC_FCF_FIELD_LEN;
+	frame[idx++] = ZB_MAC_DSN();
+	ZB_INC_MAC_DSN();
+	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activePanId);
+	idx += MAC_PAN_ID_FIELD_LEN;
+	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activeParentShortAddr);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+	COPY_U16TOBUFFER(&frame[idx], g_zbNIB.nwkAddr);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+
+	nwkFcf |= (u16)FRAME_TYPE_COMMAND;
+	nwkFcf |= (u16)(0x02U << 2);
+	nwkFcf |= BIT(9);
+
+	COPY_U16TOBUFFER(&frame[idx], nwkFcf);
+	idx += 2U;
+	COPY_U16TOBUFFER(&frame[idx], g_nwkEdCtx.activeParentShortAddr);
+	idx += 2U;
+	COPY_U16TOBUFFER(&frame[idx], g_zbNIB.nwkAddr);
+	idx += 2U;
+	frame[idx++] = 1U;
+	frame[idx++] = g_zbNIB.seqNum++;
+	nwkHdrLen = (u8)(8U + NWK_ED_MINIMAL_NWK_AUX_HDR_LEN);
+	frame[idx++] = NWK_ED_MINIMAL_NWK_SEC_CTRL;
+	frameCounter = ss_ib.outgoingFrameCounter++;
+	COPY_U32TOBUFFER(&frame[idx], frameCounter);
+	idx += 4U;
+	memcpy(&frame[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
+	idx += sizeof(addrExt_t);
+	keySeq = ss_ib.activeKeySeqNum;
+	frame[idx++] = keySeq;
+
+	timeoutReq = nwk_ed_minimal_timeout_req_value_get();
+	payload = &frame[idx];
+	payload[0] = NWK_ED_MINIMAL_NWK_TIMEOUT_REQ_CMD_ID;
+	payload[1] = timeoutReq;
+	payload[2] = 0U;
+
+	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+	COPY_U32TOBUFFER(&nonce[8], frameCounter);
+	nonce[12] = NWK_ED_MINIMAL_NWK_SEC_CTRL;
+	enc_len = ss_ccmEncryption(key, nonce, nwkHdrLen, &frame[idx - nwkHdrLen], 3U, payload);
+	if (enc_len != (u8)(3U + NWK_ED_MINIMAL_NWK_MIC_LEN)) {
+		LOG_WRN("joined TX: timeout req encrypt failed len=%u", enc_len);
+		return FALSE;
+	}
+
+	frame[idx - NWK_ED_MINIMAL_NWK_AUX_HDR_LEN] = NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE;
+	idx = (u8)(idx + enc_len);
+	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+
+	rc = zb_platform_radio_send_raw_psdu(frame, idx);
+	if (rc < 0) {
+		LOG_WRN("joined TX: timeout req tx failed rc=%d", rc);
+		return FALSE;
+	}
+
+	LOG_INF("joined TX: timeout req parent=0x%04x timeout=%u key=%u fc=%u",
+		g_nwkEdCtx.activeParentShortAddr, timeoutReq, keySeq, frameCounter);
+	return TRUE;
+}
+
 static bool nwk_ed_minimal_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 {
 	if (profile == NULL) {
@@ -474,6 +613,11 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,
 		g_zbMacPib.coordShortAddress);
 	nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
+	nwk_ed_minimal_joined_idle_poll_schedule(zdo_af_get_syn_rate());
+
+	if (!rejoinMode) {
+		(void)TL_SCHEDULE_TASK(nwk_ed_minimal_post_join_announce_task, NULL);
+	}
 }
 
 static void nwk_ed_minimal_enter_interview(bool rejoinMode)
@@ -694,17 +838,20 @@ static void nwk_ed_minimal_timer_task(void *arg)
 		return;
 	}
 
-	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_IDLE &&
-	    g_nwkEdCtx.interviewPollCount != 0U &&
-	    g_zbNwkCtx.joined) {
+	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_IDLE && g_zbNwkCtx.joined) {
+		u32 nextPollMs = zdo_af_get_syn_rate();
 
 		if (!nwk_ed_minimal_send_data_request()) {
 		}
 
-		g_nwkEdCtx.interviewPollCount--;
 		if (g_nwkEdCtx.interviewPollCount != 0U) {
-			nwk_ed_minimal_timer_start(g_nwkEdCtx.interviewPollIntervalMs);
+			g_nwkEdCtx.interviewPollCount--;
+			if (g_nwkEdCtx.interviewPollCount != 0U) {
+				nextPollMs = g_nwkEdCtx.interviewPollIntervalMs;
+			}
 		}
+
+		nwk_ed_minimal_joined_idle_poll_schedule(nextPollMs);
 	}
 }
 
@@ -712,6 +859,13 @@ static int nwk_ed_minimal_timer_cb(void *arg)
 {
 	ARG_UNUSED(arg);
 	(void)TL_SCHEDULE_TASK(nwk_ed_minimal_timer_task, NULL);
+	return -1;
+}
+
+static int nwk_ed_minimal_timeout_req_timer_cb(void *arg)
+{
+	ARG_UNUSED(arg);
+	(void)TL_SCHEDULE_TASK(nwk_ed_minimal_timeout_req_task, NULL);
 	return -1;
 }
 
@@ -725,9 +879,46 @@ static void nwk_ed_minimal_timer_start(u32 timeoutMs)
 	ev_on_timer(&g_nwkEdCtx.opTimer, timeoutMs);
 }
 
+static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs)
+{
+	if (!g_zbNwkCtx.joined || g_nwkEdCtx.endDevTimeoutRspSeen) {
+		return;
+	}
+
+	if (g_nwkEdCtx.timeoutReqTimer.cb == NULL) {
+		memset(&g_nwkEdCtx.timeoutReqTimer, 0, sizeof(g_nwkEdCtx.timeoutReqTimer));
+		g_nwkEdCtx.timeoutReqTimer.cb = nwk_ed_minimal_timeout_req_timer_cb;
+	}
+
+	g_nwkEdCtx.endDevTimeoutReqScheduled = TRUE;
+	ev_on_timer(&g_nwkEdCtx.timeoutReqTimer, timeoutMs);
+}
+
+static void nwk_ed_minimal_joined_idle_poll_schedule(u32 timeoutMs)
+{
+	if (timeoutMs == 0U || !g_zbNwkCtx.joined ||
+	    g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE) {
+		return;
+	}
+
+	nwk_ed_minimal_timer_start(timeoutMs);
+}
+
+static void nwk_ed_minimal_joined_idle_poll_restart(u32 timeoutMs)
+{
+	if (timeoutMs == 0U || !g_zbNwkCtx.joined ||
+	    g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_IDLE) {
+		return;
+	}
+
+	nwk_ed_minimal_timer_cancel();
+	nwk_ed_minimal_timer_start(timeoutMs);
+}
+
 static void nwk_ed_minimal_runtime_reset(void)
 {
 	nwk_ed_minimal_timer_cancel();
+	nwk_ed_minimal_timeout_req_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.lastScanChannels = 0U;
 	g_nwkEdCtx.lastScanDuration = 0U;
@@ -754,6 +945,8 @@ static void nwk_ed_minimal_runtime_reset(void)
 	g_nwkEdCtx.interviewRejoinMode = FALSE;
 	g_nwkEdCtx.interviewPollCount = 0U;
 	g_nwkEdCtx.interviewPollIntervalMs = NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
+	g_nwkEdCtx.endDevTimeoutRspSeen = FALSE;
+	g_nwkEdCtx.endDevTimeoutReqScheduled = FALSE;
 	g_nwkEdRxEvtHead = 0U;
 	g_nwkEdRxEvtTail = 0U;
 	g_nwkEdRxEvtCount = 0U;
@@ -901,6 +1094,37 @@ void tl_zbNwkEdMinimalTransportKeyDone(void)
 	nwk_ed_minimal_complete_join(g_nwkEdCtx.interviewRejoinMode);
 }
 
+static void nwk_ed_minimal_post_join_announce_task(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	if (!g_zbNwkCtx.joined) {
+		return;
+	}
+
+	if (zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
+		tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+		nwk_ed_minimal_timeout_req_schedule(NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS);
+	}
+}
+
+static void nwk_ed_minimal_timeout_req_task(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	g_nwkEdCtx.endDevTimeoutReqScheduled = FALSE;
+	if (!g_zbNwkCtx.joined || g_nwkEdCtx.endDevTimeoutRspSeen) {
+		return;
+	}
+
+	if (!nwk_ed_minimal_send_timeout_request()) {
+		nwk_ed_minimal_timeout_req_schedule(NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS);
+		return;
+	}
+
+	tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+}
+
 void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
 {
 	if (!g_zbNwkCtx.joined || g_nwkEdCtx.activePanId == MAC_INVALID_PANID ||
@@ -915,7 +1139,23 @@ void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
 	g_nwkEdCtx.interviewPollCount = count;
 	g_nwkEdCtx.interviewPollIntervalMs =
 		(intervalMs != 0U) ? intervalMs : NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
-	nwk_ed_minimal_timer_start(1U);
+	nwk_ed_minimal_joined_idle_poll_restart(1U);
+}
+
+void tl_zbNwkEdMinimalTimeoutRspReceived(u8 status, u8 parentInfo)
+{
+	g_nwkEdCtx.endDevTimeoutReqScheduled = FALSE;
+	nwk_ed_minimal_timeout_req_cancel();
+	g_zbNIB.parentInfo = parentInfo;
+
+	if (status == TIMEOUT_RSP_STATUS_SUCCESS) {
+		g_nwkEdCtx.endDevTimeoutRspSeen = TRUE;
+		LOG_INF("joined RX: timeout rsp ok parentInfo=0x%02x", parentInfo);
+		tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+	} else {
+		LOG_WRN("joined RX: timeout rsp status=0x%02x parentInfo=0x%02x", status,
+			parentInfo);
+	}
 }
 
 u32 tl_zbNwkEdMinimalLastScanChannelsGet(void)

@@ -82,6 +82,9 @@ __attribute__((weak)) void zb_joinAFixedNetwork(u8 channel, u16 panId, u16 short
 	u32 scanChannels = (channel < 32U) ? ((u32)1U << channel) : 0U;
 
 	tl_zbNwkEdMinimalSetFixedJoinTarget(channel, panId, shortAddr, extPanId, nwkKey, tcAddr);
+	if (nwkKey != NULL) {
+		zb_preConfigNwkKey(nwkKey, FALSE);
+	}
 	if (scanChannels != 0U) {
 		(void)zdo_nwkRejoinStart(scanChannels, zdo_cfg_attributes.config_nwk_scan_duration);
 	} else {
