@@ -4,12 +4,15 @@
 
 #include <errno.h>
 #include <string.h>
+#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_PERSIST_BLOB_VERSION 2U
+
+extern void tl_zbNwkEdMinimalRuntimeReset(void);
 
 typedef struct {
 	u8 version;
@@ -51,6 +54,56 @@ int zb_platform_restore_persistent_state(void)
 	g_zbNwkCtx.is_factory_new = g_zbNwkCtx.joined ? 0U : 1U;
 
 	return 0;
+}
+
+int zb_platform_clear_persistent_state(void)
+{
+	nv_sts_t st;
+
+	zb_persist_register_item_length();
+	st = nv_flashSingleItemRemove(NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO,
+				      sizeof(zb_persist_blob_t));
+	if (st != NV_SUCC && st != NV_ITEM_NOT_FOUND && st != NV_NO_MEDIA) {
+		LOG_WRN("Zigbee persistence clear failed: %d", st);
+	}
+
+	tl_zbNwkEdMinimalRuntimeReset();
+
+	g_zbNwkCtx.joined = 0U;
+	g_zbNwkCtx.is_factory_new = 1U;
+	g_zbNwkCtx.parentIsChanged = 0U;
+	g_zbNwkCtx.joined_pro = 0U;
+	g_zbNwkCtx.joinAccept = 0U;
+	g_zbNwkCtx.state = NLME_STATE_IDLE;
+	g_zbNwkCtx.user_state = NLME_IDLE;
+
+	g_zbMacPib.panId = MAC_INVALID_PANID;
+	g_zbMacPib.shortAddress = MAC_SHORT_ADDR_BROADCAST;
+	g_zbMacPib.coordShortAddress = MAC_SHORT_ADDR_NONE;
+	g_zbMacPib.associatedPanCoord = 0U;
+	ZB_IEEE_ADDR_ZERO(g_zbMacPib.coordExtAddress);
+
+	g_zbNIB.panId = MAC_INVALID_PANID;
+	g_zbNIB.nwkAddr = NWK_BROADCAST_RESERVED;
+	g_zbNIB.depth = 0U;
+	g_zbNIB.parentInfo = 0U;
+	memset(g_zbNIB.extPANId, 0, sizeof(g_zbNIB.extPANId));
+
+	memset(ss_ib.nwkSecurMaterialSet, 0, sizeof(ss_ib.nwkSecurMaterialSet));
+	ss_ib.securityLevel = 0U;
+	ss_ib.activeSecureMaterialIndex = 0U;
+	ss_ib.activeKeySeqNum = 0U;
+	ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
+	aps_ib.aps_authenticated = 0U;
+	aps_ib.aps_use_insecure_join = TRUE;
+	g_bdbAttrs.nodeIsOnANetwork = 0U;
+	g_bdbCtx.factoryNew = 1U;
+	BDB_STATE_SET(BDB_STATE_IDLE);
+
+	tlsr8258_zigbee_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
+				       g_zbMacPib.extAddress);
+
+	return (st == NV_SUCC || st == NV_ITEM_NOT_FOUND || st == NV_NO_MEDIA) ? 0 : -EIO;
 }
 
 void zb_info_save(void *arg)

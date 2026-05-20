@@ -194,6 +194,23 @@ void zb_platform_app_start_commissioning(void)
 #endif
 }
 
+void zb_platform_app_network_left(void)
+{
+#if defined(CONFIG_ZIGBEE_BDB)
+	commissioning_start_requested = false;
+	if (commissioning_retry_work_ready) {
+		(void)k_work_cancel_delayable(&commissioning_retry_work);
+	}
+
+	if (!bdb_runtime_ready) {
+		zigbee_shell_commissioning_retry_schedule();
+		return;
+	}
+
+	zb_platform_app_start_commissioning();
+#endif
+}
+
 void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
