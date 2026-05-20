@@ -4,6 +4,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_config.h>
 
 LOG_MODULE_REGISTER(main);
 
@@ -24,9 +25,11 @@ static void zigbee_shell_activate_poll_rate(void)
 {
 	uint32_t poll_rate = zb_getPollRate();
 
-	if (poll_rate != 0U) {
-		(void)zb_setPollRate(poll_rate);
+	if (poll_rate == 0U) {
+		poll_rate = POLL_RATE;
 	}
+
+	(void)zb_setPollRate(poll_rate);
 }
 
 static void zigbee_shell_commissioning_retry(struct k_work *work)
@@ -157,7 +160,7 @@ bool zb_platform_app_should_start_commissioning(void)
 		return false;
 	}
 
-	return true;
+	return !zb_isDeviceJoinedNwk();
 #else
 	return false;
 #endif

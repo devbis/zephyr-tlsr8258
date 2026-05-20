@@ -10,6 +10,7 @@
 #include <zephyr/spinlock.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_config.h>
 
 #include "zb_minimal_ccm.h"
 
@@ -186,6 +187,13 @@ static void nwk_ed_minimal_post_join_announce_task(void *arg);
 static void nwk_ed_minimal_timeout_req_task(void *arg);
 static void nwk_ed_minimal_rx_event_task(void *arg);
 void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
+
+static u32 nwk_ed_minimal_effective_poll_rate(void)
+{
+	u32 rate = zdo_af_get_syn_rate();
+
+	return (rate != 0U) ? rate : POLL_RATE;
+}
 
 typedef struct {
 	u16 fcf;
@@ -457,6 +465,7 @@ static bool nwk_ed_minimal_send_timeout_request(void)
 	nwkFcf |= (u16)FRAME_TYPE_COMMAND;
 	nwkFcf |= (u16)(0x02U << 2);
 	nwkFcf |= BIT(9);
+	nwkFcf |= BIT(13);
 
 	COPY_U16TOBUFFER(&frame[idx], nwkFcf);
 	idx += 2U;
@@ -623,7 +632,7 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,
 		g_zbMacPib.coordShortAddress);
 	nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
-	nwk_ed_minimal_joined_idle_poll_schedule(zdo_af_get_syn_rate());
+	nwk_ed_minimal_joined_idle_poll_schedule(nwk_ed_minimal_effective_poll_rate());
 
 	if (!rejoinMode) {
 		(void)TL_SCHEDULE_TASK(nwk_ed_minimal_post_join_announce_task, NULL);
@@ -856,7 +865,7 @@ static void nwk_ed_minimal_timer_task(void *arg)
 	}
 
 	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_IDLE && g_zbNwkCtx.joined) {
-		u32 nextPollMs = zdo_af_get_syn_rate();
+		u32 nextPollMs = nwk_ed_minimal_effective_poll_rate();
 
 		if (!nwk_ed_minimal_send_data_request()) {
 		}
@@ -875,14 +884,19 @@ static void nwk_ed_minimal_timer_task(void *arg)
 static int nwk_ed_minimal_timer_cb(void *arg)
 {
 	ARG_UNUSED(arg);
-	(void)TL_SCHEDULE_TASK(nwk_ed_minimal_timer_task, NULL);
+
+	if (TL_SCHEDULE_TASK(nwk_ed_minimal_timer_task, NULL) != RET_OK) {
+		return 0;
+	}
 	return -1;
 }
 
 static int nwk_ed_minimal_timeout_req_timer_cb(void *arg)
 {
 	ARG_UNUSED(arg);
-	(void)TL_SCHEDULE_TASK(nwk_ed_minimal_timeout_req_task, NULL);
+	if (TL_SCHEDULE_TASK(nwk_ed_minimal_timeout_req_task, NULL) != RET_OK) {
+		return 0;
+	}
 	return -1;
 }
 
@@ -928,7 +942,6 @@ static void nwk_ed_minimal_joined_idle_poll_restart(u32 timeoutMs)
 		return;
 	}
 
-	nwk_ed_minimal_timer_cancel();
 	nwk_ed_minimal_timer_start(timeoutMs);
 }
 
@@ -1157,6 +1170,20 @@ void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
 	g_nwkEdCtx.interviewPollIntervalMs =
 		(intervalMs != 0U) ? intervalMs : NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
 	nwk_ed_minimal_joined_idle_poll_restart(1U);
+}
+
+void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs)
+{
+	if (!g_zbNwkCtx.joined || g_nwkEdCtx.activePanId == MAC_INVALID_PANID ||
+	    g_nwkEdCtx.activeParentShortAddr == MAC_SHORT_ADDR_NONE) {
+		return;
+	}
+
+	if (timeoutMs == 0U) {
+		timeoutMs = nwk_ed_minimal_effective_poll_rate();
+	}
+
+	nwk_ed_minimal_joined_idle_poll_restart(timeoutMs);
 }
 
 void tl_zbNwkEdMinimalTimeoutRspReceived(u8 status, u8 parentInfo)
