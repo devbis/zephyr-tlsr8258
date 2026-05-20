@@ -21,6 +21,7 @@
 #include <zephyr/random/random.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 #include <tlsr825x/irq.h>
 
 #include "ieee802154_tlsr8258_poll_wait.h"
@@ -62,6 +63,7 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_PHY_MAX_PSDU 127u
 #define TLSR8258_FCS_LENGTH 2u
 #define TLSR8258_MIN_FRAME_LENGTH 3u
+#define TLSR8258_ACK_TURNAROUND_US 120u
 #define TLSR8258_ACK_REQUEST BIT(5)
 #define TLSR8258_FRAME_PENDING BIT(4)
 #define TLSR8258_IEEE_ADDR_SIZE 8u
@@ -86,6 +88,7 @@ struct tlsr8258_radio_data {
 	struct net_if *iface;
 	uint8_t mac_addr[TLSR8258_IEEE_ADDR_SIZE];
 	uint8_t rx_buffer[TLSR8258_RX_BUF_SIZE] __aligned(4);
+	uint8_t rx_shadow[TLSR8258_RX_BUF_SIZE] __aligned(4);
 	uint8_t tx_buffer[TLSR8258_TX_BUF_SIZE] __aligned(4);
 	uint8_t filter_pan_id[TLSR8258_PAN_ID_SIZE];
 	uint8_t filter_short_addr[TLSR8258_SHORT_ADDR_SIZE];
@@ -127,6 +130,7 @@ static const uint8_t rf_power_level_list[] = {
 static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len);
 static void tlsr8258_rx_isr(uint16_t irq_status);
 static bool tlsr8258_filter_match_for_ack(const uint8_t *payload);
+static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length);
 
 static struct tlsr8258_radio_data tlsr8258_radio;
 static tlsr8258_zigbee_rx_cb_t tlsr8258_zigbee_rx_cb;
@@ -257,6 +261,24 @@ static void tlsr8258_rf_set_txmode(void)
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
 }
 
+static uint16_t tlsr8258_snapshot_rx_frame(uint8_t *dst, uint16_t dst_size)
+{
+	uint8_t *src = tlsr8258_radio.rx_buffer;
+	uint16_t dma_len = (uint16_t)src[0] + 4u;
+	uint16_t copy_len;
+
+	if (dst == NULL || dst_size == 0u) {
+		return 0u;
+	}
+
+	copy_len = MAX(dma_len, TLSR8258_PAYLOAD_OFFSET);
+	copy_len = MIN(copy_len, (uint16_t)TLSR8258_RX_BUF_SIZE);
+	copy_len = MIN(copy_len, dst_size);
+	memcpy(dst, src, copy_len);
+
+	return copy_len;
+}
+
 static uint8_t tlsr8258_mac_hdr_size(uint16_t fcf, uint8_t psdu_len)
 {
 	uint8_t idx = 3u;
@@ -337,13 +359,14 @@ static void tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 		uint16_t irq = TLSR_REG16(0x0f20);
 
 		if ((irq & RF_IRQ_RX_READY) != 0u) {
-			uint8_t *rx = tlsr8258_radio.rx_buffer;
-			uint8_t psdu_len = rx[4];
-			const uint8_t *psdu = &rx[TLSR8258_PAYLOAD_OFFSET];
+			const uint8_t *psdu;
+			uint8_t psdu_len;
 			bool rx_is_pending_response;
 
 			tlsr8258_rx_isr(irq);
 			waited = 0u;
+			psdu = &tlsr8258_radio.rx_shadow[TLSR8258_PAYLOAD_OFFSET];
+			psdu_len = tlsr8258_radio.rx_shadow[4];
 
 			if (tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, tx_seq)) {
 				ack_seen = true;
@@ -466,34 +489,56 @@ static bool tlsr8258_filter_match_for_ack(const uint8_t *payload)
 	}
 }
 
-static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length)
+static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length)
 {
-	uint8_t ack_psdu[3] = {0x02u, 0x00u, 0u};
-	uint16_t waited = 0u;
-
 	if (length < TLSR8258_MIN_FRAME_LENGTH) {
-		return;
+		return false;
 	}
 
 	if ((payload[0] & TLSR8258_ACK_REQUEST) == 0u) {
-		return;
+		return false;
 	}
 
-	if ((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x02u) {
+	return (payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) != 0x02u;
+}
+
+static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
+					bool tx_prepared, uint32_t tx_prepared_at_cycles)
+{
+	uint8_t ack_psdu[3] = {0x02u, 0x00u, 0u};
+	uint16_t waited = 0u;
+	uint32_t prep_elapsed_us = 0u;
+
+	if (!tlsr8258_ack_requested(payload, length)) {
 		return;
 	}
 
 	if (!tlsr8258_filter_match_for_ack(payload)) {
+		if (tx_prepared) {
+			tlsr8258_rf_set_rxmode();
+			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+		}
 		return;
 	}
 
 	ack_psdu[2] = payload[2];
 	if (tlsr8258_set_tx_payload(ack_psdu, sizeof(ack_psdu)) < 0) {
+		if (tx_prepared) {
+			tlsr8258_rf_set_rxmode();
+			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+		}
 		return;
 	}
 
-	tlsr8258_rf_set_txmode();
-	k_busy_wait(120);
+	if (!tx_prepared) {
+		tlsr8258_rf_set_txmode();
+	} else {
+		prep_elapsed_us = k_cyc_to_us_floor32(k_cycle_get_32() - tx_prepared_at_cycles);
+	}
+
+	if (prep_elapsed_us < TLSR8258_ACK_TURNAROUND_US) {
+		k_busy_wait(TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us);
+	}
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
@@ -517,10 +562,13 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length)
 static void tlsr8258_rx_isr(uint16_t irq_status)
 {
 	uint8_t *rx = tlsr8258_radio.rx_buffer;
+	uint16_t rx_snapshot_len;
 	uint16_t rx_dma_len;
 	int8_t rx_rssi_dbm;
 	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
 	uint8_t length = 0u;
+	bool ack_requested = false;
+	uint32_t ack_prepared_at_cycles = 0u;
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 	int8_t rssi;
 	struct net_pkt *pkt;
@@ -528,6 +576,19 @@ static void tlsr8258_rx_isr(uint16_t irq_status)
 
 	TLSR_REG16(0x0f20) = (uint16_t)(irq_status & RF_IRQ_RX_READY);
 	tlsr8258_radio.rx_count++;
+	length = rx[4];
+	ack_requested = tlsr8258_ack_requested(payload, length);
+	if (ack_requested) {
+		tlsr8258_rf_set_txmode();
+		ack_prepared_at_cycles = k_cycle_get_32();
+	}
+	rx_snapshot_len = tlsr8258_snapshot_rx_frame(tlsr8258_radio.rx_shadow,
+						       sizeof(tlsr8258_radio.rx_shadow));
+	if (rx_snapshot_len >= TLSR8258_PAYLOAD_OFFSET) {
+		rx = tlsr8258_radio.rx_shadow;
+		payload = &rx[TLSR8258_PAYLOAD_OFFSET];
+		length = rx[4];
+	}
 
 	if (rx[0] < (TLSR8258_RX_BUF_SIZE - 2u)) {
 		rx_rssi_dbm = (int8_t)rx[rx[0] + 2u] - 110;
@@ -538,8 +599,7 @@ static void tlsr8258_rx_isr(uint16_t irq_status)
 	if (tlsr8258_zigbee_rx_cb != NULL) {
 		rx_dma_len = (uint16_t)rx[0] + 4u;
 		rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
-		length = rx[4];
-		tlsr8258_send_ack_if_needed(payload, length);
+		tlsr8258_send_ack_if_needed(payload, length, ack_requested, ack_prepared_at_cycles);
 		tlsr8258_zigbee_rx_cb(rx, (uint8_t)rx_dma_len, rx_rssi_dbm);
 	}
 
@@ -550,7 +610,6 @@ static void tlsr8258_rx_isr(uint16_t irq_status)
 		return;
 	}
 
-	length = rx[4];
 	if (!IS_ENABLED(CONFIG_IEEE802154_L2_PKT_INCL_FCS)) {
 		if (length <= TLSR8258_FCS_LENGTH) {
 			return;
@@ -604,19 +663,24 @@ static void tlsr8258_rf_isr(const void *unused)
 static void tlsr8258_iface_init(struct net_if *iface)
 {
 	uint8_t *mac = tlsr8258_radio.mac_addr;
+	const uint8_t *runtime_ieee = zb_platform_runtime_ieee_addr_get();
 
 #if defined(CONFIG_IEEE802154_TLSR8258_RANDOM_MAC)
 		sys_rand_get(mac, TLSR8258_IEEE_ADDR_SIZE);
 		mac[0] = (mac[0] & (uint8_t)~BIT(0)) | BIT(1);
 #else
-		mac[0] = 0xc4;
-		mac[1] = 0x19;
-		mac[2] = 0xd1;
-		mac[3] = 0x00;
-		mac[4] = CONFIG_IEEE802154_TLSR8258_MAC4;
-		mac[5] = CONFIG_IEEE802154_TLSR8258_MAC5;
-		mac[6] = CONFIG_IEEE802154_TLSR8258_MAC6;
-		mac[7] = CONFIG_IEEE802154_TLSR8258_MAC7;
+		if (runtime_ieee != NULL) {
+			memcpy(mac, runtime_ieee, TLSR8258_IEEE_ADDR_SIZE);
+		} else {
+			mac[0] = 0xc4;
+			mac[1] = 0x19;
+			mac[2] = 0xd1;
+			mac[3] = 0x00;
+			mac[4] = CONFIG_IEEE802154_TLSR8258_MAC4;
+			mac[5] = CONFIG_IEEE802154_TLSR8258_MAC5;
+			mac[6] = CONFIG_IEEE802154_TLSR8258_MAC6;
+			mac[7] = CONFIG_IEEE802154_TLSR8258_MAC7;
+		}
 #endif
 
 	net_if_set_link_addr(iface, mac, TLSR8258_IEEE_ADDR_SIZE, NET_LINK_IEEE802154);
