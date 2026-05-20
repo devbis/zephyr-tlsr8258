@@ -119,7 +119,6 @@ bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profi
 
 void zb_platform_app_bootstrap_ready(void)
 {
-	LOG_INF("zigbee_shell bootstrap hook: core init complete");
 #if !defined(CONFIG_ZIGBEE_BDB)
 	if (!radio_validation_started) {
 		k_work_init_delayable(&radio_probe_work, zigbee_shell_radio_probe);
@@ -138,7 +137,6 @@ void zb_platform_app_bootstrap_ready(void)
 			if (zb_isDeviceJoinedNwk()) {
 				zigbee_shell_activate_poll_rate();
 			}
-			LOG_INF("zigbee_shell BDB runtime initialized");
 		} else {
 			LOG_ERR("zigbee_shell BDB runtime init failed (%d)", err);
 		}
@@ -149,21 +147,18 @@ void zb_platform_app_bootstrap_ready(void)
 bool zb_platform_app_enable_radio_smoke_probe(void)
 {
 	/* Keep smoke probe as opt-in diagnostics only. */
-	return true;
+	return false;
 }
 
 bool zb_platform_app_should_start_commissioning(void)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
 	if (!bdb_runtime_ready) {
-		LOG_INF("zigbee_shell commissioning hook: BDB init pending");
 		return false;
 	}
 
-	LOG_INF("zigbee_shell commissioning hook: BDB enabled");
 	return true;
 #else
-	LOG_INF("zigbee_shell commissioning hook: unavailable (BDB disabled)");
 	return false;
 #endif
 }
@@ -196,7 +191,6 @@ void zb_platform_app_start_commissioning(void)
 		LOG_WRN("zigbee_shell commissioning start rejected (bdb status: 0x%02x)", status);
 	}
 #else
-	LOG_INF("zigbee_shell commissioning start: unavailable (BDB disabled)");
 #endif
 }
 
@@ -224,9 +218,5 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 
 int main(void)
 {
-	LOG_INF("Zigbee shell starting on TLSR8258 TB03F");
-	printk("Zigbee shell starting on TLSR8258 TB03F\n");
-	LOG_INF("Waiting for Zigbee bootstrap callbacks (default channel %d)",
-		CONFIG_ZIGBEE_CHANNEL);
 	return 0;
 }
