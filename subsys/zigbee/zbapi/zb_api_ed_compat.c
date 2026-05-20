@@ -5,6 +5,7 @@
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
+extern void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs);
 
 nwk_ctx_t g_zbNwkCtx __attribute__((weak)) = {
 	.is_factory_new = 1,
@@ -53,6 +54,7 @@ __attribute__((weak)) u8 zb_rejoinReqWithBackOff(u32 scanChannels, u8 scanDurati
 __attribute__((weak)) u8 zb_setPollRate(u32 newRate)
 {
 	zdo_af_set_syn_rate(newRate);
+	tl_zbNwkEdMinimalPollRestart(newRate);
 	return RET_OK;
 }
 
