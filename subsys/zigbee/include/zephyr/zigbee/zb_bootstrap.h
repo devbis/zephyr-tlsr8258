@@ -46,6 +46,8 @@ const uint8_t *zb_platform_runtime_ieee_addr_get(void);
 int zb_platform_bdb_init_default(void);
 uint8_t zb_platform_bdb_network_steer_start(void);
 int zb_platform_restore_persistent_state(void);
+int zb_platform_clear_persistent_state(void);
+void zb_platform_app_network_left(void);
 
 #define ZB_PLATFORM_RADIO_ERR_NONE          0U
 #define ZB_PLATFORM_RADIO_ERR_NOT_READY     1U

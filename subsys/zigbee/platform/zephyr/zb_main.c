@@ -60,6 +60,10 @@ void __weak zb_platform_app_start_commissioning(void)
 {
 }
 
+void __weak zb_platform_app_network_left(void)
+{
+}
+
 bool __weak zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
 	ARG_UNUSED(target);
