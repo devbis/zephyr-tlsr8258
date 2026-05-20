@@ -2,7 +2,7 @@
 /*
  * ev_timer backed by k_work_delayable.
  *
- * ev_on_timer   → k_work_schedule(&evt->zb_work, K_MSEC(timeout))
+ * ev_on_timer   → k_work_reschedule(&evt->zb_work, K_MSEC(timeout))
  * ev_unon_timer → k_work_cancel_delayable(&evt->zb_work)
  *
  * The k_work handler calls evt->cb(evt->data).
@@ -33,10 +33,10 @@ static void ev_timer_work_handler(struct k_work *work)
 		ret = evt->cb(evt->data);
 	}
 
-	/* Periodic: non-negative return means reschedule */
+	/* Periodic: non-negative return means reschedule. */
 	if (ret >= 0 && evt->period > 0 && evt->used) {
 		evt->isRunning = 1;
-		k_work_schedule(&evt->zb_work, K_MSEC(evt->period));
+		k_work_reschedule(&evt->zb_work, K_MSEC(evt->period));
 	}
 
 	k_sem_give(&zb_ev_sem);
@@ -59,7 +59,7 @@ void ev_on_timer(ev_timer_event_t *evt, u32 timeout)
 	evt->timeout   = timeout;
 	evt->period    = timeout;
 	evt->isRunning = 1;
-	k_work_schedule(&evt->zb_work, K_MSEC(timeout));
+	k_work_reschedule(&evt->zb_work, K_MSEC(timeout));
 }
 
 void ev_unon_timer(ev_timer_event_t *evt)

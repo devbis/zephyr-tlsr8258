@@ -13,6 +13,7 @@ LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
+extern void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
@@ -104,6 +105,7 @@ static void zb_platform_bdb_restore_joined_target(void)
 					    g_zbNIB.extPANId,
 					    nwkKey,
 					    ss_ib.trust_center_address);
+	tl_zbNwkEdMinimalPollRestart(zdo_af_get_syn_rate());
 	tlsr8258_zigbee_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
 				       g_zbMacPib.extAddress);
 }
