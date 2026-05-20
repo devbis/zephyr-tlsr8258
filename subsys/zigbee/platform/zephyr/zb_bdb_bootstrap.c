@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -17,8 +18,14 @@ extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
 #define ZB_SHELL_HA_DEVICE_ID  0x0000U
 #define ZB_SHELL_ENDPOINT      0x01U
+#define ZB_SHELL_CLUSTER_BASIC 0x0000U
+#define ZB_SHELL_CLUSTER_IDENTIFY 0x0003U
 
 static bool zb_bdb_bootstrap_ready;
+static const u16 zb_shell_in_clusters[] = {
+	ZB_SHELL_CLUSTER_BASIC,
+	ZB_SHELL_CLUSTER_IDENTIFY,
+};
 
 void __weak zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 {
@@ -68,80 +75,93 @@ static af_simple_descriptor_t zb_shell_simple_desc = {
 	.endpoint = ZB_SHELL_ENDPOINT,
 	.app_dev_ver = 1U,
 	.reserved = 0U,
-	.app_in_cluster_count = 0U,
+	.app_in_cluster_count = 2U,
 	.app_out_cluster_count = 0U,
-	.app_in_cluster_lst = NULL,
+	.app_in_cluster_lst = (u16 *)zb_shell_in_clusters,
 	.app_out_cluster_lst = NULL,
 };
 
+static struct zb_platform_bdb_fixed_target zb_bootstrap_target;
+static struct zb_platform_bdb_join_profile zb_bootstrap_profile;
+
+static void zb_platform_bdb_restore_joined_target(void)
+{
+	u8 *nwkKey = NULL;
+
+	if (!g_zbNwkCtx.joined ||
+	    g_zbMacPib.panId == MAC_INVALID_PANID ||
+	    g_zbMacPib.coordShortAddress == MAC_SHORT_ADDR_NONE) {
+		return;
+	}
+
+	if (ss_ib.activeSecureMaterialIndex < SECUR_N_SECUR_MATERIAL) {
+		nwkKey = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+	}
+
+	tl_zbNwkEdMinimalSetFixedJoinTarget(g_zbMacPib.phyChannelCur,
+					    g_zbMacPib.panId,
+					    g_zbMacPib.coordShortAddress,
+					    g_zbNIB.extPANId,
+					    nwkKey,
+					    ss_ib.trust_center_address);
+	tlsr8258_zigbee_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
+				       g_zbMacPib.extAddress);
+}
+
 static void zb_platform_bdb_apply_fixed_target(void)
 {
-	struct zb_platform_bdb_fixed_target target;
 	const u8 *tc_addr = NULL;
 
 	if (g_zbNwkCtx.joined) {
 		return;
 	}
 
-	memset(&target, 0, sizeof(target));
-	if (!zb_platform_app_get_fixed_join_target(&target)) {
+	memset(&zb_bootstrap_target, 0, sizeof(zb_bootstrap_target));
+	if (!zb_platform_app_get_fixed_join_target(&zb_bootstrap_target)) {
 		return;
 	}
 
-	if (target.channel < 11U || target.channel > 26U) {
-		LOG_WRN("zb bdb fixed target ignored: invalid channel %u", target.channel);
+	if (zb_bootstrap_target.channel < 11U || zb_bootstrap_target.channel > 26U) {
 		return;
 	}
 
-	if (target.tc_addr_valid) {
-		tc_addr = target.tc_addr;
+	if (zb_bootstrap_target.tc_addr_valid) {
+		tc_addr = zb_bootstrap_target.tc_addr;
 	}
 
-	tl_zbNwkEdMinimalSetFixedJoinTarget(target.channel,
-					    target.pan_id,
-					    target.short_addr,
-					    target.ext_pan_id,
-					    target.network_key,
+	tl_zbNwkEdMinimalSetFixedJoinTarget(zb_bootstrap_target.channel,
+					    zb_bootstrap_target.pan_id,
+					    zb_bootstrap_target.short_addr,
+					    zb_bootstrap_target.ext_pan_id,
+					    zb_bootstrap_target.network_key,
 					    tc_addr);
-	g_bdbAttrs.primaryChannelSet = ((u32)1U << target.channel);
+	g_bdbAttrs.primaryChannelSet = ((u32)1U << zb_bootstrap_target.channel);
 	g_bdbAttrs.secondaryChannelSet = 0U;
-
-	LOG_INF("zb bdb fixed target applied: ch=%u pan=0x%04x parent=0x%04x",
-		target.channel, target.pan_id, target.short_addr);
 }
 
 static void zb_platform_bdb_apply_join_profile(void)
 {
-	struct zb_platform_bdb_join_profile profile;
-
 	if (g_zbNwkCtx.joined) {
 		return;
 	}
 
-	memset(&profile, 0, sizeof(profile));
-	if (!zb_platform_app_get_join_profile(&profile)) {
+	memset(&zb_bootstrap_profile, 0, sizeof(zb_bootstrap_profile));
+	if (!zb_platform_app_get_join_profile(&zb_bootstrap_profile)) {
 		return;
 	}
 
-	if (profile.channel_mask != 0U) {
-		g_bdbAttrs.primaryChannelSet = profile.channel_mask;
+	if (zb_bootstrap_profile.channel_mask != 0U) {
+		g_bdbAttrs.primaryChannelSet = zb_bootstrap_profile.channel_mask;
 		g_bdbAttrs.secondaryChannelSet = 0U;
-		LOG_INF("zb bdb join profile applied: channels=0x%08x",
-			(unsigned int)profile.channel_mask);
 	}
 
-	if (profile.network_key_valid) {
-		zb_preConfigNwkKey(profile.network_key, FALSE);
-		LOG_INF("zb bdb join profile applied: preconfigured nwk key");
+	if (zb_bootstrap_profile.network_key_valid) {
+		zb_preConfigNwkKey(zb_bootstrap_profile.network_key, FALSE);
 	}
 
-	if (profile.tc_addr_valid) {
-		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, profile.tc_addr);
+	if (zb_bootstrap_profile.tc_addr_valid) {
 		ss_securityModeSet(SS_SEMODE_CENTRALIZED);
-		LOG_INF("zb bdb join profile applied: tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
-			profile.tc_addr[0], profile.tc_addr[1], profile.tc_addr[2],
-			profile.tc_addr[3], profile.tc_addr[4], profile.tc_addr[5],
-			profile.tc_addr[6], profile.tc_addr[7]);
+		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, zb_bootstrap_profile.tc_addr);
 	}
 }
 
@@ -155,36 +175,26 @@ int zb_platform_bdb_init_default(void)
 	u32 frameCounter = 0U;
 
 	if (zb_bdb_bootstrap_ready) {
+		zb_platform_bdb_restore_joined_target();
 		return 0;
 	}
 
-	(void)zb_platform_restore_persistent_state();
 	(void)zdo_ssInfoInit();
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
 
-	if (g_zbNwkCtx.joined &&
-	    g_zbMacPib.panId != MAC_INVALID_PANID &&
-	    g_zbMacPib.coordShortAddress != MAC_SHORT_ADDR_NONE) {
-		u8 *nwkKey = NULL;
-
-		if (ss_ib.activeSecureMaterialIndex < SECUR_N_SECUR_MATERIAL) {
-			nwkKey = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
-		}
-		tl_zbNwkEdMinimalSetFixedJoinTarget(g_zbMacPib.phyChannelCur,
-						    g_zbMacPib.panId,
-						    g_zbMacPib.coordShortAddress,
-						    g_zbNIB.extPANId,
-						    nwkKey,
-						    ss_ib.trust_center_address);
-	}
+	zb_platform_bdb_restore_joined_target();
 
 	tl_bdbAttrInit();
 	memset(&g_bdbCtx, 0, sizeof(g_bdbCtx));
 	g_bdbCtx.bdbAppCb = &zb_shell_bdb_cb;
 	g_bdbCtx.simpleDesc = &zb_shell_simple_desc;
 	g_bdbCtx.factoryNew = g_zbNwkCtx.is_factory_new ? 1U : 0U;
+	if (af_simpleDescGet(zb_shell_simple_desc.endpoint) == NULL &&
+	    !af_endpointRegister(zb_shell_simple_desc.endpoint, &zb_shell_simple_desc, NULL, NULL)) {
+		LOG_WRN("zb bdb init: endpoint %u register failed", zb_shell_simple_desc.endpoint);
+	}
 	zdo_zdpCbTblRegister(&zb_shell_zdo_cb);
 
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;

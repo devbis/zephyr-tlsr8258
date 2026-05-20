@@ -11,6 +11,8 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
+#include "zb_minimal_ccm.h"
+
 LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define NWK_ED_MINIMAL_SCAN_WINDOW_MIN_MS 3000U
@@ -131,7 +133,6 @@ static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs);
 extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
 extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
 extern u8 zb_zdoSendDevAnnance(void);
-extern u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 aStrLen, u8 *aStr, u8 mStrLen, u8 *mStr);
 
 static u16 nwk_ed_minimal_u16_from_le(const u8 *buf)
 {
@@ -183,6 +184,7 @@ static void nwk_ed_minimal_timer_start(u32 timeoutMs);
 static void nwk_ed_minimal_joined_idle_poll_restart(u32 timeoutMs);
 static void nwk_ed_minimal_post_join_announce_task(void *arg);
 static void nwk_ed_minimal_timeout_req_task(void *arg);
+static void nwk_ed_minimal_rx_event_task(void *arg);
 void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
 
 typedef struct {
@@ -306,8 +308,8 @@ static void nwk_ed_minimal_apply_tc_context(void)
 	}
 
 	if (centralized) {
-		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, tcAddr);
 		ss_securityModeSet(SS_SEMODE_CENTRALIZED);
+		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, tcAddr);
 		LOG_INF("join security: centralized tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 			tcAddr[0], tcAddr[1], tcAddr[2], tcAddr[3],
 			tcAddr[4], tcAddr[5], tcAddr[6], tcAddr[7]);
@@ -340,9 +342,15 @@ static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
 		return FALSE;
 	}
 
-	/* Superframe specification: association permit is bit 7 of second byte. */
+	/*
+	 * Vendor discovery path does not reject beacons solely because the
+	 * association-permit bit is clear. It only requires the upper
+	 * superframe/capability byte to carry non-zero network information and
+	 * lets the later association attempt determine if joining is currently
+	 * permitted.
+	 */
 	superframeSpec2 = psdu[idx + 1U];
-	if ((superframeSpec2 & BIT(7)) == 0U) {
+	if ((superframeSpec2 & 0x7FU) == 0U) {
 		return FALSE;
 	}
 
@@ -477,7 +485,9 @@ static bool nwk_ed_minimal_send_timeout_request(void)
 	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
 	COPY_U32TOBUFFER(&nonce[8], frameCounter);
 	nonce[12] = NWK_ED_MINIMAL_NWK_SEC_CTRL;
-	enc_len = ss_ccmEncryption(key, nonce, nwkHdrLen, &frame[idx - nwkHdrLen], 3U, payload);
+	enc_len = zb_minimal_ccm_encrypt_auth(key, nonce, NWK_ED_MINIMAL_NWK_MIC_LEN,
+					      &frame[idx - nwkHdrLen], nwkHdrLen, payload, 3U,
+					      &payload[3]);
 	if (enc_len != (u8)(3U + NWK_ED_MINIMAL_NWK_MIC_LEN)) {
 		LOG_WRN("joined TX: timeout req encrypt failed len=%u", enc_len);
 		return FALSE;
@@ -778,6 +788,13 @@ static bool nwk_ed_minimal_start_scan_channel(void)
 static void nwk_ed_minimal_timer_task(void *arg)
 {
 	ARG_UNUSED(arg);
+
+	/* Drain already queued RX events before making timeout/next-state decisions.
+	 * Otherwise a beacon or association response that arrived just before the
+	 * timer fires can be ignored until after we already conclude discovery/join
+	 * has failed.
+	 */
+	nwk_ed_minimal_rx_event_task(NULL);
 
 	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY) {
 		if (g_nwkEdCtx.discoveryForRejoin) {
@@ -1224,6 +1241,16 @@ void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 	} else {
 		ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.fixedJoinTcAddr);
 	}
+
+	if (g_zbNwkCtx.joined && panId != MAC_INVALID_PANID &&
+	    shortAddr != MAC_SHORT_ADDR_NONE) {
+		g_nwkEdCtx.activeChannel = channel;
+		g_nwkEdCtx.activePanId = panId;
+		g_nwkEdCtx.activeParentShortAddr = shortAddr;
+		if (extPanId != NULL) {
+			ZB_EXTPANID_COPY(g_nwkEdCtx.activeExtPanId, extPanId);
+		}
+	}
 }
 
 bool tl_zbNwkEdMinimalGetFixedJoinTarget(u8 *channel, u16 *panId, u16 *shortAddr,
@@ -1382,6 +1409,7 @@ static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t 
 		if (evt->assocRsp.srcExtValid) {
 			tl_zbNwkEdMinimalParentCandidateSet(g_nwkEdCtx.activeParentShortAddr,
 							      evt->assocRsp.srcExtAddr);
+			ZB_IEEE_ADDR_COPY(g_zbMacPib.coordExtAddress, evt->assocRsp.srcExtAddr);
 		}
 		nwk_ed_minimal_apply_tc_context();
 

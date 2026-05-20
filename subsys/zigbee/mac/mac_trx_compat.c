@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <errno.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 #include "tl_platform.h"
 
@@ -16,6 +19,7 @@
 #include "mac/includes/mac_trx_api.h"
 #include "mac/includes/tl_zb_mac.h"
 #include "mac/includes/mac_phy.h"
+#include "zb_minimal_ccm.h"
 
 LOG_MODULE_REGISTER(zigbee_mac_trx_compat, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -45,6 +49,15 @@ __attribute__((weak)) void tl_zbNwkEdMinimalTimeoutRspReceived(u8 status, u8 par
 {
 	ARG_UNUSED(status);
 	ARG_UNUSED(parentInfo);
+}
+
+__attribute__((weak)) void tl_zbMinimalZdoResponseIndication(u16 src_addr, u16 cluster_id,
+							     const u8 *payload, u8 payload_len)
+{
+	ARG_UNUSED(src_addr);
+	ARG_UNUSED(cluster_id);
+	ARG_UNUSED(payload);
+	ARG_UNUSED(payload_len);
 }
 
 __attribute__((weak)) u8 sys_exceptionPost(u16 line, u8 evt)
@@ -202,10 +215,36 @@ typedef struct {
 	addrExt_t security_src_ext;
 } zb_minimal_aps_frame_t;
 
+typedef struct {
+	bool pending;
+	u16 dst_nwk_addr;
+	u16 cluster_id;
+	u16 payload_len;
+	u8 payload[64];
+} zb_minimal_pending_zdo_rsp_t;
+
+typedef struct {
+	bool pending;
+	u16 dst_nwk_addr;
+	u16 profile_id;
+	u16 cluster_id;
+	u16 payload_len;
+	u8 src_ep;
+	u8 dst_ep;
+	u8 payload[64];
+} zb_minimal_pending_zcl_rsp_t;
+
 #define ZB_MINIMAL_NWK_AUX_HDR_LEN 14U
 #define ZB_MINIMAL_NWK_MIC_LEN     4U
 #define ZB_MINIMAL_APS_MIC_LEN     4U
 #define ZB_MINIMAL_CCM_L_VAL       2U
+#define ZB_MINIMAL_TX_RETRIES      4U
+#define ZB_MINIMAL_TX_RETRY_US     5000U
+#define ZB_MINIMAL_NWK_SEC_CTRL    0x2DU
+#define ZB_MINIMAL_NWK_SEC_CTRL_WIRE 0x28U
+
+static zb_minimal_pending_zdo_rsp_t g_minimal_pending_zdo_rsp;
+static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
 
 static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
 {
@@ -220,6 +259,170 @@ static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
 	}
 
 	return NULL;
+}
+
+static u8 *zb_minimal_active_nwk_key_get(void)
+{
+	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL) {
+		return NULL;
+	}
+
+	return ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+}
+
+static size_t zb_minimal_build_mac_header(u8 *buf, u16 mac_dst)
+{
+	u16 fcf = 0U;
+	size_t idx = 0U;
+
+	fcf |= MAC_FRAME_DATA;
+	fcf |= MAC_FCF_ACK_REQ_BIT;
+	fcf |= MAC_FCF_INTRA_PAN_MASK;
+	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_DST_ADDR_MODE_POS;
+	fcf |= (u16)ZB_ADDR_16BIT_DEV_OR_BROADCAST << MAC_FCF_SRC_ADDR_MODE_POS;
+
+	COPY_U16TOBUFFER(&buf[idx], fcf);
+	idx += MAC_FCF_FIELD_LEN;
+	buf[idx++] = ZB_MAC_DSN();
+	ZB_INC_MAC_DSN();
+	COPY_U16TOBUFFER(&buf[idx], g_zbNIB.panId);
+	idx += MAC_PAN_ID_FIELD_LEN;
+	COPY_U16TOBUFFER(&buf[idx], mac_dst);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+	COPY_U16TOBUFFER(&buf[idx], g_zbNIB.nwkAddr);
+	idx += MAC_SHORT_ADDR_FIELD_LEN;
+
+	return idx;
+}
+
+static size_t zb_minimal_build_nwk_header(u8 *buf, u16 nwk_dst, u8 radius, bool security,
+					  u32 *frame_counter_out)
+{
+	u16 fc = 0U;
+	size_t idx = 0U;
+
+	fc |= (u16)FRAME_TYPE_DATA;
+	fc |= (u16)(0x02U << 2);
+	if (security) {
+		fc |= BIT(9);
+	}
+
+	COPY_U16TOBUFFER(&buf[idx], fc);
+	idx += 2U;
+	COPY_U16TOBUFFER(&buf[idx], nwk_dst);
+	idx += 2U;
+	COPY_U16TOBUFFER(&buf[idx], g_zbNIB.nwkAddr);
+	idx += 2U;
+	buf[idx++] = (radius != 0U) ? radius : 30U;
+	buf[idx++] = g_zbNIB.seqNum++;
+
+	if (security) {
+		u32 frame_counter = ss_ib.outgoingFrameCounter++;
+
+		buf[idx++] = ZB_MINIMAL_NWK_SEC_CTRL;
+		COPY_U32TOBUFFER(&buf[idx], frame_counter);
+		idx += 4U;
+		memcpy(&buf[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
+		idx += sizeof(addrExt_t);
+		buf[idx++] = ss_ib.activeKeySeqNum;
+
+		if (frame_counter_out != NULL) {
+			*frame_counter_out = frame_counter;
+		}
+	} else if (frame_counter_out != NULL) {
+		*frame_counter_out = 0U;
+	}
+
+	return idx;
+}
+
+static size_t zb_minimal_build_aps_ack_header(u8 *buf, const zb_minimal_aps_frame_t *aps)
+{
+	u8 fc = 0x02U;
+	size_t idx = 0U;
+
+	if (aps->frame_type == 1U) {
+		fc |= BIT(4);
+	}
+
+	buf[idx++] = fc;
+	if (aps->frame_type != 1U) {
+		buf[idx++] = aps->src_ep;
+		COPY_U16TOBUFFER(&buf[idx], aps->cluster_id);
+		idx += 2U;
+		COPY_U16TOBUFFER(&buf[idx], aps->profile_id);
+		idx += 2U;
+		buf[idx++] = aps->dst_ep;
+	}
+	buf[idx++] = aps->aps_counter;
+
+	return idx;
+}
+
+static int zb_minimal_send_aps_ack(const zb_minimal_nwk_frame_t *nwk, const zb_minimal_aps_frame_t *aps)
+{
+	u8 frame[127];
+	u8 nonce[13];
+	u8 *nwk_key;
+	size_t idx = 0U;
+	size_t nwk_hdr_len;
+	size_t aps_hdr_len;
+	size_t aps_hdr_idx;
+	u32 nwk_frame_counter = 0U;
+	u8 enc_len;
+	u8 attempt;
+	int rc = -EINVAL;
+
+	if ((nwk == NULL) || (aps == NULL)) {
+		return -EINVAL;
+	}
+	if (aps->delivery_mode != 0U || ZB_NWK_IS_ADDRESS_BROADCAST(nwk->src_addr)) {
+		return -ENOTSUP;
+	}
+	if (ss_ib.securityLevel == 0U) {
+		return -EACCES;
+	}
+
+	nwk_key = zb_minimal_active_nwk_key_get();
+	if (nwk_key == NULL) {
+		return -EACCES;
+	}
+
+	idx += zb_minimal_build_mac_header(&frame[idx], nwk->src_addr);
+	nwk_hdr_len = zb_minimal_build_nwk_header(&frame[idx], nwk->src_addr, 30U, true,
+						      &nwk_frame_counter);
+	idx += nwk_hdr_len;
+	aps_hdr_idx = idx;
+	aps_hdr_len = zb_minimal_build_aps_ack_header(&frame[idx], aps);
+	idx += aps_hdr_len;
+
+	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+	COPY_U32TOBUFFER(&nonce[8], nwk_frame_counter);
+	nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
+	enc_len = zb_minimal_ccm_encrypt_auth(nwk_key, nonce, ZB_MINIMAL_NWK_MIC_LEN,
+						      &frame[aps_hdr_idx - nwk_hdr_len],
+						      (u8)nwk_hdr_len, &frame[aps_hdr_idx],
+						      (u8)aps_hdr_len, &frame[aps_hdr_idx + aps_hdr_len]);
+	if (enc_len != (u8)(aps_hdr_len + ZB_MINIMAL_NWK_MIC_LEN)) {
+		return -EBADMSG;
+	}
+
+	frame[aps_hdr_idx - nwk_hdr_len + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
+	idx = aps_hdr_idx + enc_len;
+	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+
+	for (attempt = 0U; attempt < ZB_MINIMAL_TX_RETRIES; attempt++) {
+		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
+		if (rc >= 0) {
+			return 0;
+		}
+		if (rc != -EBUSY) {
+			break;
+		}
+		k_busy_wait(ZB_MINIMAL_TX_RETRY_US);
+	}
+
+	return rc;
 }
 
 static void zb_minimal_aes_encrypt_block(const u8 *key, const u8 *in, u8 *out)
@@ -295,8 +498,9 @@ static void zb_minimal_ccm_add_msg(const u8 *key, u8 state[16], const u8 *msg, u
 	}
 }
 
-static bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, u8 *cipher,
-					u8 cipher_len, const u8 *aad, u8 aad_len, u8 *mic)
+static bool zb_minimal_ccm_decrypt_frame_auth(const u8 *key, const u8 nonce[13], u8 mic_len,
+					      u8 *cipher, u8 cipher_len, const u8 *aad,
+					      u8 aad_len, u8 *mic)
 {
 	u8 mac_state[16] = {0};
 	u8 b0[16] = {0};
@@ -451,10 +655,7 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	zb_minimal_mac_addr_info_t info;
 	bool dst_match = false;
 	bool src_match = false;
-
-	if (g_zbNwkCtx.joined) {
-		return true;
-	}
+	bool allow_broadcast = !g_zbNwkCtx.joined;
 
 	if (!zb_minimal_parse_mac_addr_info(psdu, len, &info)) {
 		return false;
@@ -462,7 +663,7 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 
 	if (info.dst_short_valid) {
 		dst_match = (info.dst_short_addr == g_zbMacPib.shortAddress) ||
-			    (info.dst_short_addr == MAC_SHORT_ADDR_BROADCAST);
+			    (allow_broadcast && info.dst_short_addr == MAC_SHORT_ADDR_BROADCAST);
 	} else if (info.dst_ext_valid) {
 		dst_match = memcmp(info.dst_ext_addr, g_zbMacPib.extAddress, sizeof(addrExt_t)) == 0;
 	}
@@ -597,8 +798,8 @@ static bool zb_minimal_decrypt_nwk_payload(u8 *nwk_psdu, u8 nwk_len, zb_minimal_
 	cipher_len = (u8)(frame->payload_len - frame->mic_len);
 	mic = &cipher[cipher_len];
 
-	if (!zb_minimal_ccm_decrypt_auth(key, nonce, frame->mic_len, cipher, cipher_len, aad,
-					 frame->header_len, mic)) {
+	if (!zb_minimal_ccm_decrypt_frame_auth(key, nonce, frame->mic_len, cipher, cipher_len, aad,
+					       frame->header_len, mic)) {
 		LOG_DBG("joined RX: nwk auth failed src=0x%04x key_seq=%u", frame->src_addr,
 			frame->key_seq);
 		return false;
@@ -775,8 +976,9 @@ static bool zb_minimal_decrypt_aps_payload(u8 *aps_psdu, u8 aps_len, zb_minimal_
 	}
 
 	memcpy(cipher_shadow, cipher, cipher_len);
-	auth_ok = zb_minimal_ccm_decrypt_auth(key, nonce, frame->mic_len, cipher_shadow, cipher_len,
-						 aad, (u8)(frame->payload - aps_psdu), mic);
+	auth_ok = zb_minimal_ccm_decrypt_frame_auth(key, nonce, frame->mic_len, cipher_shadow,
+						    cipher_len, aad,
+						    (u8)(frame->payload - aps_psdu), mic);
 	if (auth_ok && transport_key_sec) {
 	}
 	if (!auth_ok && transport_key_sec && key != NULL &&
@@ -785,9 +987,9 @@ static bool zb_minimal_decrypt_aps_payload(u8 *aps_psdu, u8 aps_len, zb_minimal_
 
 		(void)ss_keyHash(&hash_input, key, hashed_key);
 		memcpy(cipher_shadow, cipher, cipher_len);
-		auth_ok = zb_minimal_ccm_decrypt_auth(hashed_key, nonce, frame->mic_len,
-						      cipher_shadow, cipher_len, aad,
-						      (u8)(frame->payload - aps_psdu), mic);
+		auth_ok = zb_minimal_ccm_decrypt_frame_auth(hashed_key, nonce, frame->mic_len,
+							    cipher_shadow, cipher_len, aad,
+							    (u8)(frame->payload - aps_psdu), mic);
 		if (auth_ok) {
 			LOG_INF("joined RX: APS decrypt used hashed TC link key");
 		}
@@ -815,10 +1017,225 @@ static u8 zb_minimal_send_zdo_response(u16 dst_nwk_addr, u16 cluster_id, const u
 	dst.profileId = ZDO_PROFILE_ID;
 	dst.dstEp = ZDO_EP;
 	dst.radius = 30U;
-	dst.txOptions = 0U;
+	dst.txOptions = APS_TX_OPT_ACK_TX;
 	dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
 	dst.dstAddr.shortAddr = dst_nwk_addr;
 	return af_dataSend(ZDO_EP, &dst, cluster_id, payload_len, (u8 *)payload, &aps_cnt);
+}
+
+static void zb_minimal_zdo_response_task(void *arg)
+{
+	zb_minimal_pending_zdo_rsp_t rsp;
+
+	ARG_UNUSED(arg);
+
+	if (!g_minimal_pending_zdo_rsp.pending) {
+		return;
+	}
+
+	memcpy(&rsp, &g_minimal_pending_zdo_rsp, sizeof(rsp));
+	memset(&g_minimal_pending_zdo_rsp, 0, sizeof(g_minimal_pending_zdo_rsp));
+	if (zb_minimal_send_zdo_response(rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload,
+					 rsp.payload_len) == APS_STATUS_SUCCESS) {
+		LOG_INF("minimal ZDO rsp sent dst=0x%04x cluster=0x%04x len=%u",
+			rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
+	} else {
+		LOG_WRN("minimal ZDO rsp failed dst=0x%04x cluster=0x%04x len=%u",
+			rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
+	}
+}
+
+static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
+						 const u8 *payload, u16 payload_len)
+{
+	if (payload == NULL || payload_len > sizeof(g_minimal_pending_zdo_rsp.payload)) {
+		return false;
+	}
+
+	g_minimal_pending_zdo_rsp.pending = true;
+	g_minimal_pending_zdo_rsp.dst_nwk_addr = dst_nwk_addr;
+	g_minimal_pending_zdo_rsp.cluster_id = cluster_id;
+	g_minimal_pending_zdo_rsp.payload_len = payload_len;
+	memcpy(g_minimal_pending_zdo_rsp.payload, payload, payload_len);
+
+	if (TL_SCHEDULE_TASK(zb_minimal_zdo_response_task, NULL) != RET_OK) {
+		memset(&g_minimal_pending_zdo_rsp, 0, sizeof(g_minimal_pending_zdo_rsp));
+		return false;
+	}
+
+	return true;
+}
+
+#define ZB_MINIMAL_HA_PROFILE_ID              0x0104U
+#define ZB_MINIMAL_ZCL_BASIC_CLUSTER_ID       0x0000U
+#define ZB_MINIMAL_ZCL_FRAME_GLOBAL_RSP       0x18U
+#define ZB_MINIMAL_ZCL_CMD_READ               0x00U
+#define ZB_MINIMAL_ZCL_CMD_READ_RSP           0x01U
+#define ZB_MINIMAL_ZCL_STATUS_SUCCESS         0x00U
+#define ZB_MINIMAL_ZCL_STATUS_UNSUPPORTED_ATTR 0x86U
+#define ZB_MINIMAL_ZCL_TYPE_UINT8             0x20U
+#define ZB_MINIMAL_ZCL_TYPE_ENUM8             0x30U
+#define ZB_MINIMAL_ZCL_TYPE_CHAR_STR          0x42U
+#define ZB_MINIMAL_ZCL_BASIC_ZCL_VERSION      0x0000U
+#define ZB_MINIMAL_ZCL_BASIC_APP_VERSION      0x0001U
+#define ZB_MINIMAL_ZCL_BASIC_STACK_VERSION    0x0002U
+#define ZB_MINIMAL_ZCL_BASIC_HW_VERSION       0x0003U
+#define ZB_MINIMAL_ZCL_BASIC_MFR_NAME         0x0004U
+#define ZB_MINIMAL_ZCL_BASIC_MODEL_ID         0x0005U
+#define ZB_MINIMAL_ZCL_BASIC_POWER_SOURCE     0x0007U
+
+static u16 zb_minimal_zcl_put_basic_attr(u8 *buf, u16 pos, u16 max_len, u16 attr_id)
+{
+	static const char manufacturer[] = "Telink";
+	static const char model[] = "tlsr8258-minimal";
+	const char *str = NULL;
+	u8 type = 0U;
+	u8 value = 0U;
+
+	if ((buf == NULL) || (pos + 3U > max_len)) {
+		return pos;
+	}
+
+	COPY_U16TOBUFFER(&buf[pos], attr_id);
+	pos += 2U;
+
+	switch (attr_id) {
+	case ZB_MINIMAL_ZCL_BASIC_ZCL_VERSION:
+		type = ZB_MINIMAL_ZCL_TYPE_UINT8;
+		value = 3U;
+		break;
+	case ZB_MINIMAL_ZCL_BASIC_APP_VERSION:
+	case ZB_MINIMAL_ZCL_BASIC_STACK_VERSION:
+	case ZB_MINIMAL_ZCL_BASIC_HW_VERSION:
+		type = ZB_MINIMAL_ZCL_TYPE_UINT8;
+		value = 1U;
+		break;
+	case ZB_MINIMAL_ZCL_BASIC_POWER_SOURCE:
+		type = ZB_MINIMAL_ZCL_TYPE_ENUM8;
+		value = 3U;
+		break;
+	case ZB_MINIMAL_ZCL_BASIC_MFR_NAME:
+		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
+		str = manufacturer;
+		break;
+	case ZB_MINIMAL_ZCL_BASIC_MODEL_ID:
+		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
+		str = model;
+		break;
+	default:
+		buf[pos++] = ZB_MINIMAL_ZCL_STATUS_UNSUPPORTED_ATTR;
+		return pos;
+	}
+
+	buf[pos++] = ZB_MINIMAL_ZCL_STATUS_SUCCESS;
+	buf[pos++] = type;
+	if (str != NULL) {
+		u8 len = (u8)strlen(str);
+
+		if (pos + 1U + len > max_len) {
+			return pos;
+		}
+		buf[pos++] = len;
+		memcpy(&buf[pos], str, len);
+		pos += len;
+	} else {
+		if (pos + 1U > max_len) {
+			return pos;
+		}
+		buf[pos++] = value;
+	}
+
+	return pos;
+}
+
+static u8 zb_minimal_send_zcl_response(const zb_minimal_pending_zcl_rsp_t *rsp)
+{
+	epInfo_t dst;
+	u8 aps_cnt = 0U;
+
+	if (rsp == NULL) {
+		return APS_STATUS_INVALID_PARAMETER;
+	}
+
+	TL_SETSTRUCTCONTENT(dst, 0);
+	dst.profileId = rsp->profile_id;
+	dst.dstEp = rsp->dst_ep;
+	dst.radius = 30U;
+	dst.txOptions = APS_TX_OPT_ACK_TX;
+	dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+	dst.dstAddr.shortAddr = rsp->dst_nwk_addr;
+	return af_dataSend(rsp->src_ep, &dst, rsp->cluster_id, rsp->payload_len,
+			   (u8 *)rsp->payload, &aps_cnt);
+}
+
+static void zb_minimal_zcl_response_task(void *arg)
+{
+	zb_minimal_pending_zcl_rsp_t rsp;
+
+	ARG_UNUSED(arg);
+
+	if (!g_minimal_pending_zcl_rsp.pending) {
+		return;
+	}
+
+	memcpy(&rsp, &g_minimal_pending_zcl_rsp, sizeof(rsp));
+	memset(&g_minimal_pending_zcl_rsp, 0, sizeof(g_minimal_pending_zcl_rsp));
+	(void)zb_minimal_send_zcl_response(&rsp);
+}
+
+static bool zb_minimal_queue_zcl_response(u16 dst_nwk_addr, const zb_minimal_aps_frame_t *aps,
+					  const u8 *payload, u16 payload_len)
+{
+	if ((aps == NULL) || (payload == NULL) ||
+	    payload_len > sizeof(g_minimal_pending_zcl_rsp.payload)) {
+		return false;
+	}
+
+	g_minimal_pending_zcl_rsp.pending = true;
+	g_minimal_pending_zcl_rsp.dst_nwk_addr = dst_nwk_addr;
+	g_minimal_pending_zcl_rsp.profile_id = aps->profile_id;
+	g_minimal_pending_zcl_rsp.cluster_id = aps->cluster_id;
+	g_minimal_pending_zcl_rsp.src_ep = aps->dst_ep;
+	g_minimal_pending_zcl_rsp.dst_ep = aps->src_ep;
+	g_minimal_pending_zcl_rsp.payload_len = payload_len;
+	memcpy(g_minimal_pending_zcl_rsp.payload, payload, payload_len);
+
+	if (TL_SCHEDULE_TASK(zb_minimal_zcl_response_task, NULL) != RET_OK) {
+		memset(&g_minimal_pending_zcl_rsp, 0, sizeof(g_minimal_pending_zcl_rsp));
+		return false;
+	}
+
+	return true;
+}
+
+static bool zb_minimal_handle_zcl_basic_read(u16 src_nwk_addr, const zb_minimal_aps_frame_t *aps)
+{
+	u8 payload[64];
+	u16 pos = 0U;
+	u16 in_pos;
+
+	if ((aps == NULL) || (aps->profile_id != ZB_MINIMAL_HA_PROFILE_ID) ||
+	    (aps->cluster_id != ZB_MINIMAL_ZCL_BASIC_CLUSTER_ID) ||
+	    (aps->dst_ep == ZDO_EP) || (aps->payload_len < 3U)) {
+		return false;
+	}
+	if ((aps->payload[0] & 0x07U) != 0U || aps->payload[2] != ZB_MINIMAL_ZCL_CMD_READ) {
+		return false;
+	}
+
+	payload[pos++] = ZB_MINIMAL_ZCL_FRAME_GLOBAL_RSP;
+	payload[pos++] = aps->payload[1];
+	payload[pos++] = ZB_MINIMAL_ZCL_CMD_READ_RSP;
+
+	in_pos = 3U;
+	while ((in_pos + 1U < aps->payload_len) && (pos + 3U < sizeof(payload))) {
+		u16 attr_id = zb_u16_from_le(&aps->payload[in_pos]);
+
+		in_pos += 2U;
+		pos = zb_minimal_zcl_put_basic_attr(payload, pos, sizeof(payload), attr_id);
+	}
+
+	return zb_minimal_queue_zcl_response(src_nwk_addr, aps, payload, pos);
 }
 
 static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps_frame_t *aps)
@@ -836,34 +1253,44 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 
 	switch (aps->cluster_id) {
 	case NODE_DESC_REQ_CLID: {
-		zdo_node_descript_resp_t rsp;
+		u16 rsp_len = 4U;
 
+		memset(payload, 0, sizeof(payload));
+		payload[0] = seq;
 		if (nwk_addr_interest != g_zbNIB.nwkAddr) {
-			return false;
+			payload[1] = (af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) ?
+					    ZDO_INVALID_REQUEST :
+					    ZDO_DEVICE_NOT_FOUND;
+			COPY_U16TOBUFFER(&payload[2], nwk_addr_interest);
+		} else {
+			payload[1] = ZDO_SUCCESS;
+			COPY_U16TOBUFFER(&payload[2], g_zbNIB.nwkAddr);
+			af_nodeDescriptorCopy((node_descriptor_t *)&payload[rsp_len]);
+			rsp_len += sizeof(node_descriptor_t);
 		}
 
-		memset(&rsp, 0, sizeof(rsp));
-		rsp.seq_num = seq;
-		rsp.status = ZDO_SUCCESS;
-		rsp.nwk_addr_interest = g_zbNIB.nwkAddr;
-		af_nodeDescriptorCopy(&rsp.node_descriptor);
-		return zb_minimal_send_zdo_response(src_nwk_addr, NODE_DESC_RSP_CLID,
-						      (const u8 *)&rsp, sizeof(rsp)) == APS_STATUS_SUCCESS;
+		return zb_minimal_queue_zdo_response(src_nwk_addr, NODE_DESC_RSP_CLID, payload,
+						       rsp_len);
 	}
 	case POWER_DESC_REQ_CLID: {
-		zdo_power_descriptor_resp_t rsp;
+		u16 rsp_len = 4U;
 
+		memset(payload, 0, sizeof(payload));
+		payload[0] = seq;
 		if (nwk_addr_interest != g_zbNIB.nwkAddr) {
-			return false;
+			payload[1] = (af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) ?
+					    ZDO_INVALID_REQUEST :
+					    ZDO_DEVICE_NOT_FOUND;
+			COPY_U16TOBUFFER(&payload[2], nwk_addr_interest);
+		} else {
+			payload[1] = ZDO_SUCCESS;
+			COPY_U16TOBUFFER(&payload[2], g_zbNIB.nwkAddr);
+			af_powerDescriptorCopy((power_descriptor_t *)&payload[rsp_len]);
+			rsp_len += sizeof(power_descriptor_t);
 		}
 
-		memset(&rsp, 0, sizeof(rsp));
-		rsp.seq_num = seq;
-		rsp.status = ZDO_SUCCESS;
-		rsp.nwk_addr_interest = g_zbNIB.nwkAddr;
-		af_powerDescriptorCopy(&rsp.power_descriptor);
-		return zb_minimal_send_zdo_response(src_nwk_addr, POWER_DESC_RSP_CLID,
-						      (const u8 *)&rsp, sizeof(rsp)) == APS_STATUS_SUCCESS;
+		return zb_minimal_queue_zdo_response(src_nwk_addr, POWER_DESC_RSP_CLID, payload,
+						       rsp_len);
 	}
 	case ACTIVE_EP_REQ_CLID: {
 		af_endpoint_descriptor_t *ep_desc;
@@ -885,9 +1312,8 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 		for (i = 0U; i < ep_count && i < MAX_REQUESTED_CLUSTER_NUMBER; i++) {
 			payload[5U + i] = ep_desc[i].ep;
 		}
-		return zb_minimal_send_zdo_response(src_nwk_addr, ACTIVE_EP_RSP_CLID, payload,
-						      (u16)(5U + MIN(ep_count, MAX_REQUESTED_CLUSTER_NUMBER))) ==
-		       APS_STATUS_SUCCESS;
+		return zb_minimal_queue_zdo_response(src_nwk_addr, ACTIVE_EP_RSP_CLID, payload,
+						       (u16)(5U + MIN(ep_count, MAX_REQUESTED_CLUSTER_NUMBER)));
 	}
 	case SIMPLE_DESC_REQ_CLID: {
 		af_simple_descriptor_t *sd;
@@ -906,14 +1332,14 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 		if (sd == NULL) {
 			payload[1] = ZDO_INVALID_EP;
 			payload[4] = 0U;
-			return zb_minimal_send_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID,
-							      payload, 5U) == APS_STATUS_SUCCESS;
+			return zb_minimal_queue_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID,
+							       payload, 5U);
 		}
 
 		simple_len = af_simpleDescriptorCopy(&payload[5], sd);
 		payload[4] = simple_len;
-		return zb_minimal_send_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID, payload,
-						      (u16)(5U + simple_len)) == APS_STATUS_SUCCESS;
+		return zb_minimal_queue_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID, payload,
+						       (u16)(5U + simple_len));
 	}
 	default:
 		return false;
@@ -1025,13 +1451,25 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 		}
 	}
 
+	if (aps.ack_req) {
+		(void)zb_minimal_send_aps_ack(&nwk, &aps);
+	}
+
 	if (zb_minimal_handle_transport_key(&aps)) {
+		return;
+	}
+
+	if (aps.profile_id == ZDO_PROFILE_ID && (aps.cluster_id & 0x8000U) != 0U) {
+		tl_zbMinimalZdoResponseIndication(nwk.src_addr, aps.cluster_id, aps.payload,
+						  aps.payload_len);
 		return;
 	}
 
 	if (zb_minimal_handle_zdo_request(nwk.src_addr, &aps)) {
 		LOG_INF("minimal ZDO rsp sent src=0x%04x cluster=0x%04x", nwk.src_addr,
 			aps.cluster_id);
+	} else if (aps.profile_id == ZDO_PROFILE_ID) {
+	} else if (zb_minimal_handle_zcl_basic_read(nwk.src_addr, &aps)) {
 	}
 }
 
