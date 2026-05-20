@@ -13,6 +13,7 @@
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
+#include "zb_minimal_ccm.h"
 
 LOG_MODULE_REGISTER(zigbee_zdo_tx_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -28,10 +29,21 @@ LOG_MODULE_REGISTER(zigbee_zdo_tx_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZB_MINIMAL_NWK_AUX_HDR_LEN         14U
 
 extern bool tl_zbNwkEdMinimalParentCandidateGet(u16 *parentShortAddr, addrExt_t parentIeeeAddr);
-extern u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 aStrLen, u8 *aStr, u8 mStrLen, u8 *mStr);
 
 static u8 g_minimal_aps_counter;
 static u8 g_minimal_zdp_seq;
+
+#define ZB_MINIMAL_ZDP_CB_MAX 4U
+
+typedef struct {
+	zdo_callback cb;
+	u16 seq;
+	u8 used;
+	u8 active;
+} zb_minimal_zdp_cb_info_t;
+
+static zb_minimal_zdp_cb_info_t g_minimal_zdp_cbs[ZB_MINIMAL_ZDP_CB_MAX];
+static u8 g_minimal_zdp_cb_wptr;
 
 static u8 zb_minimal_next_aps_counter(void)
 {
@@ -47,6 +59,70 @@ static u8 zb_minimal_next_zdp_seq(void)
 	return g_minimal_zdp_seq++;
 }
 
+static zb_minimal_zdp_cb_info_t *zb_minimal_zdp_cb_find(u16 seq)
+{
+	for (u8 i = 0U; i < ARRAY_SIZE(g_minimal_zdp_cbs); i++) {
+		zb_minimal_zdp_cb_info_t *entry = &g_minimal_zdp_cbs[i];
+
+		if (entry->active && entry->seq == seq) {
+			return entry;
+		}
+	}
+
+	return NULL;
+}
+
+static void zb_minimal_zdp_cb_store(u16 seq, zdo_callback cb)
+{
+	zb_minimal_zdp_cb_info_t *entry;
+
+	if (cb == NULL) {
+		return;
+	}
+
+	entry = &g_minimal_zdp_cbs[g_minimal_zdp_cb_wptr++ & (ZB_MINIMAL_ZDP_CB_MAX - 1U)];
+	entry->cb = cb;
+	entry->seq = seq;
+	entry->used = 1U;
+	entry->active = 1U;
+}
+
+void tl_zbMinimalZdoResponseIndication(u16 src_addr, u16 cluster_id, const u8 *payload, u8 payload_len)
+{
+	zb_minimal_zdp_cb_info_t *entry;
+	zdo_zdpDataInd_t *ind;
+	u8 *zpdu;
+
+	if (payload == NULL || payload_len < 2U || (cluster_id & 0x8000U) == 0U) {
+		return;
+	}
+
+	entry = zb_minimal_zdp_cb_find(payload[0]);
+	if (entry == NULL || entry->cb == NULL) {
+		return;
+	}
+
+	ind = (zdo_zdpDataInd_t *)ev_buf_allocate(sizeof(*ind) + payload_len);
+	if (ind == NULL) {
+		entry->active = 0U;
+		return;
+	}
+
+	zpdu = (u8 *)(ind + 1);
+	memcpy(zpdu, payload, payload_len);
+	memset(ind, 0, sizeof(*ind));
+	ind->zpdu = zpdu;
+	ind->src_addr = src_addr;
+	ind->clusterId = cluster_id;
+	ind->seq_num = payload[0];
+	ind->status = payload[1];
+	ind->length = payload_len;
+
+	entry->active = 0U;
+	entry->cb(ind);
+	ev_buf_free((u8 *)ind);
+}
+
 static u16 zb_minimal_parent_short_addr_get(void)
 {
 	u16 parentShortAddr = MAC_SHORT_ADDR_NONE;
@@ -58,7 +134,8 @@ static u16 zb_minimal_parent_short_addr_get(void)
 	return MAC_SHORT_ADDR_NONE;
 }
 
-static size_t zb_minimal_build_aps_header(u8 *buf, const epInfo_t *dst, u16 clusterId, u8 apsCnt)
+static size_t zb_minimal_build_aps_header(u8 *buf, u8 srcEp, const epInfo_t *dst, u16 clusterId,
+					  u8 apsCnt)
 {
 	u8 fc = 0U;
 	size_t idx = 0U;
@@ -76,7 +153,7 @@ static size_t zb_minimal_build_aps_header(u8 *buf, const epInfo_t *dst, u16 clus
 	idx += 2U;
 	COPY_U16TOBUFFER(&buf[idx], dst->profileId);
 	idx += 2U;
-	buf[idx++] = ZDO_EP;
+	buf[idx++] = srcEp;
 	buf[idx++] = apsCnt;
 
 	return idx;
@@ -284,8 +361,9 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
 	COPY_U32TOBUFFER(&nonce[8], frameCounter);
 	nonce[12] = ZB_MINIMAL_APS_SEC_CTRL;
-	enc_len = ss_ccmEncryption((u8 *)linkKey, nonce, sizeof(aad), aad, payload_len,
-				 sec_payload);
+	enc_len = zb_minimal_ccm_encrypt_auth(linkKey, nonce, ZB_MINIMAL_APS_MIC_LEN, aad,
+					     sizeof(aad), sec_payload, payload_len,
+					     &sec_payload[payload_len]);
 	if (enc_len != (u8)(payload_len + ZB_MINIMAL_APS_MIC_LEN)) {
 		return -EINVAL;
 	}
@@ -347,16 +425,17 @@ static void zb_minimal_request_key_task(void *arg)
 	ev_buf_free((u8 *)req);
 }
 
-static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdPldLen, const u8 *cmdPld,
-				    u8 *apsCnt)
+static u8 zb_minimal_send_aps_data_frame(u8 srcEp, const epInfo_t *dst, u16 clusterId,
+					 u16 cmdPldLen, const u8 *cmdPld, u8 *apsCnt)
 {
 	u8 frame[127];
 	u8 nonce[13];
 	u8 *nwkKey = NULL;
 	size_t idx = 0U;
+	size_t nwkHdrIdx;
+	size_t apsHdrIdx;
 	size_t apsHdrLen;
 	size_t nwkHdrLen;
-	size_t payloadIdx;
 	u16 macDst;
 	u8 localApsCnt;
 	u32 nwkFrameCounter = 0U;
@@ -372,7 +451,7 @@ static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdP
 		return APS_STATUS_ILLEGAL_REQUEST;
 	}
 
-	if ((dst->profileId != ZDO_PROFILE_ID) || (dst->dstAddrMode != APS_SHORT_DSTADDR_WITHEP)) {
+	if (dst->dstAddrMode != APS_SHORT_DSTADDR_WITHEP) {
 		return APS_STATUS_NOT_SUPPORTED;
 	}
 
@@ -396,10 +475,12 @@ static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdP
 
 	localApsCnt = zb_minimal_next_aps_counter();
 	idx += zb_minimal_build_mac_header(&frame[idx], macDst);
+	nwkHdrIdx = idx;
 	nwkHdrLen = zb_minimal_build_nwk_header(&frame[idx], dst->dstAddr.shortAddr, dst->radius,
 						      useNwkSecurity, &nwkFrameCounter);
 	idx += nwkHdrLen;
-	apsHdrLen = zb_minimal_build_aps_header(&frame[idx], dst, clusterId, localApsCnt);
+	apsHdrIdx = idx;
+	apsHdrLen = zb_minimal_build_aps_header(&frame[idx], srcEp, dst, clusterId, localApsCnt);
 	idx += apsHdrLen;
 
 	if (idx + cmdPldLen > sizeof(frame)) {
@@ -407,7 +488,6 @@ static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdP
 	}
 
 	memcpy(&frame[idx], cmdPld, cmdPldLen);
-	payloadIdx = idx;
 	idx += cmdPldLen;
 
 	if (useNwkSecurity) {
@@ -416,14 +496,17 @@ static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdP
 		memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
 		COPY_U32TOBUFFER(&nonce[8], nwkFrameCounter);
 		nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
-		encLen = ss_ccmEncryption(nwkKey, nonce, (u8)nwkHdrLen, &frame[idx - cmdPldLen - apsHdrLen],
-					 (u8)(apsHdrLen + cmdPldLen), &frame[payloadIdx - apsHdrLen]);
+		encLen = zb_minimal_ccm_encrypt_auth(nwkKey, nonce, ZB_MINIMAL_NWK_MIC_LEN,
+						     &frame[nwkHdrIdx], (u8)nwkHdrLen,
+						     &frame[apsHdrIdx],
+						     (u8)(apsHdrLen + cmdPldLen),
+						     &frame[idx]);
 		if (encLen != (u8)(apsHdrLen + cmdPldLen + ZB_MINIMAL_NWK_MIC_LEN)) {
 			return APS_STATUS_SECURITY_FAIL;
 		}
 
-		frame[idx - cmdPldLen - apsHdrLen + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
-		idx = payloadIdx - apsHdrLen + encLen;
+		frame[nwkHdrIdx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
+		idx = apsHdrIdx + encLen;
 		(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
 	}
 
@@ -460,11 +543,12 @@ static u8 zb_minimal_send_zdo_frame(const epInfo_t *dst, u16 clusterId, u16 cmdP
 
 u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt)
 {
-	if (srcEp != ZDO_EP) {
+	if (srcEp > 240U) {
 		return APS_STATUS_NOT_SUPPORTED;
 	}
 
-	return zb_minimal_send_zdo_frame(pDstEpInfo, clusterId, cmdPldLen, cmdPld, apsCnt);
+	return zb_minimal_send_aps_data_frame(srcEp, pDstEpInfo, clusterId, cmdPldLen, cmdPld,
+					      apsCnt);
 }
 
 u8 zdo_send_req(zdo_zdp_req_t *req)
@@ -481,7 +565,7 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
 	dstEpInfo.profileId = ZDO_PROFILE_ID;
 	dstEpInfo.dstEp = ZDO_EP;
 	dstEpInfo.radius = 30U;
-	dstEpInfo.txOptions = 0U;
+	dstEpInfo.txOptions = APS_TX_OPT_ACK_TX;
 
 	if (req->dst_addr_mode != SHORT_ADDR_MODE) {
 		LOG_WRN("minimal zdo_send_req only supports short dst address mode");
@@ -493,6 +577,7 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
 	status = af_dataSend(ZDO_EP, &dstEpInfo, req->cluster_id, req->zduLen, req->zdu, &apsCnt);
 	if (status == APS_STATUS_SUCCESS) {
 		req->zdpSeqNum = req->zdu[0];
+		zb_minimal_zdp_cb_store(req->zdpSeqNum, req->zdoRspReceivedIndCb);
 	}
 
 	return status;
@@ -520,6 +605,218 @@ zdo_status_t zb_mgmtPermitJoinReq(u16 dstNwkAddr, u8 permitJoinDuration, u8 tcSi
 	req.cluster_id = MGMT_PERMIT_JOINING_REQ_CLID;
 	req.dst_addr_mode = SHORT_ADDR_MODE;
 	req.dst_nwk_addr = dstNwkAddr;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoNwkAddrReq(u16 dstNwkAddr, zdo_nwk_addr_req_t *pReq, u8 *seqNo, zdo_callback indCb)
+{
+	u8 payload[1U + sizeof(addrExt_t) + 2U];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	memcpy(&payload[1], pReq->ieee_addr_interest, sizeof(addrExt_t));
+	payload[9] = pReq->req_type;
+	payload[10] = pReq->start_index;
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = NWK_ADDR_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoIeeeAddrReq(u16 dstNwkAddr, zdo_ieee_addr_req_t *pReq, u8 *seqNo, zdo_callback indCb)
+{
+	u8 payload[5];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(&payload[1], pReq->nwk_addr_interest);
+	payload[3] = pReq->req_type;
+	payload[4] = pReq->start_index;
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = IEEE_ADDR_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoSimpleDescReq(u16 dstNwkAddr, zdo_simple_descriptor_req_t *pReq, u8 *seqNo,
+				       zdo_callback indCb)
+{
+	u8 payload[4];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(&payload[1], pReq->nwk_addr_interest);
+	payload[3] = pReq->endpoint;
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = SIMPLE_DESC_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_descriptor_req_t *pReq, u8 *seqNo,
+				     zdo_callback indCb)
+{
+	u8 payload[3];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(&payload[1], pReq->nwk_addr_interest);
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = NODE_DESC_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoPowerDescReq(u16 dstNwkAddr, zdo_power_descriptor_req_t *pReq, u8 *seqNo,
+				      zdo_callback indCb)
+{
+	u8 payload[3];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(&payload[1], pReq->nwk_addr_interest);
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = POWER_DESC_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoActiveEpReq(u16 dstNwkAddr, zdo_active_ep_req_t *pReq, u8 *seqNo,
+				     zdo_callback indCb)
+{
+	u8 payload[3];
+	zdo_zdp_req_t req;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	payload[0] = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(&payload[1], pReq->nwk_addr_interest);
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = sizeof(payload);
+	req.cluster_id = ACTIVE_EP_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
+	return zdo_send_req(&req);
+}
+
+zdo_status_t zb_zdoMatchDescReq(u16 dstNwkAddr, zdo_match_descriptor_req_t *pReq, u8 *seqNo,
+				      zdo_callback indCb)
+{
+	u8 payload[6U + (u8)((pReq != NULL) ? ((pReq->num_in_clusters + pReq->num_out_clusters) * 2U) : 0U)];
+	u8 *ptr = payload;
+	zdo_zdp_req_t req;
+	u8 total_clusters;
+
+	if (pReq == NULL) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	total_clusters = (u8)(pReq->num_in_clusters + pReq->num_out_clusters);
+	if (total_clusters > (u8)(2U * MAX_REQUESTED_CLUSTER_NUMBER)) {
+		return ZDO_INVALID_REQUEST;
+	}
+
+	*ptr++ = zb_minimal_next_zdp_seq();
+	COPY_U16TOBUFFER(ptr, pReq->nwk_addr_interest);
+	ptr += 2U;
+	COPY_U16TOBUFFER(ptr, pReq->profile_id);
+	ptr += 2U;
+	*ptr++ = pReq->num_in_clusters;
+	for (u8 i = 0U; i < pReq->num_in_clusters; i++) {
+		COPY_U16TOBUFFER(ptr, pReq->cluster_list[i]);
+		ptr += 2U;
+	}
+	*ptr++ = pReq->num_out_clusters;
+	for (u8 i = 0U; i < pReq->num_out_clusters; i++) {
+		COPY_U16TOBUFFER(ptr, pReq->cluster_list[pReq->num_in_clusters + i]);
+		ptr += 2U;
+	}
+
+	if (seqNo != NULL) {
+		*seqNo = payload[0];
+	}
+
+	TL_SETSTRUCTCONTENT(req, 0);
+	req.zdu = payload;
+	req.zduLen = (u8)(ptr - payload);
+	req.cluster_id = MATCH_DESC_REQ_CLID;
+	req.dst_addr_mode = SHORT_ADDR_MODE;
+	req.dst_nwk_addr = dstNwkAddr;
+	req.zdoRspReceivedIndCb = indCb;
 	return zdo_send_req(&req);
 }
 

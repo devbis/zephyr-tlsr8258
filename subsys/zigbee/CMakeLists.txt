@@ -11,10 +11,6 @@ zephyr_include_directories(
 
 zephyr_library_named(subsys__zigbee)
 
-set(vendor_ss_tlccm_obj ${CMAKE_CURRENT_SOURCE_DIR}/../../../drivers-zigbee/ss_tlCCM.o)
-set_source_files_properties(${vendor_ss_tlccm_obj} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED FALSE)
-target_sources(subsys__zigbee PRIVATE ${vendor_ss_tlccm_obj})
-
 zephyr_library_compile_definitions(
     ZB_ED_ROLE=1
     END_DEVICE=1
@@ -48,6 +44,7 @@ zephyr_library_sources(
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
     platform/zephyr/drv_security_zephyr.c
+    platform/zephyr/zb_vendor_compat.c
     platform/zephyr/zb_persistence_zephyr.c
 )
 
@@ -56,6 +53,7 @@ zephyr_library_sources(
     common/list.c
     common/mempool.c
     common/ringbuffer.c
+    common/zb_minimal_ccm.c
     common/utility.c
 )
 
