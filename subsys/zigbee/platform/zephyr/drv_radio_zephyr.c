@@ -53,9 +53,6 @@ struct zb_radio_ctx {
 };
 
 static struct zb_radio_ctx g_radio;
-volatile uint32_t zb_radio_submit_trace[8] = {
-	0x5a425458u, 0u, 0u, 0u, 0u, 0u, 0u, 0u,
-};
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
@@ -182,14 +179,10 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	int16_t rssi_clamped;
 
 	atomic_inc(&g_radio.rx_irq_count);
-	zb_radio_submit_trace[3] = 0x5b00u;
-	zb_radio_submit_trace[4] = rx_len;
-	zb_radio_submit_trace[5] = (uint32_t)(uint8_t)rssi_dbm;
 
 	if ((rx_dma == NULL) || (rx_len == 0U)) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
-		zb_radio_submit_trace[3] = 0x5be0u;
 		LOG_DBG("RX callback ignored invalid frame (buf=%p len=%u)", rx_dma, rx_len);
 		return;
 	}
@@ -225,14 +218,8 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 
 	atomic_set(&g_radio.rx_done, 1);
 	if (zb_radio_extract_rx_psdu(rx_target, (uint8_t)copy_len, &psdu, &psdu_len) == 0) {
-		zb_radio_submit_trace[3] = 0x5b10u;
-		zb_radio_submit_trace[4] = psdu_len;
-		zb_radio_submit_trace[5] = (uint32_t)(uint8_t)g_radio.last_rx_rssi_dbm;
-		zb_radio_submit_trace[6] = (psdu_len >= 2U) ?
-			((uint32_t)psdu[0] | ((uint32_t)psdu[1] << 8)) : 0U;
 		zb_macDataRecvHandler(rx_target, (u8 *)psdu, psdu_len, 0U, 0U, g_radio.last_rx_rssi_dbm);
 	} else if (rf_rxBuf != NULL) {
-		zb_radio_submit_trace[3] = 0x5beeu;
 		rf_rx_irq_handler();
 	}
 }
@@ -474,33 +461,26 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	int ret;
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->tx == NULL)) {
-		zb_radio_submit_trace[0] = 0x5a01u;
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NOT_READY);
 		LOG_WRN("TX unavailable: radio tx API not ready");
 		return -ENODEV;
 	}
 
 	if ((psdu == NULL) || (psdu_len == 0U)) {
-		zb_radio_submit_trace[0] = 0x5a02u;
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_TX);
 		LOG_WRN("TX rejected: invalid PSDU");
 		return -EINVAL;
 	}
 
-	zb_radio_submit_trace[0] = 0x5a10u;
-	zb_radio_submit_trace[1] = psdu_len;
 	g_radio.last_tx_len = psdu_len;
 	atomic_inc(&g_radio.tx_attempts);
 	ret = g_radio.api->tx(g_radio.dev, IEEE802154_TX_MODE_CCA, NULL, &frag);
-	zb_radio_submit_trace[2] = (uint32_t)ret;
 	if (ret < 0) {
-		zb_radio_submit_trace[0] = 0x5aeeu;
 		atomic_inc(&g_radio.tx_failures);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
 		return ret;
 	}
 
-	zb_radio_submit_trace[0] = 0x5a11u;
 	atomic_inc(&g_radio.tx_success);
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
 	return 0;
