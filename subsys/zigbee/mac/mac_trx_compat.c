@@ -28,6 +28,7 @@ zb_info_t g_zbInfo;
 
 extern const u8 tcLinkKeyCentralDefault[];
 extern u8 ss_keyHash(u8 *input, u8 *key, u8 *output);
+extern void tl_zbNwkEdMinimalRuntimeReset(void);
 
 __attribute__((weak)) void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 {
@@ -234,6 +235,13 @@ typedef struct {
 	u8 payload[64];
 } zb_minimal_pending_zcl_rsp_t;
 
+typedef struct {
+	bool pending;
+	u16 requester_nwk_addr;
+	u8 zdo_seq;
+	u8 leave_options;
+} zb_minimal_pending_leave_t;
+
 #define ZB_MINIMAL_NWK_AUX_HDR_LEN 14U
 #define ZB_MINIMAL_NWK_MIC_LEN     4U
 #define ZB_MINIMAL_APS_MIC_LEN     4U
@@ -242,9 +250,15 @@ typedef struct {
 #define ZB_MINIMAL_TX_RETRY_US     5000U
 #define ZB_MINIMAL_NWK_SEC_CTRL    0x2DU
 #define ZB_MINIMAL_NWK_SEC_CTRL_WIRE 0x28U
+#define ZB_MINIMAL_MGMT_LEAVE_REMOVE_CHILDREN BIT(6)
+#define ZB_MINIMAL_MGMT_LEAVE_REJOIN          BIT(7)
+#define ZB_MINIMAL_NWK_LEAVE_REJOIN           BIT(5)
+#define ZB_MINIMAL_NWK_LEAVE_REQUEST          BIT(6)
+#define ZB_MINIMAL_NWK_LEAVE_REMOVE_CHILDREN  BIT(7)
 
 static zb_minimal_pending_zdo_rsp_t g_minimal_pending_zdo_rsp;
 static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
+static zb_minimal_pending_leave_t g_minimal_pending_leave;
 
 static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
 {
@@ -295,13 +309,13 @@ static size_t zb_minimal_build_mac_header(u8 *buf, u16 mac_dst)
 	return idx;
 }
 
-static size_t zb_minimal_build_nwk_header(u8 *buf, u16 nwk_dst, u8 radius, bool security,
-					  u32 *frame_counter_out)
+static size_t zb_minimal_build_nwk_header_type(u8 *buf, u16 nwk_dst, u8 radius, bool security,
+					       u8 frame_type, u32 *frame_counter_out)
 {
 	u16 fc = 0U;
 	size_t idx = 0U;
 
-	fc |= (u16)FRAME_TYPE_DATA;
+	fc |= (u16)(frame_type & 0x03U);
 	fc |= (u16)(0x02U << 2);
 	if (security) {
 		fc |= BIT(9);
@@ -334,6 +348,13 @@ static size_t zb_minimal_build_nwk_header(u8 *buf, u16 nwk_dst, u8 radius, bool 
 	}
 
 	return idx;
+}
+
+static size_t zb_minimal_build_nwk_header(u8 *buf, u16 nwk_dst, u8 radius, bool security,
+					  u32 *frame_counter_out)
+{
+	return zb_minimal_build_nwk_header_type(buf, nwk_dst, radius, security,
+						FRAME_TYPE_DATA, frame_counter_out);
 }
 
 static size_t zb_minimal_build_aps_ack_header(u8 *buf, const zb_minimal_aps_frame_t *aps)
@@ -1238,6 +1259,113 @@ static bool zb_minimal_handle_zcl_basic_read(u16 src_nwk_addr, const zb_minimal_
 	return zb_minimal_queue_zcl_response(src_nwk_addr, aps, payload, pos);
 }
 
+static int zb_minimal_send_nwk_leave_command(u8 options)
+{
+	u8 frame[127];
+	u8 nonce[13];
+	u8 *nwk_key;
+	size_t idx = 0U;
+	size_t nwk_hdr_idx;
+	size_t nwk_hdr_len;
+	size_t payload_idx;
+	u16 parent_addr = g_zbMacPib.coordShortAddress;
+	u32 nwk_frame_counter = 0U;
+	u8 enc_len;
+	u8 attempt;
+	int rc = -EINVAL;
+
+	if (!g_zbNwkCtx.joined || parent_addr >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		return -ENOTCONN;
+	}
+
+	nwk_key = zb_minimal_active_nwk_key_get();
+	if (nwk_key == NULL || ss_ib.securityLevel == 0U) {
+		return -EACCES;
+	}
+
+	idx += zb_minimal_build_mac_header(&frame[idx], parent_addr);
+	nwk_hdr_idx = idx;
+	nwk_hdr_len = zb_minimal_build_nwk_header_type(&frame[idx], parent_addr, 1U, true,
+						       FRAME_TYPE_COMMAND,
+						       &nwk_frame_counter);
+	idx += nwk_hdr_len;
+	payload_idx = idx;
+	frame[idx++] = NWK_CMD_LEAVE;
+	frame[idx++] = options;
+
+	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+	COPY_U32TOBUFFER(&nonce[8], nwk_frame_counter);
+	nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
+	enc_len = zb_minimal_ccm_encrypt_auth(nwk_key, nonce, ZB_MINIMAL_NWK_MIC_LEN,
+					      &frame[nwk_hdr_idx], (u8)nwk_hdr_len,
+					      &frame[payload_idx],
+					      (u8)(idx - payload_idx), &frame[idx]);
+	if (enc_len != (u8)((idx - payload_idx) + ZB_MINIMAL_NWK_MIC_LEN)) {
+		return -EBADMSG;
+	}
+
+	frame[nwk_hdr_idx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
+	idx = payload_idx + enc_len;
+	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+
+	for (attempt = 0U; attempt < ZB_MINIMAL_TX_RETRIES; attempt++) {
+		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
+		if (rc >= 0) {
+			return 0;
+		}
+		if (rc != -EBUSY) {
+			break;
+		}
+		k_busy_wait(ZB_MINIMAL_TX_RETRY_US);
+	}
+
+	return rc;
+}
+
+static void zb_minimal_leave_task(void *arg)
+{
+	zb_minimal_pending_leave_t leave;
+	u8 rsp[2];
+	int rc;
+
+	ARG_UNUSED(arg);
+
+	if (!g_minimal_pending_leave.pending) {
+		return;
+	}
+
+	memcpy(&leave, &g_minimal_pending_leave, sizeof(leave));
+	memset(&g_minimal_pending_leave, 0, sizeof(g_minimal_pending_leave));
+
+	rsp[0] = leave.zdo_seq;
+	rsp[1] = ZDO_SUCCESS;
+	(void)zb_minimal_send_zdo_response(leave.requester_nwk_addr, MGMT_LEAVE_RSP_CLID,
+					   rsp, sizeof(rsp));
+
+	rc = zb_minimal_send_nwk_leave_command(leave.leave_options);
+	if (rc < 0) {
+		LOG_WRN("minimal leave notification failed: %d", rc);
+	}
+
+	(void)zb_platform_clear_persistent_state();
+	zb_platform_app_network_left();
+}
+
+static bool zb_minimal_queue_leave(u16 src_nwk_addr, u8 zdo_seq, u8 leave_options)
+{
+	g_minimal_pending_leave.pending = true;
+	g_minimal_pending_leave.requester_nwk_addr = src_nwk_addr;
+	g_minimal_pending_leave.zdo_seq = zdo_seq;
+	g_minimal_pending_leave.leave_options = leave_options;
+
+	if (TL_SCHEDULE_TASK(zb_minimal_leave_task, NULL) != RET_OK) {
+		memset(&g_minimal_pending_leave, 0, sizeof(g_minimal_pending_leave));
+		return false;
+	}
+
+	return true;
+}
+
 static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps_frame_t *aps)
 {
 	u8 payload[64];
@@ -1340,6 +1468,45 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 		payload[4] = simple_len;
 		return zb_minimal_queue_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID, payload,
 						       (u16)(5U + simple_len));
+	}
+	case MGMT_LEAVE_REQ_CLID: {
+		const u8 *device_addr;
+		u8 flags;
+		u8 leave_options = 0U;
+		bool self_leave;
+
+		if (aps->payload_len < 10U) {
+			payload[0] = seq;
+			payload[1] = ZDO_INVALID_REQUEST;
+			return zb_minimal_queue_zdo_response(src_nwk_addr, MGMT_LEAVE_RSP_CLID,
+							     payload, 2U);
+		}
+
+		device_addr = &aps->payload[1];
+		flags = aps->payload[9];
+		self_leave = ZB_IS_64BIT_ADDR_ZERO(device_addr) ||
+			     ZB_64BIT_ADDR_CMP(device_addr, g_zbMacPib.extAddress);
+		payload[0] = seq;
+		if (!self_leave) {
+			payload[1] = ZDO_NOT_SUPPORTED;
+			return zb_minimal_queue_zdo_response(src_nwk_addr, MGMT_LEAVE_RSP_CLID,
+							     payload, 2U);
+		}
+
+		if ((flags & ZB_MINIMAL_MGMT_LEAVE_REJOIN) != 0U) {
+			leave_options |= ZB_MINIMAL_NWK_LEAVE_REJOIN;
+		}
+		if ((flags & ZB_MINIMAL_MGMT_LEAVE_REMOVE_CHILDREN) != 0U) {
+			leave_options |= ZB_MINIMAL_NWK_LEAVE_REMOVE_CHILDREN;
+		}
+
+		if (!zb_minimal_queue_leave(src_nwk_addr, seq, leave_options)) {
+			payload[1] = ZDO_INSUFFICIENT_SPACE;
+			return zb_minimal_queue_zdo_response(src_nwk_addr, MGMT_LEAVE_RSP_CLID,
+							     payload, 2U);
+		}
+
+		return true;
 	}
 	default:
 		return false;
