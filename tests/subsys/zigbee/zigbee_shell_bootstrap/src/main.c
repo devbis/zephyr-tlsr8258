@@ -4,6 +4,9 @@
 static int bdb_init_calls;
 static int bdb_start_calls;
 static int bdb_init_status;
+static bool joined_network;
+static uint32_t poll_rate;
+static int poll_rate_set_calls;
 
 int zb_platform_bdb_init_default(void)
 {
@@ -21,6 +24,23 @@ uint8_t bdb_networkSteerStart(void)
 {
 	bdb_start_calls++;
 	return 0;
+}
+
+bool zb_isDeviceJoinedNwk(void)
+{
+	return joined_network;
+}
+
+uint8_t zb_setPollRate(uint32_t newRate)
+{
+	poll_rate = newRate;
+	poll_rate_set_calls++;
+	return 0;
+}
+
+uint32_t zb_getPollRate(void)
+{
+	return poll_rate;
 }
 
 int zb_platform_radio_diag_get(struct zb_platform_radio_diag_snapshot *snapshot)
@@ -57,6 +77,9 @@ static void reset_state(void)
 	bdb_init_calls = 0;
 	bdb_start_calls = 0;
 	bdb_init_status = 0;
+	joined_network = false;
+	poll_rate = 0;
+	poll_rate_set_calls = 0;
 }
 
 ZTEST(zigbee_shell_bootstrap, test_bootstrap_initializes_bdb_runtime)
@@ -81,6 +104,36 @@ ZTEST(zigbee_shell_bootstrap, test_commissioning_start_runs_after_bdb_init)
 	zb_platform_app_bootstrap_ready();
 	zb_platform_app_start_commissioning();
 	zassert_equal(bdb_start_calls, 1);
+}
+
+ZTEST(zigbee_shell_bootstrap, test_commissioning_should_not_restart_while_request_in_flight)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+	zassert_true(zb_platform_app_should_start_commissioning());
+	zb_platform_app_start_commissioning();
+	zassert_false(zb_platform_app_should_start_commissioning());
+}
+
+ZTEST(zigbee_shell_bootstrap, test_commissioning_start_skips_network_steer_when_already_joined)
+{
+	reset_state();
+	joined_network = true;
+	zb_platform_app_bootstrap_ready();
+	zb_platform_app_start_commissioning();
+	zassert_equal(bdb_start_calls, 0);
+	zassert_true(poll_rate_set_calls >= 1);
+}
+
+ZTEST(zigbee_shell_bootstrap, test_commissioning_status_false_uses_runtime_join_state)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+	zb_platform_app_start_commissioning();
+	joined_network = true;
+	zb_platform_app_bdb_commissioning_status(0x23, false);
+	zassert_false(zb_platform_app_should_start_commissioning());
+	zassert_equal(poll_rate_set_calls, 1);
 }
 
 ZTEST(zigbee_shell_bootstrap, test_radio_diag_api_header_contract)

@@ -37,6 +37,7 @@ static void zigbee_shell_commissioning_retry(struct k_work *work)
 	ARG_UNUSED(work);
 
 	if (zb_isDeviceJoinedNwk()) {
+		commissioning_start_requested = true;
 		return;
 	}
 
@@ -159,6 +160,9 @@ bool zb_platform_app_should_start_commissioning(void)
 	if (!bdb_runtime_ready) {
 		return false;
 	}
+	if (commissioning_start_requested) {
+		return false;
+	}
 
 	return !zb_isDeviceJoinedNwk();
 #else
@@ -181,11 +185,23 @@ void zb_platform_app_start_commissioning(void)
 		return;
 	}
 
+	if (zb_isDeviceJoinedNwk()) {
+		commissioning_start_requested = true;
+		zigbee_shell_activate_poll_rate();
+		if (commissioning_retry_work_ready) {
+			(void)k_work_cancel_delayable(&commissioning_retry_work);
+		}
+		return;
+	}
+
 	status = zb_platform_bdb_network_steer_start();
 	if (status == 0U) {
 		commissioning_start_requested = true;
-		if (commissioning_retry_work_ready) {
+		if (zb_isDeviceJoinedNwk() && commissioning_retry_work_ready) {
 			(void)k_work_cancel_delayable(&commissioning_retry_work);
+		}
+		if (!zb_isDeviceJoinedNwk()) {
+			zigbee_shell_commissioning_retry_schedule();
 		}
 		LOG_INF("zigbee_shell commissioning start requested (bdb status: 0x%02x)", status);
 	} else {
@@ -224,6 +240,17 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 			(void)k_work_cancel_delayable(&commissioning_retry_work);
 		}
 		LOG_INF("zigbee_shell joined network (bdb status: 0x%02x)", status);
+		return;
+	}
+
+	if (zb_isDeviceJoinedNwk()) {
+		zigbee_shell_activate_poll_rate();
+		commissioning_start_requested = true;
+		if (commissioning_retry_work_ready) {
+			(void)k_work_cancel_delayable(&commissioning_retry_work);
+		}
+		LOG_INF("zigbee_shell joined network after status check (bdb status: 0x%02x)",
+			status);
 		return;
 	}
 
