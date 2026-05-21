@@ -335,7 +335,7 @@ static bool tlsr8258_psdu_is_ack_for_seq(const uint8_t *psdu, uint8_t psdu_len, 
 	return ((psdu[0] & 0x07u) == 0x02u) && (psdu[2] == seq);
 }
 
-static void tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_psdu_len)
+static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_psdu_len)
 {
 	uint32_t wait_limit_us = tlsr8258_post_poll_wait_us(0u);
 	uint32_t waited = 0u;
@@ -345,12 +345,12 @@ static void tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 	uint8_t tx_seq;
 
 	if (tx_psdu == NULL || tx_psdu_len < 3u) {
-		return;
+		return true;
 	}
 
 	data_req = tlsr8258_psdu_is_data_request(tx_psdu, tx_psdu_len);
 	if (!data_req && ((tx_psdu[0] & TLSR8258_ACK_REQUEST) == 0u)) {
-		return;
+		return true;
 	}
 
 	tx_seq = tx_psdu[2];
@@ -391,6 +391,8 @@ static void tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 		k_busy_wait(1);
 		waited++;
 	}
+
+	return ack_seen;
 }
 
 static void tlsr8258_rf_off(void)
@@ -891,7 +893,11 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 			TLSR_REG16(0x0f20) = irq;
 			tlsr8258_radio.tx_count++;
 			tlsr8258_rf_set_rxmode();
-			tlsr8258_wait_for_post_poll_rx(frag->data, frag->len);
+			if (!tlsr8258_wait_for_post_poll_rx(frag->data, frag->len)) {
+				TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+				irq_enable(TLSR8258_IRQ_ZB_RT);
+				return -EAGAIN;
+			}
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 			irq_enable(TLSR8258_IRQ_ZB_RT);
 			return 0;
