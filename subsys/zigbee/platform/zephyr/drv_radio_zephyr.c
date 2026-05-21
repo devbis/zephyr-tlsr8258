@@ -7,24 +7,30 @@
 #include <errno.h>
 #include <string.h>
 
-#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
-#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
-#endif
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_RADIO_RX_RING_DEPTH         2U
 #define ZB_RADIO_RX_BUF_SIZE           256U
+#define ZB_RADIO_RX_WORK_Q_DEPTH       4U
 #define ZB_RADIO_CCA_BUSY_RSSI_DBM     (-60)
 #define ZB_RADIO_CCA_IDLE_RSSI_DBM     (-96)
 #define ZB_RADIO_RSSI_FALLBACK_DBM     (-110)
+
+struct zb_radio_rx_work_item {
+	uint8_t dma[ZB_RADIO_RX_BUF_SIZE];
+	uint8_t len;
+	int8_t rssi_dbm;
+};
 
 struct zb_radio_ctx {
 	const struct device *dev;
@@ -53,10 +59,14 @@ struct zb_radio_ctx {
 };
 
 static struct zb_radio_ctx g_radio;
+static struct k_work g_radio_rx_work;
+K_MSGQ_DEFINE(g_radio_rx_msgq, sizeof(struct zb_radio_rx_work_item),
+	      ZB_RADIO_RX_WORK_Q_DEPTH, 4);
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 				      const uint8_t **psdu, uint8_t *psdu_len);
+static void zb_radio_rx_work_handler(struct k_work *work);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
 extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
@@ -173,9 +183,8 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
 {
 	size_t copy_len;
-	const uint8_t *psdu = NULL;
-	uint8_t psdu_len = 0U;
-	uint8_t *rx_target;
+	struct zb_radio_rx_work_item item;
+	int ret;
 	int16_t rssi_clamped;
 
 	atomic_inc(&g_radio.rx_irq_count);
@@ -187,10 +196,43 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		return;
 	}
 
-	copy_len = MIN((size_t)rx_len, sizeof(g_radio.rx_ring[0]));
+	copy_len = MIN((size_t)rx_len, sizeof(item.dma));
 	if (copy_len == 0U) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
+		return;
+	}
+
+	memset(&item, 0, sizeof(item));
+	memcpy(item.dma, rx_dma, copy_len);
+	item.len = (uint8_t)copy_len;
+	item.rssi_dbm = rssi_dbm;
+
+	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
+	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
+	g_radio.last_rx_rssi_dbm = (s8)rssi_clamped;
+	g_radio.last_rx_len = (u8)copy_len;
+	atomic_set(&g_radio.last_rx_rssi_valid, 1);
+
+	ret = k_msgq_put(&g_radio_rx_msgq, &item, K_NO_WAIT);
+	if (ret < 0) {
+		atomic_inc(&g_radio.rx_drop_count);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
+		return;
+	}
+
+	atomic_inc(&g_radio.rx_accept_count);
+	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	k_work_submit(&g_radio_rx_work);
+}
+
+static void zb_radio_process_rx_item(const struct zb_radio_rx_work_item *item)
+{
+	const uint8_t *psdu = NULL;
+	uint8_t psdu_len = 0U;
+	uint8_t *rx_target;
+
+	if (item == NULL) {
 		return;
 	}
 
@@ -206,21 +248,24 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		return;
 	}
 
-	memcpy(rx_target, rx_dma, copy_len);
-
-	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
-	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
-	g_radio.last_rx_rssi_dbm = (s8)rssi_clamped;
-	g_radio.last_rx_len = (u8)copy_len;
-	atomic_set(&g_radio.last_rx_rssi_valid, 1);
-	atomic_inc(&g_radio.rx_accept_count);
-	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	memcpy(rx_target, item->dma, item->len);
 
 	atomic_set(&g_radio.rx_done, 1);
-	if (zb_radio_extract_rx_psdu(rx_target, (uint8_t)copy_len, &psdu, &psdu_len) == 0) {
+	if (zb_radio_extract_rx_psdu(rx_target, item->len, &psdu, &psdu_len) == 0) {
 		zb_macDataRecvHandler(rx_target, (u8 *)psdu, psdu_len, 0U, 0U, g_radio.last_rx_rssi_dbm);
 	} else if (rf_rxBuf != NULL) {
 		rf_rx_irq_handler();
+	}
+}
+
+static void zb_radio_rx_work_handler(struct k_work *work)
+{
+	struct zb_radio_rx_work_item item;
+
+	ARG_UNUSED(work);
+
+	while (k_msgq_get(&g_radio_rx_msgq, &item, K_NO_WAIT) == 0) {
+		zb_radio_process_rx_item(&item);
 	}
 }
 
@@ -270,6 +315,8 @@ void zb_radio_init(void)
 	g_radio.last_error = ZB_PLATFORM_RADIO_ERR_NOT_READY;
 	atomic_set(&g_radio.last_rx_rssi_valid, 0);
 	atomic_set(&g_radio.started, 0);
+	k_msgq_purge(&g_radio_rx_msgq);
+	k_work_init(&g_radio_rx_work, zb_radio_rx_work_handler);
 
 	if (!device_is_ready(dev)) {
 		LOG_WRN("zigbee radio device not ready");
@@ -282,9 +329,7 @@ void zb_radio_init(void)
 		LOG_WRN("zigbee radio API unavailable");
 		return;
 	}
-#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
-	tlsr8258_zigbee_register_rx_cb(zb_radio_on_rx);
-#endif
+	zb_radio_port_register_rx_cb(zb_radio_on_rx);
 }
 
 bool zb_radio_is_ready(void)

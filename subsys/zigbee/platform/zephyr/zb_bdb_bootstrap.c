@@ -4,8 +4,8 @@
 
 #include <errno.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -14,6 +14,7 @@ extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 short
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
 extern void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs);
+extern void tl_zbNwkEdMinimalPollEnsure(void);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
@@ -85,13 +86,65 @@ static af_simple_descriptor_t zb_shell_simple_desc = {
 static struct zb_platform_bdb_fixed_target zb_bootstrap_target;
 static struct zb_platform_bdb_join_profile zb_bootstrap_profile;
 
+static bool zb_platform_bdb_key_is_set(const u8 *key)
+{
+	if (key == NULL) {
+		return false;
+	}
+
+	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+		if (key[i] != 0U) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static u8 *zb_platform_bdb_active_nwk_key_get(void)
+{
+	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL) {
+		return NULL;
+	}
+
+	return ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+}
+
+static bool zb_platform_bdb_has_valid_join_context(void)
+{
+	return g_zbMacPib.panId != MAC_INVALID_PANID &&
+	       g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+	       g_zbMacPib.coordShortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+	       g_zbNIB.panId == g_zbMacPib.panId &&
+	       g_zbNIB.nwkAddr == g_zbMacPib.shortAddress &&
+	       zb_platform_bdb_key_is_set(zb_platform_bdb_active_nwk_key_get());
+}
+
+static void zb_platform_bdb_repair_joined_flag_if_needed(void)
+{
+	if (g_zbNwkCtx.joined || !zb_platform_bdb_has_valid_join_context()) {
+		return;
+	}
+
+	LOG_WRN("zb bdb restore: repairing split joined flag for short 0x%04x pan 0x%04x",
+		g_zbMacPib.shortAddress, g_zbMacPib.panId);
+	g_zbNwkCtx.joined = 1U;
+	g_zbNwkCtx.is_factory_new = 0U;
+	g_zbNwkCtx.parentIsChanged = 0U;
+	g_zbNwkCtx.state = NLME_STATE_IDLE;
+	g_zbNwkCtx.user_state = NLME_IDLE;
+	g_bdbAttrs.nodeIsOnANetwork = 1U;
+}
+
 static void zb_platform_bdb_restore_joined_target(void)
 {
 	u8 *nwkKey = NULL;
 
+	zb_platform_bdb_repair_joined_flag_if_needed();
 	if (!g_zbNwkCtx.joined ||
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
-	    g_zbMacPib.coordShortAddress == MAC_SHORT_ADDR_NONE) {
+	    g_zbMacPib.coordShortAddress == MAC_SHORT_ADDR_NONE ||
+	    !zb_platform_bdb_has_valid_join_context()) {
 		return;
 	}
 
@@ -106,8 +159,10 @@ static void zb_platform_bdb_restore_joined_target(void)
 					    nwkKey,
 					    ss_ib.trust_center_address);
 	tl_zbNwkEdMinimalPollRestart(zdo_af_get_syn_rate());
-	tlsr8258_zigbee_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
-				       g_zbMacPib.extAddress);
+	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
+				     g_zbMacPib.extAddress);
+	tl_zbNwkEdMinimalPollEnsure();
+	zb_info_save(NULL);
 }
 
 static void zb_platform_bdb_apply_fixed_target(void)
@@ -137,6 +192,9 @@ static void zb_platform_bdb_apply_fixed_target(void)
 					    zb_bootstrap_target.ext_pan_id,
 					    zb_bootstrap_target.network_key,
 					    tc_addr);
+	if (zb_platform_bdb_key_is_set(zb_bootstrap_target.network_key)) {
+		zb_preConfigNwkKey(zb_bootstrap_target.network_key, FALSE);
+	}
 	g_bdbAttrs.primaryChannelSet = ((u32)1U << zb_bootstrap_target.channel);
 	g_bdbAttrs.secondaryChannelSet = 0U;
 }
@@ -186,6 +244,7 @@ int zb_platform_bdb_init_default(void)
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
 
+	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_platform_bdb_restore_joined_target();
 
 	tl_bdbAttrInit();
