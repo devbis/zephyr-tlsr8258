@@ -52,6 +52,12 @@ __attribute__((weak)) void tl_zbNwkEdMinimalTimeoutRspReceived(u8 status, u8 par
 	ARG_UNUSED(parentInfo);
 }
 
+__attribute__((weak)) void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
+{
+	ARG_UNUSED(count);
+	ARG_UNUSED(intervalMs);
+}
+
 __attribute__((weak)) void tl_zbMinimalZdoResponseIndication(u16 src_addr, u16 cluster_id,
 							     const u8 *payload, u8 payload_len)
 {
@@ -255,10 +261,15 @@ typedef struct {
 #define ZB_MINIMAL_NWK_LEAVE_REJOIN           BIT(5)
 #define ZB_MINIMAL_NWK_LEAVE_REQUEST          BIT(6)
 #define ZB_MINIMAL_NWK_LEAVE_REMOVE_CHILDREN  BIT(7)
+#define ZB_MINIMAL_ZDO_RSP_Q_LEN              3U
 
-static zb_minimal_pending_zdo_rsp_t g_minimal_pending_zdo_rsp;
+static zb_minimal_pending_zdo_rsp_t g_minimal_pending_zdo_rsp_q[ZB_MINIMAL_ZDO_RSP_Q_LEN];
+static u8 g_minimal_pending_zdo_rsp_head;
+static u8 g_minimal_pending_zdo_rsp_tail;
+static u8 g_minimal_pending_zdo_rsp_count;
 static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
 static zb_minimal_pending_leave_t g_minimal_pending_leave;
+volatile u32 zb_minimal_zdo_trace[8] = {0x5a444f31U};
 
 static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
 {
@@ -437,7 +448,7 @@ static int zb_minimal_send_aps_ack(const zb_minimal_nwk_frame_t *nwk, const zb_m
 		if (rc >= 0) {
 			return 0;
 		}
-		if (rc != -EBUSY) {
+		if (rc != -EBUSY && rc != -EAGAIN) {
 			break;
 		}
 		k_busy_wait(ZB_MINIMAL_TX_RETRY_US);
@@ -1050,37 +1061,67 @@ static void zb_minimal_zdo_response_task(void *arg)
 
 	ARG_UNUSED(arg);
 
-	if (!g_minimal_pending_zdo_rsp.pending) {
-		return;
-	}
+	while (g_minimal_pending_zdo_rsp_count != 0U) {
+		memcpy(&rsp, &g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_tail],
+		       sizeof(rsp));
+		memset(&g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_tail], 0,
+		       sizeof(g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_tail]));
+		g_minimal_pending_zdo_rsp_tail =
+			(u8)((g_minimal_pending_zdo_rsp_tail + 1U) % ZB_MINIMAL_ZDO_RSP_Q_LEN);
+		g_minimal_pending_zdo_rsp_count--;
 
-	memcpy(&rsp, &g_minimal_pending_zdo_rsp, sizeof(rsp));
-	memset(&g_minimal_pending_zdo_rsp, 0, sizeof(g_minimal_pending_zdo_rsp));
-	if (zb_minimal_send_zdo_response(rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload,
-					 rsp.payload_len) == APS_STATUS_SUCCESS) {
-		LOG_INF("minimal ZDO rsp sent dst=0x%04x cluster=0x%04x len=%u",
-			rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
-	} else {
-		LOG_WRN("minimal ZDO rsp failed dst=0x%04x cluster=0x%04x len=%u",
-			rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
+		u8 status = zb_minimal_send_zdo_response(rsp.dst_nwk_addr, rsp.cluster_id,
+						 rsp.payload, rsp.payload_len);
+		zb_minimal_zdo_trace[5] = ((u32)status << 24) | ((u32)rsp.payload_len << 16) |
+					  rsp.cluster_id;
+		if (status == APS_STATUS_SUCCESS) {
+			tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+			LOG_INF("minimal ZDO rsp sent dst=0x%04x cluster=0x%04x len=%u",
+				rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
+		} else {
+			LOG_WRN("minimal ZDO rsp failed dst=0x%04x cluster=0x%04x len=%u",
+				rsp.dst_nwk_addr, rsp.cluster_id, rsp.payload_len);
+		}
 	}
 }
 
 static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 						 const u8 *payload, u16 payload_len)
 {
-	if (payload == NULL || payload_len > sizeof(g_minimal_pending_zdo_rsp.payload)) {
+	zb_minimal_pending_zdo_rsp_t *rsp;
+
+	if (payload == NULL || payload_len > sizeof(g_minimal_pending_zdo_rsp_q[0].payload)) {
 		return false;
 	}
 
-	g_minimal_pending_zdo_rsp.pending = true;
-	g_minimal_pending_zdo_rsp.dst_nwk_addr = dst_nwk_addr;
-	g_minimal_pending_zdo_rsp.cluster_id = cluster_id;
-	g_minimal_pending_zdo_rsp.payload_len = payload_len;
-	memcpy(g_minimal_pending_zdo_rsp.payload, payload, payload_len);
+	if (g_minimal_pending_zdo_rsp_count >= ZB_MINIMAL_ZDO_RSP_Q_LEN) {
+		LOG_WRN("minimal ZDO rsp queue full dst=0x%04x cluster=0x%04x",
+			dst_nwk_addr, cluster_id);
+		zb_minimal_zdo_trace[4]++;
+		return false;
+	}
+
+	rsp = &g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_head];
+	memset(rsp, 0, sizeof(*rsp));
+	rsp->pending = true;
+	rsp->dst_nwk_addr = dst_nwk_addr;
+	rsp->cluster_id = cluster_id;
+	rsp->payload_len = payload_len;
+	memcpy(rsp->payload, payload, payload_len);
+	g_minimal_pending_zdo_rsp_head =
+		(u8)((g_minimal_pending_zdo_rsp_head + 1U) % ZB_MINIMAL_ZDO_RSP_Q_LEN);
+	g_minimal_pending_zdo_rsp_count++;
+	zb_minimal_zdo_trace[4] = ((u32)g_minimal_pending_zdo_rsp_count << 24) |
+				  ((u32)payload_len << 16) | cluster_id;
 
 	if (TL_SCHEDULE_TASK(zb_minimal_zdo_response_task, NULL) != RET_OK) {
-		memset(&g_minimal_pending_zdo_rsp, 0, sizeof(g_minimal_pending_zdo_rsp));
+		g_minimal_pending_zdo_rsp_head =
+			(u8)((g_minimal_pending_zdo_rsp_head + ZB_MINIMAL_ZDO_RSP_Q_LEN - 1U) %
+			     ZB_MINIMAL_ZDO_RSP_Q_LEN);
+		memset(&g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_head], 0,
+		       sizeof(g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_head]));
+		g_minimal_pending_zdo_rsp_count--;
+		zb_minimal_zdo_trace[7]++;
 		return false;
 	}
 
@@ -1201,7 +1242,9 @@ static void zb_minimal_zcl_response_task(void *arg)
 
 	memcpy(&rsp, &g_minimal_pending_zcl_rsp, sizeof(rsp));
 	memset(&g_minimal_pending_zcl_rsp, 0, sizeof(g_minimal_pending_zcl_rsp));
-	(void)zb_minimal_send_zcl_response(&rsp);
+	if (zb_minimal_send_zcl_response(&rsp) == APS_STATUS_SUCCESS) {
+		tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
+	}
 }
 
 static bool zb_minimal_queue_zcl_response(u16 dst_nwk_addr, const zb_minimal_aps_frame_t *aps,
@@ -1313,7 +1356,7 @@ static int zb_minimal_send_nwk_leave_command(u8 options)
 		if (rc >= 0) {
 			return 0;
 		}
-		if (rc != -EBUSY) {
+		if (rc != -EBUSY && rc != -EAGAIN) {
 			break;
 		}
 		k_busy_wait(ZB_MINIMAL_TX_RETRY_US);
@@ -1337,18 +1380,21 @@ static void zb_minimal_leave_task(void *arg)
 	memcpy(&leave, &g_minimal_pending_leave, sizeof(leave));
 	memset(&g_minimal_pending_leave, 0, sizeof(g_minimal_pending_leave));
 
-	rsp[0] = leave.zdo_seq;
-	rsp[1] = ZDO_SUCCESS;
-	(void)zb_minimal_send_zdo_response(leave.requester_nwk_addr, MGMT_LEAVE_RSP_CLID,
-					   rsp, sizeof(rsp));
-
 	rc = zb_minimal_send_nwk_leave_command(leave.leave_options);
 	if (rc < 0) {
 		LOG_WRN("minimal leave notification failed: %d", rc);
 	}
 
-	(void)zb_platform_clear_persistent_state();
-	zb_platform_app_network_left();
+	rc = zb_platform_clear_persistent_state();
+
+	rsp[0] = leave.zdo_seq;
+	rsp[1] = (rc == 0) ? ZDO_SUCCESS : ZDO_NOT_SUPPORTED;
+	(void)zb_minimal_send_zdo_response(leave.requester_nwk_addr, MGMT_LEAVE_RSP_CLID,
+					   rsp, sizeof(rsp));
+
+	if (rc == 0) {
+		zb_platform_app_network_left();
+	}
 }
 
 static bool zb_minimal_queue_leave(u16 src_nwk_addr, u8 zdo_seq, u8 leave_options)
@@ -1378,6 +1424,9 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 	}
 	seq = aps->payload[0];
 	nwk_addr_interest = zb_u16_from_le(&aps->payload[1]);
+	zb_minimal_zdo_trace[1]++;
+	zb_minimal_zdo_trace[2] = ((u32)seq << 24) | ((u32)src_nwk_addr << 8) |
+				  (aps->cluster_id & 0xffU);
 
 	switch (aps->cluster_id) {
 	case NODE_DESC_REQ_CLID: {
@@ -1451,6 +1500,7 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 			return false;
 		}
 
+		zb_minimal_zdo_trace[3] = ((u32)aps->payload[3] << 24) | nwk_addr_interest;
 		memset(payload, 0, sizeof(payload));
 		payload[0] = seq;
 		payload[1] = ZDO_SUCCESS;
@@ -1466,6 +1516,9 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 
 		simple_len = af_simpleDescriptorCopy(&payload[5], sd);
 		payload[4] = simple_len;
+		zb_minimal_zdo_trace[6] = ((u32)simple_len << 24) |
+					  ((u32)sd->app_in_cluster_count << 16) |
+					  sd->endpoint;
 		return zb_minimal_queue_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID, payload,
 						       (u16)(5U + simple_len));
 	}
