@@ -9,6 +9,7 @@
 #define SIM_DEVICE_IEEE     0xa4c138e050020002ULL
 #define SIM_PAN_ID          0x5b27u
 #define SIM_POLL_RATE_MS    1000u
+#define SIM_POLL_STOPPED    UINT32_MAX
 #define SIM_NO_SHORT_ADDR   0xffffu
 #define SIM_MAX_WIRE_LEN    128u
 
@@ -78,8 +79,12 @@ struct sim_device {
 	uint64_t ieee;
 	uint16_t short_addr;
 	uint16_t parent_short;
+	uint16_t active_parent_short;
+	uint16_t pan_id;
+	uint16_t active_pan_id;
 	uint32_t poll_rate_ms;
 	uint32_t next_poll_ms;
+	uint32_t poll_tx_count;
 	uint8_t endpoint;
 	bool joined;
 	bool have_transport_key;
@@ -523,6 +528,9 @@ static void sim_device_init(struct sim_device *device)
 	device->ieee = SIM_DEVICE_IEEE;
 	device->short_addr = SIM_NO_SHORT_ADDR;
 	device->parent_short = SIM_NO_SHORT_ADDR;
+	device->active_parent_short = SIM_NO_SHORT_ADDR;
+	device->pan_id = SIM_NO_SHORT_ADDR;
+	device->active_pan_id = SIM_NO_SHORT_ADDR;
 	device->poll_rate_ms = SIM_POLL_RATE_MS;
 	device->endpoint = 1;
 	strcpy(device->model_id, "tlsr8258-minimal");
@@ -602,6 +610,9 @@ static void sim_device_send(struct sim *sim, enum sim_frame_type type)
 		.dst = SIM_COORD_SHORT_ADDR,
 	};
 
+	if (type == SIM_FRAME_DATA_REQ) {
+		sim->device.poll_tx_count++;
+	}
 	sim_frame_encode(sim, &frame);
 	sim_coord_receive_bytes(sim, frame.wire, frame.wire_len);
 }
@@ -673,6 +684,9 @@ static void sim_device_receive(struct sim *sim, const struct sim_frame *frame)
 
 		sim->device.short_addr = frame->assigned_short;
 		sim->device.parent_short = SIM_COORD_SHORT_ADDR;
+		sim->device.active_parent_short = SIM_COORD_SHORT_ADDR;
+		sim->device.pan_id = sim->coord.pan_id;
+		sim->device.active_pan_id = sim->coord.pan_id;
 		sim->device.state = SIM_DEVICE_WAIT_TRANSPORT_KEY;
 		sim->device.next_poll_ms = sim->now_ms + 200u;
 		sim->coord.child_short = frame->assigned_short;
@@ -727,6 +741,9 @@ static void sim_device_restore_joined(struct sim *sim, uint16_t short_addr)
 {
 	sim->device.short_addr = short_addr;
 	sim->device.parent_short = SIM_COORD_SHORT_ADDR;
+	sim->device.active_parent_short = SIM_COORD_SHORT_ADDR;
+	sim->device.pan_id = sim->coord.pan_id;
+	sim->device.active_pan_id = sim->coord.pan_id;
 	sim->device.state = SIM_DEVICE_JOINED_IDLE;
 	sim->device.joined = true;
 	sim->device.have_transport_key = true;
@@ -734,12 +751,73 @@ static void sim_device_restore_joined(struct sim *sim, uint16_t short_addr)
 	sim->coord.child_short = short_addr;
 }
 
+static bool sim_device_has_restorable_join_context(const struct sim *sim)
+{
+	return sim->device.state == SIM_DEVICE_JOINED_IDLE &&
+	       sim->device.pan_id == sim->coord.pan_id &&
+	       sim->device.short_addr != SIM_NO_SHORT_ADDR &&
+	       sim->device.parent_short == SIM_COORD_SHORT_ADDR &&
+	       sim->device.have_transport_key;
+}
+
+static void sim_device_repair_joined_context_if_needed(struct sim *sim)
+{
+	if (sim->device.joined || !sim_device_has_restorable_join_context(sim)) {
+		return;
+	}
+
+	sim->device.active_pan_id = sim->device.pan_id;
+	sim->device.active_parent_short = sim->device.parent_short;
+	sim->device.joined = true;
+}
+
+static void sim_device_poll_ensure(struct sim *sim)
+{
+	if (sim->device.state != SIM_DEVICE_JOINED_IDLE) {
+		return;
+	}
+
+	sim_device_repair_joined_context_if_needed(sim);
+	if (sim->device.joined && sim->device.next_poll_ms == SIM_POLL_STOPPED) {
+		sim->device.next_poll_ms = sim->now_ms + 1u;
+	}
+}
+
+static void sim_device_leave_reset(struct sim *sim)
+{
+	sim->device.state = SIM_DEVICE_FACTORY_NEW;
+	sim->device.short_addr = SIM_NO_SHORT_ADDR;
+	sim->device.parent_short = SIM_NO_SHORT_ADDR;
+	sim->device.active_parent_short = SIM_NO_SHORT_ADDR;
+	sim->device.pan_id = SIM_NO_SHORT_ADDR;
+	sim->device.active_pan_id = SIM_NO_SHORT_ADDR;
+	sim->device.next_poll_ms = 0;
+	sim->device.joined = false;
+	sim->device.have_transport_key = false;
+	sim->device.sent_timeout_req = false;
+	sim->device.sent_device_announce = false;
+	sim->device.interview_complete = false;
+	sim->coord.child_short = SIM_NO_SHORT_ADDR;
+	sim->coord.indirect.head = 0;
+	sim->coord.indirect.count = 0;
+}
+
 static void sim_device_poll_if_due(struct sim *sim)
 {
 	if ((sim->device.state != SIM_DEVICE_JOINED_IDLE &&
 	     sim->device.state != SIM_DEVICE_WAIT_TRANSPORT_KEY) ||
+	    sim->device.next_poll_ms == SIM_POLL_STOPPED ||
 	    sim->now_ms < sim->device.next_poll_ms) {
 		return;
+	}
+
+	if (sim->device.state == SIM_DEVICE_JOINED_IDLE) {
+		sim_device_repair_joined_context_if_needed(sim);
+		if (!sim->device.joined ||
+		    sim->device.active_pan_id == SIM_NO_SHORT_ADDR ||
+		    sim->device.active_parent_short == SIM_NO_SHORT_ADDR) {
+			return;
+		}
 	}
 
 	sim_device_send(sim, SIM_FRAME_DATA_REQ);
@@ -752,6 +830,7 @@ static void sim_advance_ms(struct sim *sim, uint32_t delta_ms)
 
 	while (sim->now_ms < target) {
 		sim->now_ms++;
+		sim_device_poll_ensure(sim);
 		sim_device_poll_if_due(sim);
 	}
 }
@@ -815,6 +894,95 @@ static void test_restore_joined_polls_indirect_interview(void)
 	EXPECT_STR_EQ(sim.coord.observed_model_id, "tlsr8258-minimal");
 }
 
+static void test_restored_split_joined_flag_recovers_polling(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim_device_restore_joined(&sim, 0x4455);
+	sim.device.joined = false;
+
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	sim_advance_ms(&sim, 5000);
+
+	EXPECT_TRUE(sim.device.joined);
+	EXPECT_TRUE(sim.device.interview_complete);
+	EXPECT_TRUE(sim.coord.interview_complete);
+	EXPECT_STR_EQ(sim.coord.observed_model_id, "tlsr8258-minimal");
+}
+
+static void test_restored_joined_stopped_poll_timer_recovers(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim_device_restore_joined(&sim, 0x6655);
+	sim.device.next_poll_ms = SIM_POLL_STOPPED;
+
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	sim_advance_ms(&sim, 5000);
+
+	EXPECT_TRUE(sim.device.interview_complete);
+	EXPECT_TRUE(sim.coord.interview_complete);
+	EXPECT_STR_EQ(sim.coord.observed_model_id, "tlsr8258-minimal");
+}
+
+static void test_split_joined_flag_without_key_does_not_poll(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim_device_restore_joined(&sim, 0x5566);
+	sim.device.joined = false;
+	sim.device.have_transport_key = false;
+
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	sim_advance_ms(&sim, 5000);
+
+	EXPECT_FALSE(sim.device.joined);
+	EXPECT_EQ(sim.coord.indirect.count, 1);
+	EXPECT_FALSE(sim.coord.interview_complete);
+}
+
+static void test_post_interview_polling_continues(void)
+{
+	struct sim sim;
+	uint32_t polls_after_interview;
+
+	sim_init(&sim);
+	sim.coord.permit_join = true;
+
+	sim_device_start_commissioning(&sim);
+	sim_advance_ms(&sim, 7000);
+	polls_after_interview = sim.device.poll_tx_count;
+	EXPECT_TRUE(sim.coord.interview_complete);
+
+	memset(&sim.coord.model_id_rsp, 0, sizeof(sim.coord.model_id_rsp));
+	sim_tx_to_device(&sim, SIM_FRAME_BASIC_MODEL_ID_READ);
+	sim_advance_ms(&sim, 2500);
+
+	EXPECT_EQ(sim.coord.model_id_rsp.type, SIM_FRAME_BASIC_MODEL_ID_READ_RSP);
+	EXPECT_TRUE(sim.device.poll_tx_count > polls_after_interview);
+}
+
+static void test_leave_resets_join_state_filters_and_persistence_model(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim_device_restore_joined(&sim, 0x3344);
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	sim_device_leave_reset(&sim);
+	sim_advance_ms(&sim, 5000);
+
+	EXPECT_FALSE(sim.device.joined);
+	EXPECT_FALSE(sim.device.have_transport_key);
+	EXPECT_EQ(sim.device.short_addr, SIM_NO_SHORT_ADDR);
+	EXPECT_EQ(sim.device.active_pan_id, SIM_NO_SHORT_ADDR);
+	EXPECT_EQ(sim.coord.indirect.count, 0);
+	EXPECT_FALSE(sim.coord.interview_complete);
+}
+
 static void test_no_poll_before_restore_or_join(void)
 {
 	struct sim sim;
@@ -833,6 +1001,11 @@ int main(void)
 	test_permit_join_interview_success();
 	test_permit_join_disabled_rejects_association();
 	test_restore_joined_polls_indirect_interview();
+	test_restored_split_joined_flag_recovers_polling();
+	test_restored_joined_stopped_poll_timer_recovers();
+	test_split_joined_flag_without_key_does_not_poll();
+	test_post_interview_polling_continues();
+	test_leave_resets_join_state_filters_and_persistence_model();
 	test_no_poll_before_restore_or_join();
 
 	if (failures != 0) {
