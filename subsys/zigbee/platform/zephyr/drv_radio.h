@@ -31,8 +31,8 @@
 /* Channel conversion: logical (11-26) → physical offset (5 MHz steps) */
 #define LOGICCHANNEL_TO_PHYSICAL(p)   (((p) - 10) * 5)
 
-/* sys timer clock rate (24 MHz / 1 µs) */
-#define S_TIMER_CLOCK_1US     24
+/* SDK compatibility: MAC timing scale selected by the Zephyr radio port. */
+#define S_TIMER_CLOCK_1US     CONFIG_ZIGBEE_MAC_TIMER_CYCLES_PER_US
 
 /* clock_time() — returns current system tick (matches SDK usage pattern) */
 static inline u32 clock_time(void)
@@ -43,6 +43,11 @@ static inline u32 clock_time(void)
 static inline bool clock_time_exceed(u32 ref, u32 span_us)
 {
 	return (u32)(clock_time() - ref) >= (span_us * S_TIMER_CLOCK_1US);
+}
+
+static inline u32 clock_cycles_to_us(u32 cycles)
+{
+	return cycles / S_TIMER_CLOCK_1US;
 }
 
 /* ─── Adapter contract (Phase 2) ─────────────────────────────────── */

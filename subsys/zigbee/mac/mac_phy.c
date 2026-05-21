@@ -724,7 +724,7 @@ void rf_rx_irq_handler(void)
         (void)pSrcAddr;
 #endif
 
-        txDelayUs = (clock_time() - txTime) / S_TIMER_CLOCK_1US;
+        txDelayUs = (s32)clock_cycles_to_us((u32)(clock_time() - txTime));
         if (txDelayUs < ZB_TX_WAIT_US) {
             WaitUs(ZB_TX_WAIT_US - txDelayUs);
         }

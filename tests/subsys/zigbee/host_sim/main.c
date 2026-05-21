@@ -911,6 +911,27 @@ static void test_restored_split_joined_flag_recovers_polling(void)
 	EXPECT_STR_EQ(sim.coord.observed_model_id, "tlsr8258-minimal");
 }
 
+static void test_restored_split_joined_flag_repairs_active_poll_target(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim_device_restore_joined(&sim, 0x6633);
+	sim.device.joined = false;
+	sim.device.active_pan_id = SIM_NO_SHORT_ADDR;
+	sim.device.active_parent_short = SIM_NO_SHORT_ADDR;
+
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	sim_advance_ms(&sim, 5000);
+
+	EXPECT_TRUE(sim.device.joined);
+	EXPECT_EQ(sim.device.active_pan_id, SIM_PAN_ID);
+	EXPECT_EQ(sim.device.active_parent_short, SIM_COORD_SHORT_ADDR);
+	EXPECT_TRUE(sim.device.interview_complete);
+	EXPECT_TRUE(sim.coord.interview_complete);
+	EXPECT_STR_EQ(sim.coord.observed_model_id, "tlsr8258-minimal");
+}
+
 static void test_restored_joined_stopped_poll_timer_recovers(void)
 {
 	struct sim sim;
@@ -1002,6 +1023,7 @@ int main(void)
 	test_permit_join_disabled_rejects_association();
 	test_restore_joined_polls_indirect_interview();
 	test_restored_split_joined_flag_recovers_polling();
+	test_restored_split_joined_flag_repairs_active_poll_target();
 	test_restored_joined_stopped_poll_timer_recovers();
 	test_split_joined_flag_without_key_does_not_poll();
 	test_post_interview_polling_continues();

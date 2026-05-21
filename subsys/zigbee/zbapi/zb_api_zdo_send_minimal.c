@@ -377,7 +377,7 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 			return RET_OK;
 		}
 
-		if (rc != -EBUSY) {
+		if (rc != -EBUSY && rc != -EAGAIN) {
 			break;
 		}
 
@@ -517,7 +517,7 @@ static u8 zb_minimal_send_aps_data_frame(u8 srcEp, const epInfo_t *dst, u16 clus
 			break;
 		}
 
-		if (rc != -EBUSY) {
+		if (rc != -EBUSY && rc != -EAGAIN) {
 			break;
 		}
 
