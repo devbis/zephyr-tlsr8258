@@ -4,9 +4,9 @@
 
 #include <errno.h>
 #include <string.h>
-#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -100,8 +100,8 @@ int zb_platform_clear_persistent_state(void)
 	g_bdbCtx.factoryNew = 1U;
 	BDB_STATE_SET(BDB_STATE_IDLE);
 
-	tlsr8258_zigbee_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
-				       g_zbMacPib.extAddress);
+	zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
+				     g_zbMacPib.extAddress);
 
 	return (st == NV_SUCC || st == NV_ITEM_NOT_FOUND || st == NV_NO_MEDIA) ? 0 : -EIO;
 }

@@ -2,13 +2,13 @@
 
 menuconfig ZIGBEE
 	bool "Zigbee protocol support"
-	depends on IEEE802154_TELINK_TLSR8258
+	depends on ZIGBEE_RADIO_PORT
 	select NVS
 	select FLASH
 	select FLASH_MAP
 	select HWINFO
 	help
-	  Enable Zigbee subsystem for TLSR8258.
+	  Enable Zigbee subsystem.
 	  AES-128 is provided by the TLSR8258 hardware accelerator.
 
 if ZIGBEE
@@ -75,3 +75,12 @@ config ZIGBEE_MAC_TRX_STUBS
 	  Keep this disabled for normal Zigbee builds.
 
 endif # ZIGBEE
+
+config ZIGBEE_RADIO_PORT
+	bool
+
+config ZIGBEE_RADIO_PORT_TLSR8258
+	bool
+	depends on IEEE802154_TELINK_TLSR8258
+	select ZIGBEE_RADIO_PORT
+	default y if IEEE802154_TELINK_TLSR8258
