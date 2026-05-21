@@ -47,6 +47,9 @@ zephyr_library_sources(
     platform/zephyr/zb_vendor_compat.c
     platform/zephyr/zb_persistence_zephyr.c
 )
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258
+    platform/zephyr/zb_radio_port_tlsr8258.c
+)
 
 # Common utilities
 zephyr_library_sources(
