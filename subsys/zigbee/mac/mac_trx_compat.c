@@ -1179,10 +1179,23 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 #define ZB_MINIMAL_ZCL_BASIC_MODEL_ID         0x0005U
 #define ZB_MINIMAL_ZCL_BASIC_POWER_SOURCE     0x0007U
 
+/*
+ * Weak identity hooks.  The zigbee_shell sample overrides these via
+ * app_profile.c so that the fallback interview path answers with the
+ * same strings as the real ZCL attribute table.
+ */
+const char __weak *zb_platform_app_basic_mfr_name(void)
+{
+	return "Telink";
+}
+
+const char __weak *zb_platform_app_basic_model_id(void)
+{
+	return "tlsr8258-minimal";
+}
+
 static u16 zb_minimal_zcl_put_basic_attr(u8 *buf, u16 pos, u16 max_len, u16 attr_id)
 {
-	static const char manufacturer[] = "Telink";
-	static const char model[] = "tlsr8258-minimal";
 	const char *str = NULL;
 	u8 type = 0U;
 	u8 value = 0U;
@@ -1211,11 +1224,11 @@ static u16 zb_minimal_zcl_put_basic_attr(u8 *buf, u16 pos, u16 max_len, u16 attr
 		break;
 	case ZB_MINIMAL_ZCL_BASIC_MFR_NAME:
 		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
-		str = manufacturer;
+		str = zb_platform_app_basic_mfr_name();
 		break;
 	case ZB_MINIMAL_ZCL_BASIC_MODEL_ID:
 		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
-		str = model;
+		str = zb_platform_app_basic_model_id();
 		break;
 	default:
 		buf[pos++] = ZB_MINIMAL_ZCL_STATUS_UNSUPPORTED_ATTR;

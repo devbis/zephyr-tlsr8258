@@ -95,6 +95,9 @@ int zb_platform_radio_send_beacon_request(void)
 }
 
 #define CONFIG_ZIGBEE_BDB 1
+/* app_bdb.c owns the commissioning state; include it directly so the
+ * reset_state() helper can access its static variables. */
+#include "../../../../samples/zigbee/zigbee_shell/src/app_bdb.c"
 #define main zigbee_shell_sample_main
 #include "../../../../samples/zigbee/zigbee_shell/src/main.c"
 #undef main
