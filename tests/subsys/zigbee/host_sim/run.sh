@@ -63,6 +63,12 @@ if rg -n 'sector_size[[:space:]]*=[[:space:]]*4096|CONFIG_TC32' \
 	exit 1
 fi
 
+if rg -n 'SYS_INIT\s*\(\s*zb_nvs_init\s*,' \
+	subsys/zigbee/platform/zephyr/drv_nv_zephyr.c; then
+	echo "Zigbee NV backend must not mount NVS from SYS_INIT; initialize it lazily from runtime context" >&2
+	exit 1
+fi
+
 leave_success_line="$(rg -n 'rsp\[1\][[:space:]]*=[[:space:]]*ZDO_SUCCESS' \
 	subsys/zigbee/mac/mac_trx_compat.c | head -n 1 | cut -d: -f1 || true)"
 leave_clear_line="$(rg -n 'zb_platform_clear_persistent_state' \
