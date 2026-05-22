@@ -1038,6 +1038,18 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
      * which in turn stalls interview traffic delivery.
      */
     bdb_ed_post_join_poll_kick();
+    /*
+     * edRuntimeReady is set by bdb_ed_runtime_join_complete(), called from
+     * nwk_ed_minimal_post_join_poll_task().  That cooperative task is enqueued
+     * immediately when join completes (nwk_ed_minimal_complete_join); this
+     * function is reached 1000 ms later via BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY.
+     * Cooperative tasks drain before any timer fires, so edRuntimeReady is
+     * already 1 on the first invocation under normal scheduling.  The 200 ms
+     * one-shot retry below guards only against a scheduler anomaly where the
+     * cooperative task has not yet run; after one retry the task will have
+     * completed.  If the timer pool is exhausted we take the steer-finish
+     * path immediately to avoid an unrecoverable spin.
+     */
     if (!g_bdbCtx.edRuntimeReady) {
         if (TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyStart, NULL, 200) == NULL) {
             TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);

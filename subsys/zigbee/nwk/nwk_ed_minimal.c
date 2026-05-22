@@ -811,6 +811,10 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	 * Program the candidate PAN before association so the radio can
 	 * acknowledge the long-addressed Association Response on the first join,
 	 * matching the vendor MAC flow more closely.
+	 *
+	 * Hardware validation required: the radio-filter pre-programming effect
+	 * on Association Response reception is not exercised by host-only
+	 * baselines and must be verified on physical hardware.
 	 */
 	zb_radio_port_update_filters(panId, MAC_SHORT_ADDR_BROADCAST, g_zbMacPib.extAddress);
 

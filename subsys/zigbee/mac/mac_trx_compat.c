@@ -84,6 +84,17 @@ static u32 zb_u32_from_le(const u8 *src)
 	return (u32)src[0] | ((u32)src[1] << 8) | ((u32)src[2] << 16) | ((u32)src[3] << 24);
 }
 
+/*
+ * Resolve the APS security source IEEE address when the 802.15.4 frame header
+ * carries only a short address (keyIdMode == SS_KEY_ID_MODE_IMPLICIT).
+ * Prefers trust_center_address (populated on first Transport-Key delivery)
+ * over coordExtAddress; returns NULL to drop the frame rather than decrypt
+ * with a zeroed IEEE address.
+ *
+ * This path (first secured unicast from TC after join when coordExtAddress is
+ * not yet populated) cannot be exercised by host-only baselines.  Full
+ * validation is deferred to on-hardware testing in a later task.
+ */
 static const u8 *zb_minimal_aps_security_src_fallback_get(void)
 {
 	if (!ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) &&
