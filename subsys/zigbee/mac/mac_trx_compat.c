@@ -84,6 +84,21 @@ static u32 zb_u32_from_le(const u8 *src)
 	return (u32)src[0] | ((u32)src[1] << 8) | ((u32)src[2] << 16) | ((u32)src[3] << 24);
 }
 
+static const u8 *zb_minimal_aps_security_src_fallback_get(void)
+{
+	if (!ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) &&
+	    !ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address)) {
+		return ss_ib.trust_center_address;
+	}
+
+	if (!ZB_IEEE_ADDR_IS_ZERO(g_zbMacPib.coordExtAddress) &&
+	    !ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress)) {
+		return g_zbMacPib.coordExtAddress;
+	}
+
+	return NULL;
+}
+
 static u8 zb_mac_src_addr_ptr(u16 frame_ctrl, u8 len, u8 *has_src_addr, u8 *malformed)
 {
 	u8 idx = MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN;
@@ -913,7 +928,14 @@ static bool zb_minimal_parse_aps_frame(const u8 *payload, u8 payload_len, zb_min
 			memcpy(frame->security_src_ext, &payload[idx], sizeof(addrExt_t));
 			idx += sizeof(addrExt_t);
 		} else {
-			memcpy(frame->security_src_ext, g_zbMacPib.coordExtAddress,
+			const u8 *security_src_ext = zb_minimal_aps_security_src_fallback_get();
+
+			if (security_src_ext == NULL) {
+				LOG_DBG("joined RX: missing APS security source IEEE");
+				return false;
+			}
+
+			memcpy(frame->security_src_ext, security_src_ext,
 			       sizeof(frame->security_src_ext));
 		}
 		if (frame->key_id == SS_SECUR_NWK_KEY) {
