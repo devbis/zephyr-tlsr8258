@@ -1200,7 +1200,6 @@ end:
 	 */
 	if ((!rc) && ((fs->ate_wra & ADDR_OFFS_MASK) ==
 		      (fs->sector_size - 2 * ate_size))) {
-
 		rc = nvs_add_gc_done_ate(fs);
 	}
 	k_mutex_unlock(&fs->nvs_lock);

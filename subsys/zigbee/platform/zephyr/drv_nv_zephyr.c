@@ -106,9 +106,16 @@ static bool zb_nvs_ensure_ready(void)
 		return false;
 	}
 
+	/*
+	 * Keep mount retryable across a single boot. The vendor stack touches NV
+	 * from multiple init paths; a transient early failure must not permanently
+	 * poison all later restore attempts.
+	 */
+	zb_nvs_init_attempted = true;
+
 	rc = zb_nvs_geometry_init();
 	if (rc < 0) {
-		zb_nvs_init_attempted = true;
+		zb_nvs_init_attempted = false;
 		if (rc == -ENOENT) {
 			zb_nvs_log_degraded("flash area missing", rc);
 		} else if (rc == -EINVAL) {
@@ -120,13 +127,13 @@ static bool zb_nvs_ensure_ready(void)
 	}
 
 	rc = nvs_mount(&zb_nvs);
-	zb_nvs_init_attempted = true;
 	if (rc == 0) {
 		zb_nvs_ready = true;
 		zb_nvs_degraded_logged = false;
 		return true;
 	}
 
+	zb_nvs_init_attempted = false;
 	zb_nvs_log_degraded("nvs mount failed", rc);
 	return false;
 }
@@ -183,6 +190,7 @@ nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
 
 nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 {
+	ssize_t actual_len;
 	ssize_t rc;
 	u16 expected_len;
 
@@ -191,18 +199,15 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 		return NV_NO_MEDIA;
 	}
 	expected_len = nv_item_expected_read_len(itemId, len);
-	rc = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
+	actual_len = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
 
-	if (rc == -ENOENT) {
+	if (actual_len == -ENOENT) {
 		return NV_ITEM_NOT_FOUND;
 	}
-	if (rc < 0) {
+	if (actual_len < 0) {
 		return NV_DATA_CHECK_ERROR;
 	}
-	if (expected_len > len) {
-		return NV_DATA_CHECK_ERROR;
-	}
-	if (rc < expected_len) {
+	if (actual_len < expected_len) {
 		return NV_DATA_CHECK_ERROR;
 	}
 	rc = nvs_read(&zb_nvs, nv_key(id, itemId), buf, len);
@@ -210,7 +215,11 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	if (rc == -ENOENT) {
 		return NV_ITEM_NOT_FOUND;
 	}
-	return rc >= expected_len ? NV_SUCC : NV_DATA_CHECK_ERROR;
+	if (rc < 0 || rc < len) {
+		return NV_DATA_CHECK_ERROR;
+	}
+
+	return NV_SUCC;
 }
 
 nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)

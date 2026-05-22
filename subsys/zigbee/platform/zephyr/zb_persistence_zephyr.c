@@ -33,6 +33,25 @@ static void zb_persist_register_item_length(void)
 	zb_persist_len_registered = true;
 }
 
+static void zb_persist_normalize_nwk_ctx(nwk_ctx_t *ctx)
+{
+	if (ctx == NULL) {
+		return;
+	}
+
+	/*
+	 * The vendor stack restores joined runtime from persisted MAC/NWK/security
+	 * state, not from transient NWK state-machine flags. Avoid reviving stale
+	 * join sub-states after reboot.
+	 */
+	ctx->parentIsChanged = 0U;
+	ctx->joined_pro = 0U;
+	ctx->joinAccept = 0U;
+	ctx->state = NLME_STATE_IDLE;
+	ctx->user_state = NLME_IDLE;
+	ctx->is_factory_new = ctx->joined ? 0U : 1U;
+}
+
 int zb_platform_restore_persistent_state(void)
 {
 	zb_persist_blob_t blob;
@@ -51,7 +70,7 @@ int zb_platform_restore_persistent_state(void)
 
 	g_zbInfo = blob.zb_info;
 	g_zbNwkCtx = blob.nwk_ctx;
-	g_zbNwkCtx.is_factory_new = g_zbNwkCtx.joined ? 0U : 1U;
+	zb_persist_normalize_nwk_ctx(&g_zbNwkCtx);
 
 	return 0;
 }
@@ -118,7 +137,7 @@ void zb_info_save(void *arg)
 	blob.version = ZB_PERSIST_BLOB_VERSION;
 	blob.zb_info = g_zbInfo;
 	blob.nwk_ctx = g_zbNwkCtx;
-	blob.nwk_ctx.is_factory_new = blob.nwk_ctx.joined ? 0U : 1U;
+	zb_persist_normalize_nwk_ctx(&blob.nwk_ctx);
 
 	st = nv_flashWriteNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
 	if (st != NV_SUCC) {
