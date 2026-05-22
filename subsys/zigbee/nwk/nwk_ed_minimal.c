@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MS  200U
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MAX 20U
 #define NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS 200U
-#define NWK_ED_MINIMAL_RX_EVT_Q_LEN       4U
+#define NWK_ED_MINIMAL_RX_EVT_Q_LEN       8U
 #define NWK_ED_MINIMAL_NWK_AUX_HDR_LEN    14U
 #define NWK_ED_MINIMAL_NWK_MIC_LEN        4U
 #define NWK_ED_MINIMAL_NWK_SEC_CTRL       0x2DU
@@ -82,6 +82,7 @@ typedef struct {
 	extPANId_t activeExtPanId;
 	u8 assocPollCount;
 	bool interviewRejoinMode;
+	bool interviewKickScheduled;
 	u8 interviewPollCount;
 	u32 interviewPollIntervalMs;
 	bool endDevTimeoutRspSeen;
@@ -191,9 +192,11 @@ static void nwk_ed_minimal_timer_start(u32 timeoutMs);
 static void nwk_ed_minimal_joined_idle_poll_restart(u32 timeoutMs);
 static void nwk_ed_minimal_post_join_poll_task(void *arg);
 static void nwk_ed_minimal_post_join_announce_task(void *arg);
+static void nwk_ed_minimal_interview_kick_task(void *arg);
 static void nwk_ed_minimal_timeout_req_task(void *arg);
 static void nwk_ed_minimal_rx_event_task(void *arg);
 static void nwk_ed_minimal_repair_joined_context_if_needed(void);
+static bool nwk_ed_minimal_send_data_request(void);
 void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs);
 void tl_zbNwkEdMinimalPollEnsure(void);
 
@@ -710,9 +713,17 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 
 static void nwk_ed_minimal_enter_interview(bool rejoinMode)
 {
+	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_INTERVIEW;
 	g_nwkEdCtx.interviewRejoinMode = rejoinMode;
 	g_nwkEdCtx.assocPollCount = 0U;
+	g_nwkEdCtx.interviewKickScheduled = FALSE;
+
+	if (TL_SCHEDULE_TASK(nwk_ed_minimal_interview_kick_task, NULL) == RET_OK) {
+		g_nwkEdCtx.interviewKickScheduled = TRUE;
+		return;
+	}
+
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_INTERVIEW_POLL_MS);
 }
 
@@ -796,6 +807,12 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	g_nwkEdCtx.assocPollCount = 0U;
 
 	nwk_ed_minimal_channel_set(channel);
+	/*
+	 * Program the candidate PAN before association so the radio can
+	 * acknowledge the long-addressed Association Response on the first join,
+	 * matching the vendor MAC flow more closely.
+	 */
+	zb_radio_port_update_filters(panId, MAC_SHORT_ADDR_BROADCAST, g_zbMacPib.extAddress);
 
 	fcf |= MAC_FRAME_COMMAND;
 	fcf |= MAC_FCF_ACK_REQ_BIT;
@@ -1110,6 +1127,7 @@ static void nwk_ed_minimal_runtime_reset(void)
 	memset(g_nwkEdCtx.activeExtPanId, 0, sizeof(g_nwkEdCtx.activeExtPanId));
 	g_nwkEdCtx.assocPollCount = 0U;
 	g_nwkEdCtx.interviewRejoinMode = FALSE;
+	g_nwkEdCtx.interviewKickScheduled = FALSE;
 	g_nwkEdCtx.interviewPollCount = 0U;
 	g_nwkEdCtx.interviewPollIntervalMs = NWK_ED_MINIMAL_INTERVIEW_POLL_MS;
 	g_nwkEdCtx.endDevTimeoutRspSeen = FALSE;
@@ -1286,6 +1304,22 @@ static void nwk_ed_minimal_post_join_poll_task(void *arg)
 
 	tl_zbNwkEdMinimalPollEnsure();
 	bdb_ed_runtime_join_complete();
+}
+
+static void nwk_ed_minimal_interview_kick_task(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	g_nwkEdCtx.interviewKickScheduled = FALSE;
+	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_INTERVIEW) {
+		return;
+	}
+
+	if (nwk_ed_minimal_send_data_request()) {
+		g_nwkEdCtx.assocPollCount++;
+	}
+
+	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_INTERVIEW_POLL_MS);
 }
 
 static void nwk_ed_minimal_timeout_req_task(void *arg)

@@ -1038,6 +1038,12 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
      * which in turn stalls interview traffic delivery.
      */
     bdb_ed_post_join_poll_kick();
+    if (!g_bdbCtx.edRuntimeReady) {
+        if (TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyStart, NULL, 200) == NULL) {
+            TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
+        }
+        return -1;
+    }
     bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
 #else
     if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
