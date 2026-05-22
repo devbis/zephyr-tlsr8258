@@ -8,6 +8,7 @@
  *
  * NVS key encoding: (id << 8) | itemId  (fits in uint16_t)
  */
+#include <zephyr/drivers/flash.h>
 #include <zephyr/kernel.h>
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/kvss/nvs.h>
@@ -15,12 +16,11 @@
 #include <errno.h>
 #include "drv_nv.h"
 
-#define NVS_PARTITION_LABEL  nvs_storage
-#define NVS_PARTITION_ID     FIXED_PARTITION_ID(NVS_PARTITION_LABEL)
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
 
 static struct nvs_fs zb_nvs;
 static bool zb_nvs_ready;
+static bool zb_nvs_degraded_logged;
 static u8 nv_item_len_chk_num;
 
 typedef struct {
@@ -30,35 +30,72 @@ typedef struct {
 
 static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
 
+static void zb_nvs_log_degraded(const char *reason, int rc)
+{
+	if (zb_nvs_degraded_logged) {
+		return;
+	}
+
+	zb_nvs_degraded_logged = true;
+	printk("zigbee NV degraded: %s (%d)\n", reason, rc);
+}
+
+static int zb_nvs_flash_area_id_get(void)
+{
+	if (CONFIG_ZIGBEE_NV_FLASH_AREA_ID >= 0) {
+		return CONFIG_ZIGBEE_NV_FLASH_AREA_ID;
+	}
+
+#if FIXED_PARTITION_EXISTS(nvs_storage)
+	return DT_FIXED_PARTITION_ID(DT_NODELABEL(nvs_storage));
+#else
+	return -ENOENT;
+#endif
+}
+
 static int zb_nvs_init(void)
 {
 	const struct flash_area *fa;
+	struct flash_pages_info page_info;
+	int area_id;
 	int rc;
 
-	rc = flash_area_open(NVS_PARTITION_ID, &fa);
+	area_id = zb_nvs_flash_area_id_get();
+	if (area_id < 0) {
+		zb_nvs_log_degraded("flash area missing", area_id);
+		return 0;
+	}
+
+	rc = flash_area_open((uint8_t)area_id, &fa);
 	if (rc < 0) {
-		return rc;
+		zb_nvs_log_degraded("flash area open failed", rc);
+		return 0;
 	}
 	zb_nvs.flash_device = flash_area_get_device(fa);
 	zb_nvs.offset       = fa->fa_off;
-	zb_nvs.sector_size  = 4096;
-	zb_nvs.sector_count = CONFIG_ZIGBEE_NV_SECTOR_COUNT;
+	rc = flash_get_page_info_by_offs(zb_nvs.flash_device, fa->fa_off, &page_info);
+	if (rc < 0 || page_info.size == 0U) {
+		flash_area_close(fa);
+		zb_nvs_log_degraded("flash geometry unavailable", rc);
+		return 0;
+	}
+	zb_nvs.sector_size = page_info.size;
+	zb_nvs.sector_count = fa->fa_size / page_info.size;
 	flash_area_close(fa);
 
-#ifdef CONFIG_TC32
-	/*
-	 * TC32 bring-up still trips inside Zephyr NVS mount path.
-	 * Keep Zigbee booting without persistent storage for now:
-	 * all NV entry points already degrade cleanly when zb_nvs_ready == false.
-	 */
-	return 0;
-#endif
+	if (zb_nvs.sector_count == 0U) {
+		zb_nvs_log_degraded("flash area too small", -EINVAL);
+		return 0;
+	}
 
 	rc = nvs_mount(&zb_nvs);
 	if (rc == 0) {
 		zb_nvs_ready = true;
+		zb_nvs_degraded_logged = false;
+	} else {
+		zb_nvs_log_degraded("nvs mount failed", rc);
 	}
-	return rc;
+	return 0;
 }
 SYS_INIT(zb_nvs_init, APPLICATION, 90);
 

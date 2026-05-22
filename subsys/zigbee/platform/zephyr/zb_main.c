@@ -64,6 +64,10 @@ void __weak zb_platform_app_network_left(void)
 {
 }
 
+void __weak bdb_ed_runtime_join_complete(void)
+{
+}
+
 bool __weak zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
 	ARG_UNUSED(target);

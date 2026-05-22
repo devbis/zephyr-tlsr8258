@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(main);
 #if defined(CONFIG_ZIGBEE_BDB)
 static bool commissioning_start_requested;
 static bool bdb_runtime_ready;
+static bool leave_recommission_pending;
 static struct k_work_delayable commissioning_retry_work;
 static bool commissioning_retry_work_ready;
 static const uint8_t zigbee_shell_fixed_tc_addr[8] = {
@@ -20,6 +21,8 @@ static const uint8_t zigbee_shell_fixed_tc_addr[8] = {
 extern bool zb_isDeviceJoinedNwk(void);
 extern uint8_t zb_setPollRate(uint32_t newRate);
 extern uint32_t zb_getPollRate(void);
+
+static void zigbee_shell_commissioning_retry_schedule(void);
 
 static void zigbee_shell_activate_poll_rate(void)
 {
@@ -36,7 +39,23 @@ static void zigbee_shell_commissioning_retry(struct k_work *work)
 {
 	ARG_UNUSED(work);
 
+	if (leave_recommission_pending) {
+		if (!bdb_runtime_ready || zb_isDeviceJoinedNwk() || commissioning_start_requested) {
+			zigbee_shell_commissioning_retry_schedule();
+			return;
+		}
+
+		leave_recommission_pending = false;
+		zb_platform_app_start_commissioning();
+		if (!commissioning_start_requested) {
+			leave_recommission_pending = true;
+			zigbee_shell_commissioning_retry_schedule();
+		}
+		return;
+	}
+
 	if (zb_isDeviceJoinedNwk()) {
+		zigbee_shell_activate_poll_rate();
 		commissioning_start_requested = true;
 		return;
 	}
@@ -217,16 +236,12 @@ void zb_platform_app_network_left(void)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
 	commissioning_start_requested = false;
+	leave_recommission_pending = true;
 	if (commissioning_retry_work_ready) {
 		(void)k_work_cancel_delayable(&commissioning_retry_work);
 	}
 
-	if (!bdb_runtime_ready) {
-		zigbee_shell_commissioning_retry_schedule();
-		return;
-	}
-
-	zb_platform_app_start_commissioning();
+	zigbee_shell_commissioning_retry_schedule();
 #endif
 }
 
@@ -235,6 +250,7 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 #if defined(CONFIG_ZIGBEE_BDB)
 	if (joinedNetwork) {
 		zigbee_shell_activate_poll_rate();
+		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		if (commissioning_retry_work_ready) {
 			(void)k_work_cancel_delayable(&commissioning_retry_work);
@@ -245,6 +261,7 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 
 	if (zb_isDeviceJoinedNwk()) {
 		zigbee_shell_activate_poll_rate();
+		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		if (commissioning_retry_work_ready) {
 			(void)k_work_cancel_delayable(&commissioning_retry_work);

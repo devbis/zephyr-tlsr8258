@@ -699,7 +699,7 @@ static void sim_device_receive(struct sim *sim, const struct sim_frame *frame)
 		sim->device.have_transport_key = true;
 		sim->device.joined = true;
 		sim->device.state = SIM_DEVICE_JOINED_IDLE;
-		sim->device.next_poll_ms = sim->now_ms + sim->device.poll_rate_ms;
+		sim->device.next_poll_ms = sim->now_ms + 1u;
 		sim_device_send(sim, SIM_FRAME_END_DEVICE_TIMEOUT_REQ);
 		sim->device.sent_timeout_req = true;
 		sim_device_send(sim, SIM_FRAME_DEVICE_ANNOUNCE);
@@ -861,6 +861,22 @@ static void test_permit_join_interview_success(void)
 	EXPECT_EQ(get_le16(&sim.coord.model_id_rsp.wire[18]), SIM_ZCL_ATTR_MODEL_ID);
 }
 
+static void test_association_does_not_complete_join_before_transport_key(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim.coord.permit_join = true;
+	sim.coord.interview_enabled = false;
+	sim_device_start_commissioning(&sim);
+
+	EXPECT_EQ(sim.device.state, SIM_DEVICE_WAIT_TRANSPORT_KEY);
+	EXPECT_FALSE(sim.device.joined);
+	EXPECT_FALSE(sim.device.sent_timeout_req);
+	EXPECT_FALSE(sim.device.sent_device_announce);
+	EXPECT_FALSE(sim.coord.interview_complete);
+}
+
 static void test_permit_join_disabled_rejects_association(void)
 {
 	struct sim sim;
@@ -986,6 +1002,26 @@ static void test_post_interview_polling_continues(void)
 	EXPECT_TRUE(sim.device.poll_tx_count > polls_after_interview);
 }
 
+static void test_first_post_join_poll_delivers_pending_indirect_traffic(void)
+{
+	struct sim sim;
+
+	sim_init(&sim);
+	sim.coord.permit_join = true;
+	sim.coord.interview_enabled = false;
+	sim_device_start_commissioning(&sim);
+	sim_advance_ms(&sim, 250);
+
+	EXPECT_TRUE(sim.device.joined);
+	sim_tx_to_device(&sim, SIM_FRAME_ACTIVE_EP_REQ);
+	EXPECT_EQ(sim.coord.indirect.count, 2);
+
+	sim_advance_ms(&sim, SIM_POLL_RATE_MS);
+
+	EXPECT_EQ(sim.coord.indirect.count, 1);
+	EXPECT_TRUE(sim.device.poll_tx_count >= 2);
+}
+
 static void test_leave_resets_join_state_filters_and_persistence_model(void)
 {
 	struct sim sim;
@@ -1020,6 +1056,7 @@ static void test_no_poll_before_restore_or_join(void)
 int main(void)
 {
 	test_permit_join_interview_success();
+	test_association_does_not_complete_join_before_transport_key();
 	test_permit_join_disabled_rejects_association();
 	test_restore_joined_polls_indirect_interview();
 	test_restored_split_joined_flag_recovers_polling();
@@ -1027,6 +1064,7 @@ int main(void)
 	test_restored_joined_stopped_poll_timer_recovers();
 	test_split_joined_flag_without_key_does_not_poll();
 	test_post_interview_polling_continues();
+	test_first_post_join_poll_delivers_pending_indirect_traffic();
 	test_leave_resets_join_state_filters_and_persistence_model();
 	test_no_poll_before_restore_or_join();
 
