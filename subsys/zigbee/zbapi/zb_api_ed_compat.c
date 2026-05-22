@@ -98,3 +98,16 @@ __attribute__((weak)) s32 nwk_parentNodeInfoStore(void)
 {
 	return RET_OK;
 }
+
+/*
+ * ED minimal binding table stub.
+ * An ED has no binding table; zcl_reporting.c uses this to check whether
+ * a cluster has a binding before scheduling attribute reports.  Return
+ * false so reports are suppressed on a device with no bindings.
+ */
+__attribute__((weak)) bool zb_bindingTblSearched(u16 clusterID, u8 srcEp)
+{
+ARG_UNUSED(clusterID);
+ARG_UNUSED(srcEp);
+return false;
+}

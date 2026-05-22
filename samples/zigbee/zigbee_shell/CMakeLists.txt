@@ -7,3 +7,7 @@ target_sources(app PRIVATE
 	src/app_bdb.c
 	src/app_profile.c
 )
+
+# Expose ZCL SDK headers (zcl/, af/) that live under subsys/zigbee but are
+# not part of the public zephyr_include_directories set.
+target_include_directories(app PRIVATE ${ZEPHYR_BASE}/subsys/zigbee)
