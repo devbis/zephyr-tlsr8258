@@ -36,7 +36,7 @@ bool zb_platform_app_should_start_commissioning(void);
 void zb_platform_app_start_commissioning(void);
 bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target);
 bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile);
-void zb_platform_apply_runtime_ieee_addr(void);
+void zb_platform_app_apply_runtime_ieee_addr(void);
 const uint8_t *zb_platform_runtime_ieee_addr_get(void);
 
 /*
@@ -48,6 +48,21 @@ uint8_t zb_platform_bdb_network_steer_start(void);
 int zb_platform_restore_persistent_state(void);
 int zb_platform_clear_persistent_state(void);
 void zb_platform_app_network_left(void);
+
+/*
+ * Called by zb_platform_bdb_init_default() before BDB attribute
+ * initialization.  Applications override this weak stub to call
+ * zcl_init / af_endpointRegister / zcl_register for their endpoints.
+ */
+void zb_platform_app_register_endpoints(void);
+
+/*
+ * Identity strings used by the fallback Basic-cluster interview path in
+ * mac_trx_compat.c.  Applications override these weak stubs so the
+ * interview answers mirror the real ZCL attribute table.
+ */
+const char *zb_platform_app_basic_mfr_name(void);
+const char *zb_platform_app_basic_model_id(void);
 
 #define ZB_PLATFORM_RADIO_ERR_NONE          0U
 #define ZB_PLATFORM_RADIO_ERR_NOT_READY     1U
