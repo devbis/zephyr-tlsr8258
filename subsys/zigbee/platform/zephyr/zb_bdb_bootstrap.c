@@ -243,12 +243,24 @@ static void zb_platform_bdb_apply_join_profile(void)
 
 #endif
 
+/*
+ * Optional hook for the application to register endpoints and initialize
+ * ZCL before BDB starts.  The zigbee_shell sample overrides this to call
+ * app_profile_register(), giving real zcl_init / af_endpointRegister /
+ * zcl_register wiring.  A no-op default allows the subsystem to compile
+ * standalone without requiring the sample-layer symbols.
+ */
+void __weak zb_platform_app_register_endpoints(void)
+{
+}
+
 int zb_platform_bdb_init_default(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return -ENOTSUP;
 #else
 	u32 frameCounter = 0U;
+	af_simple_descriptor_t *registered_desc;
 
 	if (zb_bdb_bootstrap_ready) {
 		zb_platform_bdb_restore_joined_target();
@@ -264,15 +276,30 @@ int zb_platform_bdb_init_default(void)
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_platform_bdb_restore_joined_target();
 
+	/* Let the application register its endpoint and initialize ZCL.
+	 * This must run before BDB attribute init so g_bdbCtx.simpleDesc
+	 * can point at the app-owned descriptor. */
+	zb_platform_app_register_endpoints();
+
 	tl_bdbAttrInit();
 	memset(&g_bdbCtx, 0, sizeof(g_bdbCtx));
 	g_bdbCtx.bdbAppCb = &zb_shell_bdb_cb;
-	g_bdbCtx.simpleDesc = &zb_shell_simple_desc;
-	g_bdbCtx.factoryNew = g_zbNwkCtx.is_factory_new ? 1U : 0U;
-	if (af_simpleDescGet(zb_shell_simple_desc.endpoint) == NULL &&
-	    !af_endpointRegister(zb_shell_simple_desc.endpoint, &zb_shell_simple_desc, NULL, NULL)) {
-		LOG_WRN("zb bdb init: endpoint %u register failed", zb_shell_simple_desc.endpoint);
+
+	/* Prefer the descriptor the app just registered; fall back to the
+	 * built-in shell descriptor if the app did not register anything. */
+	registered_desc = af_simpleDescGet(zb_shell_simple_desc.endpoint);
+	if (registered_desc != NULL) {
+		g_bdbCtx.simpleDesc = registered_desc;
+	} else {
+		g_bdbCtx.simpleDesc = &zb_shell_simple_desc;
+		if (!af_endpointRegister(zb_shell_simple_desc.endpoint,
+					 &zb_shell_simple_desc, NULL, NULL)) {
+			LOG_WRN("zb bdb init: endpoint %u register failed",
+				zb_shell_simple_desc.endpoint);
+		}
 	}
+
+	g_bdbCtx.factoryNew = g_zbNwkCtx.is_factory_new ? 1U : 0U;
 	zdo_zdpCbTblRegister(&zb_shell_zdo_cb);
 
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
