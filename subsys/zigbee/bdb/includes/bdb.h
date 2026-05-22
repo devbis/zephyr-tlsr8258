@@ -409,7 +409,9 @@ typedef struct {
     u8 leaveDoing:1;
     u8 forceJoin:1;
     u8 securityDisable:1;
-    u8 resv:3;
+    u8 edRuntimeReady:1;
+    u8 tcLinkKeyReady:1;
+    u8 resv:1;
     u8 initResult;
 } bdb_ctx_t;
 /** @} end of group zb_bdb_ctx */
@@ -610,6 +612,7 @@ void tl_bdbReset2FN(void);
  * @return      None
  */
 void bdb_retrieveTcLinkKeyDone(u8 status);
+void bdb_ed_runtime_join_complete(void);
 
 /**
  * @brief   check the bdb state
