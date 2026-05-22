@@ -5,6 +5,7 @@ project(zigbee_shell_bootstrap)
 target_sources(app PRIVATE
 	src/main.c
 	${ZEPHYR_BASE}/samples/zigbee/zigbee_shell/src/main.c
+	${ZEPHYR_BASE}/samples/zigbee/zigbee_shell/src/app_bdb.c
 )
 
 target_compile_definitions(app PRIVATE
@@ -14,4 +15,5 @@ target_compile_definitions(app PRIVATE
 
 target_include_directories(app PRIVATE
 	${ZEPHYR_BASE}/subsys/zigbee/include
+	${ZEPHYR_BASE}/samples/zigbee/zigbee_shell/src
 )
