@@ -136,6 +136,22 @@ static void zb_platform_bdb_repair_joined_flag_if_needed(void)
 	g_bdbAttrs.nodeIsOnANetwork = 1U;
 }
 
+static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
+{
+	int rc;
+
+	if (!g_zbNwkCtx.joined || zb_platform_bdb_has_valid_join_context()) {
+		return;
+	}
+
+	LOG_WRN("zb bdb restore: dropping stale joined context short=0x%04x pan=0x%04x key_idx=%u",
+		g_zbMacPib.shortAddress, g_zbMacPib.panId, ss_ib.activeSecureMaterialIndex);
+	rc = zb_platform_clear_persistent_state();
+	if (rc != 0) {
+		LOG_WRN("zb bdb restore: persistence clear failed rc=%d", rc);
+	}
+}
+
 static void zb_platform_bdb_restore_joined_target(void)
 {
 	u8 *nwkKey = NULL;
@@ -244,6 +260,7 @@ int zb_platform_bdb_init_default(void)
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
 
+	zb_platform_bdb_drop_stale_joined_state_if_needed();
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_platform_bdb_restore_joined_target();
 
