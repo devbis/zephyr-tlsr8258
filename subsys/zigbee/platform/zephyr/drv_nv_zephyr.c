@@ -20,6 +20,8 @@
 
 static struct nvs_fs zb_nvs;
 static bool zb_nvs_ready;
+static bool zb_nvs_init_attempted;
+static bool zb_nvs_geometry_ready;
 static bool zb_nvs_degraded_logged;
 static u8 nv_item_len_chk_num;
 
@@ -53,51 +55,81 @@ static int zb_nvs_flash_area_id_get(void)
 #endif
 }
 
-static int zb_nvs_init(void)
+static int zb_nvs_geometry_init(void)
 {
 	const struct flash_area *fa;
 	struct flash_pages_info page_info;
 	int area_id;
 	int rc;
 
+	if (zb_nvs_geometry_ready) {
+		return 0;
+	}
+
 	area_id = zb_nvs_flash_area_id_get();
 	if (area_id < 0) {
-		zb_nvs_log_degraded("flash area missing", area_id);
-		return 0;
+		return area_id;
 	}
 
 	rc = flash_area_open((uint8_t)area_id, &fa);
 	if (rc < 0) {
-		zb_nvs_log_degraded("flash area open failed", rc);
-		return 0;
+		return rc;
 	}
 	zb_nvs.flash_device = flash_area_get_device(fa);
 	zb_nvs.offset       = fa->fa_off;
 	rc = flash_get_page_info_by_offs(zb_nvs.flash_device, fa->fa_off, &page_info);
 	if (rc < 0 || page_info.size == 0U) {
 		flash_area_close(fa);
-		zb_nvs_log_degraded("flash geometry unavailable", rc);
-		return 0;
+		return (rc < 0) ? rc : -EINVAL;
 	}
 	zb_nvs.sector_size = page_info.size;
 	zb_nvs.sector_count = fa->fa_size / page_info.size;
 	flash_area_close(fa);
 
 	if (zb_nvs.sector_count == 0U) {
-		zb_nvs_log_degraded("flash area too small", -EINVAL);
-		return 0;
+		return -EINVAL;
+	}
+
+	zb_nvs_geometry_ready = true;
+	return 0;
+}
+
+static bool zb_nvs_ensure_ready(void)
+{
+	int rc;
+
+	if (zb_nvs_ready) {
+		return true;
+	}
+
+	if (zb_nvs_init_attempted) {
+		return false;
+	}
+
+	rc = zb_nvs_geometry_init();
+	if (rc < 0) {
+		zb_nvs_init_attempted = true;
+		if (rc == -ENOENT) {
+			zb_nvs_log_degraded("flash area missing", rc);
+		} else if (rc == -EINVAL) {
+			zb_nvs_log_degraded("flash area too small", rc);
+		} else {
+			zb_nvs_log_degraded("flash geometry unavailable", rc);
+		}
+		return false;
 	}
 
 	rc = nvs_mount(&zb_nvs);
+	zb_nvs_init_attempted = true;
 	if (rc == 0) {
 		zb_nvs_ready = true;
 		zb_nvs_degraded_logged = false;
-	} else {
-		zb_nvs_log_degraded("nvs mount failed", rc);
+		return true;
 	}
-	return 0;
+
+	zb_nvs_log_degraded("nvs mount failed", rc);
+	return false;
 }
-SYS_INIT(zb_nvs_init, APPLICATION, 90);
 
 static inline uint16_t nv_key(u8 id, u8 itemId)
 {
@@ -141,7 +173,7 @@ static bool nv_index_key_supported(u8 opSect, u16 opIdx)
 nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
 {
 	ARG_UNUSED(single);
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	int rc = nvs_write(&zb_nvs, nv_key((u8)id, itemId), buf, len);
@@ -155,7 +187,7 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	u16 expected_len;
 
 	ARG_UNUSED(single);
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	expected_len = nv_item_expected_read_len(itemId, len);
@@ -184,7 +216,7 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 {
 	ARG_UNUSED(len);
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	int rc = nvs_delete(&zb_nvs, nv_key(id, itemId));
@@ -194,7 +226,7 @@ nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 
 nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 {
-	if (!zb_nvs_ready || len == NULL) {
+	if (len == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	ssize_t rc = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
@@ -208,7 +240,7 @@ nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 
 nv_sts_t nv_resetAll(void)
 {
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	int rc = nvs_clear(&zb_nvs);
@@ -222,7 +254,7 @@ nv_sts_t nv_resetAll(void)
 
 nv_sts_t nv_resetModule(u8 modules)
 {
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	if (modules >= NV_MAX_MODULS) {
@@ -240,7 +272,7 @@ nv_sts_t nv_resetToFactoryNew(void)
 /* Frame counter stored in dedicated NVS entry */
 nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount)
 {
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	int rc = nvs_write(&zb_nvs,
@@ -252,7 +284,7 @@ nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount)
 
 nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount)
 {
-	if (!zb_nvs_ready || frameCount == NULL) {
+	if (frameCount == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	int rc = nvs_read(&zb_nvs,
@@ -270,7 +302,7 @@ nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount)
 nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx,
 			      u16 len, u8 *buf)
 {
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	if (!nv_index_key_supported(opSect, opIdx)) {
@@ -284,7 +316,7 @@ nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx)
 {
 	int rc;
 
-	if (!zb_nvs_ready) {
+	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	if (!nv_index_key_supported(opSect, opIdx)) {
