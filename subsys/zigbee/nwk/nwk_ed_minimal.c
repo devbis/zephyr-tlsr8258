@@ -138,6 +138,7 @@ static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs);
 
 extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
 extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
+extern void bdb_ed_runtime_join_complete(void);
 extern u8 zb_zdoSendDevAnnance(void);
 
 static u16 nwk_ed_minimal_u16_from_le(const u8 *buf)
@@ -409,7 +410,7 @@ static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
 
 static void nwk_ed_minimal_channel_set(u8 channel)
 {
-	rf_setChannel(channel);
+	(void)zb_radio_port_set_channel(channel);
 	(void)tl_zbMacAttrSet(MAC_PHY_ATTR_CURRENT_CHANNEL, &channel, sizeof(channel));
 }
 
@@ -864,8 +865,10 @@ static bool nwk_ed_minimal_start_scan_channel(void)
 	g_nwkEdCtx.activeScanChannel = nextChannel;
 	zb_nwk_ed_trace[2]++;
 	zb_nwk_ed_trace[3] = ((u32)nextChannel << 24) | g_nwkEdCtx.remainingScanChannels;
+	if (zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, nextChannel) < 0) {
+		LOG_WRN("discovery RX arm failed on channel %u", nextChannel);
+	}
 	nwk_ed_minimal_channel_set(nextChannel);
-	rf_setTrxState(RF_STATE_RX);
 	nwk_ed_minimal_send_beacon_request();
 	nwk_ed_minimal_timer_start(nwk_ed_minimal_scan_window_ms(g_nwkEdCtx.lastScanDuration));
 	LOG_INF("discovery scanning channel %u", nextChannel);
@@ -1282,6 +1285,7 @@ static void nwk_ed_minimal_post_join_poll_task(void *arg)
 	ARG_UNUSED(arg);
 
 	tl_zbNwkEdMinimalPollEnsure();
+	bdb_ed_runtime_join_complete();
 }
 
 static void nwk_ed_minimal_timeout_req_task(void *arg)
