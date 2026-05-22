@@ -43,7 +43,9 @@ static void app_bdb_activate_poll_rate(void)
 
 static void app_bdb_commissioning_retry_schedule(void);
 /* forward declaration so retry handler can call it */
-void app_bdb_start_commissioning(void);static void app_bdb_commissioning_retry(struct k_work *work)
+void app_bdb_start_commissioning(void);
+
+static void app_bdb_commissioning_retry(struct k_work *work)
 {
 	ARG_UNUSED(work);
 

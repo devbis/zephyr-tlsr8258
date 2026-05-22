@@ -1191,7 +1191,7 @@ const char __weak *zb_platform_app_basic_mfr_name(void)
 
 const char __weak *zb_platform_app_basic_model_id(void)
 {
-	return "tlsr8258-minimal";
+	return "tlsr8258";
 }
 
 static u16 zb_minimal_zcl_put_basic_attr(u8 *buf, u16 pos, u16 max_len, u16 attr_id)

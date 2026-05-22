@@ -19,6 +19,7 @@ zephyr_library_compile_definitions(
     NV_ENABLE=1
     SECURITY_ENABLE=1
     DEFAULT_CHANNEL=${CONFIG_ZIGBEE_CHANNEL}
+    ZCL_REPORTING_TABLE_NUM=2
 )
 
 # Library-private include dirs — not visible to the rest of the build
@@ -40,6 +41,7 @@ zephyr_library_sources(
     platform/zephyr/zb_task_queue_zephyr.c
     platform/zephyr/zb_main.c
     platform/zephyr/drv_hw_zephyr.c
+    platform/zephyr/drv_rand_zephyr.c
     platform/zephyr/drv_radio_map.c
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
