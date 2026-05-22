@@ -8,8 +8,8 @@
  */
 #pragma once
 
-#include <zephyr/kernel.h>
 #include <zephyr/zigbee/zb_types.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 
 /* RF trx mode constants (match SDK rf.h RF_TRX_MODE enum) */
 #define RF_MODE_TX     0
@@ -31,23 +31,20 @@
 /* Channel conversion: logical (11-26) → physical offset (5 MHz steps) */
 #define LOGICCHANNEL_TO_PHYSICAL(p)   (((p) - 10) * 5)
 
-/* SDK compatibility: MAC timing scale selected by the Zephyr radio port. */
-#define S_TIMER_CLOCK_1US     CONFIG_ZIGBEE_MAC_TIMER_CYCLES_PER_US
-
-/* clock_time() — returns current system tick (matches SDK usage pattern) */
+/* clock_time() — returns a monotonic microsecond timeline for MAC deadlines. */
 static inline u32 clock_time(void)
 {
-	return (u32)k_cycle_get_32();
+	return zb_radio_port_clock_time_us();
 }
 
 static inline bool clock_time_exceed(u32 ref, u32 span_us)
 {
-	return (u32)(clock_time() - ref) >= (span_us * S_TIMER_CLOCK_1US);
+	return zb_radio_port_clock_time_exceed(ref, span_us);
 }
 
 static inline u32 clock_cycles_to_us(u32 cycles)
 {
-	return cycles / S_TIMER_CLOCK_1US;
+	return zb_radio_port_clock_delta_to_us(cycles);
 }
 
 /* ─── Adapter contract (Phase 2) ─────────────────────────────────── */

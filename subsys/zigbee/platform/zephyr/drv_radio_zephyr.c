@@ -7,29 +7,28 @@
 #include <errno.h>
 #include <string.h>
 
-#include <zephyr/devicetree.h>
-#include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/spinlock.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_RADIO_RX_RING_DEPTH         2U
-#define ZB_RADIO_RX_BUF_SIZE           256U
-#define ZB_RADIO_RX_WORK_Q_DEPTH       4U
+#define ZB_RADIO_RX_BUF_SIZE           136U
+#define ZB_RADIO_RX_SLOT_COUNT         8U
 #define ZB_RADIO_CCA_BUSY_RSSI_DBM     (-60)
 #define ZB_RADIO_CCA_IDLE_RSSI_DBM     (-96)
 #define ZB_RADIO_RSSI_FALLBACK_DBM     (-110)
 
-struct zb_radio_rx_work_item {
+struct zb_radio_rx_slot {
 	uint8_t dma[ZB_RADIO_RX_BUF_SIZE];
 	uint8_t len;
 	int8_t rssi_dbm;
+	bool busy;
 };
 
 struct zb_radio_ctx {
@@ -38,6 +37,12 @@ struct zb_radio_ctx {
 	u8 *rx_target;
 	u8 *rx_next;
 	u8 rx_ring[ZB_RADIO_RX_RING_DEPTH][ZB_RADIO_RX_BUF_SIZE];
+	struct zb_radio_rx_slot rx_slots[ZB_RADIO_RX_SLOT_COUNT];
+	uint8_t rx_pending[ZB_RADIO_RX_SLOT_COUNT];
+	uint8_t rx_pending_head;
+	uint8_t rx_pending_tail;
+	uint8_t rx_pending_count;
+	struct k_spinlock rx_lock;
 	atomic_t started;
 	atomic_t tx_done;
 	atomic_t rx_done;
@@ -60,13 +65,14 @@ struct zb_radio_ctx {
 
 static struct zb_radio_ctx g_radio;
 static struct k_work g_radio_rx_work;
-K_MSGQ_DEFINE(g_radio_rx_msgq, sizeof(struct zb_radio_rx_work_item),
-	      ZB_RADIO_RX_WORK_Q_DEPTH, 4);
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 				      const uint8_t **psdu, uint8_t *psdu_len);
 static void zb_radio_rx_work_handler(struct k_work *work);
+static struct zb_radio_rx_slot *zb_radio_rx_slot_alloc(uint8_t *slot_idx);
+static struct zb_radio_rx_slot *zb_radio_rx_slot_pop(uint8_t *slot_idx);
+static void zb_radio_rx_slot_release(uint8_t slot_idx);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
 extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
@@ -103,24 +109,8 @@ static int zb_radio_start_impl(u8 channel)
 		return -ENODEV;
 	}
 
-	if (g_radio.api->set_channel == NULL) {
-		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_SET_CHANNEL);
-		return -ENOTSUP;
-	}
-
-	ret = g_radio.api->set_channel(g_radio.dev, channel);
-	if ((ret < 0) && (ret != -EALREADY)) {
-		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_SET_CHANNEL);
-		return ret;
-	}
-
-	if (g_radio.api->start == NULL) {
-		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_START);
-		return -ENOTSUP;
-	}
-
-	ret = g_radio.api->start(g_radio.dev);
-	if ((ret < 0) && (ret != -EALREADY)) {
+	ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, channel);
+	if (ret < 0) {
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_START);
 		return ret;
 	}
@@ -156,6 +146,62 @@ static void zb_radio_rx_ring_prime(const u8 *current)
 	g_radio.rx_next = zb_radio_ring_alternate_buf(current);
 }
 
+static struct zb_radio_rx_slot *zb_radio_rx_slot_alloc(uint8_t *slot_idx)
+{
+	struct zb_radio_rx_slot *slot = NULL;
+	k_spinlock_key_t key = k_spin_lock(&g_radio.rx_lock);
+
+	for (uint8_t i = 0U; i < ZB_RADIO_RX_SLOT_COUNT; i++) {
+		if (g_radio.rx_slots[i].busy) {
+			continue;
+		}
+
+		g_radio.rx_slots[i].busy = true;
+		slot = &g_radio.rx_slots[i];
+		if (slot_idx != NULL) {
+			*slot_idx = i;
+		}
+		break;
+	}
+
+	k_spin_unlock(&g_radio.rx_lock, key);
+	return slot;
+}
+
+static struct zb_radio_rx_slot *zb_radio_rx_slot_pop(uint8_t *slot_idx)
+{
+	struct zb_radio_rx_slot *slot = NULL;
+	k_spinlock_key_t key = k_spin_lock(&g_radio.rx_lock);
+
+	if (g_radio.rx_pending_count != 0U) {
+		uint8_t idx = g_radio.rx_pending[g_radio.rx_pending_head];
+
+		g_radio.rx_pending_head =
+			(uint8_t)((g_radio.rx_pending_head + 1U) % ZB_RADIO_RX_SLOT_COUNT);
+		g_radio.rx_pending_count--;
+		slot = &g_radio.rx_slots[idx];
+		if (slot_idx != NULL) {
+			*slot_idx = idx;
+		}
+	}
+
+	k_spin_unlock(&g_radio.rx_lock, key);
+	return slot;
+}
+
+static void zb_radio_rx_slot_release(uint8_t slot_idx)
+{
+	k_spinlock_key_t key;
+
+	if (slot_idx >= ZB_RADIO_RX_SLOT_COUNT) {
+		return;
+	}
+
+	key = k_spin_lock(&g_radio.rx_lock);
+	memset(&g_radio.rx_slots[slot_idx], 0, sizeof(g_radio.rx_slots[slot_idx]));
+	k_spin_unlock(&g_radio.rx_lock, key);
+}
+
 static bool zb_radio_live_rssi_sample(s8 *rssi)
 {
 	int ret;
@@ -183,9 +229,10 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
 {
 	size_t copy_len;
-	struct zb_radio_rx_work_item item;
-	int ret;
+	struct zb_radio_rx_slot *slot;
+	uint8_t slot_idx = ZB_RADIO_RX_SLOT_COUNT;
 	int16_t rssi_clamped;
+	k_spinlock_key_t key;
 
 	atomic_inc(&g_radio.rx_irq_count);
 
@@ -196,17 +243,25 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		return;
 	}
 
-	copy_len = MIN((size_t)rx_len, sizeof(item.dma));
+	slot = zb_radio_rx_slot_alloc(&slot_idx);
+	if (slot == NULL) {
+		atomic_inc(&g_radio.rx_drop_count);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
+		return;
+	}
+
+	copy_len = MIN((size_t)rx_len, sizeof(slot->dma));
 	if (copy_len == 0U) {
+		zb_radio_rx_slot_release(slot_idx);
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
 		return;
 	}
 
-	memset(&item, 0, sizeof(item));
-	memcpy(item.dma, rx_dma, copy_len);
-	item.len = (uint8_t)copy_len;
-	item.rssi_dbm = rssi_dbm;
+	memset(slot->dma, 0, sizeof(slot->dma));
+	memcpy(slot->dma, rx_dma, copy_len);
+	slot->len = (uint8_t)copy_len;
+	slot->rssi_dbm = rssi_dbm;
 
 	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
 	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
@@ -214,58 +269,56 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	g_radio.last_rx_len = (u8)copy_len;
 	atomic_set(&g_radio.last_rx_rssi_valid, 1);
 
-	ret = k_msgq_put(&g_radio_rx_msgq, &item, K_NO_WAIT);
-	if (ret < 0) {
+	key = k_spin_lock(&g_radio.rx_lock);
+	if (g_radio.rx_pending_count >= ZB_RADIO_RX_SLOT_COUNT) {
+		k_spin_unlock(&g_radio.rx_lock, key);
+		zb_radio_rx_slot_release(slot_idx);
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
 		return;
 	}
+	g_radio.rx_pending[g_radio.rx_pending_tail] = slot_idx;
+	g_radio.rx_pending_tail =
+		(uint8_t)((g_radio.rx_pending_tail + 1U) % ZB_RADIO_RX_SLOT_COUNT);
+	g_radio.rx_pending_count++;
+	k_spin_unlock(&g_radio.rx_lock, key);
 
 	atomic_inc(&g_radio.rx_accept_count);
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
 	k_work_submit(&g_radio_rx_work);
 }
 
-static void zb_radio_process_rx_item(const struct zb_radio_rx_work_item *item)
+static void zb_radio_process_rx_item(struct zb_radio_rx_slot *slot)
 {
 	const uint8_t *psdu = NULL;
 	uint8_t psdu_len = 0U;
-	uint8_t *rx_target;
+	u8 *saved_rx_buf;
 
-	if (item == NULL) {
+	if (slot == NULL) {
 		return;
 	}
-
-	if (g_radio.rx_target == NULL) {
-		g_radio.rx_target = g_radio.rx_ring[0];
-		zb_radio_rx_ring_prime(g_radio.rx_target);
-	}
-
-	rx_target = g_radio.rx_target;
-	if (rx_target == NULL) {
-		atomic_inc(&g_radio.rx_drop_count);
-		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
-		return;
-	}
-
-	memcpy(rx_target, item->dma, item->len);
 
 	atomic_set(&g_radio.rx_done, 1);
-	if (zb_radio_extract_rx_psdu(rx_target, item->len, &psdu, &psdu_len) == 0) {
-		zb_macDataRecvHandler(rx_target, (u8 *)psdu, psdu_len, 0U, 0U, g_radio.last_rx_rssi_dbm);
+	if (zb_radio_extract_rx_psdu(slot->dma, slot->len, &psdu, &psdu_len) == 0) {
+		zb_macDataRecvHandler(slot->dma, (u8 *)psdu, psdu_len, 0U, 0U, slot->rssi_dbm);
 	} else if (rf_rxBuf != NULL) {
+		saved_rx_buf = rf_rxBuf;
+		rf_rxBuf = slot->dma;
 		rf_rx_irq_handler();
+		rf_rxBuf = saved_rx_buf;
 	}
 }
 
 static void zb_radio_rx_work_handler(struct k_work *work)
 {
-	struct zb_radio_rx_work_item item;
+	struct zb_radio_rx_slot *slot;
+	uint8_t slot_idx;
 
 	ARG_UNUSED(work);
 
-	while (k_msgq_get(&g_radio_rx_msgq, &item, K_NO_WAIT) == 0) {
-		zb_radio_process_rx_item(&item);
+	while ((slot = zb_radio_rx_slot_pop(&slot_idx)) != NULL) {
+		zb_radio_process_rx_item(slot);
+		zb_radio_rx_slot_release(slot_idx);
 	}
 }
 
@@ -300,7 +353,9 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 
 void zb_radio_init(void)
 {
-	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zb));
+	const struct device *dev = NULL;
+	const struct ieee802154_radio_api *api = NULL;
+	int ret;
 
 	memset(&g_radio, 0, sizeof(g_radio));
 	g_radio.trx_state = RF_MODE_OFF;
@@ -315,16 +370,16 @@ void zb_radio_init(void)
 	g_radio.last_error = ZB_PLATFORM_RADIO_ERR_NOT_READY;
 	atomic_set(&g_radio.last_rx_rssi_valid, 0);
 	atomic_set(&g_radio.started, 0);
-	k_msgq_purge(&g_radio_rx_msgq);
 	k_work_init(&g_radio_rx_work, zb_radio_rx_work_handler);
 
-	if (!device_is_ready(dev)) {
+	ret = zb_radio_port_radio_get(&dev, &api);
+	if (ret < 0) {
 		LOG_WRN("zigbee radio device not ready");
 		return;
 	}
 
 	g_radio.dev = dev;
-	g_radio.api = (const struct ieee802154_radio_api *)dev->api;
+	g_radio.api = api;
 	if (g_radio.api == NULL) {
 		LOG_WRN("zigbee radio API unavailable");
 		return;
@@ -397,12 +452,10 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 	}
 
 	if (mode == RF_MODE_OFF) {
-		if (g_radio.api->stop != NULL) {
-			ret = g_radio.api->stop(g_radio.dev);
-			if ((ret < 0) && (ret != -EALREADY)) {
-				zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_STOP);
-				return;
-			}
+		ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_OFF, g_radio.current_channel);
+		if (ret < 0) {
+			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_STOP);
+			return;
 		}
 
 		g_radio.trx_state = RF_MODE_OFF;
@@ -412,12 +465,21 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 	}
 
 	logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
-	ret = zb_radio_start_impl(logical_chn);
+	ret = zb_radio_port_set_trx_state(
+		(mode == RF_MODE_TX) ? ZB_RADIO_PORT_TRX_TX :
+		(mode == RF_MODE_AUTO) ? ZB_RADIO_PORT_TRX_AUTO :
+				       ZB_RADIO_PORT_TRX_RX,
+		logical_chn);
 	if (ret < 0) {
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_START);
 		return;
 	}
 
+	zb_radio_set_promiscuous(true);
+	g_radio.current_channel = logical_chn;
+	atomic_set(&g_radio.started, 1);
 	g_radio.trx_state = mode;
+	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
 }
 
 void zb_radio_trx_off_auto_mode(void)
@@ -425,13 +487,10 @@ void zb_radio_trx_off_auto_mode(void)
 	int ret;
 
 	if (g_radio.trx_state == RF_MODE_AUTO) {
-		if ((g_radio.dev != NULL) && (g_radio.api != NULL) &&
-		    (g_radio.api->stop != NULL)) {
-			ret = g_radio.api->stop(g_radio.dev);
-			if ((ret < 0) && (ret != -EALREADY)) {
-				LOG_WRN("auto-mode stop failed (rc=%d)", ret);
-				return;
-			}
+		ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_OFF, g_radio.current_channel);
+		if (ret < 0) {
+			LOG_WRN("auto-mode stop failed (rc=%d)", ret);
+			return;
 		}
 
 		g_radio.trx_state = RF_MODE_OFF;
@@ -636,13 +695,8 @@ int zb_platform_radio_stop(void)
 		return -ENODEV;
 	}
 
-	if (g_radio.api->stop == NULL) {
-		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_STOP);
-		return -ENOTSUP;
-	}
-
-	ret = g_radio.api->stop(g_radio.dev);
-	if ((ret < 0) && (ret != -EALREADY)) {
+	ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_OFF, g_radio.current_channel);
+	if (ret < 0) {
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_STOP);
 		return ret;
 	}
