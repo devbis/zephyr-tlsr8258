@@ -14,22 +14,30 @@
 
 #include "app_profile.h"
 
-/* In a real Zephyr build these macros are not pre-defined; pull in the
- * ZCL/AF SDK headers.  In the host-test harness the test file provides
- * all the necessary stubs and type definitions before including this
- * translation unit, so the guards below prevent double-inclusion. */
-#if !defined(ZCL_ATTRID_BASIC_ZCL_VER)
+/* In a real Zephyr build pull in the ZCL/AF SDK headers.
+ * In the host-test harness the test file provides all stubs before
+ * including this translation unit, so no SDK headers are needed. */
+#if defined(__ZEPHYR__)
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(app_profile);
+/*
+ * Pull in SDK compiler/type shims before ZCL/AF headers.
+ * compiler_zephyr.h defines _attribute_packed_ -> __packed so that
+ * the SDK's "typedef struct _attribute_packed_ {...}" pattern produces
+ * anonymous packed structs instead of a struct named _attribute_packed_.
+ * zb_types.h provides u8/u16/u32 which ZCL/AF headers use but do not
+ * include themselves.
+ * af/zb_af.h defines epInfo_t which zcl.h uses in function declarations.
+ */
+#include "platform/zephyr/compiler_zephyr.h"
+#include <zephyr/zigbee/zb_types.h>
+#include "af/zb_af.h"
 #include "zcl/zcl_const.h"
 #include "zcl/zcl.h"
 #include "zcl/general/zcl_basic.h"
 #include "zcl/general/zcl_identify.h"
-#include "af/zb_af.h"
 void zcl_rx_handler(void *p);
-#else
-/* Host-test build: LOG macros are provided by the test harness. */
-#endif
+#endif /* __ZEPHYR__ */
 
 /* ------------------------------------------------------------------ */
 /* Basic cluster attribute table                                       */
