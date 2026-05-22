@@ -16,14 +16,50 @@ if rg -n '#include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge\.h>' \
 	exit 1
 fi
 
+if rg -n 'rf_set(Channel|TrxState)\s*\(' \
+	subsys/zigbee \
+	-g '*.c' \
+	-g '!subsys/zigbee/mac/mac_phy.c' \
+	-g '!subsys/zigbee/platform/zephyr/zb_radio_port_tlsr8258.c'; then
+	echo "Generic Zigbee runtime must not call rf_setChannel/rf_setTrxState directly" >&2
+	exit 1
+fi
+
+if rg -n 'DEVICE_DT_GET\(DT_NODELABEL\(zb\)\)' \
+	subsys/zigbee \
+	-g '*.c' \
+	-g '!subsys/zigbee/platform/zephyr/zb_radio_port_tlsr8258.c'; then
+	echo "DEVICE_DT_GET(DT_NODELABEL(zb)) must stay inside the TLSR8258 radio port adapter" >&2
+	exit 1
+fi
+
 if rg -n 'S_TIMER_CLOCK_1US[[:space:]]+24|sysTimerPerUs[[:space:]]*=[[:space:]]*24' \
 	subsys/zigbee/platform/zephyr subsys/zigbee/mac; then
 	echo "Zigbee timer conversion must use Zephyr clock conversion, not a fixed 24 MHz assumption" >&2
 	exit 1
 fi
 
+if rg -n 'CONFIG_ZIGBEE_MAC_TIMER_CYCLES_PER_US' \
+	subsys/zigbee/platform/zephyr subsys/zigbee/mac \
+	-g '*.c' -g '*.h'; then
+	echo "Generic Zigbee timing path must not depend on CONFIG_ZIGBEE_MAC_TIMER_CYCLES_PER_US" >&2
+	exit 1
+fi
+
 if ! rg -q 'nwk_ed_minimal_rx_evt_drop_record' subsys/zigbee/nwk/nwk_ed_minimal.c; then
 	echo "nwk_ed_minimal RX event queue drops must be counted and logged" >&2
+	exit 1
+fi
+
+if rg -n 'K_MSGQ_DEFINE\(g_radio_rx_msgq|ZB_RADIO_RX_WORK_Q_DEPTH[[:space:]]+4U|memcpy\(rx_target, item->dma' \
+	subsys/zigbee/platform/zephyr/drv_radio_zephyr.c; then
+	echo "Radio RX deferred path must use a single-copy slot pool, not msgq depth 4 plus ring copy" >&2
+	exit 1
+fi
+
+if rg -n 'sector_size[[:space:]]*=[[:space:]]*4096|CONFIG_TC32' \
+	subsys/zigbee/platform/zephyr/drv_nv_zephyr.c; then
+	echo "Zigbee NV backend must derive flash geometry and avoid CONFIG_TC32 skip paths" >&2
 	exit 1
 fi
 

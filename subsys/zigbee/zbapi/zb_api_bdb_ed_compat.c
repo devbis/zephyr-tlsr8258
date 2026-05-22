@@ -9,7 +9,7 @@
 #pragma clang diagnostic pop
 #endif
 
-extern void rf_setChannel(u8 chn);
+#include <zephyr/zigbee/zb_radio_port.h>
 
 const addrExt_t g_zero_addr __attribute__((weak)) = {0};
 const addrExt_t g_invalid_addr __attribute__((weak)) = {0xFF, 0xFF, 0xFF, 0xFF,
@@ -103,7 +103,7 @@ __attribute__((weak)) u8 is_device_factory_new(void)
 __attribute__((weak)) void tl_zbMacChannelSet(u8 chan)
 {
 	g_zbInfo.macPib.phyChannelCur = chan;
-	rf_setChannel(chan);
+	(void)zb_radio_port_set_channel(chan);
 }
 
 __attribute__((weak)) zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_descriptor_req_t *pReq,
