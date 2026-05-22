@@ -222,7 +222,7 @@ void aps_init(void)
 	aps_ib.aps_updateDevice_holdApsSecurity = FALSE;
 	aps_ib.aps_zdo_restricted_mode = FALSE;
 
-	if (aps_groupTblNvInit() == NV_ITEM_NOT_FOUND) {
+	if (aps_groupTblNvInit() != NV_SUCC) {
 		aps_groupTblReset();
 	} else {
 		aps_init_group_num_set();
