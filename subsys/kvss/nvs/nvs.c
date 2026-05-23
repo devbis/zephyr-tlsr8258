@@ -972,6 +972,9 @@ static int nvs_startup(struct nvs_fs *fs)
 	uint32_t addr = 0U;
 	uint16_t i, closed_sectors = 0;
 	uint8_t erase_value = fs->flash_parameters->erase_value;
+	bool empty_open_sector = false;
+	bool gc_done_only_sector = false;
+	struct nvs_ate open_sector_ate;
 
 	k_mutex_lock(&fs->nvs_lock, K_FOREVER);
 
@@ -1026,16 +1029,49 @@ static int nvs_startup(struct nvs_fs *fs)
 		if (!rc) {
 			/* empty ate */
 			nvs_sector_advance(fs, &addr);
+			rc = nvs_flash_cmp_const(fs, addr - ate_size, erase_value,
+						sizeof(struct nvs_ate));
+			if (rc < 0) {
+				goto end;
+			}
+			if (!rc) {
+				addr -= ate_size;
+				empty_open_sector = true;
+			} else {
+				rc = nvs_flash_ate_rd(fs, addr - ate_size, &open_sector_ate);
+				if (rc) {
+					goto end;
+				}
+				/*
+				 * A single gc-done marker with offset 0 means the sector is
+				 * still logically empty and does not need recovery scanning.
+				 */
+				if (nvs_close_ate_valid(fs, &open_sector_ate) &&
+				    (open_sector_ate.offset == 0U)) {
+					addr -= ate_size;
+					empty_open_sector = true;
+					gc_done_only_sector = true;
+				}
+			}
 		}
+	}
+
+	if (gc_done_only_sector) {
+		fs->ate_wra = addr - ate_size;
+		fs->data_wra = addr & ADDR_SECT_MASK;
+		rc = 0;
+		goto end;
 	}
 
 	/* addr contains address of closing ate in the most recent sector,
 	 * search for the last valid ate using the recover_last_ate routine
 	 */
 
-	rc = nvs_recover_last_ate(fs, &addr);
-	if (rc) {
-		goto end;
+	if (!empty_open_sector) {
+		rc = nvs_recover_last_ate(fs, &addr);
+		if (rc) {
+			goto end;
+		}
 	}
 
 	/* addr contains address of the last valid ate in the most recent sector
@@ -1189,7 +1225,6 @@ static int nvs_startup(struct nvs_fs *fs)
 	}
 
 end:
-
 #ifdef CONFIG_NVS_LOOKUP_CACHE
 	if (!rc) {
 		rc = nvs_lookup_cache_rebuild(fs);
