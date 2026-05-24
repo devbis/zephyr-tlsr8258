@@ -18,7 +18,7 @@ struct tlsr8258_rx_slot {
 	uint8_t dma[TLSR8258_RX_SLOT_DMA_SIZE];
 	uint8_t len;
 	int8_t rssi_dbm;
-	/* True while the slot holds an enqueued frame that has not been dequeued. */
+	/* Authoritative slot state: true only while the slot holds an enqueued frame. */
 	bool queued;
 };
 
@@ -35,6 +35,14 @@ void tlsr8258_rx_queue_init(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_
 			    uint8_t slot_count);
 bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_t *dma, uint8_t len,
 				   int8_t rssi_dbm);
+/*
+ * Dequeues the oldest frame into queue-owned slot storage.
+ *
+ * On success, frame->dma points at the slot backing the returned frame. That
+ * pointer remains valid until the slot is reused by a later successful enqueue
+ * or the queue is reinitialized. Callers must copy out any data they need
+ * before the slot is enqueued again.
+ */
 bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame);
 uint32_t tlsr8258_rx_queue_drop_count(const struct tlsr8258_rx_queue *queue);
 
