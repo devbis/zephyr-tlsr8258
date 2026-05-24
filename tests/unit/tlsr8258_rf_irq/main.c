@@ -147,8 +147,10 @@ static void test_public_bridge_header_exposes_sink_only_registration(void)
 {
 	const char *path = WORKTREE_FILE("include/zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h");
 
-	EXPECT_FILE_CONTAINS(path, "typedef int (*tlsr8258_zigbee_rx_sink_t)");
+	EXPECT_FILE_CONTAINS(path, "#include <zephyr/zigbee/zb_radio_port.h>");
+	EXPECT_FILE_CONTAINS(path, "typedef zb_radio_port_rx_sink_t tlsr8258_zigbee_rx_sink_t;");
 	EXPECT_FILE_CONTAINS(path, "void tlsr8258_zigbee_register_rx_sink");
+	EXPECT_FILE_NOT_CONTAINS(path, "struct tlsr8258_rx_frame_view {");
 	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_zigbee_rx_cb_t");
 	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_zigbee_register_rx_cb");
 }
@@ -157,7 +159,7 @@ static void test_zigbee_port_header_exposes_sink_only_registration(void)
 {
 	const char *path = WORKTREE_FILE("subsys/zigbee/include/zephyr/zigbee/zb_radio_port.h");
 
-	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_rx_frame_view;");
+	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_rx_frame_view {");
 	EXPECT_FILE_CONTAINS(path, "void zb_radio_port_register_rx_sink");
 	EXPECT_FILE_CONTAINS(path, "typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame)");
 	EXPECT_FILE_NOT_CONTAINS(path, "struct zb_radio_port_rx_frame");
@@ -171,6 +173,11 @@ static void test_zigbee_driver_registers_sink_api(void)
 
 	EXPECT_FILE_CONTAINS(path, "zb_radio_port_register_rx_sink(");
 	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_zigbee_bridge.h");
+	EXPECT_FILE_NOT_CONTAINS(path, "struct zb_radio_rx_slot {");
+	EXPECT_FILE_NOT_CONTAINS(path, "g_radio_rx_work");
+	EXPECT_FILE_NOT_CONTAINS(path, "rx_pending_count");
+	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_rx_slot_alloc(");
+	EXPECT_FILE_NOT_CONTAINS(path, "struct tlsr8258_rx_frame_view {");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_register_rx_cb(");
 }
 
@@ -181,7 +188,10 @@ static void test_tlsr8258_dispatch_uses_sink_as_authoritative_path(void)
 	EXPECT_FILE_CONTAINS(path, "void tlsr8258_zigbee_register_rx_sink");
 	EXPECT_FILE_NOT_CONTAINS(path, "void tlsr8258_zigbee_register_rx_cb");
 	EXPECT_FILE_CONTAINS(path, "if (tlsr8258_zigbee_rx_sink != NULL)");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_zigbee_rx_sink(&view);");
+	EXPECT_FILE_CONTAINS(path, "rc = tlsr8258_zigbee_rx_sink(&view);");
+	EXPECT_FILE_CONTAINS(path, "if (rc < 0)");
+	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rx_capture_common(");
+	EXPECT_FILE_NOT_CONTAINS(path, "static void tlsr8258_rx_isr(");
 }
 
 int main(void)
