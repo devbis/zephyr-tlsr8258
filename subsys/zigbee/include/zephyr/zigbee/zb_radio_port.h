@@ -9,7 +9,11 @@
 #include <zephyr/device.h>
 #include <zephyr/net/ieee802154_radio.h>
 
-struct tlsr8258_rx_frame_view;
+struct tlsr8258_rx_frame_view {
+	const uint8_t *dma;
+	uint8_t len;
+	int8_t rssi_dbm;
+};
 
 typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame);
 
