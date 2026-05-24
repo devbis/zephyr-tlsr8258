@@ -100,6 +100,37 @@ static void test_invalid_enqueue_does_not_increment_drop_count(void)
 	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
 }
 
+static void test_dequeue_from_empty_queue_fails(void)
+{
+	struct tlsr8258_rx_slot slots[1] = { 0 };
+	struct tlsr8258_rx_queue queue;
+	struct tlsr8258_rx_frame frame;
+
+	tlsr8258_rx_queue_init(&queue, slots, 1u);
+
+	EXPECT_FALSE(tlsr8258_rx_queue_try_dequeue(&queue, &frame));
+	EXPECT_EQ(queue.head, 0u);
+	EXPECT_EQ(queue.tail, 0u);
+	EXPECT_EQ(queue.pending, 0u);
+	EXPECT_FALSE(slots[0].queued);
+}
+
+static void test_dequeue_rejects_null_output_argument(void)
+{
+	struct tlsr8258_rx_slot slots[1] = { 0 };
+	struct tlsr8258_rx_queue queue;
+	const uint8_t payload[] = { 0x66u };
+
+	tlsr8258_rx_queue_init(&queue, slots, 1u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_enqueue(&queue, payload, sizeof(payload), -13));
+	EXPECT_FALSE(tlsr8258_rx_queue_try_dequeue(&queue, NULL));
+	EXPECT_EQ(queue.head, 0u);
+	EXPECT_EQ(queue.tail, 0u);
+	EXPECT_EQ(queue.pending, 1u);
+	EXPECT_TRUE(slots[0].queued);
+}
+
 static void test_wraparound_preserves_fifo_order_and_state(void)
 {
 	struct tlsr8258_rx_slot slots[2] = { 0 };
@@ -173,6 +204,8 @@ int main(void)
 	test_enqueue_dequeue_round_trip();
 	test_overflow_increments_drop_count_without_mutating_queue();
 	test_invalid_enqueue_does_not_increment_drop_count();
+	test_dequeue_from_empty_queue_fails();
+	test_dequeue_rejects_null_output_argument();
 	test_wraparound_preserves_fifo_order_and_state();
 
 	if (failures != 0) {
