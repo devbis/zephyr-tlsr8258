@@ -133,7 +133,8 @@ static const uint8_t rf_power_level_list[] = {
 };
 
 static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len);
-static void tlsr8258_rx_isr(uint16_t irq_status);
+static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
+				       uint16_t snapshot_size);
 static void tlsr8258_rx_capture_isr(void);
 static bool tlsr8258_filter_match_for_ack(const uint8_t *payload);
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length);
@@ -446,7 +447,8 @@ static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 			uint8_t psdu_len;
 			bool rx_is_pending_response;
 
-			tlsr8258_rx_isr(irq);
+			tlsr8258_rx_capture_common(irq, tlsr8258_radio.rx_shadow,
+						 sizeof(tlsr8258_radio.rx_shadow));
 			waited = 0u;
 			psdu = &tlsr8258_radio.rx_shadow[TLSR8258_PAYLOAD_OFFSET];
 			psdu_len = tlsr8258_radio.rx_shadow[4];
@@ -644,41 +646,46 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 }
 
-static void tlsr8258_rx_isr(uint16_t irq_status)
+static int8_t tlsr8258_rx_rssi_dbm(const uint8_t *rx)
+{
+	if (rx[0] < (TLSR8258_RX_BUF_SIZE - 2u)) {
+		return (int8_t)rx[rx[0] + 2u] - 110;
+	}
+
+	return -110;
+}
+
+static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
+				       uint16_t snapshot_size)
 {
 	uint8_t *rx = tlsr8258_radio.rx_buffer;
-	uint16_t rx_snapshot_len;
+	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
+	uint16_t snapshot_len = 0u;
 	uint16_t rx_dma_len;
 	int8_t rx_rssi_dbm;
-	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
-	uint8_t length = 0u;
-	bool ack_requested = false;
+	uint8_t length = rx[4];
+	bool ack_requested = tlsr8258_ack_requested(payload, length);
 	uint32_t ack_prepared_at_cycles = 0u;
 
 	ARG_UNUSED(irq_status);
 	TLSR_REG16(0x0f20) = RF_IRQ_RX;
 	tlsr8258_radio_rx_count_inc();
-	length = rx[4];
-	ack_requested = tlsr8258_ack_requested(payload, length);
 	if (ack_requested) {
 		tlsr8258_rf_set_txmode();
 		ack_prepared_at_cycles = k_cycle_get_32();
 	}
-	rx_snapshot_len = tlsr8258_snapshot_rx_frame(tlsr8258_radio.rx_shadow,
-						       sizeof(tlsr8258_radio.rx_shadow));
-	if (rx_snapshot_len >= TLSR8258_PAYLOAD_OFFSET) {
-		rx = tlsr8258_radio.rx_shadow;
-		payload = &rx[TLSR8258_PAYLOAD_OFFSET];
-		length = rx[4];
+
+	if ((snapshot != NULL) && (snapshot_size > 0u)) {
+		snapshot_len = tlsr8258_snapshot_rx_frame(snapshot, snapshot_size);
+		if (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) {
+			rx = snapshot;
+			payload = &rx[TLSR8258_PAYLOAD_OFFSET];
+			length = rx[4];
+		}
 	}
 
-	if (rx[0] < (TLSR8258_RX_BUF_SIZE - 2u)) {
-		rx_rssi_dbm = (int8_t)rx[rx[0] + 2u] - 110;
-	} else {
-		rx_rssi_dbm = -110;
-	}
-
-	rx_dma_len = (uint16_t)rx[0] + 4u;
+	rx_rssi_dbm = tlsr8258_rx_rssi_dbm(rx);
+	rx_dma_len = (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) ? snapshot_len : (uint16_t)rx[0] + 4u;
 	rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
 	if (tlsr8258_rx_queue_try_enqueue(&tlsr8258_rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm)) {
 		k_sem_give(&tlsr8258_rx_sem);
@@ -690,6 +697,7 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 {
 	const uint8_t *rx = frame->dma;
 	struct tlsr8258_rx_frame_view view;
+	int rc;
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 	uint8_t length;
 	int8_t rssi;
@@ -700,7 +708,14 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 		view.dma = rx;
 		view.len = frame->len;
 		view.rssi_dbm = frame->rssi_dbm;
-		tlsr8258_zigbee_rx_sink(&view);
+		rc = tlsr8258_zigbee_rx_sink(&view);
+		if (rc < 0) {
+			if (rc == -ENODATA) {
+				LOG_DBG("zigbee RX sink deferred frame handling (len=%u)", frame->len);
+			} else {
+				LOG_WRN("zigbee RX sink rejected frame (rc=%d len=%u)", rc, frame->len);
+			}
+		}
 		return;
 	}
 
@@ -766,42 +781,7 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 
 static void tlsr8258_rx_capture_isr(void)
 {
-	uint8_t *rx = tlsr8258_radio.rx_buffer;
-	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
-	uint8_t length;
-	uint16_t dma_len;
-	int8_t rssi_dbm;
-	bool ack_needed;
-	uint32_t ack_prep_at = 0u;
-
-	TLSR_REG16(0x0f20) = RF_IRQ_RX;
-	tlsr8258_radio_rx_count_inc();
-
-	length = rx[4];
-	ack_needed = tlsr8258_ack_requested(payload, length);
-	if (ack_needed) {
-		/* Switch to TX early to meet the 120 µs ACK turnaround budget.
-		 * This also freezes the DMA buffer so the snapshot is stable. */
-		tlsr8258_rf_set_txmode();
-		ack_prep_at = k_cycle_get_32();
-	}
-
-	dma_len = (uint16_t)rx[0] + 4u;
-	dma_len = MIN(dma_len, (uint16_t)(TLSR8258_RX_BUF_SIZE - 1u));
-
-	if (rx[0] < (TLSR8258_RX_BUF_SIZE - 2u)) {
-		rssi_dbm = (int8_t)rx[rx[0] + 2u] - 110;
-	} else {
-		rssi_dbm = -110;
-	}
-
-	if (tlsr8258_rx_queue_try_enqueue(&tlsr8258_rx_queue, rx, (uint8_t)dma_len, rssi_dbm)) {
-		k_sem_give(&tlsr8258_rx_sem);
-	}
-
-	/* Send ACK after enqueue so the slot copy is safe; the DMA buffer
-	 * remains valid until tlsr8258_send_ack_if_needed restores RX mode. */
-	tlsr8258_send_ack_if_needed(payload, length, ack_needed, ack_prep_at);
+	tlsr8258_rx_capture_common(RF_IRQ_RX, NULL, 0u);
 }
 
 static void tlsr8258_rf_isr(const void *unused)
