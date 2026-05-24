@@ -157,9 +157,10 @@ static void test_zigbee_port_header_exposes_sink_only_registration(void)
 {
 	const char *path = WORKTREE_FILE("subsys/zigbee/include/zephyr/zigbee/zb_radio_port.h");
 
-	EXPECT_FILE_CONTAINS(path, "struct zb_radio_port_rx_frame");
+	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_rx_frame_view;");
 	EXPECT_FILE_CONTAINS(path, "void zb_radio_port_register_rx_sink");
-	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_rx_frame_view");
+	EXPECT_FILE_CONTAINS(path, "typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame)");
+	EXPECT_FILE_NOT_CONTAINS(path, "struct zb_radio_port_rx_frame");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_rx_cb_t");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_register_rx_cb");
 }

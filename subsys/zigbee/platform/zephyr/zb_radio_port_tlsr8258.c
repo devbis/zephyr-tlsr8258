@@ -14,8 +14,6 @@
 #define TLSR8258_SYSTEM_TICK_CYCLES_PER_US \
 	(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000U)
 
-static zb_radio_port_rx_sink_t zb_radio_port_tlsr8258_rx_sink;
-
 static int zb_radio_port_tlsr8258_get(const struct device **dev,
 				      const struct ieee802154_radio_api **api)
 {
@@ -107,26 +105,9 @@ uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 	return delta_us / TLSR8258_SYSTEM_TICK_CYCLES_PER_US;
 }
 
-static int zb_radio_port_tlsr8258_rx_sink_adapter(const struct tlsr8258_rx_frame_view *frame)
-{
-	struct zb_radio_port_rx_frame port_frame;
-
-	if ((zb_radio_port_tlsr8258_rx_sink == NULL) || (frame == NULL)) {
-		return -EINVAL;
-	}
-
-	port_frame.dma = frame->dma;
-	port_frame.len = frame->len;
-	port_frame.rssi_dbm = frame->rssi_dbm;
-
-	return zb_radio_port_tlsr8258_rx_sink(&port_frame);
-}
-
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
 {
-	zb_radio_port_tlsr8258_rx_sink = sink;
-	tlsr8258_zigbee_register_rx_sink((sink != NULL) ?
-					 zb_radio_port_tlsr8258_rx_sink_adapter : NULL);
+	tlsr8258_zigbee_register_rx_sink(sink);
 }
 
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
