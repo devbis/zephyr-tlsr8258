@@ -226,28 +226,41 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 	return false;
 }
 
-static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_dbm)
+static int zb_radio_on_rx_sink(const struct zb_radio_port_rx_frame *frame)
 {
 	size_t copy_len;
 	struct zb_radio_rx_slot *slot;
 	uint8_t slot_idx = ZB_RADIO_RX_SLOT_COUNT;
 	int16_t rssi_clamped;
 	k_spinlock_key_t key;
+	const uint8_t *rx_dma;
+	uint8_t rx_len;
+	int8_t rssi_dbm;
 
 	atomic_inc(&g_radio.rx_irq_count);
+
+	if (frame == NULL) {
+		atomic_inc(&g_radio.rx_drop_count);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
+		return -EINVAL;
+	}
+
+	rx_dma = frame->dma;
+	rx_len = frame->len;
+	rssi_dbm = frame->rssi_dbm;
 
 	if ((rx_dma == NULL) || (rx_len == 0U)) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
 		LOG_DBG("RX callback ignored invalid frame (buf=%p len=%u)", rx_dma, rx_len);
-		return;
+		return -EINVAL;
 	}
 
 	slot = zb_radio_rx_slot_alloc(&slot_idx);
 	if (slot == NULL) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
-		return;
+		return -ENOMEM;
 	}
 
 	copy_len = MIN((size_t)rx_len, sizeof(slot->dma));
@@ -255,7 +268,7 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		zb_radio_rx_slot_release(slot_idx);
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
-		return;
+		return -EINVAL;
 	}
 
 	memset(slot->dma, 0, sizeof(slot->dma));
@@ -275,7 +288,7 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 		zb_radio_rx_slot_release(slot_idx);
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_RX_NO_BUFFER);
-		return;
+		return -ENOMEM;
 	}
 	g_radio.rx_pending[g_radio.rx_pending_tail] = slot_idx;
 	g_radio.rx_pending_tail =
@@ -286,6 +299,7 @@ static void zb_radio_on_rx(const uint8_t *rx_dma, uint8_t rx_len, int8_t rssi_db
 	atomic_inc(&g_radio.rx_accept_count);
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
 	k_work_submit(&g_radio_rx_work);
+	return 0;
 }
 
 static void zb_radio_process_rx_item(struct zb_radio_rx_slot *slot)
@@ -384,7 +398,7 @@ void zb_radio_init(void)
 		LOG_WRN("zigbee radio API unavailable");
 		return;
 	}
-	zb_radio_port_register_rx_cb(zb_radio_on_rx);
+	zb_radio_port_register_rx_sink(zb_radio_on_rx_sink);
 }
 
 bool zb_radio_is_ready(void)
