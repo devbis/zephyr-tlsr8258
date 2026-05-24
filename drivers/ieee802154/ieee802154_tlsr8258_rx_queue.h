@@ -31,6 +31,12 @@ struct tlsr8258_rx_queue {
 	uint32_t drop_count;
 };
 
+/*
+ * Initializes a queue over caller-provided slot storage.
+ *
+ * When slot_count > 0, slots must point to at least slot_count writable slots.
+ * slots may be NULL only when slot_count is 0.
+ */
 void tlsr8258_rx_queue_init(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slots,
 			    uint8_t slot_count);
 bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_t *dma, uint8_t len,
