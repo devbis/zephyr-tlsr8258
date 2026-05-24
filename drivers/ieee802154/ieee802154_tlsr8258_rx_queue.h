@@ -18,6 +18,7 @@ struct tlsr8258_rx_slot {
 	uint8_t dma[TLSR8258_RX_SLOT_DMA_SIZE];
 	uint8_t len;
 	int8_t rssi_dbm;
+	/* True while the slot holds an enqueued frame that has not been dequeued. */
 	bool queued;
 };
 

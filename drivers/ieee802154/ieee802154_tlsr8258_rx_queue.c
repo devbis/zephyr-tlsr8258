@@ -26,7 +26,11 @@ bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_
 {
 	struct tlsr8258_rx_slot *slot;
 
-	if ((queue->slot_count == 0u) || (queue->pending >= queue->slot_count) || (dma == NULL)) {
+	if ((queue->slot_count == 0u) || (dma == NULL)) {
+		return false;
+	}
+
+	if (queue->pending >= queue->slot_count) {
 		queue->drop_count++;
 		return false;
 	}
