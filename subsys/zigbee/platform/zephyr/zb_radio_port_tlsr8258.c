@@ -7,7 +7,12 @@
 #include <zephyr/drivers/ieee802154/tlsr8258_zigbee_bridge.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/ieee802154_radio.h>
+#include <zephyr/sys/sys_io.h>
 #include <zephyr/zigbee/zb_radio_port.h>
+
+#define TLSR8258_SYSTEM_TICK_REG 0x00800740u
+#define TLSR8258_SYSTEM_TICK_CYCLES_PER_US \
+	(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000U)
 
 static int zb_radio_port_tlsr8258_get(const struct device **dev,
 				      const struct ieee802154_radio_api **api)
@@ -86,22 +91,28 @@ int zb_radio_port_set_trx_state(enum zb_radio_port_trx_state state,
 
 uint32_t zb_radio_port_clock_time_us(void)
 {
-	return k_cyc_to_us_floor32(k_cycle_get_32());
+	return sys_read32(TLSR8258_SYSTEM_TICK_REG);
 }
 
 bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us)
 {
-	return (uint32_t)(zb_radio_port_clock_time_us() - ref_us) >= span_us;
+	return (uint32_t)(zb_radio_port_clock_time_us() - ref_us) >
+	       (span_us * TLSR8258_SYSTEM_TICK_CYCLES_PER_US);
 }
 
 uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 {
-	return delta_us;
+	return delta_us / TLSR8258_SYSTEM_TICK_CYCLES_PER_US;
 }
 
 void zb_radio_port_register_rx_cb(zb_radio_port_rx_cb_t cb)
 {
 	tlsr8258_zigbee_register_rx_cb((tlsr8258_zigbee_rx_cb_t)cb);
+}
+
+void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
+{
+	tlsr8258_zigbee_register_rx_sink((tlsr8258_zigbee_rx_sink_t)sink);
 }
 
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,

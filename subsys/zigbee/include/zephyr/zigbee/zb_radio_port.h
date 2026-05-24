@@ -9,6 +9,7 @@
 #include <zephyr/device.h>
 #include <zephyr/net/ieee802154_radio.h>
 
+/* Legacy callback – kept for backward compatibility with existing callers. */
 typedef void (*zb_radio_port_rx_cb_t)(const uint8_t *rx_dma, uint8_t rx_len,
 				      int8_t rssi_dbm);
 
@@ -31,5 +32,12 @@ uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us);
 void zb_radio_port_register_rx_cb(zb_radio_port_rx_cb_t cb);
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr);
+
+/* New sink-registration API (driver-owned worker, thread context delivery). */
+struct tlsr8258_rx_frame_view;
+
+typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame);
+
+void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink);
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_INCLUDE_ZEPHYR_ZIGBEE_ZB_RADIO_PORT_H_ */
