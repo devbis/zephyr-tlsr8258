@@ -26,7 +26,7 @@ startup_state_e drv_platform_init(void)
 
 void drv_enable_irq(void)
 {
-	irq_unlock(0);
+	irq_unlock(1);
 }
 
 u32 drv_disable_irq(void)

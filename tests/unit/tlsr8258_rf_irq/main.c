@@ -194,6 +194,14 @@ static void test_tlsr8258_dispatch_uses_sink_as_authoritative_path(void)
 	EXPECT_FILE_NOT_CONTAINS(path, "static void tlsr8258_rx_isr(");
 }
 
+static void test_zigbee_drv_enable_irq_reenables_global_gate(void)
+{
+	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/drv_hw_zephyr.c");
+
+	EXPECT_FILE_CONTAINS(path, "irq_unlock(1);");
+	EXPECT_FILE_NOT_CONTAINS(path, "irq_unlock(0);");
+}
+
 int main(void)
 {
 	test_runtime_irq_mask_matches_vendor_rx_tx_only();
@@ -205,6 +213,7 @@ int main(void)
 	test_zigbee_port_header_exposes_sink_only_registration();
 	test_zigbee_driver_registers_sink_api();
 	test_tlsr8258_dispatch_uses_sink_as_authoritative_path();
+	test_zigbee_drv_enable_irq_reenables_global_gate();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_rf_irq: %d failure(s)\n", failures);
