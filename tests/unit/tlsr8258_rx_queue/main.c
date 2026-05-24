@@ -81,10 +81,79 @@ static void test_overflow_increments_drop_count_without_mutating_queue(void)
 	EXPECT_EQ(memcmp(frame.dma, first_payload, sizeof(first_payload)), 0);
 }
 
+static void test_wraparound_preserves_fifo_order_and_state(void)
+{
+	struct tlsr8258_rx_slot slots[2] = { 0 };
+	struct tlsr8258_rx_queue queue;
+	struct tlsr8258_rx_frame frame;
+	const uint8_t payload_a[] = { 0x10u };
+	const uint8_t payload_b[] = { 0x20u, 0x21u };
+	const uint8_t payload_c[] = { 0x30u, 0x31u, 0x32u };
+
+	tlsr8258_rx_queue_init(&queue, slots, 2u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_enqueue(&queue, payload_a, sizeof(payload_a), -1));
+	EXPECT_TRUE(tlsr8258_rx_queue_try_enqueue(&queue, payload_b, sizeof(payload_b), -2));
+	EXPECT_EQ(queue.head, 0u);
+	EXPECT_EQ(queue.tail, 0u);
+	EXPECT_EQ(queue.pending, 2u);
+	EXPECT_TRUE(slots[0].queued);
+	EXPECT_TRUE(slots[1].queued);
+	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_dequeue(&queue, &frame));
+	EXPECT_EQ(frame.dma, slots[0].dma);
+	EXPECT_EQ(frame.len, sizeof(payload_a));
+	EXPECT_EQ(frame.rssi_dbm, -1);
+	EXPECT_EQ(memcmp(frame.dma, payload_a, sizeof(payload_a)), 0);
+	EXPECT_EQ(queue.head, 1u);
+	EXPECT_EQ(queue.tail, 0u);
+	EXPECT_EQ(queue.pending, 1u);
+	EXPECT_FALSE(slots[0].queued);
+	EXPECT_TRUE(slots[1].queued);
+	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_enqueue(&queue, payload_c, sizeof(payload_c), -3));
+	EXPECT_EQ(queue.head, 1u);
+	EXPECT_EQ(queue.tail, 1u);
+	EXPECT_EQ(queue.pending, 2u);
+	EXPECT_TRUE(slots[0].queued);
+	EXPECT_TRUE(slots[1].queued);
+	EXPECT_EQ(memcmp(slots[0].dma, payload_c, sizeof(payload_c)), 0);
+	EXPECT_EQ(slots[0].len, sizeof(payload_c));
+	EXPECT_EQ(slots[0].rssi_dbm, -3);
+	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_dequeue(&queue, &frame));
+	EXPECT_EQ(frame.dma, slots[1].dma);
+	EXPECT_EQ(frame.len, sizeof(payload_b));
+	EXPECT_EQ(frame.rssi_dbm, -2);
+	EXPECT_EQ(memcmp(frame.dma, payload_b, sizeof(payload_b)), 0);
+	EXPECT_TRUE(slots[0].queued);
+	EXPECT_FALSE(slots[1].queued);
+	EXPECT_EQ(queue.head, 0u);
+	EXPECT_EQ(queue.tail, 1u);
+	EXPECT_EQ(queue.pending, 1u);
+	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+
+	EXPECT_TRUE(tlsr8258_rx_queue_try_dequeue(&queue, &frame));
+	EXPECT_EQ(frame.dma, slots[0].dma);
+	EXPECT_EQ(frame.len, sizeof(payload_c));
+	EXPECT_EQ(frame.rssi_dbm, -3);
+	EXPECT_EQ(memcmp(frame.dma, payload_c, sizeof(payload_c)), 0);
+	EXPECT_FALSE(slots[0].queued);
+	EXPECT_FALSE(slots[1].queued);
+	EXPECT_EQ(queue.head, 1u);
+	EXPECT_EQ(queue.tail, 1u);
+	EXPECT_EQ(queue.pending, 0u);
+	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+}
+
 int main(void)
 {
 	test_enqueue_dequeue_round_trip();
 	test_overflow_increments_drop_count_without_mutating_queue();
+	test_wraparound_preserves_fifo_order_and_state();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_rx_queue: %d failure(s)\n", failures);
