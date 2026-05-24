@@ -6,6 +6,7 @@
 #include <zephyr/zigbee/zb_types.h>
 #include <string.h>
 #include "zb_radio_smoke.h"
+#include "drv_hw.h"
 #include "drv_radio.h"
 #include "ev_timer.h"
 #include "ev_poll.h"
@@ -41,6 +42,7 @@ static bool zb_bootstrap_done;
 static bool zb_core_init_done;
 static bool zb_commissioning_pending;
 static bool zb_waiting_for_radio_log;
+extern volatile u32 zb_nwk_ed_trace[];
 
 void __weak zb_platform_app_bootstrap_ready(void)
 {
@@ -89,22 +91,39 @@ static void zb_core_bootstrap_once(void)
 	if (!zb_core_init_done) {
 		u8 cold_reset = TRUE;
 
+		zb_nwk_ed_trace[15] = 0xA5A00001U;
 		/* Deterministic ED bootstrap order. */
 		ev_buf_init();
+		zb_nwk_ed_trace[15] = 0xA5A00101U;
 		ev_timer_init();
+		zb_nwk_ed_trace[15] = 0xA5A00102U;
 		tl_zbMacInit(cold_reset);
+		zb_nwk_ed_trace[15] = 0xA5A00103U;
 		tl_zbNwkInit(cold_reset);
+		zb_nwk_ed_trace[15] = 0xA5A00104U;
 		aps_init();
+		zb_nwk_ed_trace[15] = 0xA5A00105U;
 		af_init();
+		zb_nwk_ed_trace[15] = 0xA5A00106U;
 		zdo_init();
+		zb_nwk_ed_trace[15] = 0xA5A00107U;
 		(void)zb_platform_restore_persistent_state();
+		zb_nwk_ed_trace[15] = 0xA5A00108U;
 		zb_platform_apply_runtime_ieee_addr();
+		zb_nwk_ed_trace[15] = 0xA5A00109U;
 		rf_init();
+		zb_nwk_ed_trace[15] = 0xA5A0010AU;
+		drv_enable_irq();
+		zb_nwk_ed_trace[15] = 0xA5A0010BU;
 		zb_core_init_done = true;
+		zb_nwk_ed_trace[15] = 0xA5A00002U;
 	}
 
 	zb_radio_init();
+	zb_nwk_ed_trace[15] = 0xA5A00003U;
 	if (!zb_radio_is_ready()) {
+		zb_nwk_ed_trace[14]++;
+		zb_nwk_ed_trace[15] = 0xA5A00004U;
 		if (!zb_waiting_for_radio_log) {
 			LOG_WRN("Zigbee bootstrap waiting for radio readiness");
 			zb_waiting_for_radio_log = true;
@@ -116,15 +135,20 @@ static void zb_core_bootstrap_once(void)
 		LOG_INF("Zigbee radio ready; completing bootstrap");
 		zb_waiting_for_radio_log = false;
 	}
+	zb_nwk_ed_trace[15] = 0xA5A00005U;
 
 	zb_platform_app_bootstrap_ready();
+	zb_nwk_ed_trace[15] = 0xA5B00001U;
 
 	if (zb_platform_app_enable_radio_smoke_probe()) {
 		zb_radio_smoke_probe();
 	}
 
 	if (zb_platform_app_should_start_commissioning()) {
+		zb_nwk_ed_trace[15] = 0xA5B00002U;
 		zb_commissioning_pending = true;
+	} else {
+		zb_nwk_ed_trace[15] = 0xA5B00003U;
 	}
 
 	zb_bootstrap_done = true;
@@ -136,8 +160,10 @@ static void zb_process_deferred_commissioning(void)
 		return;
 	}
 
+	zb_nwk_ed_trace[15] = 0xA5B00004U;
 	zb_commissioning_pending = false;
 	zb_platform_app_start_commissioning();
+	zb_nwk_ed_trace[15] = 0xA5B00006U;
 }
 
 static void zb_thread_fn(void *a, void *b, void *c)
@@ -151,6 +177,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	while (1) {
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
+			ev_timer_process();
 			ev_poll_process();
 			if (!zb_bootstrap_done) {
 				k_yield();
@@ -158,13 +185,28 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			}
 		}
 
+		ev_timer_process();
 		ev_poll_process();
 		zb_process_deferred_commissioning();
 
 		if (k_sem_take(&zb_ev_sem, K_NO_WAIT) == 0) {
+			zb_nwk_ed_trace[15] = 0xA5B00007U;
 			continue;
 		}
 
+		if (ev_timer_nearestGet() != NULL) {
+			/*
+			 * Keep vendor-style timer progress alive even when no external
+			 * event wakes the Zigbee thread.  TLSR8258 hardware proved the
+			 * Zephyr delayed-work timeout path was not expiring here.
+			 */
+			zb_nwk_ed_trace[15] = 0xA5B00008U;
+			k_yield();
+			k_busy_wait(1000);
+			continue;
+		}
+
+		zb_nwk_ed_trace[15] = 0xA5B00009U;
 		(void)k_sem_take(&zb_ev_sem, K_FOREVER);
 	}
 }
