@@ -213,25 +213,11 @@ static inline void tlsr8258_radio_promiscuous_set(bool promiscuous)
 	*tlsr8258_radio_u8_field(offsetof(struct tlsr8258_radio_data, promiscuous)) =
 		promiscuous ? 1u : 0u;
 }
-static tlsr8258_zigbee_rx_cb_t tlsr8258_legacy_rx_cb;
+
 static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
-
-/* Sink adapter so legacy callers share the authoritative sink dispatch path. */
-static int tlsr8258_legacy_cb_sink(const struct tlsr8258_rx_frame_view *frame)
-{
-	tlsr8258_legacy_rx_cb(frame->dma, frame->len, frame->rssi_dbm);
-	return 0;
-}
-
-void tlsr8258_zigbee_register_rx_cb(tlsr8258_zigbee_rx_cb_t cb)
-{
-	tlsr8258_legacy_rx_cb = cb;
-	tlsr8258_zigbee_rx_sink = (cb != NULL) ? tlsr8258_legacy_cb_sink : NULL;
-}
 
 void tlsr8258_zigbee_register_rx_sink(tlsr8258_zigbee_rx_sink_t sink)
 {
-	tlsr8258_legacy_rx_cb = NULL;
 	tlsr8258_zigbee_rx_sink = sink;
 }
 
@@ -715,6 +701,7 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 		view.len = frame->len;
 		view.rssi_dbm = frame->rssi_dbm;
 		tlsr8258_zigbee_rx_sink(&view);
+		return;
 	}
 
 #if defined(CONFIG_IEEE802154_RAW_MODE)
