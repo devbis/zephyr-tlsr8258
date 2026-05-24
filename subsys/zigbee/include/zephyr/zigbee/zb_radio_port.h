@@ -9,13 +9,9 @@
 #include <zephyr/device.h>
 #include <zephyr/net/ieee802154_radio.h>
 
-struct zb_radio_port_rx_frame {
-	const uint8_t *dma;
-	uint8_t len;
-	int8_t rssi_dbm;
-};
+struct tlsr8258_rx_frame_view;
 
-typedef int (*zb_radio_port_rx_sink_t)(const struct zb_radio_port_rx_frame *frame);
+typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame);
 
 enum zb_radio_port_trx_state {
 	ZB_RADIO_PORT_TRX_OFF = 0,
