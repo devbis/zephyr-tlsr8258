@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 struct zb_radio_ctx {
 	const struct device *dev;
 	const struct ieee802154_radio_api *api;
+	/* Legacy compatibility-facing RX buffer API only; not used by the normal sink pipeline. */
 	u8 *rx_target;
 	u8 *rx_next;
 	u8 rx_ring[ZB_RADIO_RX_RING_DEPTH][ZB_RADIO_RX_BUF_SIZE];
@@ -107,19 +108,7 @@ static int zb_radio_start_impl(u8 channel)
 
 static u8 *zb_radio_ring_alternate_buf(const u8 *current)
 {
-	if (current == g_radio.rx_ring[0]) {
-		return g_radio.rx_ring[1];
-	}
-
-	if (current == g_radio.rx_ring[1]) {
-		return g_radio.rx_ring[0];
-	}
-
-	if (current != g_radio.rx_ring[0]) {
-		return g_radio.rx_ring[0];
-	}
-
-	return g_radio.rx_ring[1];
+	return (current == g_radio.rx_ring[0]) ? g_radio.rx_ring[1] : g_radio.rx_ring[0];
 }
 
 static void zb_radio_rx_ring_prime(const u8 *current)

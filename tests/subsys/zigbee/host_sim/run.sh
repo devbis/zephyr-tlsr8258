@@ -57,6 +57,12 @@ if rg -n 'K_MSGQ_DEFINE\(g_radio_rx_msgq|ZB_RADIO_RX_WORK_Q_DEPTH[[:space:]]+4U|
 	exit 1
 fi
 
+if rg -n 'struct tlsr8258_rx_frame_view[[:space:]]*\{' \
+	subsys/zigbee/platform/zephyr/drv_radio_zephyr.c; then
+	echo "drv_radio_zephyr.c must use the shared tlsr8258_rx_frame_view from zb_radio_port.h" >&2
+	exit 1
+fi
+
 if rg -n 'struct zb_radio_rx_slot|g_radio_rx_work|rx_pending_(head|tail|count)|zb_radio_rx_slot_(alloc|pop|release)|zb_radio_rx_work_handler' \
 	subsys/zigbee/platform/zephyr/drv_radio_zephyr.c; then
 	echo "drv_radio_zephyr.c must stay a thin Zigbee RX sink without bridge-owned RX queue/work" >&2
