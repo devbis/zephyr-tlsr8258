@@ -65,6 +65,10 @@ struct zb_radio_ctx {
 
 static struct zb_radio_ctx g_radio;
 static struct k_work g_radio_rx_work;
+volatile u32 zb_radio_bridge_extract_success_count;
+volatile u32 zb_radio_bridge_extract_fail_count;
+volatile u32 zb_radio_bridge_beacon_count;
+volatile u32 zb_radio_bridge_last_frame_type;
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
@@ -77,6 +81,12 @@ extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 ti
 extern void rf_rx_irq_handler(void);
 extern void rf_tx_irq_handler(void);
 extern u8 *rf_rxBuf;
+
+struct tlsr8258_rx_frame_view {
+	const uint8_t *dma;
+	uint8_t len;
+	int8_t rssi_dbm;
+};
 
 static void zb_radio_set_promiscuous(bool enable)
 {
@@ -226,7 +236,7 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 	return false;
 }
 
-static int zb_radio_on_rx_sink(const struct zb_radio_port_rx_frame *frame)
+static int zb_radio_on_rx_sink(const struct tlsr8258_rx_frame_view *frame)
 {
 	size_t copy_len;
 	struct zb_radio_rx_slot *slot;
@@ -314,8 +324,16 @@ static void zb_radio_process_rx_item(struct zb_radio_rx_slot *slot)
 
 	atomic_set(&g_radio.rx_done, 1);
 	if (zb_radio_extract_rx_psdu(slot->dma, slot->len, &psdu, &psdu_len) == 0) {
+		zb_radio_bridge_extract_success_count++;
+		if (psdu != NULL && psdu_len != 0U) {
+			zb_radio_bridge_last_frame_type = (u32)(psdu[0] & 0x07U);
+			if ((psdu[0] & 0x07U) == 0U) {
+				zb_radio_bridge_beacon_count++;
+			}
+		}
 		zb_macDataRecvHandler(slot->dma, (u8 *)psdu, psdu_len, 0U, 0U, slot->rssi_dbm);
 	} else if (rf_rxBuf != NULL) {
+		zb_radio_bridge_extract_fail_count++;
 		saved_rx_buf = rf_rxBuf;
 		rf_rxBuf = slot->dma;
 		rf_rx_irq_handler();
