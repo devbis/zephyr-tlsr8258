@@ -1635,8 +1635,10 @@ static void nwk_ed_minimal_post_join_announce_task(void *arg)
 		return;
 	}
 
+	/* Arm the interview poll loop before sending the announce so the
+	 * coordinator's ZDO queries are received even if the announce is lost. */
+	tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
 	if (zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
-		tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
 		nwk_ed_minimal_timeout_req_schedule(NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS);
 	}
 }

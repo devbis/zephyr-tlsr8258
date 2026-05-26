@@ -5,7 +5,7 @@ set -eu
 
 cd "$(dirname "$0")/../../../.."
 
-out="${TMPDIR:-/tmp}/zephyr-zigbee-host-shell-bootstrap"
+out="tests/subsys/zigbee/host_shell_bootstrap/host_bootstrap_test"
 cc="${CC:-cc}"
 
 "$cc" -std=c17 -Wall -Wextra -Werror \

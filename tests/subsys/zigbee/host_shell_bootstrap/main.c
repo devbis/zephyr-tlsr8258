@@ -141,6 +141,14 @@ int zb_platform_radio_send_beacon_request(void)
 	return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* Minimal ZDO / ZCL stubs for the post-join interview seam            */
+/*                                                                     */
+/* Included BEFORE app_bdb.c so that the types and forward             */
+/* declarations are visible at every call site inside that file.       */
+/* ------------------------------------------------------------------ */
+#include "zdo_zcl_stubs.h"
+
 #define CONFIG_ZIGBEE_BDB 1
 /* app_bdb.c owns the commissioning state; include it directly so the
  * reset_state() helper can access its static variables. */
@@ -148,6 +156,50 @@ int zb_platform_radio_send_beacon_request(void)
 #define main zigbee_shell_sample_main
 #include "../../../../samples/zigbee/zigbee_shell/src/main.c"
 #undef main
+
+static int active_ep_req_calls;
+static u16 active_ep_req_dst;
+static int simple_desc_req_calls;
+static u16 simple_desc_req_dst;
+static u8  simple_desc_req_ep;
+static int zcl_basic_read_calls;
+static u16 zcl_basic_read_cluster;
+static u16 zcl_basic_read_dst;
+
+zdo_status_t zb_zdoActiveEpReq(u16 dstNwkAddr, zdo_active_ep_req_t *pReq,
+				u8 *seqNo, zdo_callback indCb)
+{
+	active_ep_req_calls++;
+	active_ep_req_dst = dstNwkAddr;
+	(void)pReq; (void)seqNo; (void)indCb;
+	return 0;
+}
+
+zdo_status_t zb_zdoSimpleDescReq(u16 dstNwkAddr, zdo_simple_descriptor_req_t *pReq,
+				  u8 *seqNo, zdo_callback indCb)
+{
+	simple_desc_req_calls++;
+	simple_desc_req_dst = dstNwkAddr;
+	if (pReq != NULL) {
+		simple_desc_req_ep = pReq->endpoint;
+	}
+	(void)seqNo; (void)indCb;
+	return 0;
+}
+
+status_t zcl_read(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode,
+		  u8 disableDefaultRsp, u8 direction, u8 seqNo,
+		  zclReadCmd_t *readCmd)
+{
+	zcl_basic_read_calls++;
+	zcl_basic_read_cluster = clusterId;
+	if (pDstEpInfo != NULL) {
+		zcl_basic_read_dst = pDstEpInfo->dstAddr.shortAddr;
+	}
+	(void)srcEp; (void)manuCode; (void)disableDefaultRsp;
+	(void)direction; (void)seqNo; (void)readCmd;
+	return 0;
+}
 
 static void reset_state(void)
 {
@@ -169,6 +221,15 @@ static void reset_state(void)
 	bdb_runtime_ready = false;
 	leave_recommission_pending = false;
 	commissioning_retry_timer = NULL;
+
+	active_ep_req_calls = 0;
+	active_ep_req_dst = 0xFFFFU;
+	simple_desc_req_calls = 0;
+	simple_desc_req_dst = 0xFFFFU;
+	simple_desc_req_ep = 0xFFU;
+	zcl_basic_read_calls = 0;
+	zcl_basic_read_cluster = 0xFFFFU;
+	zcl_basic_read_dst = 0xFFFFU;
 }
 
 static void test_commissioning_should_not_restart_while_request_in_flight(void)
@@ -271,6 +332,69 @@ static void test_leave_retry_starts_after_runtime_is_not_joined(void)
 	EXPECT_TRUE(commissioning_start_requested);
 }
 
+/*
+ * RED: after a successful join, the bootstrap layer MUST initiate the
+ * post-association ZDO/ZCL interview against the coordinator (0x0000):
+ *   1. Active-EP request  — discover which endpoints the coordinator has
+ *   2. Simple-Descriptor request — fetch the profile/device-ID for ep 0x01
+ *   3. Basic-cluster read — read Manufacturer Name + Model ID (cluster 0x0000)
+ *
+ * This test is intentionally RED until app_bdb_commissioning_status()
+ * (or a helper it calls) is wired to invoke these APIs.
+ */
+static void test_post_join_initiates_zdo_zcl_interview(void)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+	zb_platform_app_start_commissioning();
+
+	/*
+	 * BDB reports a successful join (status=0x00, joinedNetwork=true).
+	 * This is the JOINING -> INTERVIEW handoff point.
+	 */
+	zb_platform_app_bdb_commissioning_status(0x00, true);
+
+	/* 1. Active-EP request must be directed at coordinator short addr 0x0000. */
+	EXPECT_TRUE(active_ep_req_calls >= 1);
+	EXPECT_EQ(active_ep_req_dst, 0x0000);
+
+	/*
+	 * 2. Simple-Descriptor request must target coordinator 0x0000 for
+	 *    the generic endpoint (APP_PROFILE_ENDPOINT = 0x01).
+	 */
+	EXPECT_TRUE(simple_desc_req_calls >= 1);
+	EXPECT_EQ(simple_desc_req_dst, 0x0000);
+	EXPECT_EQ(simple_desc_req_ep, 0x01);
+
+	/* 3. Basic-cluster attribute read (cluster ID 0x0000) must be issued. */
+	EXPECT_TRUE(zcl_basic_read_calls >= 1);
+	EXPECT_EQ(zcl_basic_read_cluster, 0x0000);
+	EXPECT_EQ(zcl_basic_read_dst, 0x0000);
+}
+
+static void test_commissioning_join_success_cancels_pending_retry_timer(void)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+	zb_platform_app_start_commissioning();
+
+	/* The not-yet-joined path schedules a retry timer. */
+	EXPECT_EQ(ev_timer_task_post_calls, 1);
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
+
+	/* BDB reports join success with joinedNetwork=true (the interview-ready
+	 * state: transport key is installed and the coordinator can now query
+	 * the device). */
+	zb_platform_app_bdb_commissioning_status(0x00, true);
+
+	/* Retry timer must be cancelled, poll rate activated, and commissioning
+	 * must not be eligible for restart. */
+	EXPECT_EQ(ev_timer_task_cancel_calls, 1);
+	EXPECT_FALSE(ev_timer_task_stub.scheduled);
+	EXPECT_EQ(poll_rate_set_calls, 1);
+	EXPECT_FALSE(zb_platform_app_should_start_commissioning());
+}
+
 int main(void)
 {
 	test_commissioning_should_not_restart_while_request_in_flight();
@@ -281,6 +405,8 @@ int main(void)
 	test_network_left_defers_recommission_until_runtime_resets();
 	test_leave_retry_while_still_joined_keeps_recommission_pending();
 	test_leave_retry_starts_after_runtime_is_not_joined();
+	test_commissioning_join_success_cancels_pending_retry_timer();
+	test_post_join_initiates_zdo_zcl_interview();
 
 	if (failures != 0) {
 		printf("host_shell_bootstrap: %d failure(s)\n", failures);

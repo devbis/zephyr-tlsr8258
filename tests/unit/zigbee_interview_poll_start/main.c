@@ -52,6 +52,27 @@ static bool contains(const char *source, const char *needle)
 	return strstr(source, needle) != NULL;
 }
 
+static bool contains_between(const char *source, const char *start_marker,
+			     const char *end_marker, const char *needle)
+{
+	const char *start;
+	const char *end;
+	const char *match;
+
+	start = strstr(source, start_marker);
+	if (start == NULL) {
+		return false;
+	}
+
+	end = strstr(start, end_marker);
+	if (end == NULL) {
+		return false;
+	}
+
+	match = strstr(start, needle);
+	return match != NULL && match < end;
+}
+
 #define EXPECT_TRUE(expr) do { \
 	if (!(expr)) { \
 		fprintf(stderr, "FAIL %s:%d expected true: %s\n", __FILE__, __LINE__, #expr); \
@@ -140,12 +161,35 @@ static void test_joined_tx_gate_allows_pre_interview_assoc_window(void)
 	free(source);
 }
 
+static void test_post_join_announce_arms_interview_poll_unconditionally(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_minimal.c");
+	const char *func = "static void nwk_ed_minimal_post_join_announce_task(void *arg)";
+	const char *cond = "if (zb_zdoSendDevAnnance() == ZDO_SUCCESS)";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	/* InterviewPollStart must be armed regardless of whether dev-announce
+	 * delivery succeeds, so the coordinator's ZDO queries are received
+	 * even if the announce frame is lost.  The call must therefore appear
+	 * before — not inside — the if (zb_zdoSendDevAnnance() == ZDO_SUCCESS)
+	 * conditional in nwk_ed_minimal_post_join_announce_task. */
+	EXPECT_TRUE(contains_between(source, func, cond,
+				     "tl_zbNwkEdMinimalInterviewPollStart(0U, 0U)"));
+
+	free(source);
+}
+
 int main(void)
 {
 	test_interview_poll_start_can_restart_active_interview();
 	test_interview_poll_start_can_kick_pre_interview_assoc_window();
 	test_joined_rx_gate_allows_pre_interview_assoc_window();
 	test_joined_tx_gate_allows_pre_interview_assoc_window();
+	test_post_join_announce_arms_interview_poll_unconditionally();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_interview_poll_start: %d failure(s)\n", failures);
