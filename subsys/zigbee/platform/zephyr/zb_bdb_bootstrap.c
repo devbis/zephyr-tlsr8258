@@ -8,13 +8,14 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
+extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
+extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 
 #if defined(CONFIG_ZIGBEE_BDB)
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
-extern void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs);
-extern void tl_zbNwkEdMinimalPollEnsure(void);
+extern void bdb_outgoingFrameCountUpdate(u8 repower);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
@@ -44,6 +45,9 @@ static void zb_shell_bdb_init_cb(u8 status, u8 joinedNetwork)
 static void zb_shell_bdb_commissioning_cb(u8 status, void *arg)
 {
 	ARG_UNUSED(arg);
+	app_bdb_rejoin_callback_trace_put((0x21U << 24) |
+					  (uint32_t)status |
+					  ((uint32_t)(g_zbNwkCtx.joined ? 1U : 0U) << 8));
 	zb_platform_app_bdb_commissioning_status((uint8_t)status,
 						 g_zbNwkCtx.joined ? true : false);
 }
@@ -120,8 +124,28 @@ static bool zb_platform_bdb_has_valid_join_context(void)
 	       zb_platform_bdb_key_is_set(zb_platform_bdb_active_nwk_key_get());
 }
 
+static void zb_platform_bdb_trace_join_context(uint8_t slot)
+{
+	bool has_valid = zb_platform_bdb_has_valid_join_context();
+	bool key_set = zb_platform_bdb_key_is_set(zb_platform_bdb_active_nwk_key_get());
+
+	if (&zb_restore_diag_trace[0] == NULL || slot >= 16U) {
+		return;
+	}
+
+	zb_restore_diag_trace[slot] = ((uint32_t)g_zbNwkCtx.joined) |
+				      ((uint32_t)g_zbNwkCtx.is_factory_new << 8) |
+				      ((uint32_t)has_valid << 16) |
+				      ((uint32_t)key_set << 24);
+	if ((slot + 1U) < 16U) {
+		zb_restore_diag_trace[slot + 1U] = ((uint32_t)g_zbMacPib.shortAddress << 16) |
+						   (uint32_t)g_zbMacPib.panId;
+	}
+}
+
 static void zb_platform_bdb_repair_joined_flag_if_needed(void)
 {
+	zb_platform_bdb_trace_join_context(9U);
 	if (g_zbNwkCtx.joined || !zb_platform_bdb_has_valid_join_context()) {
 		return;
 	}
@@ -134,12 +158,14 @@ static void zb_platform_bdb_repair_joined_flag_if_needed(void)
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.user_state = NLME_IDLE;
 	g_bdbAttrs.nodeIsOnANetwork = 1U;
+	zb_platform_bdb_trace_join_context(11U);
 }
 
 static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
 {
 	int rc;
 
+	zb_platform_bdb_trace_join_context(13U);
 	if (!g_zbNwkCtx.joined || zb_platform_bdb_has_valid_join_context()) {
 		return;
 	}
@@ -155,6 +181,7 @@ static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
 static void zb_platform_bdb_restore_joined_target(void)
 {
 	u8 *nwkKey = NULL;
+	int rc;
 
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	if (!g_zbNwkCtx.joined ||
@@ -174,10 +201,24 @@ static void zb_platform_bdb_restore_joined_target(void)
 					    g_zbNIB.extPANId,
 					    nwkKey,
 					    ss_ib.trust_center_address);
-	tl_zbNwkEdMinimalPollRestart(zdo_af_get_syn_rate());
 	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
 				     g_zbMacPib.extAddress);
-	tl_zbNwkEdMinimalPollEnsure();
+	rc = zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur);
+	if (rc != 0) {
+		LOG_WRN("zb bdb restore: radio start failed on channel %u rc=%d",
+			g_zbMacPib.phyChannelCur, rc);
+		return;
+	}
+
+	bdb_outgoingFrameCountUpdate(1U);
+	zb_rejoinSecModeSet(REJOIN_SECURITY);
+	if (zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,
+			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
+		LOG_WRN("zb bdb restore: secure rejoin start failed on channel %u",
+			g_zbMacPib.phyChannelCur);
+		return;
+	}
+
 	zb_info_save(NULL);
 }
 

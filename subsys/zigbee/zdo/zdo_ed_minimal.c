@@ -46,6 +46,8 @@ u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
 
 static bool g_zdoUnderRejoinMode = FALSE;
 
+extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
+
 extern void tl_zbNwkEdMinimalRuntimeReset(void);
 extern bool tl_zbNwkEdMinimalDiscoveryStart(u32 scanChannels, u8 scanDuration);
 extern void tl_zbNwkEdMinimalDiscoveryStop(void);
@@ -121,6 +123,9 @@ static void zdo_ed_minimal_rejoin_done(u8 status)
 {
 	zdo_start_device_confirm_t cnf;
 
+	app_bdb_rejoin_callback_trace_put((0x24U << 24) |
+					  (uint32_t)status |
+					  ((uint32_t)(g_zdoEdAsync.rejoinPending ? 1U : 0U) << 8));
 	if (!g_zdoEdAsync.rejoinPending) {
 		return;
 	}
@@ -369,6 +374,17 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
 	}
 
 	return ZDO_SUCCESS;
+}
+
+void zdo_ed_minimal_rejoin_restart_prepare(void)
+{
+	app_bdb_rejoin_callback_trace_put((0x25U << 24) |
+					  ((uint32_t)(g_zdoEdAsync.rejoinPending ? 1U : 0U) << 8) |
+					  ((uint32_t)(g_zdoEdAsync.rejoinWithBackoff ? 1U : 0U) << 9));
+	g_zdoEdAsync.rejoinPending = FALSE;
+	g_zdoEdAsync.rejoinWithBackoff = FALSE;
+	g_zdoUnderRejoinMode = FALSE;
+	tl_zbNwkEdMinimalOperationAbort();
 }
 
 zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)

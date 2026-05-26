@@ -9,8 +9,20 @@ static int bdb_init_calls;
 static int bdb_start_calls;
 static int bdb_init_status;
 static bool joined_network;
+static bool nwk_manager_idle;
 static uint32_t poll_rate;
 static int poll_rate_set_calls;
+static int ev_timer_task_post_calls;
+static int ev_timer_task_cancel_calls;
+
+struct ev_timer_event_t {
+	int (*cb)(void *data);
+	void *data;
+	uint32_t timeout_ms;
+	bool scheduled;
+};
+
+static struct ev_timer_event_t ev_timer_task_stub;
 
 #define EXPECT_TRUE(expr) do { \
 	if (!(expr)) { \
@@ -53,6 +65,11 @@ bool zb_isDeviceJoinedNwk(void)
 	return joined_network;
 }
 
+bool zdo_ifZdoNwkManagerIdle(void)
+{
+	return nwk_manager_idle;
+}
+
 uint8_t zb_setPollRate(uint32_t newRate)
 {
 	poll_rate = newRate;
@@ -63,6 +80,36 @@ uint8_t zb_setPollRate(uint32_t newRate)
 uint32_t zb_getPollRate(void)
 {
 	return poll_rate;
+}
+
+struct ev_timer_event_t *ev_timer_taskPost(int (*func)(void *data), void *arg, uint32_t t_ms)
+{
+	ev_timer_task_post_calls++;
+	ev_timer_task_stub.cb = func;
+	ev_timer_task_stub.data = arg;
+	ev_timer_task_stub.timeout_ms = t_ms;
+	ev_timer_task_stub.scheduled = true;
+	return &ev_timer_task_stub;
+}
+
+uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt)
+{
+	ev_timer_task_cancel_calls++;
+	if (evt != NULL && *evt != NULL) {
+		(*evt)->scheduled = false;
+		*evt = NULL;
+		return 0;
+	}
+
+	return 1;
+}
+
+static void fire_retry_timer(void)
+{
+	if (ev_timer_task_stub.cb != NULL) {
+		ev_timer_task_stub.scheduled = false;
+		(void)ev_timer_task_stub.cb(ev_timer_task_stub.data);
+	}
 }
 
 int zb_platform_radio_diag_get(struct zb_platform_radio_diag_snapshot *snapshot)
@@ -108,12 +155,20 @@ static void reset_state(void)
 	bdb_start_calls = 0;
 	bdb_init_status = 0;
 	joined_network = false;
+	nwk_manager_idle = true;
 	poll_rate = 0;
 	poll_rate_set_calls = 0;
+	ev_timer_task_post_calls = 0;
+	ev_timer_task_cancel_calls = 0;
+	ev_timer_task_stub.cb = NULL;
+	ev_timer_task_stub.data = NULL;
+	ev_timer_task_stub.timeout_ms = 0;
+	ev_timer_task_stub.scheduled = false;
 
 	commissioning_start_requested = false;
 	bdb_runtime_ready = false;
-	commissioning_retry_work_ready = false;
+	leave_recommission_pending = false;
+	commissioning_retry_timer = NULL;
 }
 
 static void test_commissioning_should_not_restart_while_request_in_flight(void)
@@ -146,6 +201,33 @@ static void test_commissioning_status_false_uses_runtime_join_state(void)
 	EXPECT_EQ(poll_rate_set_calls, 1);
 }
 
+static void test_commissioning_start_schedules_vendor_retry_timer(void)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+
+	zb_platform_app_start_commissioning();
+
+	EXPECT_EQ(ev_timer_task_post_calls, 1);
+	EXPECT_EQ(ev_timer_task_stub.timeout_ms, 5000);
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
+}
+
+static void test_retry_does_not_restart_commissioning_while_nwk_manager_busy(void)
+{
+	reset_state();
+	zb_platform_app_bootstrap_ready();
+	zb_platform_app_start_commissioning();
+	nwk_manager_idle = false;
+
+	fire_retry_timer();
+
+	EXPECT_EQ(bdb_start_calls, 1);
+	EXPECT_TRUE(commissioning_start_requested);
+	EXPECT_EQ(ev_timer_task_post_calls, 2);
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
+}
+
 static void test_network_left_defers_recommission_until_runtime_resets(void)
 {
 	reset_state();
@@ -156,37 +238,34 @@ static void test_network_left_defers_recommission_until_runtime_resets(void)
 
 	EXPECT_EQ(bdb_start_calls, 0);
 	EXPECT_FALSE(commissioning_start_requested);
-	EXPECT_TRUE(commissioning_retry_work_ready);
-	EXPECT_TRUE(commissioning_retry_work.scheduled);
+	EXPECT_EQ(ev_timer_task_post_calls, 1);
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
 }
 
 static void test_leave_retry_while_still_joined_keeps_recommission_pending(void)
 {
-	struct k_work work = {0};
-
 	reset_state();
 	zb_platform_app_bootstrap_ready();
 	joined_network = true;
 	zb_platform_app_network_left();
 
-	commissioning_retry_work.handler(&work);
+	fire_retry_timer();
 
 	EXPECT_EQ(bdb_start_calls, 0);
 	EXPECT_FALSE(commissioning_start_requested);
-	EXPECT_TRUE(commissioning_retry_work.scheduled);
+	EXPECT_EQ(ev_timer_task_post_calls, 2);
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
 }
 
 static void test_leave_retry_starts_after_runtime_is_not_joined(void)
 {
-	struct k_work work = {0};
-
 	reset_state();
 	zb_platform_app_bootstrap_ready();
 	joined_network = true;
 	zb_platform_app_network_left();
 	joined_network = false;
 
-	commissioning_retry_work.handler(&work);
+	fire_retry_timer();
 
 	EXPECT_EQ(bdb_start_calls, 1);
 	EXPECT_TRUE(commissioning_start_requested);
@@ -197,6 +276,8 @@ int main(void)
 	test_commissioning_should_not_restart_while_request_in_flight();
 	test_commissioning_start_skips_network_steer_when_already_joined();
 	test_commissioning_status_false_uses_runtime_join_state();
+	test_commissioning_start_schedules_vendor_retry_timer();
+	test_retry_does_not_restart_commissioning_while_nwk_manager_busy();
 	test_network_left_defers_recommission_until_runtime_resets();
 	test_leave_retry_while_still_joined_keeps_recommission_pending();
 	test_leave_retry_starts_after_runtime_is_not_joined();
