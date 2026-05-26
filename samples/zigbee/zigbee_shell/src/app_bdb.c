@@ -316,6 +316,58 @@ void app_bdb_network_left(void)
 #endif
 }
 
+/*
+ * Callback fired by the ZDO layer when the coordinator's Active_EP_rsp
+ * arrives.  Drives the interview: issues SimpleDesc + Basic-cluster read
+ * for each endpoint reported by the coordinator.
+ *
+ * `p` is a `zdo_zdpDataInd_t *` allocated by the ZDO layer with `zpdu`
+ * pointing at the raw Active_EP_rsp payload (seq, status, nwk_addr,
+ * ep_count, ep_list[]).  This is the same contract used by bdb.c callbacks.
+ */
+static void app_bdb_active_ep_rsp_cb(void *p)
+{
+	const zdo_zdpDataInd_t *ind = (const zdo_zdpDataInd_t *)p;
+	const zdo_active_ep_resp_t *rsp;
+	u8 i;
+
+	if ((ind == NULL) || (ind->zpdu == NULL)) {
+		return;
+	}
+
+	rsp = (const zdo_active_ep_resp_t *)ind->zpdu;
+	if (ind->status != (u8)ZDO_SUCCESS || rsp->active_ep_count == 0U) {
+		return;
+	}
+
+	for (i = 0U; i < rsp->active_ep_count && i < MAX_REQUESTED_CLUSTER_NUMBER; i++) {
+		zdo_simple_descriptor_req_t sd_req;
+		epInfo_t ep_info;
+		struct {
+			u8  numAttr;
+			u16 attrID[2];
+		} basic_read = { 2U, { 0x0004U, 0x0005U } };
+		u8 seq = 0U;
+		u8 ep = rsp->active_ep_lst[i];
+
+		sd_req.nwk_addr_interest = ind->src_addr;
+		sd_req.endpoint = ep;
+		(void)zb_zdoSimpleDescReq(ind->src_addr, &sd_req, &seq, NULL);
+
+		memset(&ep_info, 0, sizeof(ep_info));
+		ep_info.dstAddr.shortAddr = ind->src_addr;
+		ep_info.dstEp = ep;
+		ep_info.profileId = APP_PROFILE_HA_PROFILE_ID;
+		ep_info.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+		ep_info.txOptions = APS_TX_OPT_ACK_TX;
+		ep_info.radius = 30U;
+		seq = 0U;
+		(void)zcl_read(APP_PROFILE_ENDPOINT, &ep_info,
+			       0x0000U, 0U, 1U, 0U, seq,
+			       (zclReadCmd_t *)&basic_read);
+	}
+}
+
 void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
@@ -329,34 +381,15 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 		commissioning_start_requested = true;
 		app_bdb_commissioning_retry_cancel();
 		if (status == 0x00U) {
-			/* Post-join ZDO/ZCL interview: discover coordinator endpoints
-			 * and read the Basic cluster so Zigbee2MQTT can identify us. */
+			/* Post-join ZDO/ZCL interview: discover coordinator endpoints.
+			 * The response callback app_bdb_active_ep_rsp_cb will issue
+			 * SimpleDesc + Basic-cluster read for each discovered endpoint,
+			 * making the interview flow response-driven rather than hardcoded. */
 			zdo_active_ep_req_t ep_req = { .nwk_addr_interest = 0x0000U };
-			zdo_simple_descriptor_req_t sd_req = {
-				.nwk_addr_interest = 0x0000U,
-				.endpoint = APP_PROFILE_ENDPOINT,
-			};
-			struct {
-				u8  numAttr;
-				u16 attrID[2];
-			} basic_read = { 2U, { 0x0004U, 0x0005U } };
-			epInfo_t ep_info;
 			u8 seq = 0U;
 
-			memset(&ep_info, 0, sizeof(ep_info));
-			ep_info.dstAddr.shortAddr = 0x0000U;
-			ep_info.dstEp = APP_PROFILE_ENDPOINT;
-			ep_info.profileId = APP_PROFILE_HA_PROFILE_ID;
-			ep_info.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-			ep_info.txOptions = APS_TX_OPT_ACK_TX;
-			ep_info.radius = 30U;
-
-			(void)zb_zdoActiveEpReq(0x0000U, &ep_req, &seq, NULL);
-			seq = 0U;
-			(void)zb_zdoSimpleDescReq(0x0000U, &sd_req, &seq, NULL);
-			(void)zcl_read(APP_PROFILE_ENDPOINT, &ep_info,
-				       0x0000U, 0U, 1U, 0U, 0U,
-				       (zclReadCmd_t *)&basic_read);
+			(void)zb_zdoActiveEpReq(0x0000U, &ep_req, &seq,
+						app_bdb_active_ep_rsp_cb);
 		}
 		app_bdb_rejoin_callback_trace_put((0x15U << 24) |
 						  (zb_getPollRate() & 0xffffU));
