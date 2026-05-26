@@ -33,6 +33,7 @@ u8 MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
 tx_data_queue g_txQueue[TX_QUEUE_BN];
 
 tl_zb_mac_ctx_t g_zbMacCtx;
+extern volatile u32 zb_nwk_ed_trace[];
 
 static u8 aps_counter_value;
 static u8 aps_handle;
@@ -204,6 +205,9 @@ u8 aps_get_counter_value(void)
 
 void aps_init(void)
 {
+	u8 group_nv_status;
+
+	zb_nwk_ed_trace[14] = 0xA6A00001U;
 	aps_counter_value = 0x7aU;
 	aps_handle = 0U;
 
@@ -221,13 +225,20 @@ void aps_init(void)
 	aps_ib.aps_authenticated = FALSE;
 	aps_ib.aps_updateDevice_holdApsSecurity = FALSE;
 	aps_ib.aps_zdo_restricted_mode = FALSE;
+	zb_nwk_ed_trace[14] = 0xA6A00002U;
 
-	if (aps_groupTblNvInit() != NV_SUCC) {
+	group_nv_status = aps_groupTblNvInit();
+	zb_nwk_ed_trace[14] = 0xA6A00003U | group_nv_status;
+	if (group_nv_status != NV_SUCC) {
 		aps_groupTblReset();
+		zb_nwk_ed_trace[14] = 0xA6A00004U | group_nv_status;
 	} else {
 		aps_init_group_num_set();
+		zb_nwk_ed_trace[14] = 0xA6A00005U;
 	}
 
 	zb_binding_table_reset();
+	zb_nwk_ed_trace[14] = 0xA6A00006U;
 	zb_tx_cache_reset();
+	zb_nwk_ed_trace[14] = 0xA6A00007U;
 }

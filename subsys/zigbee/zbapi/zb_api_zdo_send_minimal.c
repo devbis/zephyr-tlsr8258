@@ -21,14 +21,14 @@ LOG_MODULE_REGISTER(zigbee_zdo_tx_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZB_MINIMAL_ZDO_TX_RETRY_DELAY_US   5000U
 #define ZB_MINIMAL_APS_MIC_LEN             4U
 #define ZB_MINIMAL_APS_CCM_L_VAL           2U
-#define ZB_MINIMAL_APS_SEC_CTRL            0x25U
-#define ZB_MINIMAL_APS_FC_BOOTSTRAP        0x01000000U
 #define ZB_MINIMAL_NWK_MIC_LEN             4U
 #define ZB_MINIMAL_NWK_SEC_CTRL            0x2DU
 #define ZB_MINIMAL_NWK_SEC_CTRL_WIRE       0x28U
 #define ZB_MINIMAL_NWK_AUX_HDR_LEN         14U
 
 extern bool tl_zbNwkEdMinimalParentCandidateGet(u16 *parentShortAddr, addrExt_t parentIeeeAddr);
+extern bool tl_zbNwkEdMinimalCanProcessDataFrames(void);
+extern u8 ss_keyHash(u8 *padV, u8 *key, u8 *hashOut);
 
 static u8 g_minimal_aps_counter;
 static u8 g_minimal_zdp_seq;
@@ -44,6 +44,43 @@ typedef struct {
 
 static zb_minimal_zdp_cb_info_t g_minimal_zdp_cbs[ZB_MINIMAL_ZDP_CB_MAX];
 static u8 g_minimal_zdp_cb_wptr;
+u32 zb_request_key_trace[4] = {0x41505251U, 0U, 0U, 0U};
+
+static u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt)
+{
+	u8 *p = auxHdr + 5U;
+	u8 *key = (u8 *)keyInfo;
+
+	COPY_U32TOBUFFER(auxHdr + 1, ss_ib.outgoingFrameCounter);
+	ss_ib.outgoingFrameCounter++;
+
+	auxHdr[0] = (u8)((auxHdr[0] & (u8)~0x07U) | 0x05U);
+
+	if (key != NULL) {
+		auxHdr[0] |= 0x20U;
+		memcpy(auxHdr + 5U, g_zbMacPib.extAddress, sizeof(addrExt_t));
+		p = auxHdr + 13U;
+
+		if (key[0] != 5U) {
+			if (key[1] == 1U) {
+				auxHdr[0] = (u8)((auxHdr[0] & (u8)~0x18U) | 0x10U);
+			} else {
+				auxHdr[0] |= 0x18U;
+			}
+		} else {
+			auxHdr[0] &= (u8)~0x18U;
+		}
+	} else if ((extNonceOpt & 0x20U) != 0U) {
+		auxHdr[0] |= 0x20U;
+		memcpy(auxHdr + 5U, g_zbMacPib.extAddress, sizeof(addrExt_t));
+		p = auxHdr + 13U;
+		auxHdr[0] &= (u8)~0x18U;
+	} else {
+		auxHdr[0] &= (u8)~0x18U;
+	}
+
+	return (u8)(p - auxHdr);
+}
 
 static u8 zb_minimal_next_aps_counter(void)
 {
@@ -159,17 +196,17 @@ static size_t zb_minimal_build_aps_header(u8 *buf, u8 srcEp, const epInfo_t *dst
 	return idx;
 }
 
-static size_t zb_minimal_build_aps_cmd_secure_header(u8 *buf, u8 apsCnt, u32 frameCounter)
+static size_t zb_minimal_build_aps_cmd_secure_header(u8 *buf, u8 apsCnt, const u8 *payload)
 {
 	size_t idx = 0U;
 
-	buf[idx++] = 0x21U;
+	if ((buf == NULL) || (payload == NULL)) {
+		return 0U;
+	}
+
+	buf[idx++] = 0x41U;
 	buf[idx++] = apsCnt;
-	buf[idx++] = ZB_MINIMAL_APS_SEC_CTRL;
-	COPY_U32TOBUFFER(&buf[idx], frameCounter);
-	idx += 4U;
-	memcpy(&buf[idx], g_zbMacPib.extAddress, sizeof(addrExt_t));
-	idx += sizeof(addrExt_t);
+	idx += ss_apsEnAuxHdrFill(&buf[idx], (void *)payload, 0);
 
 	return idx;
 }
@@ -316,21 +353,61 @@ static bool zb_minimal_tc_link_key_context_get(ss_dev_pair_set_t *keyPair)
 	return true;
 }
 
+static const u8 *zb_minimal_request_key_aps_key_get(u8 secCtrl, const u8 *linkKey,
+						      u8 *keyHash)
+{
+	u8 keyIdentifier;
+	u8 pad = 0U;
+
+	if ((linkKey == NULL) || (keyHash == NULL)) {
+		return NULL;
+	}
+
+	keyIdentifier = (secCtrl >> 3U) & 0x03U;
+	switch (keyIdentifier) {
+	case SS_SECUR_DATA_KEY:
+		return linkKey;
+	case SS_SECUR_KEY_TRANSPORT_KEY:
+		break;
+	case SS_SECUR_KEY_LOAD_KEY:
+		pad = 2U;
+		break;
+	default:
+		return NULL;
+	}
+
+	if (ss_keyHash(&pad, (u8 *)linkKey, keyHash) != RET_OK) {
+		return NULL;
+	}
+
+	return keyHash;
+}
+
 static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u8 *payload,
 						 u8 payload_len)
 {
 	u8 frame[127];
 	u8 aad[15];
 	u8 nonce[13];
+	u8 apsNonce[13];
 	u8 *sec_payload;
+	u8 *nwkKey;
 	size_t idx = 0U;
+	size_t nwkHdrIdx;
+	size_t nwkHdrLen;
+	size_t nwkPayloadIdx;
+	size_t apsHdrIdx;
 	size_t apsHdrLen;
 	u32 frameCounter;
+	u32 nwkFrameCounter = 0U;
 	int rc;
 	u8 apsCnt;
 	u8 attempt;
+	u8 apsSecCtrl;
 	u8 enc_len;
+	u8 keyHash[SEC_KEY_LEN];
 	ss_dev_pair_set_t keyPair;
+	const u8 *apsKey;
 	const u8 *linkKey;
 
 	if ((payload == NULL) || (payload_len == 0U) || (ss_ib.tcLinkKey == NULL)) {
@@ -340,34 +417,62 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 		return -EINVAL;
 	}
 	linkKey = keyPair.linkKey;
+	nwkKey = zb_minimal_active_nwk_key_get();
+	if (nwkKey == NULL || ss_ib.securityLevel == 0U) {
+		return -EACCES;
+	}
 
 	apsCnt = zb_minimal_next_aps_counter();
-	if (keyPair.outgoingFrameCounter < ZB_MINIMAL_APS_FC_BOOTSTRAP) {
-		keyPair.outgoingFrameCounter = ZB_MINIMAL_APS_FC_BOOTSTRAP;
-	}
-	frameCounter = ++keyPair.outgoingFrameCounter;
-	zb_minimal_dev_key_pair_save(&keyPair);
-	(void)nv_nwkFrameCountSaveToFlash(frameCounter);
 
 	idx += zb_minimal_build_mac_header(&frame[idx], macDst);
-	idx += zb_minimal_build_nwk_header(&frame[idx], nwkDst, 30U, FALSE, NULL);
-	apsHdrLen = zb_minimal_build_aps_cmd_secure_header(&frame[idx], apsCnt, frameCounter);
+	nwkHdrIdx = idx;
+	nwkHdrLen = zb_minimal_build_nwk_header(&frame[idx], nwkDst, 30U, TRUE,
+						       &nwkFrameCounter);
+	idx += nwkHdrLen;
+	nwkPayloadIdx = idx;
+	apsHdrIdx = idx;
+	apsHdrLen = zb_minimal_build_aps_cmd_secure_header(&frame[idx], apsCnt, payload);
+	if ((apsHdrLen == 0U) || (apsHdrLen > sizeof(aad))) {
+		return -EINVAL;
+	}
+	frame[apsHdrIdx] |= 0x20U;
 	memcpy(aad, &frame[idx], apsHdrLen);
+	apsSecCtrl = frame[apsHdrIdx + 2U];
+	frameCounter = BUILD_U32(frame[apsHdrIdx + 3U], frame[apsHdrIdx + 4U],
+				 frame[apsHdrIdx + 5U], frame[apsHdrIdx + 6U]);
+	apsKey = zb_minimal_request_key_aps_key_get(apsSecCtrl, linkKey, keyHash);
+	if (apsKey == NULL) {
+		return -EINVAL;
+	}
+	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
 	idx += apsHdrLen;
 
 	sec_payload = &frame[idx];
 	memcpy(sec_payload, payload, payload_len);
 
-	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
-	COPY_U32TOBUFFER(&nonce[8], frameCounter);
-	nonce[12] = ZB_MINIMAL_APS_SEC_CTRL;
-	enc_len = zb_minimal_ccm_encrypt_auth(linkKey, nonce, ZB_MINIMAL_APS_MIC_LEN, aad,
-					     sizeof(aad), sec_payload, payload_len,
+	memcpy(apsNonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+	COPY_U32TOBUFFER(&apsNonce[8], frameCounter);
+	apsNonce[12] = frame[apsHdrIdx + 2U];
+	enc_len = zb_minimal_ccm_encrypt_auth(apsKey, apsNonce, ZB_MINIMAL_APS_MIC_LEN, aad,
+					     (u8)apsHdrLen, sec_payload, payload_len,
 					     &sec_payload[payload_len]);
 	if (enc_len != (u8)(payload_len + ZB_MINIMAL_APS_MIC_LEN)) {
 		return -EINVAL;
 	}
 	idx += enc_len;
+
+	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+	COPY_U32TOBUFFER(&nonce[8], nwkFrameCounter);
+	nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
+	enc_len = zb_minimal_ccm_encrypt_auth(nwkKey, nonce, ZB_MINIMAL_NWK_MIC_LEN,
+					      &frame[nwkHdrIdx], (u8)nwkHdrLen,
+					      &frame[nwkPayloadIdx],
+					      (u8)(idx - nwkPayloadIdx), &frame[idx]);
+	if (enc_len != (u8)((idx - nwkPayloadIdx) + ZB_MINIMAL_NWK_MIC_LEN)) {
+		return -EINVAL;
+	}
+	frame[nwkHdrIdx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
+	idx = nwkPayloadIdx + enc_len;
 
 	for (attempt = 0U; attempt < ZB_MINIMAL_ZDO_TX_RETRIES; attempt++) {
 		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
@@ -395,14 +500,21 @@ static void zb_minimal_request_key_task(void *arg)
 	u8 payload_len = 2U;
 	u16 nwkDst;
 	u16 macDst;
+	int sendStatus;
+
+	zb_request_key_trace[1] = 0U;
+	zb_request_key_trace[2] = 0U;
+	zb_request_key_trace[3] = 0xa9b0ff00U;
 
 	if (req == NULL) {
+		zb_request_key_trace[3] = 0xa9b0ff01U;
 		return;
 	}
 
 	if ((ss_ib.tcLinkKey == NULL) ||
 	    (req->dstAddrMode != ZB_ADDR_16BIT_DEV_OR_BROADCAST) ||
 	    (req->keyType != SS_KEYREQ_TYPE_TCLK)) {
+		zb_request_key_trace[3] = 0xa9b0ff02U;
 		ev_buf_free((u8 *)req);
 		return;
 	}
@@ -412,6 +524,9 @@ static void zb_minimal_request_key_task(void *arg)
 	if (macDst == MAC_SHORT_ADDR_NONE) {
 		macDst = nwkDst;
 	}
+	zb_request_key_trace[1] = ((u32)nwkDst << 16) | macDst;
+	zb_request_key_trace[2] = ((u32)req->keyType << 24) |
+				  ((u32)req->dstAddrMode << 16) | req->dstAddr.shortAddr;
 
 	payload[0] = 0x08U;
 	payload[1] = req->keyType;
@@ -421,7 +536,8 @@ static void zb_minimal_request_key_task(void *arg)
 		payload_len = sizeof(payload);
 	}
 
-	(void)zb_minimal_send_aps_request_key_frame(nwkDst, macDst, payload, payload_len);
+	sendStatus = zb_minimal_send_aps_request_key_frame(nwkDst, macDst, payload, payload_len);
+	zb_request_key_trace[3] = 0xa9b10000U | (u16)sendStatus;
 	ev_buf_free((u8 *)req);
 }
 
@@ -447,7 +563,7 @@ static u8 zb_minimal_send_aps_data_frame(u8 srcEp, const epInfo_t *dst, u16 clus
 		return APS_STATUS_INVALID_PARAMETER;
 	}
 
-	if (!zb_isDeviceJoinedNwk()) {
+	if (!zb_isDeviceJoinedNwk() && !tl_zbNwkEdMinimalCanProcessDataFrames()) {
 		return APS_STATUS_ILLEGAL_REQUEST;
 	}
 

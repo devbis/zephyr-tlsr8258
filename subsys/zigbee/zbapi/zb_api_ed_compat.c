@@ -63,9 +63,26 @@ __attribute__((weak)) u32 zb_getPollRate(void)
 	return zdo_af_get_syn_rate();
 }
 
+__attribute__((weak)) void bdb_outgoingFrameCountUpdate(u8 repower)
+{
+	if (!repower) {
+		return;
+	}
+
+	ss_ib.outgoingFrameCounter += SS_UPDATE_FRAMECOUNT_THRES;
+	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+}
+
 __attribute__((weak)) void zb_rejoinSecModeSet(u8 mode)
 {
-	ARG_UNUSED(mode);
+	if (mode == REJOIN_SECURITY) {
+		aps_ib.aps_use_insecure_join = FALSE;
+		aps_ib.aps_authenticated = ss_ib.securityLevel ? TRUE : FALSE;
+		return;
+	}
+
+	aps_ib.aps_use_insecure_join = TRUE;
+	aps_ib.aps_authenticated = FALSE;
 }
 
 __attribute__((weak)) u8 zb_directJoinReq(u32 scanChannels, u8 scanDuration)

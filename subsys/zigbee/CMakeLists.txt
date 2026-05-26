@@ -95,6 +95,7 @@ add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     zbapi/zb_api_ed_compat.c
     zbapi/zb_api_zdo_send_minimal.c
+    nwk/nwk_schedule_fallback.c
     nwk/nwk_ed_minimal.c
     zdo/zdo_ed_minimal.c
 )
