@@ -5,6 +5,7 @@
 #include "nwk_schedule_fallback.h"
 #include "os/ev_timer.h"
 
+#include <errno.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/spinlock.h>
