@@ -1039,6 +1039,13 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
 
     ARG_UNUSED(arg);
 
+    /* Transport key has already been installed by the minimal RX path:
+     * skip the NodeDesc/TCLK exchange and short-circuit to success. */
+    if (aps_ib.aps_authenticated && ss_ib.securityLevel != 0U) {
+        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
+        return -1;
+    }
+
     if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
         req.nwk_addr_interest = 0x0000;
         status = zb_zdoNodeDescReq(0x0000, &req, &sn, bdb_nodeDescRespHandler);
