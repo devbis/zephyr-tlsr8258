@@ -1,79 +1,116 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * ev_timer backed by k_work_delayable.
+ * Zephyr port of the vendor ev_timer backend.
  *
- * ev_on_timer   → k_work_reschedule(&evt->zb_work, K_MSEC(timeout))
- * ev_unon_timer → k_work_cancel_delayable(&evt->zb_work)
- *
- * The k_work handler calls evt->cb(evt->data).
- * If cb returns >= 0, the timer is rescheduled for evt->period ms (periodic).
- * If cb returns < 0 (TL_ZB_TIMER_CANCEL pattern), the timer stops.
+ * The previous k_work_delayable-backed implementation armed timers correctly
+ * on TLSR8258, but the delayed callbacks never expired on hardware.  The
+ * vendor stack drives its timer list directly from clock_time(); keep that
+ * model here so Zigbee discovery/join timeouts progress independently of the
+ * broken delayed-work path.
  */
+#include <string.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/zigbee/zb_types.h>
-#include "ev_timer.h"
-#include "ev_buffer.h"
 
-/* Semaphore defined in zb_main.c — signalled to wake the Zigbee thread */
+#include "drv_hw.h"
+#include "drv_radio.h"
+#include "ev_buffer.h"
+#include "ev_rtc.h"
+#include "ev_timer.h"
+#include "utlist.h"
+
 extern struct k_sem zb_ev_sem;
 
-static void ev_timer_work_handler(struct k_work *work)
+typedef struct {
+	ev_timer_event_t *timer_head;
+	ev_timer_event_t *timer_nearest;
+} ev_timer_ctrl_t;
+
+static ev_timer_ctrl_t ev_timer_ctrl;
+static u32 prev_sys_tick;
+static u32 rem_sys_tick_us;
+
+__attribute__((weak)) void ev_rtc_update(u32 update_time_ms)
 {
-	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
-	ev_timer_event_t *evt = CONTAINER_OF(dwork, ev_timer_event_t, zb_work);
-
-	if (!evt->used || !evt->isRunning) {
-		return;
-	}
-
-	evt->isRunning = 0;
-	int ret = 0;
-
-	if (evt->cb != NULL) {
-		ret = evt->cb(evt->data);
-	}
-
-	/* Periodic: non-negative return means reschedule. */
-	if (ret >= 0 && evt->period > 0 && evt->used) {
-		evt->isRunning = 1;
-		k_work_reschedule(&evt->zb_work, K_MSEC(evt->period));
-	}
-
-	k_sem_give(&zb_ev_sem);
+	ARG_UNUSED(update_time_ms);
 }
 
-void ev_timer_init(void)
+static void ev_timer_nearest_update(void)
 {
-	/* Timers are initialised on first use (ev_on_timer) */
+	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
+
+	ev_timer_ctrl.timer_nearest = ev_timer_ctrl.timer_head;
+	while (timer_evt != NULL) {
+		if (ev_timer_ctrl.timer_nearest == NULL ||
+		    timer_evt->timeout < ev_timer_ctrl.timer_nearest->timeout) {
+			ev_timer_ctrl.timer_nearest = timer_evt;
+		}
+		timer_evt = timer_evt->next;
+	}
 }
 
-void ev_on_timer(ev_timer_event_t *evt, u32 timeout)
+static void ev_timer_runtime_clear(ev_timer_event_t *evt)
 {
 	if (evt == NULL) {
 		return;
 	}
-	if (!evt->used) {
-		k_work_init_delayable(&evt->zb_work, ev_timer_work_handler);
-		evt->used = 1;
-	}
-	evt->timeout   = timeout;
-	evt->period    = timeout;
-	evt->isRunning = 1;
-	k_work_reschedule(&evt->zb_work, K_MSEC(timeout));
+
+	evt->isRunning = 0U;
+	evt->curSysTick = 0U;
 }
 
-void ev_unon_timer(ev_timer_event_t *evt)
+static void ev_timer_execute_cb(void)
 {
-	if (evt == NULL || !evt->used) {
-		return;
+	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
+	ev_timer_event_t *prev_head = timer_evt;
+
+	while (timer_evt != NULL) {
+		if (timer_evt->timeout == 0U) {
+			s32 next_timeout;
+
+			timer_evt->isBusy = 1U;
+			next_timeout = timer_evt->cb(timer_evt->data);
+			if (next_timeout < 0) {
+				ev_unon_timer(timer_evt);
+			} else if (next_timeout == 0) {
+				timer_evt->timeout = timer_evt->period;
+			} else {
+				timer_evt->period = (u32)next_timeout;
+				timer_evt->timeout = timer_evt->period;
+			}
+			timer_evt->isBusy = 0U;
+
+			if (prev_head != ev_timer_ctrl.timer_head) {
+				timer_evt = ev_timer_ctrl.timer_head;
+				prev_head = timer_evt;
+			} else {
+				timer_evt = timer_evt->next;
+			}
+		} else {
+			timer_evt = timer_evt->next;
+		}
 	}
-	evt->isRunning = 0;
-	k_work_cancel_delayable(&evt->zb_work);
+
+	ev_timer_nearest_update();
 }
 
-bool ev_timer_exist(ev_timer_event_t *evt)
+void ev_timer_init(void)
 {
-	return evt != NULL && evt->used && evt->isRunning;
+	memset(&ev_timer_ctrl, 0, sizeof(ev_timer_ctrl));
+	prev_sys_tick = clock_time();
+	rem_sys_tick_us = 0U;
+}
+
+void ev_timer_setPrevSysTick(u32 tick)
+{
+	prev_sys_tick = tick;
+	rem_sys_tick_us = 0U;
+}
+
+ev_timer_event_t *ev_timer_nearestGet(void)
+{
+	return ev_timer_ctrl.timer_nearest;
 }
 
 bool ev_timer_enough(void)
@@ -81,67 +118,164 @@ bool ev_timer_enough(void)
 	return true;
 }
 
-void ev_timer_process(void)
+bool ev_timer_exist(ev_timer_event_t *evt)
 {
-	/* No-op: k_work_q handles firing */
+	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
+
+	while (timer_evt != NULL) {
+		if (timer_evt == evt) {
+			return true;
+		}
+		timer_evt = timer_evt->next;
+	}
+
+	return false;
 }
 
-void ev_timer_update(u32 updateTime)
+void ev_on_timer(ev_timer_event_t *evt, u32 timeout)
 {
-	ARG_UNUSED(updateTime);
+	ev_timer_event_t *existing = NULL;
+	u32 irq_state;
+
+	if (evt == NULL) {
+		return;
+	}
+
+	evt->period = timeout;
+	irq_state = drv_disable_irq();
+	LIST_EXIST(ev_timer_ctrl.timer_head, evt, existing);
+	if (existing != NULL) {
+		existing->timeout = evt->period;
+	} else {
+		if (evt->isRunning == 0U) {
+			evt->curSysTick = clock_time();
+		}
+		evt->timeout = evt->period;
+		LIST_ADD(ev_timer_ctrl.timer_head, evt);
+	}
+	ev_timer_nearest_update();
+	drv_restore_irq(irq_state);
+	k_sem_give(&zb_ev_sem);
 }
 
-void ev_timer_setPrevSysTick(u32 tick)
+void ev_unon_timer(ev_timer_event_t *evt)
 {
-	ARG_UNUSED(tick);
-}
+	ev_timer_event_t *existing = NULL;
+	u32 irq_state;
 
-ev_timer_event_t *ev_timer_nearestGet(void)
-{
-	return NULL;
+	if (evt == NULL) {
+		return;
+	}
+
+	LIST_EXIST(ev_timer_ctrl.timer_head, evt, existing);
+	if (existing == NULL) {
+		return;
+	}
+
+	irq_state = drv_disable_irq();
+	ev_timer_runtime_clear(evt);
+	LIST_DELETE(ev_timer_ctrl.timer_head, evt);
+	ev_timer_nearest_update();
+	drv_restore_irq(irq_state);
 }
 
 ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_ms)
 {
-	/* Allocate from ev_buffer group that fits ev_timer_event_t.
-	 * ev_timer_event_t is ~80 bytes with k_work_delayable; use group 2 (152B). */
-	u8 *buf = ev_buf_allocate(sizeof(ev_timer_event_t));
+	ev_timer_event_t *timer_evt = (ev_timer_event_t *)ev_buf_allocate(sizeof(ev_timer_event_t));
 
-	if (buf == NULL) {
+	if (timer_evt == NULL) {
 		return NULL;
 	}
-	ev_timer_event_t *evt = (ev_timer_event_t *)buf;
 
-	memset(evt, 0, sizeof(*evt));
-	evt->cb   = func;
-	evt->data = arg;
-	ev_on_timer(evt, t_ms);
-	return evt;
+	memset(timer_evt, 0, sizeof(*timer_evt));
+	timer_evt->cb = func;
+	timer_evt->data = arg;
+	timer_evt->used = 1U;
+	ev_on_timer(timer_evt, t_ms);
+
+	return timer_evt;
 }
 
 u8 ev_timer_taskCancel(ev_timer_event_t **evt)
 {
-	struct k_work_sync cancel_sync;
-	bool was_used;
 	ev_timer_event_t *timer_evt;
 
 	if (evt == NULL || *evt == NULL) {
 		return FAILURE;
 	}
 
-	if (k_is_in_isr()) {
+	timer_evt = *evt;
+	if (timer_evt->isBusy) {
 		return FAILURE;
 	}
 
-	timer_evt = *evt;
-	was_used = timer_evt->used;
-	timer_evt->isRunning = 0;
-	timer_evt->used = 0;
-	if (was_used) {
-		(void)k_work_cancel_delayable_sync(&timer_evt->zb_work, &cancel_sync);
+	ev_unon_timer(timer_evt);
+	timer_evt->used = 0U;
+	if (is_ev_buf(timer_evt)) {
+		ev_buf_free((u8 *)timer_evt);
+	}
+	*evt = NULL;
+
+	return SUCCESS;
+}
+
+void ev_timer_update(u32 update_time_ms)
+{
+	ev_timer_event_t *timer_evt;
+	u32 irq_state;
+
+	if (update_time_ms == 0U) {
+		return;
 	}
 
-	ev_buf_free((u8 *)timer_evt);
-	*evt = NULL;
-	return SUCCESS;
+	irq_state = drv_disable_irq();
+	ev_rtc_update(update_time_ms);
+	timer_evt = ev_timer_ctrl.timer_head;
+	while (timer_evt != NULL) {
+		u32 elapsed_ms;
+
+		if (timer_evt->isRunning) {
+			elapsed_ms = update_time_ms;
+		} else {
+			u32 cur_sys_tick = clock_time();
+			u32 elapsed_us =
+				clock_cycles_to_us((u32)(cur_sys_tick - timer_evt->curSysTick));
+
+			elapsed_ms = elapsed_us / 1000U;
+			timer_evt->isRunning = 1U;
+		}
+
+		if (timer_evt->timeout > elapsed_ms) {
+			timer_evt->timeout -= elapsed_ms;
+		} else {
+			timer_evt->timeout = 0U;
+		}
+
+		timer_evt = timer_evt->next;
+	}
+	drv_restore_irq(irq_state);
+}
+
+void ev_timer_process(void)
+{
+	u32 curr_sys_tick = clock_time();
+	u32 elapsed_us;
+	u32 update_time_ms;
+
+	if (curr_sys_tick == prev_sys_tick) {
+		return;
+	}
+
+	elapsed_us = clock_cycles_to_us((u32)(curr_sys_tick - prev_sys_tick));
+	prev_sys_tick = curr_sys_tick;
+	update_time_ms = elapsed_us / 1000U;
+	rem_sys_tick_us += elapsed_us % 1000U;
+	update_time_ms += rem_sys_tick_us / 1000U;
+	rem_sys_tick_us %= 1000U;
+
+	if (update_time_ms != 0U) {
+		ev_timer_update(update_time_ms);
+	}
+
+	ev_timer_execute_cb();
 }

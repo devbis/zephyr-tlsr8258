@@ -5,6 +5,7 @@ static int bdb_init_calls;
 static int bdb_start_calls;
 static int bdb_init_status;
 static bool joined_network;
+static bool nwk_manager_idle = true;
 static uint32_t poll_rate;
 static int poll_rate_set_calls;
 
@@ -29,6 +30,11 @@ uint8_t bdb_networkSteerStart(void)
 bool zb_isDeviceJoinedNwk(void)
 {
 	return joined_network;
+}
+
+bool zdo_ifZdoNwkManagerIdle(void)
+{
+	return nwk_manager_idle;
 }
 
 uint8_t zb_setPollRate(uint32_t newRate)
@@ -78,6 +84,7 @@ static void reset_state(void)
 	bdb_start_calls = 0;
 	bdb_init_status = 0;
 	joined_network = false;
+	nwk_manager_idle = true;
 	poll_rate = 0;
 	poll_rate_set_calls = 0;
 }
