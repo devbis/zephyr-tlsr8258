@@ -20,6 +20,7 @@
  * constants.  In the host test harness zdo_zcl_stubs.h is pre-included
  * before app_bdb.c, so this block is deliberately skipped there. */
 #include "zbapi/zb_api.h"
+#include "zcl/zcl_config.h"
 #include "zcl/zcl.h"
 #endif
 
