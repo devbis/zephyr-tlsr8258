@@ -21,7 +21,9 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_B91 ieee802154_b91.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8258
   ieee802154_tlsr8258.c
   ieee802154_tlsr8258_poll_wait.c
+  ieee802154_tlsr8258_rf_irq.c
   ieee802154_tlsr8258_rx_queue.c
+  ieee802154_tlsr8258_tx_irq.c
 )
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_UPIPE ieee802154_uart_pipe.c)
 # zephyr-keep-sorted-stop
