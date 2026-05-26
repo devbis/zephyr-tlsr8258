@@ -11,6 +11,7 @@
 LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_PERSIST_BLOB_VERSION 2U
+extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
 
 extern void tl_zbNwkEdMinimalRuntimeReset(void);
 
@@ -57,12 +58,21 @@ int zb_platform_restore_persistent_state(void)
 	zb_persist_blob_t blob;
 	nv_sts_t st;
 
+	if (&zb_restore_diag_trace[0] != NULL) {
+		zb_restore_diag_trace[1] = 0xA5D10100U;
+	}
 	zb_persist_register_item_length();
 	memset(&blob, 0, sizeof(blob));
 
 	st = nv_flashReadNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
+	if (&zb_restore_diag_trace[0] != NULL) {
+		zb_restore_diag_trace[2] = 0xA5D20000U | (uint32_t)st;
+	}
 	if (st != NV_SUCC) {
 		return -ENOENT;
+	}
+	if (&zb_restore_diag_trace[0] != NULL) {
+		zb_restore_diag_trace[3] = 0xA5D30000U | (uint32_t)blob.version;
 	}
 	if (blob.version != ZB_PERSIST_BLOB_VERSION) {
 		return -EINVAL;
@@ -71,6 +81,16 @@ int zb_platform_restore_persistent_state(void)
 	g_zbInfo = blob.zb_info;
 	g_zbNwkCtx = blob.nwk_ctx;
 	zb_persist_normalize_nwk_ctx(&g_zbNwkCtx);
+	if (&zb_restore_diag_trace[0] != NULL) {
+		zb_restore_diag_trace[4] = ((uint32_t)g_zbMacPib.shortAddress << 16) |
+					 (uint32_t)g_zbMacPib.panId;
+		zb_restore_diag_trace[5] = ((uint32_t)g_zbNIB.nwkAddr << 16) |
+					 (uint32_t)g_zbMacPib.coordShortAddress;
+		zb_restore_diag_trace[6] = ((uint32_t)g_zbNwkCtx.joined) |
+					 ((uint32_t)g_zbNwkCtx.is_factory_new << 8) |
+					 ((uint32_t)g_zbNwkCtx.parentIsChanged << 16) |
+					 ((uint32_t)g_zbNwkCtx.state << 24);
+	}
 
 	return 0;
 }
@@ -129,6 +149,7 @@ void zb_info_save(void *arg)
 {
 	zb_persist_blob_t blob;
 	nv_sts_t st;
+	nv_sts_t frame_counter_st;
 
 	ARG_UNUSED(arg);
 
@@ -138,6 +159,19 @@ void zb_info_save(void *arg)
 	blob.zb_info = g_zbInfo;
 	blob.nwk_ctx = g_zbNwkCtx;
 	zb_persist_normalize_nwk_ctx(&blob.nwk_ctx);
+
+	/*
+	 * Keep the vendor security/runtime blob in sync with the joined-state blob.
+	 * Several ED join paths call zb_info_save() directly, bypassing the vendor
+	 * BDB persistence helper that would normally store SSIB and frame counters.
+	 * Save those dependencies first so reboot never sees a joined blob without
+	 * the security context required to restore it.
+	 */
+	frame_counter_st = nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+	if (frame_counter_st != NV_SUCC) {
+		LOG_WRN("Zigbee frame counter save failed: %d", frame_counter_st);
+	}
+	zdo_ssInfoSaveToFlash();
 
 	st = nv_flashWriteNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
 	if (st != NV_SUCC) {

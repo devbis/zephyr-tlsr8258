@@ -31,6 +31,7 @@ typedef struct {
 } nv_item_len_chk_t;
 
 static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
+extern volatile u32 zb_nwk_ed_trace[];
 
 static void zb_nvs_log_degraded(const char *reason, int rc)
 {
@@ -98,11 +99,14 @@ static bool zb_nvs_ensure_ready(void)
 {
 	int rc;
 
+	zb_nwk_ed_trace[9] = 0xA7B00001U;
 	if (zb_nvs_ready) {
+		zb_nwk_ed_trace[9] = 0xA7B00007U;
 		return true;
 	}
 
 	if (zb_nvs_init_attempted) {
+		zb_nwk_ed_trace[9] = 0xA7B00008U;
 		return false;
 	}
 
@@ -112,8 +116,11 @@ static bool zb_nvs_ensure_ready(void)
 	 * poison all later restore attempts.
 	 */
 	zb_nvs_init_attempted = true;
+	zb_nwk_ed_trace[9] = 0xA7B00002U;
 
 	rc = zb_nvs_geometry_init();
+	zb_nwk_ed_trace[8] = (u32)rc;
+	zb_nwk_ed_trace[9] = 0xA7B00003U;
 	if (rc < 0) {
 		zb_nvs_init_attempted = false;
 		if (rc == -ENOENT) {
@@ -126,10 +133,14 @@ static bool zb_nvs_ensure_ready(void)
 		return false;
 	}
 
+	zb_nwk_ed_trace[9] = 0xA7B00004U;
 	rc = nvs_mount(&zb_nvs);
+	zb_nwk_ed_trace[7] = (u32)rc;
+	zb_nwk_ed_trace[9] = 0xA7B00005U;
 	if (rc == 0) {
 		zb_nvs_ready = true;
 		zb_nvs_degraded_logged = false;
+		zb_nwk_ed_trace[9] = 0xA7B00006U;
 		return true;
 	}
 
@@ -193,13 +204,28 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	ssize_t actual_len;
 	ssize_t rc;
 	u16 expected_len;
+	bool trace_aps_group = (id == NV_MODULE_APS) && (itemId == NV_ITEM_APS_GROUP_TABLE);
 
 	ARG_UNUSED(single);
+	if (trace_aps_group) {
+		zb_nwk_ed_trace[13] = 0xA7A00001U;
+	}
 	if (!zb_nvs_ensure_ready()) {
+		if (trace_aps_group) {
+			zb_nwk_ed_trace[13] = 0xA7A00002U;
+		}
 		return NV_NO_MEDIA;
 	}
 	expected_len = nv_item_expected_read_len(itemId, len);
+	if (trace_aps_group) {
+		zb_nwk_ed_trace[12] = expected_len;
+		zb_nwk_ed_trace[13] = 0xA7A00003U;
+	}
 	actual_len = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
+	if (trace_aps_group) {
+		zb_nwk_ed_trace[11] = (u32)actual_len;
+		zb_nwk_ed_trace[13] = 0xA7A00004U;
+	}
 
 	if (actual_len == -ENOENT) {
 		return NV_ITEM_NOT_FOUND;
@@ -211,6 +237,10 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 		return NV_DATA_CHECK_ERROR;
 	}
 	rc = nvs_read(&zb_nvs, nv_key(id, itemId), buf, len);
+	if (trace_aps_group) {
+		zb_nwk_ed_trace[10] = (u32)rc;
+		zb_nwk_ed_trace[13] = 0xA7A00005U;
+	}
 
 	if (rc == -ENOENT) {
 		return NV_ITEM_NOT_FOUND;
