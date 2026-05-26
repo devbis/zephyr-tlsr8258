@@ -128,7 +128,13 @@ __attribute__((weak)) u8 zb_nlmePermitJoiningRequest(u8 permitDuration)
 
 __attribute__((weak)) void ss_securityModeSet(ss_securityMode_e m)
 {
-	ss_ib.securityLevel = (m == SS_SEMODE_DISTRIBUTED) ? 0U : 5U;
+	if (m == SS_SEMODE_DISTRIBUTED) {
+		ss_ib.tcPolicy.updateTCLKrequired = 0;
+		memcpy(ss_ib.trust_center_address, g_invalid_addr, EXT_ADDR_LEN);
+	} else if (m == SS_SEMODE_CENTRALIZED) {
+		ss_ib.tcPolicy.updateTCLKrequired = 1;
+		memset(ss_ib.trust_center_address, 0, EXT_ADDR_LEN);
+	}
 }
 
 __attribute__((weak)) u8 zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequestKeyReq)
