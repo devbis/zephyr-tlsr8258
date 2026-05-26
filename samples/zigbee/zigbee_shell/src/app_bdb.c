@@ -8,11 +8,20 @@
  */
 
 #include "app_bdb.h"
+#include "app_profile.h"
 
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_config.h>
+
+#if !defined(ZDO_ZCL_STUBS_H_)
+/* Production build: pull in the real SDK headers for ZDO/ZCL types and
+ * constants.  In the host test harness zdo_zcl_stubs.h is pre-included
+ * before app_bdb.c, so this block is deliberately skipped there. */
+#include "zbapi/zb_api.h"
+#include "zcl/zcl.h"
+#endif
 
 LOG_MODULE_REGISTER(app_bdb);
 
@@ -319,6 +328,36 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		app_bdb_commissioning_retry_cancel();
+		if (status == 0x00U) {
+			/* Post-join ZDO/ZCL interview: discover coordinator endpoints
+			 * and read the Basic cluster so Zigbee2MQTT can identify us. */
+			zdo_active_ep_req_t ep_req = { .nwk_addr_interest = 0x0000U };
+			zdo_simple_descriptor_req_t sd_req = {
+				.nwk_addr_interest = 0x0000U,
+				.endpoint = APP_PROFILE_ENDPOINT,
+			};
+			struct {
+				u8  numAttr;
+				u16 attrID[2];
+			} basic_read = { 2U, { 0x0004U, 0x0005U } };
+			epInfo_t ep_info;
+			u8 seq = 0U;
+
+			memset(&ep_info, 0, sizeof(ep_info));
+			ep_info.dstAddr.shortAddr = 0x0000U;
+			ep_info.dstEp = APP_PROFILE_ENDPOINT;
+			ep_info.profileId = APP_PROFILE_HA_PROFILE_ID;
+			ep_info.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+			ep_info.txOptions = APS_TX_OPT_ACK_TX;
+			ep_info.radius = 30U;
+
+			(void)zb_zdoActiveEpReq(0x0000U, &ep_req, &seq, NULL);
+			seq = 0U;
+			(void)zb_zdoSimpleDescReq(0x0000U, &sd_req, &seq, NULL);
+			(void)zcl_read(APP_PROFILE_ENDPOINT, &ep_info,
+				       0x0000U, 0U, 1U, 0U, 0U,
+				       (zclReadCmd_t *)&basic_read);
+		}
 		app_bdb_rejoin_callback_trace_put((0x15U << 24) |
 						  (zb_getPollRate() & 0xffffU));
 		LOG_INF("zigbee_shell joined network (bdb status: 0x%02x)", status);
