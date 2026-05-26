@@ -24,6 +24,10 @@ LOG_MODULE_REGISTER(zigbee_nwk_ed_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MS  200U
 #define NWK_ED_MINIMAL_INTERVIEW_POLL_MAX 20U
 #define NWK_ED_MINIMAL_TIMEOUT_REQ_DELAY_MS 200U
+#define NWK_ED_MINIMAL_BEACON_EBUSY_RETRY_MS    20U
+#define NWK_ED_MINIMAL_BEACON_EBUSY_MAX_RETRY    3U
+#define NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS     20U
+#define NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY    3U
 #define NWK_ED_MINIMAL_RX_EVT_Q_LEN       8U
 #define NWK_ED_MINIMAL_NWK_AUX_HDR_LEN    14U
 #define NWK_ED_MINIMAL_NWK_MIC_LEN        4U
@@ -91,6 +95,8 @@ typedef struct {
 	u32 rxEvtDropCount;
 	u32 rxEvtOverflowCount;
 	nwk_ed_minimal_rx_evt_type_t lastRxEvtDropType;
+	u8 beaconEbusyRetry;
+	u8 assocEbusyRetry;
 
 	ev_timer_event_t opTimer;
 	ev_timer_event_t timeoutReqTimer;
@@ -728,6 +734,8 @@ static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
 	g_nwkEdCtx.lastJoinStatus = status;
+	g_nwkEdCtx.beaconEbusyRetry = 0U;
+	g_nwkEdCtx.assocEbusyRetry = 0U;
 
 	if (status != ZDO_SUCCESS && !rejoinMode) {
 		g_zbNwkCtx.joined = 0;
@@ -1042,7 +1050,15 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	zb_nwk_ed_trace[12] = ((u32)(u8)idx << 24) | ((u32)MAC_CMD_ASSOCIATION_REQUEST << 16) |
 			       (u16)rc;
 	zb_nwk_ed_trace[13] = ((u32)panId << 16) | parentShortAddr;
-	if (rc < 0) {
+	if (rc == -EBUSY) {
+		LOG_DBG("association request CCA busy ch=%u retry=%u", channel,
+			g_nwkEdCtx.assocEbusyRetry);
+		g_nwkEdCtx.assocEbusyRetry++;
+		g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN
+					      : NWK_ED_MINIMAL_STATE_JOINING;
+		nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS);
+		return TRUE;
+	} else if (rc < 0) {
 		LOG_WRN("association request tx failed (rc=%d len=%u ch=%u)", rc, idx, channel);
 		return FALSE;
 	}
@@ -1061,8 +1077,15 @@ static void nwk_ed_minimal_send_beacon_request(void)
 
 	zb_nwk_ed_trace[4]++;
 	zb_nwk_ed_trace[5] = ((u32)g_nwkEdCtx.activeScanChannel << 24) | (u16)rc;
-	if (rc < 0) {
+	if (rc == -EBUSY) {
+		LOG_DBG("beacon request CCA busy ch=%u retry=%u",
+			g_nwkEdCtx.activeScanChannel, g_nwkEdCtx.beaconEbusyRetry);
+		g_nwkEdCtx.beaconEbusyRetry++;
+	} else if (rc < 0) {
+		g_nwkEdCtx.beaconEbusyRetry = 0U;
 		LOG_WRN("beacon request tx failed (rc=%d ch=%u)", rc, g_nwkEdCtx.activeScanChannel);
+	} else {
+		g_nwkEdCtx.beaconEbusyRetry = 0U;
 	}
 }
 
@@ -1082,9 +1105,14 @@ static bool nwk_ed_minimal_start_scan_channel(void)
 	if (zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, nextChannel) < 0) {
 		LOG_WRN("discovery RX arm failed on channel %u", nextChannel);
 	}
+	g_nwkEdCtx.beaconEbusyRetry = 0U;
 	nwk_ed_minimal_channel_set(nextChannel);
 	nwk_ed_minimal_send_beacon_request();
-	nwk_ed_minimal_timer_start(nwk_ed_minimal_scan_window_ms(g_nwkEdCtx.lastScanDuration));
+	nwk_ed_minimal_timer_start(
+		(g_nwkEdCtx.beaconEbusyRetry > 0U &&
+		 g_nwkEdCtx.beaconEbusyRetry <= NWK_ED_MINIMAL_BEACON_EBUSY_MAX_RETRY)
+		? NWK_ED_MINIMAL_BEACON_EBUSY_RETRY_MS
+		: nwk_ed_minimal_scan_window_ms(g_nwkEdCtx.lastScanDuration));
 	LOG_INF("discovery scanning channel %u", nextChannel);
 
 	return TRUE;
@@ -1106,6 +1134,25 @@ static void nwk_ed_minimal_timer_task(void *arg)
 	nwk_ed_minimal_rx_event_task(NULL);
 
 	if (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY) {
+		/*
+		 * If the BeaconReq TX returned -EBUSY (CCA), retry on the same
+		 * channel before advancing to the next one.  Skip the retry if we
+		 * already have a usable beacon candidate - no need to spam.
+		 */
+		if (g_nwkEdCtx.beaconEbusyRetry > 0U &&
+		    g_nwkEdCtx.beaconEbusyRetry <= NWK_ED_MINIMAL_BEACON_EBUSY_MAX_RETRY &&
+		    !g_nwkEdCtx.haveBeaconCandidate &&
+		    !g_nwkEdCtx.parentCandidateValid) {
+			nwk_ed_minimal_send_beacon_request();
+			nwk_ed_minimal_timer_start(
+				(g_nwkEdCtx.beaconEbusyRetry > 0U)
+				? NWK_ED_MINIMAL_BEACON_EBUSY_RETRY_MS
+				: nwk_ed_minimal_scan_window_ms(
+					g_nwkEdCtx.lastScanDuration));
+			return;
+		}
+		g_nwkEdCtx.beaconEbusyRetry = 0U;
+
 		if (g_nwkEdCtx.discoveryForRejoin) {
 			if (g_nwkEdCtx.haveBeaconCandidate || g_nwkEdCtx.parentCandidateValid) {
 				if (!nwk_ed_minimal_start_assoc(TRUE)) {
@@ -1138,6 +1185,24 @@ static void nwk_ed_minimal_timer_task(void *arg)
 			nwk_ed_minimal_finish_join(rejoinMode ? ZDO_NETWORK_LOST : ZDO_TIMEOUT, rejoinMode);
 			return;
 		}
+
+		/*
+		 * Retry the AssocReq if the last attempt was rejected by CCA
+		 * (-EBUSY).  assocEbusyRetry accumulates across retries so that
+		 * the MAX_RETRY ceiling is honoured even if CCA is persistently
+		 * busy.  On exhaustion we fall through to the normal data-request
+		 * poll which will eventually time out.
+		 */
+		if (g_nwkEdCtx.assocEbusyRetry > 0U &&
+		    g_nwkEdCtx.assocEbusyRetry <= NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY) {
+			if (!nwk_ed_minimal_start_assoc(rejoinMode)) {
+				nwk_ed_minimal_finish_join(
+					rejoinMode ? ZDO_NETWORK_LOST : ZDO_TIMEOUT,
+					rejoinMode);
+			}
+			return;
+		}
+		g_nwkEdCtx.assocEbusyRetry = 0U;
 
 		if (!nwk_ed_minimal_send_data_request()) {
 		}
