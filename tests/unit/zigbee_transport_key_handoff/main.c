@@ -137,10 +137,56 @@ static void test_aps_transport_key_decrypt_hashes_key_load_key_like_vendor(void)
 	free(source);
 }
 
+static void test_transport_key_handler_sets_authenticated_before_signalling_done(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/mac/mac_trx_compat.c");
+	const char *func = "static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)";
+	const char *done_call = "tl_zbNwkEdMinimalTransportKeyDone();";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	/* aps_ib.aps_authenticated must be set to 1 before the TransportKeyDone
+	 * signal fires so that any BDB short-circuit check that reacts to that
+	 * signal immediately sees the updated flag. */
+	EXPECT_TRUE(contains_between(source, func, done_call,
+				     "aps_ib.aps_authenticated = 1U;"));
+
+	free(source);
+}
+
+static void test_bdb_tclk_short_circuits_when_transport_key_already_installed(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
+	const char *func = "_CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)";
+	const char *raw_else = "#else";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	/* When zb_minimal_handle_transport_key has already set
+	 * aps_ib.aps_authenticated before the BDB retrieval timer fires,
+	 * bdb_retrieveTcLinkKeyStart must detect the installed key and call
+	 * bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS) immediately
+	 * rather than sending a Node Desc request.  The guard must appear in
+	 * the CONFIG_IEEE802154_RAW_MODE branch (the production path) before
+	 * the #else that leads to the legacy stub path. */
+	EXPECT_TRUE(contains_between(source, func, raw_else,
+				     "if (aps_ib.aps_authenticated && ss_ib.securityLevel != 0U)"));
+
+	free(source);
+}
+
 int main(void)
 {
 	test_transport_key_done_schedules_join_completion_on_task_queue();
 	test_aps_transport_key_decrypt_hashes_key_load_key_like_vendor();
+	test_transport_key_handler_sets_authenticated_before_signalling_done();
+	test_bdb_tclk_short_circuits_when_transport_key_already_installed();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_transport_key_handoff: %d failure(s)\n", failures);
