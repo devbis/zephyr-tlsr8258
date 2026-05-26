@@ -1057,7 +1057,10 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 		g_nwkEdCtx.assocEbusyRetry++;
 		g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN
 					      : NWK_ED_MINIMAL_STATE_JOINING;
-		nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS);
+		nwk_ed_minimal_timer_start(
+			g_nwkEdCtx.assocEbusyRetry <= NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY
+			? NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS
+			: NWK_ED_MINIMAL_JOIN_POLL_MS);
 		return TRUE;
 	} else if (rc < 0) {
 		LOG_WRN("association request tx failed (rc=%d len=%u ch=%u)", rc, idx, channel);
@@ -1146,7 +1149,8 @@ static void nwk_ed_minimal_timer_task(void *arg)
 		    !g_nwkEdCtx.parentCandidateValid) {
 			nwk_ed_minimal_send_beacon_request();
 			nwk_ed_minimal_timer_start(
-				(g_nwkEdCtx.beaconEbusyRetry > 0U)
+				(g_nwkEdCtx.beaconEbusyRetry > 0U &&
+				 g_nwkEdCtx.beaconEbusyRetry <= NWK_ED_MINIMAL_BEACON_EBUSY_MAX_RETRY)
 				? NWK_ED_MINIMAL_BEACON_EBUSY_RETRY_MS
 				: nwk_ed_minimal_scan_window_ms(
 					g_nwkEdCtx.lastScanDuration));
