@@ -13,6 +13,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+#include "flash_tlsr8258_paged_write.h"
+
 #define TLSR8258_FLASH_PAGE_SIZE   256u
 #define TLSR8258_FLASH_SECTOR_SIZE 4096u
 
@@ -63,9 +65,17 @@ struct tlsr8258_flash_data {
 	struct flash_pages_layout layout;
 };
 
+struct tlsr8258_flash_write_ctx {
+	uint8_t *page_buf;
+};
+
 static const struct flash_parameters tlsr8258_flash_parameters = {
 	.write_block_size = 1,
 	.erase_value = 0xff,
+};
+
+__attribute__((used)) volatile uint32_t tlsr8258_flash_trace[8] = {
+	0x464C4153u, 0, 0, 0, 0, 0, 0, 0,
 };
 
 static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
@@ -245,9 +255,8 @@ int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len);
 
 TLSR8258_RAM_CODE int tlsr8258_flash_read_ram_body(uint32_t addr, uint8_t *buf, size_t len)
 {
-	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
+	unsigned int key = arch_irq_lock();
 
-	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
 	tlsr8258_flash_send_cmd(0x03u);
 	tlsr8258_flash_send_addr(addr);
 	tlsr8258_mspi_write(0u);
@@ -261,7 +270,7 @@ TLSR8258_RAM_CODE int tlsr8258_flash_read_ram_body(uint32_t addr, uint8_t *buf, 
 	}
 
 	tlsr8258_mspi_high();
-	TLSR8258_REG_MSPI_MODE = saved_mode;
+	arch_irq_unlock(key);
 	return 0;
 }
 
@@ -317,6 +326,9 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 	struct tlsr8258_flash_data *dev_data = dev->data;
 	uint8_t *dst = data;
 	int ret;
+	bool trace_slot = ((size_t)offset == 0x7eff8u) || ((size_t)offset == 0x7fff8u) ||
+			 ((size_t)offset == 0x7eff0u) || ((size_t)offset == 0x7fff0u);
+	bool trace_nvs = trace_slot;
 
 	if (!tlsr8258_flash_range_valid(config, offset, len)) {
 		return -EINVAL;
@@ -326,14 +338,59 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 		return 0;
 	}
 
+	if (trace_nvs) {
+		tlsr8258_flash_trace[1]++;
+		tlsr8258_flash_trace[2] = (uint32_t)offset;
+		tlsr8258_flash_trace[3] = (uint32_t)len;
+		tlsr8258_flash_trace[4] = 0xF1A00001u;
+	}
 	k_sem_take(&dev_data->lock, K_FOREVER);
 	{
-		unsigned int key = arch_irq_lock();
-
+		if (trace_nvs) {
+			tlsr8258_flash_trace[0] = 0x534C4F54u;
+			tlsr8258_flash_trace[4] = 0xF1A00002u;
+			tlsr8258_flash_trace[5] = TLSR8258_REG_MSPI_MODE;
+		}
+		tlsr8258_watchdog_clear();
+		if (trace_nvs) {
+			tlsr8258_flash_trace[4] = 0xF1A00003u;
+		}
 		ret = tlsr8258_flash_read_ram((uint32_t)offset, dst, len);
-		arch_irq_unlock(key);
+		if (trace_nvs) {
+			tlsr8258_flash_trace[4] = 0xF1A00004u;
+			tlsr8258_flash_trace[5] = (uint32_t)ret;
+			if (len >= sizeof(uint32_t)) {
+				memcpy((void *)&tlsr8258_flash_trace[6], dst, sizeof(uint32_t));
+			}
+			if (len >= (2u * sizeof(uint32_t))) {
+				memcpy((void *)&tlsr8258_flash_trace[7], dst + sizeof(uint32_t),
+				       sizeof(uint32_t));
+			}
+		}
+		tlsr8258_watchdog_clear();
 	}
 	k_sem_give(&dev_data->lock);
+
+	return ret;
+}
+
+static void tlsr8258_flash_watchdog_feed(void *ctx)
+{
+	ARG_UNUSED(ctx);
+	tlsr8258_watchdog_clear();
+}
+
+static int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr, const uint8_t *buf,
+					    size_t len)
+{
+	struct tlsr8258_flash_write_ctx *write_ctx = ctx;
+	unsigned int key;
+	int ret;
+
+	memcpy(write_ctx->page_buf, buf, len);
+	key = arch_irq_lock();
+	ret = tlsr8258_flash_write_page_ram(addr, write_ctx->page_buf, len);
+	arch_irq_unlock(key);
 
 	return ret;
 }
@@ -345,6 +402,9 @@ static int tlsr8258_flash_write(const struct device *dev, off_t offset,
 	struct tlsr8258_flash_data *dev_data = dev->data;
 	const uint8_t *src = data;
 	uint8_t page_buf[TLSR8258_FLASH_PAGE_SIZE];
+	struct tlsr8258_flash_write_ctx write_ctx = {
+		.page_buf = page_buf,
+	};
 	int ret = 0;
 
 	if (!tlsr8258_flash_range_valid(config, offset, len)) {
@@ -352,24 +412,9 @@ static int tlsr8258_flash_write(const struct device *dev, off_t offset,
 	}
 
 	k_sem_take(&dev_data->lock, K_FOREVER);
-
-	while (len > 0u) {
-		size_t page_off = (size_t)offset & (TLSR8258_FLASH_PAGE_SIZE - 1u);
-		size_t chunk = MIN(len, TLSR8258_FLASH_PAGE_SIZE - page_off);
-		unsigned int key;
-
-		memcpy(page_buf, src, chunk);
-		key = arch_irq_lock();
-		ret = tlsr8258_flash_write_page_ram((uint32_t)offset, page_buf, chunk);
-		arch_irq_unlock(key);
-		if (ret < 0) {
-			break;
-		}
-
-		offset += chunk;
-		src += chunk;
-		len -= chunk;
-	}
+	ret = tlsr8258_flash_write_pages(&write_ctx, (uint32_t)offset, src, len,
+					 tlsr8258_flash_write_page_locked,
+					 tlsr8258_flash_watchdog_feed);
 
 	k_sem_give(&dev_data->lock);
 	return ret;
