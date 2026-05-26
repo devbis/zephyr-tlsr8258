@@ -31,7 +31,7 @@
 /* Channel conversion: logical (11-26) → physical offset (5 MHz steps) */
 #define LOGICCHANNEL_TO_PHYSICAL(p)   (((p) - 10) * 5)
 
-/* clock_time() — returns a monotonic microsecond timeline for MAC deadlines. */
+/* clock_time() — returns the vendor-style monotonic timer cycles timeline. */
 static inline u32 clock_time(void)
 {
 	return zb_radio_port_clock_time_us();
