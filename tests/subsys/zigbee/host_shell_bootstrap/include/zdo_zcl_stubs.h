@@ -30,6 +30,36 @@ typedef struct {
 	u16 nwk_addr_interest;
 } zdo_active_ep_req_t;
 
+/* ZDO success status (mirrors ZDO_SUCCESS in zdo/zdo_api.h) */
+#define ZDO_SUCCESS 0x00U
+
+/* Max endpoint/cluster count per ZDO request (mirrors zdp.h) */
+#ifndef MAX_REQUESTED_CLUSTER_NUMBER
+#define MAX_REQUESTED_CLUSTER_NUMBER 8
+#endif
+
+/* Active EP response layout — mirrors zdo_active_ep_resp_t in zdo/zdp.h.
+ * The production struct is _attribute_packed_; natural alignment is the same
+ * because all fields after the u8 pair are on already-aligned offsets. */
+typedef struct {
+	u8  seq_num;
+	u8  status;
+	u16 nwk_addr_interest;
+	u8  active_ep_count;
+	u8  active_ep_lst[MAX_REQUESTED_CLUSTER_NUMBER];
+} zdo_active_ep_resp_t;
+
+/* ZDO data indication — mirrors zdo_zdpDataInd_t in zdo/zdp.h.
+ * `zpdu` points to the raw ZDO response payload (starts with seq_num). */
+typedef struct {
+	u8  *zpdu;
+	u16  src_addr;
+	u16  clusterId;
+	u8   seq_num;
+	u8   status;
+	u8   length;
+} zdo_zdpDataInd_t;
+
 typedef struct {
 	u16 nwk_addr_interest;
 	u8  endpoint;
