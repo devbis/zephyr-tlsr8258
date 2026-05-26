@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(fs_nvs, CONFIG_NVS_LOG_LEVEL);
 static int nvs_prev_ate(struct nvs_fs *fs, uint32_t *addr, struct nvs_ate *ate);
 static int nvs_ate_valid(struct nvs_fs *fs, uint16_t entry_addr,
 			 const struct nvs_ate *entry);
+volatile uint16_t tlsr8258_nvs_trace[16];
 
 #ifdef CONFIG_NVS_LOOKUP_CACHE
 
@@ -602,6 +603,8 @@ static int nvs_recover_last_ate(struct nvs_fs *fs, uint32_t *addr)
 
 	LOG_DBG("Recovering last ate from sector %d",
 		(*addr >> ADDR_SECT_SHIFT));
+	tlsr8258_nvs_trace[8] = 0x1001U;
+	tlsr8258_nvs_trace[9] = (uint16_t)(*addr & 0xFFFFU);
 
 	ate_size = nvs_al_size(fs, sizeof(struct nvs_ate));
 
@@ -609,8 +612,12 @@ static int nvs_recover_last_ate(struct nvs_fs *fs, uint32_t *addr)
 	ate_end_addr = *addr;
 	data_end_addr = *addr & ADDR_SECT_MASK;
 	while ((ate_end_addr >= data_end_addr) && (ate_end_addr & ADDR_OFFS_MASK) != 0U) {
+		tlsr8258_nvs_trace[10] = (uint16_t)(ate_end_addr & 0xFFFFU);
+		tlsr8258_nvs_trace[11] = (uint16_t)(data_end_addr & 0xFFFFU);
 		rc = nvs_flash_ate_rd(fs, ate_end_addr, &end_ate);
 		if (rc) {
+			tlsr8258_nvs_trace[8] = 0x10EEU;
+			tlsr8258_nvs_trace[9] = (uint16_t)rc;
 			return rc;
 		}
 		if (nvs_ate_valid(fs, ate_end_addr, &end_ate)) {
@@ -618,10 +625,15 @@ static int nvs_recover_last_ate(struct nvs_fs *fs, uint32_t *addr)
 			data_end_addr &= ADDR_SECT_MASK;
 			data_end_addr += end_ate.offset + end_ate.len;
 			*addr = ate_end_addr;
+			tlsr8258_nvs_trace[12] = end_ate.id;
+			tlsr8258_nvs_trace[13] = end_ate.offset;
+			tlsr8258_nvs_trace[14] = end_ate.len;
 		}
 		ate_end_addr -= ate_size;
 	}
 
+	tlsr8258_nvs_trace[8] = 0x10FFU;
+	tlsr8258_nvs_trace[9] = (uint16_t)(*addr & 0xFFFFU);
 	return 0;
 }
 
@@ -974,11 +986,17 @@ static int nvs_startup(struct nvs_fs *fs)
 	uint8_t erase_value = fs->flash_parameters->erase_value;
 	bool empty_open_sector = false;
 	bool gc_done_only_sector = false;
+	bool open_sector_last_ate_known = false;
 	struct nvs_ate open_sector_ate;
+	struct nvs_ate prev_open_sector_ate;
 
 	k_mutex_lock(&fs->nvs_lock, K_FOREVER);
 
 	ate_size = nvs_al_size(fs, sizeof(struct nvs_ate));
+	tlsr8258_nvs_trace[0] = 0x0001U;
+	tlsr8258_nvs_trace[1] = fs->sector_count;
+	tlsr8258_nvs_trace[2] = fs->sector_size;
+
 	/* step through the sectors to find a open sector following
 	 * a closed sector, this is where NVS can write.
 	 */
@@ -1019,6 +1037,7 @@ static int nvs_startup(struct nvs_fs *fs)
 	}
 
 	if (i == fs->sector_count) {
+		tlsr8258_nvs_trace[0] = 0x0002U;
 		/* none of the sectors where closed, in most cases we can set
 		 * the address to the first sector, except when there are only
 		 * two sectors. Then we can only set it to the first sector if
@@ -1026,37 +1045,94 @@ static int nvs_startup(struct nvs_fs *fs)
 		 */
 		rc = nvs_flash_cmp_const(fs, addr - ate_size, erase_value,
 				sizeof(struct nvs_ate));
+		tlsr8258_nvs_trace[3] = (uint16_t)((addr - ate_size) & 0xFFFFU);
+		tlsr8258_nvs_trace[4] = (uint16_t)rc;
 		if (!rc) {
 			/* empty ate */
 			nvs_sector_advance(fs, &addr);
 			rc = nvs_flash_cmp_const(fs, addr - ate_size, erase_value,
 						sizeof(struct nvs_ate));
+			tlsr8258_nvs_trace[5] = (uint16_t)((addr - ate_size) & 0xFFFFU);
+			tlsr8258_nvs_trace[6] = (uint16_t)rc;
+			if (rc < 0) {
+				goto end;
+			}
+			if (!rc) {
+				rc = nvs_flash_cmp_const(fs, addr - (2 * ate_size),
+							 erase_value,
+							 sizeof(struct nvs_ate));
+				tlsr8258_nvs_trace[14] = (uint16_t)((addr - (2 * ate_size)) & 0xFFFFU);
+				tlsr8258_nvs_trace[15] = (uint16_t)rc;
+				if (rc < 0) {
+					goto end;
+				}
+				if (!rc) {
+					addr -= ate_size;
+					empty_open_sector = true;
+				} else {
+					rc = nvs_flash_ate_rd(fs, addr - (2 * ate_size),
+								      &prev_open_sector_ate);
+					if (rc) {
+						goto end;
+					}
+					if (nvs_ate_valid(fs, addr - (2 * ate_size),
+								  &prev_open_sector_ate)) {
+						addr -= (2 * ate_size);
+						open_sector_last_ate_known = true;
+						tlsr8258_nvs_trace[8] = 0x1003U;
+						tlsr8258_nvs_trace[9] = (uint16_t)(addr & 0xFFFFU);
+					}
+				}
+				goto open_sector_done;
+			}
+		}
+
+		rc = nvs_flash_ate_rd(fs, addr - ate_size, &open_sector_ate);
+		if (rc) {
+			goto end;
+		}
+		tlsr8258_nvs_trace[7] = open_sector_ate.offset;
+		/*
+		 * A tail gc-done marker with offset 0 only means the sector
+		 * is logically empty when the previous ATE slot is still
+		 * erased. Live sectors can legitimately end with the same
+		 * marker after data has already been written.
+		 */
+		if (nvs_close_ate_valid(fs, &open_sector_ate) &&
+		    (open_sector_ate.offset == 0U)) {
+			rc = nvs_flash_cmp_const(fs, addr - (2 * ate_size),
+					 erase_value,
+					 sizeof(struct nvs_ate));
+			tlsr8258_nvs_trace[14] = (uint16_t)((addr - (2 * ate_size)) & 0xFFFFU);
+			tlsr8258_nvs_trace[15] = (uint16_t)rc;
 			if (rc < 0) {
 				goto end;
 			}
 			if (!rc) {
 				addr -= ate_size;
 				empty_open_sector = true;
+				gc_done_only_sector = true;
 			} else {
-				rc = nvs_flash_ate_rd(fs, addr - ate_size, &open_sector_ate);
+				rc = nvs_flash_ate_rd(fs, addr - (2 * ate_size),
+						      &prev_open_sector_ate);
 				if (rc) {
 					goto end;
 				}
-				/*
-				 * A single gc-done marker with offset 0 means the sector is
-				 * still logically empty and does not need recovery scanning.
-				 */
-				if (nvs_close_ate_valid(fs, &open_sector_ate) &&
-				    (open_sector_ate.offset == 0U)) {
-					addr -= ate_size;
-					empty_open_sector = true;
-					gc_done_only_sector = true;
+				if (nvs_ate_valid(fs, addr - (2 * ate_size),
+						  &prev_open_sector_ate)) {
+					addr -= (2 * ate_size);
+					open_sector_last_ate_known = true;
+					tlsr8258_nvs_trace[8] = 0x1002U;
+					tlsr8258_nvs_trace[9] = (uint16_t)(addr & 0xFFFFU);
 				}
 			}
 		}
+open_sector_done:
+		;
 	}
 
 	if (gc_done_only_sector) {
+		tlsr8258_nvs_trace[0] = 0x0003U;
 		fs->ate_wra = addr - ate_size;
 		fs->data_wra = addr & ADDR_SECT_MASK;
 		rc = 0;
@@ -1067,7 +1143,9 @@ static int nvs_startup(struct nvs_fs *fs)
 	 * search for the last valid ate using the recover_last_ate routine
 	 */
 
-	if (!empty_open_sector) {
+	if (!empty_open_sector && !open_sector_last_ate_known) {
+		tlsr8258_nvs_trace[0] = 0x0004U;
+		tlsr8258_nvs_trace[3] = (uint16_t)(addr & 0xFFFFU);
 		rc = nvs_recover_last_ate(fs, &addr);
 		if (rc) {
 			goto end;
@@ -1080,8 +1158,13 @@ static int nvs_startup(struct nvs_fs *fs)
 	 */
 	fs->ate_wra = addr;
 	fs->data_wra = addr & ADDR_SECT_MASK;
+	tlsr8258_nvs_trace[0] = 0x0005U;
+	tlsr8258_nvs_trace[3] = (uint16_t)(fs->ate_wra & 0xFFFFU);
+	tlsr8258_nvs_trace[4] = (uint16_t)(fs->data_wra & 0xFFFFU);
 
 	while (fs->ate_wra >= fs->data_wra) {
+		tlsr8258_nvs_trace[10] = (uint16_t)(fs->ate_wra & 0xFFFFU);
+		tlsr8258_nvs_trace[11] = (uint16_t)(fs->data_wra & 0xFFFFU);
 		rc = nvs_flash_ate_rd(fs, fs->ate_wra, &last_ate);
 		if (rc) {
 			goto end;
@@ -1095,6 +1178,9 @@ static int nvs_startup(struct nvs_fs *fs)
 		}
 
 		if (nvs_ate_valid(fs, fs->ate_wra, &last_ate)) {
+			tlsr8258_nvs_trace[12] = last_ate.id;
+			tlsr8258_nvs_trace[13] = last_ate.offset;
+			tlsr8258_nvs_trace[14] = last_ate.len;
 			/* complete write of ate was performed */
 			fs->data_wra = addr & ADDR_SECT_MASK;
 			/* Align the data write address to the current
@@ -1116,6 +1202,7 @@ static int nvs_startup(struct nvs_fs *fs)
 		}
 
 		fs->ate_wra -= ate_size;
+		tlsr8258_nvs_trace[15]++;
 	}
 
 	/* if the sector after the write sector is not empty gc was interrupted
@@ -1126,7 +1213,14 @@ static int nvs_startup(struct nvs_fs *fs)
 	 */
 	addr = fs->ate_wra & ADDR_SECT_MASK;
 	nvs_sector_advance(fs, &addr);
-	rc = nvs_flash_cmp_const(fs, addr, erase_value, fs->sector_size);
+	/*
+	 * A non-empty sector always has at least one ATE allocated from the tail,
+	 * so probing the tail slot is enough to distinguish an empty follow-up
+	 * sector from an interrupted-GC sector without reading the entire 4 KiB
+	 * sector on mount.
+	 */
+	rc = nvs_flash_cmp_const(fs, addr + fs->sector_size - ate_size,
+				 erase_value, sizeof(struct nvs_ate));
 	if (rc < 0) {
 		goto end;
 	}
@@ -1238,6 +1332,9 @@ end:
 		rc = nvs_add_gc_done_ate(fs);
 	}
 	k_mutex_unlock(&fs->nvs_lock);
+	tlsr8258_nvs_trace[0] = 0x00FFU;
+	tlsr8258_nvs_trace[1] = (uint16_t)rc;
+	tlsr8258_nvs_trace[2] = (uint16_t)(addr & 0xFFFFU);
 	return rc;
 }
 
