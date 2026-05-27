@@ -113,7 +113,6 @@ static void test_tx_waits_for_driver_completion(void)
 	const char *func =
 		"static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,\n"
 		"\t\t       struct net_pkt *pkt, struct net_buf *frag)\n{";
-	const char *helper = "static void tlsr8258_complete_tx_sync_bridge(";
 	const char *next_func = "static int tlsr8258_ed_scan(const struct device *dev, uint16_t duration,";
 
 	EXPECT_TRUE(source != NULL);
@@ -123,16 +122,30 @@ static void test_tx_waits_for_driver_completion(void)
 
 	EXPECT_TRUE(contains_between(source, func, next_func,
 				     "tlsr8258_radio_op_prepare_tx(&tlsr8258_radio.op,"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "tlsr8258_complete_tx_sync_bridge(frag->data, frag->len, tx_seq);"));
+	EXPECT_TRUE(ordered_between(source, func, next_func,
+				    "tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);",
+				    "irq_enable(TLSR8258_IRQ_ZB_RT);"));
 	EXPECT_TRUE(contains_between(source, func, next_func,
 				     "k_sem_take(&tlsr8258_tx_wait,"));
 	EXPECT_FALSE(contains_between(source, func, next_func,
 				      "tlsr8258_wait_for_post_poll_rx("));
-	EXPECT_TRUE(contains_between(source, helper, func,
-				     "tlsr8258_wait_for_post_poll_rx("));
-	EXPECT_TRUE(contains_between(source, helper, func,
-				     "k_sem_give(&tlsr8258_tx_wait);"));
+	EXPECT_FALSE(contains_between(source, func, next_func,
+				      "tlsr8258_complete_tx_sync_bridge("));
+
+	free(source);
+}
+
+static void test_legacy_poll_wait_seam_is_removed(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/drivers/ieee802154/ieee802154_tlsr8258.c");
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	EXPECT_FALSE(strstr(source, "#include \"ieee802154_tlsr8258_poll_wait.h\"") != NULL);
+	EXPECT_FALSE(strstr(source, "static bool tlsr8258_wait_for_post_poll_rx(") != NULL);
 
 	free(source);
 }
@@ -140,6 +153,7 @@ static void test_tx_waits_for_driver_completion(void)
 int main(void)
 {
 	test_tx_waits_for_driver_completion();
+	test_legacy_poll_wait_seam_is_removed();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_beacon_request_wait_path: %d failure(s)\n", failures);

@@ -243,10 +243,9 @@ static void test_pending_response_classification_uses_shared_helper(void)
 
 	EXPECT_FILE_CONTAINS(path, "static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu,");
 	EXPECT_FILE_CONTAINS(path, "return has_ack_match_fields && !is_ack &&");
-	EXPECT_FILE_CONTAINS(path, "rx_is_pending_response =");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq);");
 	EXPECT_FILE_CONTAINS(path,
 			     "is_pending_response = tlsr8258_psdu_is_pending_response(");
+	EXPECT_FILE_CONTAINS(path, "psdu, psdu_len, tlsr8258_radio.op.tx_seq);");
 	EXPECT_FILE_NOT_CONTAINS(path,
 				 "rx_is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&");
 }
