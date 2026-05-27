@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <errno.h>
+
 #include "ieee802154_tlsr8258_radio_op.h"
 
 void tlsr8258_radio_op_reset(struct tlsr8258_radio_op *op)
@@ -39,7 +41,7 @@ void tlsr8258_radio_op_on_tx_error(struct tlsr8258_radio_op *op, int result_errn
 void tlsr8258_radio_op_on_timeout(struct tlsr8258_radio_op *op)
 {
 	op->state = TLSR8258_RADIO_OP_COMPLETE_NO_RX;
-	op->result_errno = -11;
+	op->result_errno = -EAGAIN;
 }
 
 bool tlsr8258_radio_op_on_rx(struct tlsr8258_radio_op *op, bool is_ack,
