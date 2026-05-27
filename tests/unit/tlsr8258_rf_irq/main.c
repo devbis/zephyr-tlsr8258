@@ -223,28 +223,32 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 	EXPECT_FILE_CONTAINS(path, "bool is_ack;");
 	EXPECT_FILE_CONTAINS(path, "bool ack_pending;");
 	EXPECT_FILE_CONTAINS(path, "bool is_pending_response;");
-	EXPECT_FILE_CONTAINS(path, "bool has_ack_match_fields;");
 	EXPECT_FILE_CONTAINS(path, "psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];");
 	EXPECT_FILE_CONTAINS(path, "psdu_len = frame.dma[4];");
 	EXPECT_FILE_CONTAINS(path, "is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.tx_seq);");
 	EXPECT_FILE_CONTAINS(path, "ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);");
-	EXPECT_FILE_CONTAINS(path, "has_ack_match_fields = false;");
 	EXPECT_FILE_CONTAINS(path,
-		"if (psdu_len >= (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_SHORT_ADDR_SIZE)) {");
-	EXPECT_FILE_CONTAINS(path, "switch (psdu[TLSR8258_DEST_ADDR_TYPE_OFFSET] &");
-	EXPECT_FILE_CONTAINS(path, "case TLSR8258_DEST_ADDR_TYPE_SHORT:");
-	EXPECT_FILE_CONTAINS(path, "case TLSR8258_DEST_ADDR_TYPE_IEEE:");
-	EXPECT_FILE_CONTAINS(path, "psdu_len >= (TLSR8258_DEST_ADDR_OFFSET +");
-	EXPECT_FILE_CONTAINS(path, "TLSR8258_IEEE_ADDR_SIZE);");
-	EXPECT_FILE_CONTAINS(path, "is_pending_response = has_ack_match_fields &&");
-	EXPECT_FILE_CONTAINS(path, "!is_ack &&");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_filter_match_for_ack(psdu);");
+			     "is_pending_response = tlsr8258_psdu_is_pending_response(");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_rx(&tlsr8258_radio.op, is_ack,");
 	EXPECT_FILE_CONTAINS(path, "ack_pending,");
 	EXPECT_FILE_CONTAINS(path, "is_pending_response);");
 	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
+}
+
+static void test_pending_response_classification_uses_shared_helper(void)
+{
+	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
+
+	EXPECT_FILE_CONTAINS(path, "static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu,");
+	EXPECT_FILE_CONTAINS(path, "return has_ack_match_fields && !is_ack &&");
+	EXPECT_FILE_CONTAINS(path, "rx_is_pending_response =");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq);");
+	EXPECT_FILE_CONTAINS(path,
+			     "is_pending_response = tlsr8258_psdu_is_pending_response(");
+	EXPECT_FILE_NOT_CONTAINS(path,
+				 "rx_is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&");
 }
 
 static void test_zigbee_drv_enable_irq_reenables_global_gate(void)
@@ -277,6 +281,7 @@ int main(void)
 	test_rf_isr_signals_tx_success_via_radio_op_and_sem();
 	test_rf_isr_signals_tx_error_via_radio_op_and_sem();
 	test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem();
+	test_pending_response_classification_uses_shared_helper();
 	test_zigbee_drv_enable_irq_reenables_global_gate();
 	test_zigbee_bootstrap_enables_global_irq_gate();
 
