@@ -563,6 +563,57 @@ static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 	return require_ack ? ack_seen : true;
 }
 
+static void tlsr8258_complete_tx_sync_bridge(const uint8_t *tx_psdu, uint8_t tx_psdu_len,
+					     uint8_t tx_seq)
+{
+	uint32_t waited = 0u;
+
+	while (waited < CONFIG_IEEE802154_TLSR8258_TX_WAIT_US) {
+		uint16_t irq = TLSR_REG16(0x0f20);
+
+		if (tlsr8258_tx_irq_indicates_success(irq)) {
+			tlsr8258_tx_diag_put((0x11u << 24) | ((uint32_t)tx_seq << 16) | irq);
+			TLSR_REG16(0x0f20) = irq;
+			tlsr8258_radio_tx_count_inc();
+			tlsr8258_rf_set_rxmode();
+			if (!tlsr8258_radio_op_on_tx_success(&tlsr8258_radio.op)) {
+				if (!tlsr8258_wait_for_post_poll_rx(tx_psdu, tx_psdu_len)) {
+					tlsr8258_tx_diag_put((0x12u << 24) |
+							     ((uint32_t)tx_seq << 16) |
+							     (uint32_t)(uint16_t)-EAGAIN);
+					tlsr8258_radio_op_on_timeout(&tlsr8258_radio.op);
+				} else {
+					tlsr8258_radio.op.state = TLSR8258_RADIO_OP_COMPLETE_OK;
+					tlsr8258_radio.op.result_errno = 0;
+				}
+			}
+			if (tlsr8258_radio_op_result_errno(&tlsr8258_radio.op) == 0) {
+				tlsr8258_tx_diag_put((0x13u << 24) | ((uint32_t)tx_seq << 16));
+			}
+			k_sem_give(&tlsr8258_tx_wait);
+			return;
+		}
+
+		if ((irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
+			tlsr8258_tx_diag_put((0x14u << 24) | ((uint32_t)tx_seq << 16) | irq);
+			TLSR_REG16(0x0f20) = irq;
+			tlsr8258_rf_set_rxmode();
+			tlsr8258_radio_op_on_tx_error(&tlsr8258_radio.op, -EIO);
+			k_sem_give(&tlsr8258_tx_wait);
+			return;
+		}
+
+		k_busy_wait(1);
+		waited++;
+	}
+
+	tlsr8258_tx_diag_put((0x15u << 24) | ((uint32_t)tx_seq << 16) |
+			     (CONFIG_IEEE802154_TLSR8258_TX_WAIT_US & 0xffffu));
+	tlsr8258_rf_set_rxmode();
+	tlsr8258_radio_op_on_tx_error(&tlsr8258_radio.op, -EIO);
+	k_sem_give(&tlsr8258_tx_wait);
+}
+
 static void tlsr8258_rf_off(void)
 {
 	TLSR_REG8(0x0f00) = 0x80u;
@@ -1141,6 +1192,7 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	tlsr8258_tx_diag_put((0x10u << 24) | ((uint32_t)tx_seq << 16) | (uint32_t)mode);
 	tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);
+	tlsr8258_complete_tx_sync_bridge(frag->data, frag->len, tx_seq);
 	irq_enable(TLSR8258_IRQ_ZB_RT);
 
 	ret = k_sem_take(&tlsr8258_tx_wait, wait_timeout);
