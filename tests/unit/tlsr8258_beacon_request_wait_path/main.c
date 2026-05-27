@@ -107,11 +107,13 @@ static bool ordered_between(const char *source, const char *start_marker,
 	} \
 } while (0)
 
-static void test_beacon_request_keeps_post_tx_rx_window_open_without_requiring_ack(void)
+static void test_tx_waits_for_driver_completion(void)
 {
 	char *source = read_file(WORKTREE_ROOT "/drivers/ieee802154/ieee802154_tlsr8258.c");
-	const char *func = "static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_psdu_len)\n{";
-	const char *next_func = "static void tlsr8258_rf_off(void)";
+	const char *func =
+		"static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,\n"
+		"\t\t       struct net_pkt *pkt, struct net_buf *frag)\n{";
+	const char *next_func = "static int tlsr8258_ed_scan(const struct device *dev, uint16_t duration,";
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
@@ -119,23 +121,18 @@ static void test_beacon_request_keeps_post_tx_rx_window_open_without_requiring_a
 	}
 
 	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "beacon_req = tlsr8258_psdu_is_beacon_request(tx_psdu, tx_psdu_len);"));
+				     "tlsr8258_radio_op_prepare_tx(&tlsr8258_radio.op,"));
 	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "if (!data_req && !beacon_req && ((tx_psdu[0] & TLSR8258_ACK_REQUEST) == 0u)) {"));
-	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "beacon_req = tlsr8258_psdu_is_beacon_request(tx_psdu, tx_psdu_len);",
-				    "if (!data_req && !beacon_req && ((tx_psdu[0] & TLSR8258_ACK_REQUEST) == 0u)) {"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "return require_ack ? ack_seen : true;"));
+				     "k_sem_take(&tlsr8258_tx_wait,"));
 	EXPECT_FALSE(contains_between(source, func, next_func,
-				      "if (!data_req && ((tx_psdu[0] & TLSR8258_ACK_REQUEST) == 0u)) {"));
+				      "tlsr8258_wait_for_post_poll_rx("));
 
 	free(source);
 }
 
 int main(void)
 {
-	test_beacon_request_keeps_post_tx_rx_window_open_without_requiring_ack();
+	test_tx_waits_for_driver_completion();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_beacon_request_wait_path: %d failure(s)\n", failures);
