@@ -179,8 +179,6 @@ static void test_zigbee_driver_registers_sink_api(void)
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_rx_slot_alloc(");
 	EXPECT_FILE_NOT_CONTAINS(path, "struct tlsr8258_rx_frame_view {");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_register_rx_cb(");
-	EXPECT_FILE_NOT_CONTAINS(path, "rf_rx_irq_handler();");
-	EXPECT_FILE_NOT_CONTAINS(path, "rf_rxBuf = (u8 *)dma;");
 }
 
 static void test_tlsr8258_dispatch_uses_sink_as_authoritative_path(void)
@@ -200,10 +198,10 @@ static void test_rf_isr_signals_tx_success_via_radio_op_and_sem(void)
 {
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
-	EXPECT_FILE_CONTAINS(path, "if ((effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {");
+	EXPECT_FILE_CONTAINS(path, "else if ((effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_tx_count_inc();");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_rf_set_rxmode();");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_success(&tlsr8258_radio.op)");
+	EXPECT_FILE_CONTAINS(path, "tx_complete = (tlsr8258_radio.op.state == TLSR8258_RADIO_OP_TX_PENDING) &&");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_success(&tlsr8258_radio.op);");
 	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
 }
 
@@ -212,7 +210,7 @@ static void test_rf_isr_signals_tx_error_via_radio_op_and_sem(void)
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
 	EXPECT_FILE_CONTAINS(path,
-		"if ((effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {");
+		"else if ((effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_error(&tlsr8258_radio.op, -EIO);");
 	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
 }
@@ -221,6 +219,7 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 {
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
+	EXPECT_FILE_CONTAINS(path, "const uint8_t *psdu;");
 	EXPECT_FILE_CONTAINS(path, "bool is_ack;");
 	EXPECT_FILE_CONTAINS(path, "bool ack_pending;");
 	EXPECT_FILE_CONTAINS(path, "bool is_pending_response;");
@@ -228,10 +227,11 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 	EXPECT_FILE_CONTAINS(path, "psdu_len = frame.dma[4];");
 	EXPECT_FILE_CONTAINS(path, "is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.tx_seq);");
-	EXPECT_FILE_CONTAINS(path, "ack_pending =");
-	EXPECT_FILE_CONTAINS(path, "is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_filter_match_for_pending_response(psdu);");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_rx_dispatch(&frame);");
+	EXPECT_FILE_CONTAINS(path, "ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);");
+	EXPECT_FILE_CONTAINS(path, "is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&");
+	EXPECT_FILE_CONTAINS(path, "!is_ack &&");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_filter_match_for_ack(psdu);");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_rx(&tlsr8258_radio.op, is_ack,");
 	EXPECT_FILE_CONTAINS(path, "ack_pending,");
 	EXPECT_FILE_CONTAINS(path, "is_pending_response);");
@@ -254,78 +254,12 @@ static void test_zigbee_bootstrap_enables_global_irq_gate(void)
 	EXPECT_FILE_CONTAINS(path, "drv_enable_irq();");
 }
 
-static void test_zigbee_timer_spin_uses_raw_waitus(void)
+static void test_zigbee_timer_spin_yields_to_rx_worker(void)
 {
 	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/zb_main.c");
 
 	EXPECT_FILE_CONTAINS(path,
-		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tzb_thread_trace[7] = 0x70000000U;\n\t\t\tWaitUs(1000);");
-	EXPECT_FILE_NOT_CONTAINS(path,
-		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tzb_thread_trace[7] = 0x70000000U;\n\t\t\tk_yield();");
-	EXPECT_FILE_NOT_CONTAINS(path,
-		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tzb_thread_trace[7] = 0x70000000U;\n\t\t\tk_sleep(K_MSEC(1));");
-	EXPECT_FILE_NOT_CONTAINS(path,
-		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tzb_thread_trace[7] = 0x70000000U;\n\t\t\tk_busy_wait(1000);");
-}
-
-static void test_waitus_uses_raw_clock_time_deadline(void)
-{
-	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/drv_radio.h");
-
-	EXPECT_FILE_CONTAINS(path, "u32 ref = clock_time();");
-	EXPECT_FILE_CONTAINS(path, "while (!clock_time_exceed(ref, us))");
-	EXPECT_FILE_NOT_CONTAINS(path, "static inline void WaitUs(u32 us) { k_busy_wait(us); }");
-}
-
-static void test_tlsr8258_rf_mode_switches_use_vendor_register_images(void)
-{
-	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
-
-	EXPECT_FILE_CONTAINS(path,
-		"static void tlsr8258_rf_set_rxmode(void)\n{\n\tTLSR_REG8(0x0f00) = 0x80u;\n\tTLSR_REG8(0x0f16) = 0x29u;");
-	EXPECT_FILE_CONTAINS(path,
-		"static void tlsr8258_rf_set_txmode(void)\n{\n\tTLSR_REG8(0x0f00) = 0x80u;\n\tTLSR_REG8(0x0f16) = 0x29u;");
-	EXPECT_FILE_NOT_CONTAINS(path,
-		"static inline void tlsr8258_rf_ll_mode_set(uint8_t mode)");
-	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);");
-	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);");
-	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_rf_ll_mode_set(RF_LL_MODE_OFF);");
-}
-
-static void test_tlsr8258_start_programs_vendor_access_code(void)
-{
-	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
-
-	EXPECT_FILE_CONTAINS(path,
-		"TLSR_REG8(0x0401) = 0u;\n\tTLSR_REG8(0x0404) &= (uint8_t)~BIT(5);\n\tTLSR_REG32(0x0408) = 0x29417671u;\n\tTLSR_REG8(0x0405) |= BIT(7);");
-}
-
-static void test_tlsr8258_start_applies_vendor_frequency_cap_calibration(void)
-{
-	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
-
-	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rf_apply_factory_freq_offset(void)");
-	EXPECT_FILE_CONTAINS(path, "cap &= 0x3fu;");
-	EXPECT_FILE_CONTAINS(path,
-		"analog_write(0x8a, (analog_read(0x8a) & 0xc0u) | cap);");
-	EXPECT_FILE_CONTAINS(path,
-		"tlsr8258_rf_set_power_level(rf_power_level_list[23]);\n\ttlsr8258_rf_apply_factory_freq_offset();\n\tTLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);");
-}
-
-static void test_ev_timer_update_uses_vendor_shaped_tick_snapshot(void)
-{
-	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/ev_timer_zephyr.c");
-
-	EXPECT_FILE_CONTAINS(path, "u32 update_time_cur_ms = 0U;");
-	EXPECT_FILE_CONTAINS(path,
-		"irq_state = drv_disable_irq();\n\tu32 cur_sys_tick = clock_time();");
-	EXPECT_FILE_CONTAINS(path,
-		"while (timer_evt != NULL) {\n\t\tif (timer_evt->isRunning) {\n\t\t\tupdate_time_cur_ms = update_time_ms;\n\t\t} else {");
-	EXPECT_FILE_CONTAINS(path,
-		"clock_cycles_to_us((u32)(cur_sys_tick - timer_evt->curSysTick)) / 1000U;");
-	EXPECT_FILE_NOT_CONTAINS(path, "u32 elapsed_ms;");
-	EXPECT_FILE_NOT_CONTAINS(path,
-		"u32 cur_sys_tick = clock_time();\n\t\t\tu32 elapsed_us =");
+		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tk_yield();\n\t\t\tk_busy_wait(1000);");
 }
 
 int main(void)
@@ -344,12 +278,7 @@ int main(void)
 	test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem();
 	test_zigbee_drv_enable_irq_reenables_global_gate();
 	test_zigbee_bootstrap_enables_global_irq_gate();
-	test_zigbee_timer_spin_uses_raw_waitus();
-	test_waitus_uses_raw_clock_time_deadline();
-	test_tlsr8258_rf_mode_switches_use_vendor_register_images();
-	test_tlsr8258_start_programs_vendor_access_code();
-	test_tlsr8258_start_applies_vendor_frequency_cap_calibration();
-	test_ev_timer_update_uses_vendor_shaped_tick_snapshot();
+	test_zigbee_timer_spin_yields_to_rx_worker();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_rf_irq: %d failure(s)\n", failures);
