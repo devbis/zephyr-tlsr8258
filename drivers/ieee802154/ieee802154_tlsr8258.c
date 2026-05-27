@@ -1044,6 +1044,10 @@ static int tlsr8258_set_txpower(const struct device *dev, int16_t dbm)
 
 static int tlsr8258_start(const struct device *dev)
 {
+	const uint16_t runtime_irq_mask =
+		tlsr8258_rf_irq_runtime_mask() |
+		RF_IRQ_TX_DS | RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT;
+
 	ARG_UNUSED(dev);
 
 	if (tlsr8258_radio_started_get()) {
@@ -1064,7 +1068,7 @@ static int tlsr8258_start(const struct device *dev)
 	TLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	TLSR_REG16(0x0f1c) = 0u;
-	TLSR_REG16(0x0f1c) = tlsr8258_rf_irq_runtime_mask();
+	TLSR_REG16(0x0f1c) = runtime_irq_mask;
 	TLSR_REG8(0x0430) |= BIT(1);
 	tlsr8258_rf_set_rxmode();
 	irq_enable(TLSR8258_IRQ_ZB_RT);

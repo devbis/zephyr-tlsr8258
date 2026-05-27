@@ -150,10 +150,33 @@ static void test_legacy_poll_wait_seam_is_removed(void)
 	free(source);
 }
 
+static void test_start_enables_tx_completion_error_irqs(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/drivers/ieee802154/ieee802154_tlsr8258.c");
+	const char *func =
+		"static int tlsr8258_start(const struct device *dev)\n{";
+	const char *next_func = "static int tlsr8258_stop(const struct device *dev)";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "tlsr8258_rf_irq_runtime_mask() |"));
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "RF_IRQ_TX_DS | RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT"));
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "TLSR_REG16(0x0f1c) = runtime_irq_mask;"));
+
+	free(source);
+}
+
 int main(void)
 {
 	test_tx_waits_for_driver_completion();
 	test_legacy_poll_wait_seam_is_removed();
+	test_start_enables_tx_completion_error_irqs();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_beacon_request_wait_path: %d failure(s)\n", failures);
