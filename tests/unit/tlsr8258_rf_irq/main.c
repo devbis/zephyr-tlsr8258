@@ -223,12 +223,21 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 	EXPECT_FILE_CONTAINS(path, "bool is_ack;");
 	EXPECT_FILE_CONTAINS(path, "bool ack_pending;");
 	EXPECT_FILE_CONTAINS(path, "bool is_pending_response;");
+	EXPECT_FILE_CONTAINS(path, "bool has_ack_match_fields;");
 	EXPECT_FILE_CONTAINS(path, "psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];");
 	EXPECT_FILE_CONTAINS(path, "psdu_len = frame.dma[4];");
 	EXPECT_FILE_CONTAINS(path, "is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.tx_seq);");
 	EXPECT_FILE_CONTAINS(path, "ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);");
-	EXPECT_FILE_CONTAINS(path, "is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&");
+	EXPECT_FILE_CONTAINS(path, "has_ack_match_fields = false;");
+	EXPECT_FILE_CONTAINS(path,
+		"if (psdu_len >= (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_SHORT_ADDR_SIZE)) {");
+	EXPECT_FILE_CONTAINS(path, "switch (psdu[TLSR8258_DEST_ADDR_TYPE_OFFSET] &");
+	EXPECT_FILE_CONTAINS(path, "case TLSR8258_DEST_ADDR_TYPE_SHORT:");
+	EXPECT_FILE_CONTAINS(path, "case TLSR8258_DEST_ADDR_TYPE_IEEE:");
+	EXPECT_FILE_CONTAINS(path, "psdu_len >= (TLSR8258_DEST_ADDR_OFFSET +");
+	EXPECT_FILE_CONTAINS(path, "TLSR8258_IEEE_ADDR_SIZE);");
+	EXPECT_FILE_CONTAINS(path, "is_pending_response = has_ack_match_fields &&");
 	EXPECT_FILE_CONTAINS(path, "!is_ack &&");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_filter_match_for_ack(psdu);");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX");
