@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -56,7 +57,7 @@ static void test_timeout_maps_to_eagain(void)
 	tlsr8258_radio_op_on_timeout(&op);
 
 	EXPECT_EQ(op.state, TLSR8258_RADIO_OP_COMPLETE_NO_RX);
-	EXPECT_EQ(tlsr8258_radio_op_result_errno(&op), -11);
+	EXPECT_EQ(tlsr8258_radio_op_result_errno(&op), -EAGAIN);
 }
 
 int main(void)
