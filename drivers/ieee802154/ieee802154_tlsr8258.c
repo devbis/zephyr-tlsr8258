@@ -1221,6 +1221,16 @@ static const struct ieee802154_radio_api tlsr8258_radio_api = {
 
 static int tlsr8258_init(const struct device *dev)
 {
+	/*
+	 * Guard against double-invocation.  The Zephyr kernel calls this via
+	 * do_device_init() at POST_KERNEL level, but on TLSR8258 the .data
+	 * section copy from flash LMA > boot-mirror window may fail, leaving
+	 * device_state.init_res stale.  zb_radio_port_tlsr8258_get() works
+	 * around that by calling device_init() as a fallback; the flag below
+	 * prevents the k_thread_create path from running twice.
+	 */
+	static bool tlsr8258_hw_inited;
+
 	ARG_UNUSED(dev);
 
 	memset(&tlsr8258_radio, 0, sizeof(tlsr8258_radio));
@@ -1231,10 +1241,14 @@ static int tlsr8258_init(const struct device *dev)
 
 	tlsr8258_rx_queue_init(&tlsr8258_rx_queue, tlsr8258_rx_slots, TLSR8258_RX_SLOT_COUNT);
 	k_sem_init(&tlsr8258_rx_sem, 0, TLSR8258_RX_SLOT_COUNT);
-	k_thread_create(&tlsr8258_rx_worker_thread, tlsr8258_rx_worker_stack,
-			K_KERNEL_STACK_SIZEOF(tlsr8258_rx_worker_stack),
-			tlsr8258_rx_worker, NULL, NULL, NULL,
-			K_PRIO_COOP(2), 0, K_NO_WAIT);
+
+	if (!tlsr8258_hw_inited) {
+		k_thread_create(&tlsr8258_rx_worker_thread, tlsr8258_rx_worker_stack,
+				K_KERNEL_STACK_SIZEOF(tlsr8258_rx_worker_stack),
+				tlsr8258_rx_worker, NULL, NULL, NULL,
+				K_PRIO_COOP(2), 0, K_NO_WAIT);
+		tlsr8258_hw_inited = true;
+	}
 
 	tlsr8258_rf_init();
 	tlsr8258_rf_set_channel_offset(

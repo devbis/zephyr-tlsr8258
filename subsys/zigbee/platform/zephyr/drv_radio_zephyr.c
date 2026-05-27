@@ -503,8 +503,16 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	    (psdu[psdu_len - 1U] == 0x04U)) {
 		zb_radio_submit_trace_store(zb_radio_submit_datareq_trace, psdu, psdu_len);
 	}
+	/*
+	 * DATA REQUEST frames must bypass CCA.  During the interview phase the
+	 * coordinator retransmits transport-key frames continuously; CCA sees
+	 * those transmissions as a busy channel and returns -EBUSY for every
+	 * subsequent DATA REQ poll (polls 9-20), preventing the key delivery.
+	 * Using DIRECT mode for all TX eliminates that race.
+	 */
+	enum ieee802154_tx_mode tx_mode = IEEE802154_TX_MODE_DIRECT;
 	atomic_inc(&g_radio.tx_attempts);
-	ret = g_radio.api->tx(g_radio.dev, IEEE802154_TX_MODE_CCA, NULL, &frag);
+	ret = g_radio.api->tx(g_radio.dev, tx_mode, NULL, &frag);
 	if (ret < 0) {
 		atomic_inc(&g_radio.tx_failures);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
