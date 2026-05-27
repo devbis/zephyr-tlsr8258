@@ -19,8 +19,29 @@ static int zb_radio_port_tlsr8258_get(const struct device **dev,
 {
 	const struct device *radio = DEVICE_DT_GET(DT_NODELABEL(zb));
 
-	if (!device_is_ready(radio)) {
+	if (radio == NULL) {
 		return -ENODEV;
+	}
+
+	/*
+	 * On TLSR8258, the .data section is copied from a flash LMA that lies
+	 * beyond the boot-mirror window (LMA 0x18B90 > mirror ceiling 0xAFFF).
+	 * The TC32 startup copy loop may silently produce wrong data, leaving
+	 * device_state.init_res stale from a previous firmware image.
+	 * device_is_ready() therefore returns false even though the device is
+	 * functional.
+	 *
+	 * Workaround: if device_is_ready() fails, force-initialise the device
+	 * (device_init is a no-op if already done) and fall through to the
+	 * api-pointer check which is the actual gate we care about.
+	 */
+	if (!device_is_ready(radio)) {
+		if (!radio->state->initialized) {
+			(void)device_init(radio);
+		}
+		if (radio->api == NULL) {
+			return -ENODEV;
+		}
 	}
 
 	if (dev != NULL) {
