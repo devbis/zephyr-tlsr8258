@@ -490,6 +490,31 @@ static bool tlsr8258_psdu_is_ack_for_seq(const uint8_t *psdu, uint8_t psdu_len, 
 	return ((psdu[0] & 0x07u) == 0x02u) && (psdu[2] == seq);
 }
 
+static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_len, uint8_t seq)
+{
+	bool has_ack_match_fields = false;
+	bool is_ack;
+
+	if (psdu == NULL || psdu_len < (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_SHORT_ADDR_SIZE)) {
+		return false;
+	}
+
+	is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, seq);
+	switch (psdu[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) {
+	case TLSR8258_DEST_ADDR_TYPE_SHORT:
+		has_ack_match_fields = true;
+		break;
+	case TLSR8258_DEST_ADDR_TYPE_IEEE:
+		has_ack_match_fields =
+			psdu_len >= (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_IEEE_ADDR_SIZE);
+		break;
+	default:
+		break;
+	}
+
+	return has_ack_match_fields && !is_ack && tlsr8258_filter_match_for_ack(psdu);
+}
+
 static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_psdu_len)
 {
 	uint32_t wait_limit_us = tlsr8258_post_poll_wait_us(0u);
@@ -543,9 +568,8 @@ static bool tlsr8258_wait_for_post_poll_rx(const uint8_t *tx_psdu, uint8_t tx_ps
 				continue;
 			}
 
-			rx_is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&
-					       ((psdu[0] & 0x07u) != 0x02u) &&
-					       tlsr8258_filter_match_for_ack(psdu);
+			rx_is_pending_response =
+				tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq);
 			if (tlsr8258_post_poll_should_stop(ack_seen, ack_pending,
 							 rx_is_pending_response)) {
 				break;
@@ -907,7 +931,6 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 	bool is_ack;
 	bool ack_pending;
 	bool is_pending_response;
-	bool has_ack_match_fields;
 
 	ARG_UNUSED(arg1);
 	ARG_UNUSED(arg2);
@@ -921,31 +944,14 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 			is_ack = false;
 			ack_pending = false;
 			is_pending_response = false;
-			has_ack_match_fields = false;
 			if (frame.len >= TLSR8258_PAYLOAD_OFFSET) {
 				psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];
 				psdu_len = frame.dma[4];
 				is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,
 								      tlsr8258_radio.op.tx_seq);
 				ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);
-				if (psdu_len >= (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_SHORT_ADDR_SIZE)) {
-					switch (psdu[TLSR8258_DEST_ADDR_TYPE_OFFSET] &
-						TLSR8258_DEST_ADDR_TYPE_MASK) {
-					case TLSR8258_DEST_ADDR_TYPE_SHORT:
-						has_ack_match_fields = true;
-						break;
-					case TLSR8258_DEST_ADDR_TYPE_IEEE:
-						has_ack_match_fields =
-							psdu_len >= (TLSR8258_DEST_ADDR_OFFSET +
-								    TLSR8258_IEEE_ADDR_SIZE);
-						break;
-					default:
-						break;
-					}
-				}
-				is_pending_response = has_ack_match_fields &&
-						     !is_ack &&
-						     tlsr8258_filter_match_for_ack(psdu);
+				is_pending_response = tlsr8258_psdu_is_pending_response(
+					psdu, psdu_len, tlsr8258_radio.op.tx_seq);
 			}
 			tlsr8258_rx_dispatch(&frame);
 			{
