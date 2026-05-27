@@ -4,7 +4,9 @@
 
 #define RF_IRQ_TX BIT(1)
 #define RF_IRQ_CMD_DONE BIT(5)
+#define RF_IRQ_FSM_TIMEOUT BIT(6)
 #define RF_IRQ_TX_DS BIT(8)
+#define RF_IRQ_STX_TIMEOUT BIT(11)
 
 #define BIT(n) (1u << (n))
 
@@ -41,11 +43,19 @@ static void test_tx_ds_irq_is_success(void)
 	EXPECT_TRUE(tlsr8258_tx_irq_indicates_success(RF_IRQ_TX_DS));
 }
 
+static void test_timeout_irqs_are_not_success(void)
+{
+	EXPECT_FALSE(tlsr8258_tx_irq_indicates_success(RF_IRQ_STX_TIMEOUT));
+	EXPECT_FALSE(tlsr8258_tx_irq_indicates_success(RF_IRQ_FSM_TIMEOUT));
+	EXPECT_FALSE(tlsr8258_tx_irq_indicates_success(RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT));
+}
+
 int main(void)
 {
 	test_cmd_done_alone_is_not_success();
 	test_tx_irq_is_success();
 	test_tx_ds_irq_is_success();
+	test_timeout_irqs_are_not_success();
 
 	if (failures != 0) {
 		printf("tlsr8258_tx_irq: %d failure(s)\n", failures);
