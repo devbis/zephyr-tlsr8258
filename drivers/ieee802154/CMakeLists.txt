@@ -19,7 +19,6 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_STM32WBA ieee802154_stm32wba.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_B91 ieee802154_b91.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8258
   ieee802154_tlsr8258.c
-  ieee802154_tlsr8258_poll_wait.c
   ieee802154_tlsr8258_radio_op.c
   ieee802154_tlsr8258_rf_irq.c
   ieee802154_tlsr8258_rx_queue.c
