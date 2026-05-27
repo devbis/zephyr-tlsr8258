@@ -60,11 +60,18 @@ static void test_timeout_maps_to_eagain(void)
 	EXPECT_EQ(tlsr8258_radio_op_result_errno(&op), -EAGAIN);
 }
 
+static void test_build_uses_zephyr_errno_mapping(void)
+{
+	EXPECT_EQ(EAGAIN, 11);
+	EXPECT_EQ(ENOMSG, 35);
+}
+
 int main(void)
 {
 	test_tx_success_with_post_rx_enters_waiting_state();
 	test_ack_without_pending_completes_operation();
 	test_timeout_maps_to_eagain();
+	test_build_uses_zephyr_errno_mapping();
 
 	if (failures != 0) {
 		printf("tlsr8258_radio_op: %d failure(s)\n", failures);
