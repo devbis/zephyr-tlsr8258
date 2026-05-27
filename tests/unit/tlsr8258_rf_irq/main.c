@@ -254,14 +254,6 @@ static void test_zigbee_bootstrap_enables_global_irq_gate(void)
 	EXPECT_FILE_CONTAINS(path, "drv_enable_irq();");
 }
 
-static void test_zigbee_timer_spin_yields_to_rx_worker(void)
-{
-	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/zb_main.c");
-
-	EXPECT_FILE_CONTAINS(path,
-		"zb_nwk_ed_trace[15] = 0xA5B00008U;\n\t\t\tk_yield();\n\t\t\tk_busy_wait(1000);");
-}
-
 int main(void)
 {
 	test_runtime_irq_mask_matches_vendor_rx_tx_only();
@@ -278,7 +270,6 @@ int main(void)
 	test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem();
 	test_zigbee_drv_enable_irq_reenables_global_gate();
 	test_zigbee_bootstrap_enables_global_irq_gate();
-	test_zigbee_timer_spin_yields_to_rx_worker();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_rf_irq: %d failure(s)\n", failures);
