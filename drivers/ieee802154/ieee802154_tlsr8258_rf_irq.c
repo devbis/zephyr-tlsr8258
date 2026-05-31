@@ -34,8 +34,11 @@ uint16_t tlsr8258_rf_irq_runtime_mask(void)
 
 uint16_t tlsr8258_rf_irq_effective_status(uint16_t irq, const uint8_t *rx, size_t rx_size)
 {
-	if ((irq == 0u) && tlsr8258_rf_dma_frame_valid(rx, rx_size)) {
-		return RF_IRQ_RX;
+	if ((irq & RF_IRQ_RX) != 0u) {
+		if (tlsr8258_rf_dma_frame_valid(rx, rx_size)) {
+			return irq;
+		}
+		return 0u;
 	}
 
 	return irq;

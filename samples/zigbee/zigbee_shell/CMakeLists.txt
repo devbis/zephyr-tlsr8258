@@ -12,5 +12,6 @@ target_sources(app PRIVATE
 # not part of the public zephyr_include_directories set.
 target_include_directories(app PRIVATE
     ${ZEPHYR_BASE}/subsys/zigbee
+    ${ZEPHYR_BASE}/subsys/zigbee/include
     ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr
 )
