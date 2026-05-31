@@ -1156,8 +1156,8 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 
 	expect_ack = tlsr8258_ack_requested(frag->data, frag->len);
 	expect_post_tx_rx = tlsr8258_psdu_is_data_request(frag->data, frag->len) ||
-				 tlsr8258_psdu_is_beacon_request(frag->data, frag->len) ||
-				 tlsr8258_psdu_is_assoc_request(frag->data, frag->len);
+				 tlsr8258_psdu_is_beacon_request(frag->data, frag->len);
+				 // || tlsr8258_psdu_is_assoc_request(frag->data, frag->len);
 	wait_budget_us = expect_post_tx_rx ? 150000u : CONFIG_IEEE802154_TLSR8258_TX_WAIT_US;
 	k_timeout_t wait_timeout = K_USEC(expect_post_tx_rx ? 150000u :
 					      CONFIG_IEEE802154_TLSR8258_TX_WAIT_US);
