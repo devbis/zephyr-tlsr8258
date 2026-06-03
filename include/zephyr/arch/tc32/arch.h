@@ -20,6 +20,8 @@
 #include <zephyr/sys/util.h>
 
 #define ARCH_STACK_PTR_ALIGN 8
+#define TC32_BOOT_RAM_MIRROR_CODE \
+	__attribute__((noinline, section(".boot_ram_mirror")))
 
 #ifdef __cplusplus
 extern "C" {

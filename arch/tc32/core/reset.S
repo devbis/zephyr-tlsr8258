@@ -316,7 +316,7 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 .Ldata_end:
 	.word __data_region_end
 
-SECTION_FUNC(ram_code, __irq)
+SECTION_FUNC(boot_ram_mirror, __irq)
 z_tc32_irq_entry:
 	tpush {r14}
 	tpush {r0-r7}

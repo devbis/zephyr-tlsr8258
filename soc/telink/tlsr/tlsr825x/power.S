@@ -7,7 +7,7 @@
 
 GTEXT(start_suspend)
 
-SECTION_FUNC(ram_code, start_suspend)
+SECTION_FUNC(boot_ram_mirror, start_suspend)
 	tpush {r2-r3}
 	tmovs r2, #129
 	tloadr r3, .Lsuspend_data
