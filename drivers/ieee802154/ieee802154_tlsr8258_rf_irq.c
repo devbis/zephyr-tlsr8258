@@ -6,6 +6,9 @@
 
 #define RF_IRQ_RX       BIT(0)
 #define RF_IRQ_TX       BIT(1)
+#define RF_IRQ_RX_CRC_2 BIT(4)
+#define RF_IRQ_RX_DR    BIT(9)
+#define RF_IRQ_RX_EVENTS (RF_IRQ_RX | RF_IRQ_RX_CRC_2 | RF_IRQ_RX_DR)
 
 static bool tlsr8258_rf_dma_frame_valid(const uint8_t *rx, size_t rx_size)
 {
@@ -29,16 +32,23 @@ static bool tlsr8258_rf_dma_frame_valid(const uint8_t *rx, size_t rx_size)
 
 uint16_t tlsr8258_rf_irq_runtime_mask(void)
 {
-	return RF_IRQ_RX | RF_IRQ_TX;
+	return RF_IRQ_RX_EVENTS | RF_IRQ_TX;
 }
 
 uint16_t tlsr8258_rf_irq_effective_status(uint16_t irq, const uint8_t *rx, size_t rx_size)
 {
-	if ((irq & RF_IRQ_RX) != 0u) {
-		if (tlsr8258_rf_dma_frame_valid(rx, rx_size)) {
-			return irq;
+	bool dma_valid = tlsr8258_rf_dma_frame_valid(rx, rx_size);
+
+	if ((irq & RF_IRQ_RX_EVENTS) != 0u) {
+		if (!dma_valid) {
+			return irq & (uint16_t)~RF_IRQ_RX_EVENTS;
 		}
-		return 0u;
+
+		return (irq & (uint16_t)~RF_IRQ_RX_EVENTS) | RF_IRQ_RX;
+	}
+
+	if ((irq == 0u) && dma_valid) {
+		return RF_IRQ_RX;
 	}
 
 	return irq;
@@ -46,5 +56,5 @@ uint16_t tlsr8258_rf_irq_effective_status(uint16_t irq, const uint8_t *rx, size_
 
 bool tlsr8258_rf_irq_has_rx_event(uint16_t irq)
 {
-	return (irq & RF_IRQ_RX) != 0u;
+	return (irq & RF_IRQ_RX_EVENTS) != 0u;
 }
