@@ -3,6 +3,7 @@
  */
 
 #include <zephyr/kernel.h>
+#include <zephyr/arch/tc32/arch.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/linker/section_tags.h>
 #include <kswap.h>
@@ -74,7 +75,7 @@ static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
 	return irq;
 }
 
-void __attribute__((section(".ram_code"))) z_tc32_handle_irqs(void)
+void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
 	unsigned int drained = 0u;
