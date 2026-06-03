@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <zephyr/init.h>
+#include <zephyr/arch/tc32/arch.h>
 #include <zephyr/kernel.h>
 #include <zephyr/pm/pm.h>
 #include <zephyr/pm/state.h>
@@ -253,7 +254,7 @@ static bool tlsr8258_pm_wake_gate_ready(uint8_t wake44)
 	return (wake44 & TLSR8258_WAKEUP_STATUS_ALL) == 0u;
 }
 
-static void __attribute__((section(".ram_code"))) tlsr8258_pm_sleep_start(void)
+static void TC32_BOOT_RAM_MIRROR_CODE tlsr8258_pm_sleep_start(void)
 {
 	volatile uint32_t *ret_slot =
 		(volatile uint32_t *)(uintptr_t)(TLSR8258_PM_RET_ENTRY_BASE +
