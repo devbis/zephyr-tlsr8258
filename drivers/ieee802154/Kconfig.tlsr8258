@@ -34,6 +34,13 @@ config IEEE802154_TLSR8258_RANDOM_MAC
 	  Keep this disabled until the board has an entropy or test-random source
 	  selected by the application.
 
+config IEEE802154_TLSR8258_RETAINED_DEBUG
+	bool "Retained TLSR8258 RF bring-up debug state"
+	default n
+	help
+	  Keep driver RF IRQ/TX diagnostics in retained RAM for post-mortem
+	  inspection during low-level bring-up.
+
 if !IEEE802154_TLSR8258_RANDOM_MAC
 
 config IEEE802154_TLSR8258_MAC4
