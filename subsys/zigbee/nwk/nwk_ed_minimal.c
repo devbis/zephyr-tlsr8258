@@ -1165,8 +1165,19 @@ static void nwk_ed_minimal_timer_task(void *arg)
 				}
 				return;
 			}
-		} else if (g_nwkEdCtx.haveBeaconCandidate) {
-			nwk_ed_minimal_finish_discovery(ZDO_SUCCESS);
+		} else if (g_nwkEdCtx.haveBeaconCandidate ||
+			   g_nwkEdCtx.parentCandidateValid ||
+			   g_nwkEdCtx.fixedJoinValid) {
+			/*
+			 * Network steering may already have a usable parent/fixed
+			 * target from traffic heuristics or bootstrap policy even
+			 * when no beacon candidate was recorded. In that case do
+			 * not keep the state machine parked in DISCOVERY: proceed
+			 * to association immediately.
+			 */
+			if (!nwk_ed_minimal_start_assoc(FALSE)) {
+				nwk_ed_minimal_finish_join(ZDO_TIMEOUT, FALSE);
+			}
 			return;
 		}
 
