@@ -6,7 +6,7 @@
 #define RF_IRQ_CMD_DONE BIT(5)
 #define RF_IRQ_FSM_TIMEOUT BIT(6)
 #define RF_IRQ_TX_DS BIT(8)
-#define RF_IRQ_STX_TIMEOUT BIT(11)
+#define RF_IRQ_STX_TIMEOUT BIT(12)
 
 #define BIT(n) (1u << (n))
 
