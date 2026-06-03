@@ -70,13 +70,13 @@ SECTIONS
 	} GROUP_DATA_LINK_IN(RAM_CODE, ROMABLE_REGION)
 	. = _tc32_flash_copy_lma_start + SIZEOF(.tc32_flash_copy);
 
-	SECTION_PROLOGUE(.ram_code,,)
+	SECTION_PROLOGUE(.boot_ram_mirror,,)
 	{
 		. = ALIGN(4);
-		PROVIDE(__ram_code_start = .);
-		*(.ram_code)
-		*(".ram_code.*")
-		PROVIDE(__ram_code_end = .);
+		PROVIDE(__boot_ram_mirror_start = .);
+		*(.boot_ram_mirror)
+		*(".boot_ram_mirror.*")
+		PROVIDE(__boot_ram_mirror_end = .);
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	. = ALIGN(16);

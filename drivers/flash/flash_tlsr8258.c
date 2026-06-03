@@ -53,8 +53,6 @@
 #define TLSR8258_FLASH_CFG_VDD_F_1M    0x0fe1c0u
 #define TLSR8258_FLASH_CFG_VDD_F_2M    0x1fe1c0u
 
-#define TLSR8258_RAM_CODE __attribute__((noinline, section(".ram_code")))
-
 struct tlsr8258_flash_config {
 	uintptr_t base;
 	size_t size;
@@ -203,7 +201,7 @@ static void tlsr8258_flash_apply_vdd_calibration(const struct tlsr8258_flash_con
 			      (reg_value & 0xf8u) | (calib_value & 0x07u));
 }
 
-static TLSR8258_RAM_CODE void tlsr8258_flash_sleep_us(uint32_t us)
+static __ramfunc void tlsr8258_flash_sleep_us(uint32_t us)
 {
 	uint32_t start = TLSR8258_REG_SYSTEM_TICK;
 	uint32_t ticks = us * TLSR8258_SYS_TICKS_PER_US;
@@ -212,7 +210,7 @@ static TLSR8258_RAM_CODE void tlsr8258_flash_sleep_us(uint32_t us)
 	}
 }
 
-static TLSR8258_RAM_CODE void tlsr8258_flash_send_cmd(uint8_t cmd)
+static __ramfunc void tlsr8258_flash_send_cmd(uint8_t cmd)
 {
 	tlsr8258_mspi_high();
 	tlsr8258_flash_sleep_us(1u);
@@ -221,7 +219,7 @@ static TLSR8258_RAM_CODE void tlsr8258_flash_send_cmd(uint8_t cmd)
 	tlsr8258_mspi_wait();
 }
 
-static TLSR8258_RAM_CODE void tlsr8258_flash_send_addr(uint32_t addr)
+static __ramfunc void tlsr8258_flash_send_addr(uint32_t addr)
 {
 	tlsr8258_mspi_write((uint8_t)(addr >> 16));
 	tlsr8258_mspi_wait();
@@ -231,7 +229,7 @@ static TLSR8258_RAM_CODE void tlsr8258_flash_send_addr(uint32_t addr)
 	tlsr8258_mspi_wait();
 }
 
-static TLSR8258_RAM_CODE int tlsr8258_flash_wait_done(void)
+static __ramfunc int tlsr8258_flash_wait_done(void)
 {
 	tlsr8258_flash_sleep_us(100u);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_STATUS);
@@ -249,16 +247,32 @@ static TLSR8258_RAM_CODE int tlsr8258_flash_wait_done(void)
 	return -ETIMEDOUT;
 }
 
-int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf, size_t len);
-int tlsr8258_flash_erase_sector_ram(uint32_t addr);
-int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len);
-
-TLSR8258_RAM_CODE int tlsr8258_flash_read_ram_body(uint32_t addr, uint8_t *buf, size_t len)
+/*
+ * Runtime flash transactions must execute from RAM after XIP startup. The
+ * TC32 boot mirror is reserved for reset/IRQ/suspend glue only.
+ */
+__ramfunc int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len)
 {
+	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
 	unsigned int key = arch_irq_lock();
+	uint32_t start;
 
-	tlsr8258_flash_send_cmd(0x03u);
-	tlsr8258_flash_send_addr(addr);
+	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
+	tlsr8258_mspi_high();
+	start = TLSR8258_REG_SYSTEM_TICK;
+	while ((uint32_t)(TLSR8258_REG_SYSTEM_TICK - start) <= TLSR8258_SYS_TICKS_PER_US) {
+	}
+	tlsr8258_mspi_low();
+	tlsr8258_mspi_write(0x03u);
+	tlsr8258_mspi_wait();
+
+	tlsr8258_mspi_write((uint8_t)(addr >> 16));
+	tlsr8258_mspi_wait();
+	tlsr8258_mspi_write((uint8_t)(addr >> 8));
+	tlsr8258_mspi_wait();
+	tlsr8258_mspi_write((uint8_t)addr);
+	tlsr8258_mspi_wait();
+
 	tlsr8258_mspi_write(0u);
 	tlsr8258_mspi_wait();
 	TLSR8258_REG_MSPI_CTRL = 0x0au;
@@ -270,12 +284,12 @@ TLSR8258_RAM_CODE int tlsr8258_flash_read_ram_body(uint32_t addr, uint8_t *buf, 
 	}
 
 	tlsr8258_mspi_high();
+	TLSR8258_REG_MSPI_MODE = saved_mode;
 	arch_irq_unlock(key);
 	return 0;
 }
 
-TLSR8258_RAM_CODE int tlsr8258_flash_write_page_ram_body(uint32_t addr, const uint8_t *buf,
-							 size_t len)
+__ramfunc int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf, size_t len)
 {
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
 	int ret;
@@ -296,7 +310,7 @@ TLSR8258_RAM_CODE int tlsr8258_flash_write_page_ram_body(uint32_t addr, const ui
 	return ret;
 }
 
-TLSR8258_RAM_CODE int tlsr8258_flash_erase_sector_ram_body(uint32_t addr)
+__ramfunc int tlsr8258_flash_erase_sector_ram(uint32_t addr)
 {
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
 	int ret;
