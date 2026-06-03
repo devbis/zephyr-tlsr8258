@@ -11,6 +11,7 @@
 #define RF_IRQ_TX       BIT(1)
 #define RF_IRQ_RX_CRC_2 BIT(4)
 #define RF_IRQ_RX_DR    BIT(9)
+#define RF_IRQ_RX_EVENTS (RF_IRQ_RX | RF_IRQ_RX_CRC_2 | RF_IRQ_RX_DR)
 
 uint16_t tlsr8258_rf_irq_runtime_mask(void);
 bool tlsr8258_rf_irq_has_rx_event(uint16_t irq);
@@ -100,18 +101,18 @@ out:
 	} \
 } while (0)
 
-static void test_runtime_irq_mask_matches_vendor_rx_tx_only(void)
+static void test_runtime_irq_mask_matches_runtime_rx_event_contract(void)
 {
-	EXPECT_EQ(tlsr8258_rf_irq_runtime_mask(), RF_IRQ_RX | RF_IRQ_TX);
+	EXPECT_EQ(tlsr8258_rf_irq_runtime_mask(), RF_IRQ_RX_EVENTS | RF_IRQ_TX);
 }
 
-static void test_rx_event_requires_primary_rx_bit(void)
+static void test_rx_event_accepts_all_vendor_rx_indicators(void)
 {
 	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX));
 	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX | RF_IRQ_RX_CRC_2));
-	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_CRC_2));
-	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_DR));
-	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_CRC_2 | RF_IRQ_RX_DR));
+	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_CRC_2));
+	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_DR));
+	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_CRC_2 | RF_IRQ_RX_DR));
 }
 
 static void test_zero_irq_with_valid_dma_rx_synthesizes_rx_status(void)
@@ -123,6 +124,19 @@ static void test_zero_irq_with_valid_dma_rx_synthesizes_rx_status(void)
 	dma[16] = 0x10u;
 
 	EXPECT_EQ(tlsr8258_rf_irq_effective_status(0u, dma, sizeof(dma)), RF_IRQ_RX);
+}
+
+static void test_secondary_rx_irq_with_valid_dma_promotes_to_logical_rx(void)
+{
+	uint8_t dma[20] = { 0 };
+
+	dma[0] = 13u;
+	dma[4] = 4u;
+	dma[16] = 0x10u;
+
+	EXPECT_EQ(tlsr8258_rf_irq_effective_status(RF_IRQ_RX_DR, dma, sizeof(dma)), RF_IRQ_RX);
+	EXPECT_EQ(tlsr8258_rf_irq_effective_status(RF_IRQ_RX_CRC_2, dma, sizeof(dma)),
+		  RF_IRQ_RX);
 }
 
 static void test_zero_irq_with_invalid_dma_does_not_synthesize_rx_status(void)
@@ -139,8 +153,19 @@ static void test_zero_irq_with_invalid_dma_does_not_synthesize_rx_status(void)
 static void test_non_rx_irq_bits_do_not_trigger_rx_capture(void)
 {
 	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_TX));
-	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_TX | RF_IRQ_RX_DR));
-	EXPECT_FALSE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_RX_CRC_2));
+	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_TX | RF_IRQ_RX_DR));
+}
+
+static void test_invalid_dma_clears_rx_event_bits_but_preserves_other_irqs(void)
+{
+	uint8_t dma[20] = { 0 };
+
+	dma[0] = 13u;
+	dma[4] = 5u;
+	dma[16] = 0x00u;
+
+	EXPECT_EQ(tlsr8258_rf_irq_effective_status(RF_IRQ_TX | RF_IRQ_RX_DR, dma, sizeof(dma)),
+		  RF_IRQ_TX);
 }
 
 static void test_public_bridge_header_exposes_sink_only_registration(void)
@@ -172,6 +197,9 @@ static void test_zigbee_driver_registers_sink_api(void)
 	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/drv_radio_zephyr.c");
 
 	EXPECT_FILE_CONTAINS(path, "zb_radio_port_register_rx_sink(");
+	EXPECT_FILE_NOT_CONTAINS(path, "rf_rx_irq_handler(");
+	EXPECT_FILE_NOT_CONTAINS(path, "rf_tx_irq_handler(");
+	EXPECT_FILE_NOT_CONTAINS(path, "rf_rxBuf");
 	EXPECT_FILE_NOT_CONTAINS(path, "tlsr8258_zigbee_bridge.h");
 	EXPECT_FILE_NOT_CONTAINS(path, "struct zb_radio_rx_slot {");
 	EXPECT_FILE_NOT_CONTAINS(path, "g_radio_rx_work");
@@ -192,6 +220,8 @@ static void test_tlsr8258_dispatch_uses_sink_as_authoritative_path(void)
 	EXPECT_FILE_CONTAINS(path, "if (rc < 0)");
 	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rx_capture_common(");
 	EXPECT_FILE_NOT_CONTAINS(path, "static void tlsr8258_rx_isr(");
+	EXPECT_FILE_CONTAINS(path, "uint16_t rx_ack = irq_status & RF_IRQ_RX_EVENTS;");
+	EXPECT_FILE_CONTAINS(path, "if (rx_ack == 0u)");
 }
 
 static void test_rf_isr_signals_tx_success_via_radio_op_and_sem(void)
@@ -269,11 +299,13 @@ static void test_zigbee_bootstrap_enables_global_irq_gate(void)
 
 int main(void)
 {
-	test_runtime_irq_mask_matches_vendor_rx_tx_only();
-	test_rx_event_requires_primary_rx_bit();
+	test_runtime_irq_mask_matches_runtime_rx_event_contract();
+	test_rx_event_accepts_all_vendor_rx_indicators();
 	test_zero_irq_with_valid_dma_rx_synthesizes_rx_status();
+	test_secondary_rx_irq_with_valid_dma_promotes_to_logical_rx();
 	test_zero_irq_with_invalid_dma_does_not_synthesize_rx_status();
 	test_non_rx_irq_bits_do_not_trigger_rx_capture();
+	test_invalid_dma_clears_rx_event_bits_but_preserves_other_irqs();
 	test_public_bridge_header_exposes_sink_only_registration();
 	test_zigbee_port_header_exposes_sink_only_registration();
 	test_zigbee_driver_registers_sink_api();
