@@ -365,11 +365,17 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 			tlsr8258_flash_trace[4] = 0xF1A00002u;
 			tlsr8258_flash_trace[5] = TLSR8258_REG_MSPI_MODE;
 		}
-		tlsr8258_watchdog_clear();
+		/*
+		 * Normal flash reads are safe through the TLSR8258 XIP mapping and
+		 * avoid the fragile early-boot manual MSPI read sequence. Keep the
+		 * RAM-only path for write/erase, where flash must be driven with
+		 * instruction fetches detached from XIP.
+		 */
 		if (trace_nvs) {
 			tlsr8258_flash_trace[4] = 0xF1A00003u;
 		}
-		ret = tlsr8258_flash_read_ram((uint32_t)offset, dst, len);
+		memcpy(dst, (const void *)(config->base + (uintptr_t)offset), len);
+		ret = 0;
 		if (trace_nvs) {
 			tlsr8258_flash_trace[4] = 0xF1A00004u;
 			tlsr8258_flash_trace[5] = (uint32_t)ret;
@@ -381,7 +387,6 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 				       sizeof(uint32_t));
 			}
 		}
-		tlsr8258_watchdog_clear();
 	}
 	k_sem_give(&dev_data->lock);
 
