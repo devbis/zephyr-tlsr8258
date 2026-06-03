@@ -99,6 +99,7 @@ typedef struct {
 	u8 beaconEbusyRetry;
 	u8 assocEbusyRetry;
 
+	ev_timer_event_t stateTimer;
 	ev_timer_event_t opTimer;
 	ev_timer_event_t timeoutReqTimer;
 } nwk_ed_minimal_ctx_t;
@@ -220,7 +221,13 @@ static void nwk_ed_minimal_timer_cancel(void)
 	nwk_ed_minimal_timer_trace_put((0x07U << 24) |
 				       ((u32)g_nwkEdCtx.state << 16) |
 				       g_nwkEdCtx.assocPollCount);
-	ev_unon_timer(&g_nwkEdCtx.opTimer);
+	ev_unon_timer(&g_nwkEdCtx.stateTimer);
+}
+
+static void nwk_ed_minimal_timer_reinit(void)
+{
+	ev_unon_timer(&g_nwkEdCtx.stateTimer);
+	memset(&g_nwkEdCtx.stateTimer, 0, sizeof(g_nwkEdCtx.stateTimer));
 }
 
 static void nwk_ed_minimal_timeout_req_cancel(void)
@@ -394,7 +401,8 @@ static void nwk_ed_minimal_apply_tc_context(void)
 
 static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
 						  const nwk_ed_minimal_mac_hdr_t *hdr,
-						  u16 *panId, u16 *coordShortAddr, extPANId_t extPanId)
+						  u16 *panId, u16 *coordShortAddr, extPANId_t extPanId,
+						  bool *associationPermit)
 {
 	u8 idx;
 	u8 gtsSpec;
@@ -405,7 +413,8 @@ static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
 	u8 superframeSpec2;
 
 	if (psdu == NULL || hdr == NULL || panId == NULL || coordShortAddr == NULL ||
-	    extPanId == NULL || !hdr->srcPanValid || !hdr->srcShortValid) {
+	    extPanId == NULL || associationPermit == NULL ||
+	    !hdr->srcPanValid || !hdr->srcShortValid) {
 		return FALSE;
 	}
 
@@ -414,17 +423,11 @@ static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
 		return FALSE;
 	}
 
-	/*
-	 * Vendor discovery path does not reject beacons solely because the
-	 * association-permit bit is clear. It only requires the upper
-	 * superframe/capability byte to carry non-zero network information and
-	 * lets the later association attempt determine if joining is currently
-	 * permitted.
-	 */
 	superframeSpec2 = psdu[idx + 1U];
 	if ((superframeSpec2 & 0x7FU) == 0U) {
 		return FALSE;
 	}
+	*associationPermit = (superframeSpec2 & BIT(7)) != 0U;
 
 	idx += 2U;
 	gtsSpec = psdu[idx++];
@@ -487,25 +490,36 @@ static bool nwk_ed_minimal_key_is_set(const u8 *key)
 	return FALSE;
 }
 
+static void nwk_ed_minimal_mark_preconfigured_join_secure(void)
+{
+	ss_ib.preConfiguredKeyType |= SS_PRECONFIGURED_NWKKEY;
+	if (ss_ib.securityLevel == 0U) {
+		ss_ib.securityLevel = 5U;
+	}
+	aps_ib.aps_authenticated = 1U;
+	aps_ib.aps_use_insecure_join = FALSE;
+}
+
 static void nwk_ed_minimal_install_fixed_join_key_if_needed(void)
 {
 	ss_material_set_t *material;
+	u8 *active_key = nwk_ed_minimal_active_nwk_key_get();
 
 	if (!nwk_ed_minimal_key_is_set(g_nwkEdCtx.fixedJoinNwkKey)) {
 		return;
 	}
-	if (nwk_ed_minimal_key_is_set(nwk_ed_minimal_active_nwk_key_get())) {
-		return;
+
+	if (!nwk_ed_minimal_key_is_set(active_key) ||
+	    memcmp(active_key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN) != 0) {
+		material = &ss_ib.nwkSecurMaterialSet[0];
+		memcpy(material->key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN);
+		material->keySeqNum = 0U;
+		material->keyType = 1U;
+		ss_ib.activeSecureMaterialIndex = 0U;
+		ss_ib.activeKeySeqNum = 0U;
 	}
 
-	material = &ss_ib.nwkSecurMaterialSet[0];
-	memcpy(material->key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN);
-	material->keySeqNum = 0U;
-	material->keyType = 1U;
-	ss_ib.activeSecureMaterialIndex = 0U;
-	ss_ib.activeKeySeqNum = 0U;
-	ss_ib.preConfiguredKeyType |= SS_PRECONFIGURED_NWKKEY;
-	aps_ib.aps_authenticated = 1U;
+	nwk_ed_minimal_mark_preconfigured_join_secure();
 }
 
 static u8 nwk_ed_minimal_end_device_initiator_bit(void)
@@ -780,6 +794,7 @@ static void nwk_ed_minimal_enter_interview(bool rejoinMode)
 	g_nwkEdCtx.interviewRejoinMode = rejoinMode;
 	g_nwkEdCtx.assocPollCount = 0U;
 	g_nwkEdCtx.interviewKickScheduled = FALSE;
+	nwk_ed_minimal_timer_reinit();
 	zb_nwk_ed_interview_trace[0] = 0xb7e10000U | ((u32)rejoinMode << 8) |
 				       g_nwkEdCtx.state;
 
@@ -967,6 +982,7 @@ static bool nwk_ed_minimal_send_rejoin_request(void)
 
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_REJOIN;
 	g_nwkEdCtx.assocPollCount = 0U;
+	nwk_ed_minimal_timer_reinit();
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
 	LOG_INF("rejoin request sent: short 0x%04x pan 0x%04x parent 0x%04x ch %u",
 		g_nwkEdCtx.activeShortAddr, g_nwkEdCtx.activePanId,
@@ -1057,6 +1073,7 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 		g_nwkEdCtx.assocEbusyRetry++;
 		g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN
 					      : NWK_ED_MINIMAL_STATE_JOINING;
+		nwk_ed_minimal_timer_reinit();
 		nwk_ed_minimal_timer_start(
 			g_nwkEdCtx.assocEbusyRetry <= NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY
 			? NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS
@@ -1068,6 +1085,7 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	}
 
 	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
+	nwk_ed_minimal_timer_reinit();
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
 	LOG_INF("%s started: pan 0x%04x parent 0x%04x ch %u",
 		rejoinMode ? "rejoin" : "join", panId, parentShortAddr, channel);
@@ -1291,15 +1309,21 @@ static int nwk_ed_minimal_timeout_req_timer_cb(void *arg)
 
 static void nwk_ed_minimal_timer_start(u32 timeoutMs)
 {
-	if (g_nwkEdCtx.opTimer.cb == NULL) {
-		memset(&g_nwkEdCtx.opTimer, 0, sizeof(g_nwkEdCtx.opTimer));
-		g_nwkEdCtx.opTimer.cb = nwk_ed_minimal_timer_cb;
+	if (g_nwkEdCtx.stateTimer.cb == NULL) {
+		memset(&g_nwkEdCtx.stateTimer, 0, sizeof(g_nwkEdCtx.stateTimer));
+		g_nwkEdCtx.stateTimer.cb = nwk_ed_minimal_timer_cb;
 	}
 
+	/* Re-arm from a clean state every time.  On hardware the same timer node
+	 * can be reused across discovery/join/interview transitions in one
+	 * scheduling turn; dropping any stale runtime/list linkage avoids a lost
+	 * follow-up expiry.
+	 */
+	ev_unon_timer(&g_nwkEdCtx.stateTimer);
 	nwk_ed_minimal_timer_trace_put((0x01U << 24) |
 				       ((u32)g_nwkEdCtx.state << 16) |
 				       (timeoutMs & 0xffffU));
-	ev_on_timer(&g_nwkEdCtx.opTimer, timeoutMs);
+	ev_on_timer(&g_nwkEdCtx.stateTimer, timeoutMs);
 }
 
 static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs)
@@ -1314,6 +1338,7 @@ static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs)
 	}
 
 	g_nwkEdCtx.endDevTimeoutReqScheduled = TRUE;
+	ev_unon_timer(&g_nwkEdCtx.timeoutReqTimer);
 	ev_on_timer(&g_nwkEdCtx.timeoutReqTimer, timeoutMs);
 }
 
@@ -1630,7 +1655,12 @@ void tl_zbNwkEdMinimalRejoinResponseReceived(u8 status, u16 nwkAddr, u16 parentS
 	if (!aps_ib.aps_authenticated) {
 		LOG_INF("rejoin response accepted: short 0x%04x pan 0x%04x parent 0x%04x, waiting transport key",
 			nwkAddr, g_nwkEdCtx.activePanId, parentShortAddr);
-		tl_zdoEdMinimalJoinDone(ZDO_SUCCESS, TRUE);
+		/* Keep ZDO/BDB in the pre-join state until the transport key has
+		 * actually been installed.  Signalling success here causes BDB to
+		 * start post-join procedures while NWK/APS security is still
+		 * incomplete, which splits runtime state and can preempt the real
+		 * transport-key interview traffic.
+		 */
 		nwk_ed_minimal_enter_interview(TRUE);
 		return;
 	}
@@ -1973,6 +2003,10 @@ static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_r
 		return;
 	}
 
+	if (!g_nwkEdCtx.discoveryForRejoin) {
+		return;
+	}
+
 	if (g_nwkEdCtx.haveBeaconCandidate) {
 		return;
 	}
@@ -2061,7 +2095,10 @@ static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t 
 			LOG_INF("%s associated: short 0x%04x pan 0x%04x parent 0x%04x, waiting transport key",
 				rejoinMode ? "rejoin" : "join", evt->assocRsp.assignedShortAddr,
 				g_nwkEdCtx.activePanId, g_nwkEdCtx.activeParentShortAddr);
-			tl_zdoEdMinimalJoinDone(ZDO_SUCCESS, rejoinMode);
+			/* Delay the join-confirm callback until the transport key is
+			 * installed so higher layers do not start BDB/TCLK work before
+			 * the end-device interview is complete.
+			 */
 			nwk_ed_minimal_enter_interview(rejoinMode);
 			return;
 		}
@@ -2139,6 +2176,7 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		u16 panId = MAC_INVALID_PANID;
 		u16 parentShortAddr = MAC_SHORT_ADDR_NONE;
 		extPANId_t extPanId = {0};
+		bool associationPermit;
 
 		zb_nwk_beacon_frame_count++;
 		zb_nwk_beacon_last_len = payloadLen;
@@ -2148,15 +2186,19 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 			return;
 		}
 
+		memset(&evt, 0, sizeof(evt));
 		if (!nwk_ed_minimal_parse_beacon_candidate(macPld, payloadLen, &hdr, &panId,
-							   &parentShortAddr, extPanId)) {
+							   &parentShortAddr, extPanId,
+							   &associationPermit)) {
 			zb_nwk_beacon_parse_fail_count++;
+			return;
+		}
+		if (!g_nwkEdCtx.discoveryForRejoin && !associationPermit) {
 			return;
 		}
 
 		zb_nwk_beacon_success_count++;
 		zb_nwk_ed_trace[8]++;
-		memset(&evt, 0, sizeof(evt));
 		evt.type = NWK_ED_MINIMAL_RX_EVT_BEACON;
 		evt.rssi = rssi;
 		evt.beacon.panId = panId;
@@ -2172,7 +2214,16 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 
 	if (hdr.frameType == MAC_FRAME_DATA && hdr.srcPanValid && hdr.srcShortValid &&
 	    hdr.dstShortValid && hdr.dstShortAddr == MAC_SHORT_ADDR_BROADCAST) {
-		if (!discoveryActive || !g_nwkEdCtx.discoveryForRejoin) {
+		if (!discoveryActive) {
+			return;
+		}
+		/*
+		 * Factory-new discovery cannot safely infer a parent from arbitrary
+		 * broadcast traffic, but coordinator-originated broadcasts still
+		 * provide a valid centralized-network candidate when beacon
+		 * responses are absent.
+		 */
+		if (!g_nwkEdCtx.discoveryForRejoin && hdr.srcShortAddr != 0x0000U) {
 			return;
 		}
 
@@ -2201,7 +2252,15 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		    hdr.srcPanValid &&
 		    hdr.dstShortValid &&
 		    hdr.dstShortAddr != MAC_SHORT_ADDR_BROADCAST) {
-			if (!discoveryActive || !g_nwkEdCtx.discoveryForRejoin) {
+			if (!discoveryActive) {
+				return;
+			}
+			/*
+			 * During factory-new join, only trust parent hints that are
+			 * explicitly directed at the coordinator. Rejoin may reuse
+			 * any observed parent-directed polling traffic.
+			 */
+			if (!g_nwkEdCtx.discoveryForRejoin && hdr.dstShortAddr != 0x0000U) {
 				return;
 			}
 			memset(&evt, 0, sizeof(evt));
