@@ -58,9 +58,6 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 				      const uint8_t **psdu, uint8_t *psdu_len);
 static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t rssi_dbm);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
-extern void rf_rx_irq_handler(void);
-extern void rf_tx_irq_handler(void);
-extern u8 *rf_rxBuf;
 
 static void zb_radio_set_promiscuous(bool enable)
 {
@@ -218,26 +215,27 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 {
 	const uint8_t *psdu = NULL;
 	uint8_t psdu_len = 0U;
-	u8 *saved_rx_buf;
+	u8 *rx_buf = g_radio.rx_target;
 
 	if ((dma == NULL) || (dma_len == 0U)) {
 		return -EINVAL;
 	}
 
 	atomic_set(&g_radio.rx_done, 1);
-	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) == 0) {
-		zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, psdu_len, 0U, 0U, rssi_dbm);
-		return 0;
+	if (rx_buf != NULL) {
+		if (dma_len > ZB_RADIO_RX_BUF_SIZE) {
+			return -EINVAL;
+		}
+
+		memcpy(rx_buf, dma, dma_len);
+		dma = rx_buf;
 	}
 
-	if (rf_rxBuf == NULL) {
-		return -ENODATA;
+	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) < 0) {
+		return -EINVAL;
 	}
 
-	saved_rx_buf = rf_rxBuf;
-	rf_rxBuf = (u8 *)dma;
-	rf_rx_irq_handler();
-	rf_rxBuf = saved_rx_buf;
+	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, psdu_len, 0U, 0U, rssi_dbm);
 	return 0;
 }
 
@@ -471,7 +469,6 @@ void zb_radio_tx_start(u8 *tx_buf)
 	}
 
 	atomic_set(&g_radio.tx_done, 1);
-	rf_tx_irq_handler();
 }
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
