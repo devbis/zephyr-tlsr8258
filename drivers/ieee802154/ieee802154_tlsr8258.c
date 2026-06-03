@@ -91,6 +91,27 @@ struct tblcmdset {
 	uint8_t cmd;
 };
 
+struct tlsr8258_radio_config {
+	void (*irq_config_func)(const struct device *dev);
+};
+
+struct tlsr8258_radio_debug {
+	volatile uint32_t rf_isr_entry_count;
+	volatile uint32_t rf_isr_rx_event_count;
+	volatile uint32_t rx_capture_debug_count;
+	volatile uint16_t rf_irq_raw_debug;
+	volatile uint16_t rf_irq_effective_debug;
+	volatile uint16_t rf_irq_mask_debug;
+	volatile uint16_t rf_irq_ack_debug;
+	volatile uint16_t rx_capture_irq_debug;
+	volatile uint8_t rf_dma_len_debug;
+	volatile uint8_t rf_psdu_len_debug;
+	volatile uint8_t rf_crc_debug;
+	volatile uint8_t rf_branch_debug;
+	volatile uint32_t tx_diag_trace[32];
+	volatile uint8_t tx_diag_trace_head;
+};
+
 struct tlsr8258_radio_data {
 	struct net_if *iface;
 	uint8_t mac_addr[TLSR8258_IEEE_ADDR_SIZE];
@@ -105,6 +126,12 @@ struct tlsr8258_radio_data {
 	uint32_t rx_count;
 	uint32_t tx_count;
 	struct tlsr8258_radio_op op;
+	struct k_sem tx_wait;
+	struct k_thread rx_worker_thread;
+	K_KERNEL_STACK_MEMBER(rx_worker_stack, TLSR8258_RX_WORKER_STACK_SIZE);
+	struct tlsr8258_rx_queue rx_queue;
+	struct tlsr8258_rx_slot rx_slots[TLSR8258_RX_SLOT_COUNT];
+	struct tlsr8258_radio_debug *debug;
 	bool started;
 	bool promiscuous;
 };
@@ -135,65 +162,48 @@ static const uint8_t rf_power_level_list[] = {
 	0x94, 0x92, 0x90, 0x8e, 0x8c, 0x8a, 0x88, 0x86, 0x84, 0x82,
 };
 
-static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len);
+static int tlsr8258_set_tx_payload(struct tlsr8258_radio_data *radio, const uint8_t *payload,
+				   uint8_t payload_len);
 static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
-				       uint16_t snapshot_size);
-static void tlsr8258_rx_capture_isr(uint16_t irq_status);
-static bool tlsr8258_filter_match_for_ack(const uint8_t *payload);
+				       uint16_t snapshot_size,
+				       struct tlsr8258_radio_data *radio);
+static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio);
+static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
+					  const struct tlsr8258_radio_data *radio);
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length);
 
-static struct tlsr8258_radio_data tlsr8258_radio;
+#if defined(CONFIG_IEEE802154_TLSR8258_RETAINED_DEBUG)
+static struct tlsr8258_radio_debug __noinit tlsr8258_radio_debug_state;
+#endif
 
-K_KERNEL_STACK_MEMBER(tlsr8258_rx_worker_stack, TLSR8258_RX_WORKER_STACK_SIZE);
-static struct k_sem tlsr8258_rx_sem;
-static struct k_sem tlsr8258_tx_wait;
-static struct k_thread tlsr8258_rx_worker_thread;
-static struct tlsr8258_rx_queue tlsr8258_rx_queue;
-static struct tlsr8258_rx_slot tlsr8258_rx_slots[TLSR8258_RX_SLOT_COUNT];
-
-/*
- * Live RF ISR trace for hardware-only RX handoff debugging. Keep this in
- * retained RAM so the programmer can sample it after the failing join window.
- */
-volatile uint32_t __noinit tlsr8258_rf_isr_entry_count;
-volatile uint32_t __noinit tlsr8258_rf_isr_rx_event_count;
-volatile uint32_t __noinit tlsr8258_rx_capture_debug_count;
-volatile uint16_t __noinit tlsr8258_rf_irq_raw_debug;
-volatile uint16_t __noinit tlsr8258_rf_irq_effective_debug;
-volatile uint16_t __noinit tlsr8258_rf_irq_mask_debug;
-volatile uint16_t __noinit tlsr8258_rf_irq_ack_debug;
-volatile uint16_t __noinit tlsr8258_rx_capture_irq_debug;
-volatile uint8_t __noinit tlsr8258_rf_dma_len_debug;
-volatile uint8_t __noinit tlsr8258_rf_psdu_len_debug;
-volatile uint8_t __noinit tlsr8258_rf_crc_debug;
-volatile uint8_t __noinit tlsr8258_rf_branch_debug;
-volatile uint32_t __noinit tlsr8258_tx_diag_trace[32];
-volatile uint8_t __noinit tlsr8258_tx_diag_trace_head;
-
-static void tlsr8258_tx_diag_put(uint32_t word)
+static struct tlsr8258_radio_debug *tlsr8258_radio_debug_get(struct tlsr8258_radio_data *radio)
 {
-	uint8_t head = tlsr8258_tx_diag_trace_head;
-
-	tlsr8258_tx_diag_trace[head & (ARRAY_SIZE(tlsr8258_tx_diag_trace) - 1u)] = word;
-	tlsr8258_tx_diag_trace_head = head + 1u;
+	return radio->debug;
 }
 
-static void tlsr8258_rf_debug_reset(void)
+static void tlsr8258_tx_diag_put(struct tlsr8258_radio_data *radio, uint32_t word)
 {
-	tlsr8258_rf_isr_entry_count = 0u;
-	tlsr8258_rf_isr_rx_event_count = 0u;
-	tlsr8258_rx_capture_debug_count = 0u;
-	tlsr8258_rf_irq_raw_debug = 0u;
-	tlsr8258_rf_irq_effective_debug = 0u;
-	tlsr8258_rf_irq_mask_debug = 0u;
-	tlsr8258_rf_irq_ack_debug = 0u;
-	tlsr8258_rx_capture_irq_debug = 0u;
-	tlsr8258_rf_dma_len_debug = 0u;
-	tlsr8258_rf_psdu_len_debug = 0u;
-	tlsr8258_rf_crc_debug = 0u;
-	tlsr8258_rf_branch_debug = 0u;
-	memset((void *)tlsr8258_tx_diag_trace, 0, sizeof(tlsr8258_tx_diag_trace));
-	tlsr8258_tx_diag_trace_head = 0u;
+	struct tlsr8258_radio_debug *debug = tlsr8258_radio_debug_get(radio);
+	uint8_t head;
+
+	if (debug == NULL) {
+		return;
+	}
+
+	head = debug->tx_diag_trace_head;
+	debug->tx_diag_trace[head & (ARRAY_SIZE(debug->tx_diag_trace) - 1u)] = word;
+	debug->tx_diag_trace_head = head + 1u;
+}
+
+static void tlsr8258_rf_debug_reset(struct tlsr8258_radio_data *radio)
+{
+	struct tlsr8258_radio_debug *debug = tlsr8258_radio_debug_get(radio);
+
+	if (debug == NULL) {
+		return;
+	}
+
+	memset((void *)debug, 0, sizeof(*debug));
 }
 
 /*
@@ -202,67 +212,77 @@ static void tlsr8258_rf_debug_reset(void)
  * source asked for started. Use explicit offset-based volatile helpers for
  * those tail fields so codegen materializes the correct address.
  */
-static inline volatile uint8_t *tlsr8258_radio_u8_field(size_t offset)
+static inline volatile uint8_t *tlsr8258_radio_u8_field(struct tlsr8258_radio_data *radio,
+							size_t offset)
 {
-	return (volatile uint8_t *)((volatile uint8_t *)&tlsr8258_radio + offset);
+	return (volatile uint8_t *)((volatile uint8_t *)radio + offset);
 }
 
-static inline volatile uint16_t *tlsr8258_radio_u16_field(size_t offset)
+static inline volatile uint16_t *tlsr8258_radio_u16_field(struct tlsr8258_radio_data *radio,
+							  size_t offset)
 {
-	return (volatile uint16_t *)((volatile uint8_t *)&tlsr8258_radio + offset);
+	return (volatile uint16_t *)((volatile uint8_t *)radio + offset);
 }
 
-static inline volatile uint32_t *tlsr8258_radio_u32_field(size_t offset)
+static inline volatile uint32_t *tlsr8258_radio_u32_field(struct tlsr8258_radio_data *radio,
+							  size_t offset)
 {
-	return (volatile uint32_t *)((volatile uint8_t *)&tlsr8258_radio + offset);
+	return (volatile uint32_t *)((volatile uint8_t *)radio + offset);
 }
 
-static inline uint16_t tlsr8258_radio_current_channel_get(void)
+static inline uint16_t tlsr8258_radio_current_channel_get(struct tlsr8258_radio_data *radio)
 {
-	return *tlsr8258_radio_u16_field(offsetof(struct tlsr8258_radio_data, current_channel));
+	return *tlsr8258_radio_u16_field(radio,
+					 offsetof(struct tlsr8258_radio_data, current_channel));
 }
 
-static inline void tlsr8258_radio_current_channel_set(uint16_t channel)
+static inline void tlsr8258_radio_current_channel_set(struct tlsr8258_radio_data *radio,
+						      uint16_t channel)
 {
-	*tlsr8258_radio_u16_field(offsetof(struct tlsr8258_radio_data, current_channel)) = channel;
+	*tlsr8258_radio_u16_field(radio,
+				  offsetof(struct tlsr8258_radio_data, current_channel)) = channel;
 }
 
-static inline void tlsr8258_radio_last_irq_set(uint16_t irq)
+static inline void tlsr8258_radio_last_irq_set(struct tlsr8258_radio_data *radio, uint16_t irq)
 {
-	*tlsr8258_radio_u16_field(offsetof(struct tlsr8258_radio_data, last_irq)) = irq;
+	*tlsr8258_radio_u16_field(radio, offsetof(struct tlsr8258_radio_data, last_irq)) = irq;
 }
 
-static inline void tlsr8258_radio_rx_count_inc(void)
+static inline void tlsr8258_radio_rx_count_inc(struct tlsr8258_radio_data *radio)
 {
-	(*tlsr8258_radio_u32_field(offsetof(struct tlsr8258_radio_data, rx_count)))++;
+	(*tlsr8258_radio_u32_field(radio, offsetof(struct tlsr8258_radio_data, rx_count)))++;
 }
 
-static inline void tlsr8258_radio_tx_count_inc(void)
+static inline void tlsr8258_radio_tx_count_inc(struct tlsr8258_radio_data *radio)
 {
-	(*tlsr8258_radio_u32_field(offsetof(struct tlsr8258_radio_data, tx_count)))++;
+	(*tlsr8258_radio_u32_field(radio, offsetof(struct tlsr8258_radio_data, tx_count)))++;
 }
 
-static inline bool tlsr8258_radio_started_get(void)
+static inline bool tlsr8258_radio_started_get(struct tlsr8258_radio_data *radio)
 {
-	return *tlsr8258_radio_u8_field(offsetof(struct tlsr8258_radio_data, started)) != 0u;
+	return *tlsr8258_radio_u8_field(radio, offsetof(struct tlsr8258_radio_data, started)) != 0u;
 }
 
-static inline void tlsr8258_radio_started_set(bool started)
+static inline void tlsr8258_radio_started_set(struct tlsr8258_radio_data *radio, bool started)
 {
-	*tlsr8258_radio_u8_field(offsetof(struct tlsr8258_radio_data, started)) =
+	*tlsr8258_radio_u8_field(radio, offsetof(struct tlsr8258_radio_data, started)) =
 		started ? 1u : 0u;
 }
 
-static inline bool tlsr8258_radio_promiscuous_get(void)
+static inline void tlsr8258_radio_promiscuous_set(struct tlsr8258_radio_data *radio,
+						  bool promiscuous)
 {
-	return *tlsr8258_radio_u8_field(offsetof(struct tlsr8258_radio_data, promiscuous)) != 0u;
-}
-
-static inline void tlsr8258_radio_promiscuous_set(bool promiscuous)
-{
-	*tlsr8258_radio_u8_field(offsetof(struct tlsr8258_radio_data, promiscuous)) =
+	*tlsr8258_radio_u8_field(radio, offsetof(struct tlsr8258_radio_data, promiscuous)) =
 		promiscuous ? 1u : 0u;
 }
+
+#if !defined(CONFIG_IEEE802154_RAW_MODE)
+static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *radio)
+{
+	return *tlsr8258_radio_u8_field(radio,
+					offsetof(struct tlsr8258_radio_data, promiscuous)) != 0u;
+}
+#endif
 
 static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
 
@@ -274,11 +294,12 @@ void tlsr8258_zigbee_register_rx_sink(tlsr8258_zigbee_rx_sink_t sink)
 void tlsr8258_zigbee_update_filters(uint16_t pan_id, uint16_t short_addr,
 				    const uint8_t *ieee_addr)
 {
-	sys_put_le16(pan_id, tlsr8258_radio.filter_pan_id);
-	sys_put_le16(short_addr, tlsr8258_radio.filter_short_addr);
+	struct tlsr8258_radio_data *radio = DEVICE_DT_GET(DT_NODELABEL(zb))->data;
+
+	sys_put_le16(pan_id, radio->filter_pan_id);
+	sys_put_le16(short_addr, radio->filter_short_addr);
 	if (ieee_addr != NULL) {
-		memcpy(tlsr8258_radio.filter_ieee_addr, ieee_addr,
-		       TLSR8258_IEEE_ADDR_SIZE);
+		memcpy(radio->filter_ieee_addr, ieee_addr, TLSR8258_IEEE_ADDR_SIZE);
 	}
 }
 
@@ -374,29 +395,30 @@ static inline void tlsr8258_rf_ll_mode_set(uint8_t mode)
 	TLSR_REG8(0x0f16) = (uint8_t)((TLSR_REG8(0x0f16) & 0xfcu) | (mode & 0x03u));
 }
 
-static void tlsr8258_rf_set_rxmode(void)
+static void tlsr8258_rf_set_rxmode(struct tlsr8258_radio_data *radio)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get()));
+		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
 	TLSR_REG8(0x0428) = RF_TRX_MODE | BIT(0);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);
 }
 
-static void tlsr8258_rf_set_txmode(void)
+static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get()));
+		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
 	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
 }
 
-static uint16_t tlsr8258_snapshot_rx_frame(uint8_t *dst, uint16_t dst_size)
+static uint16_t tlsr8258_snapshot_rx_frame(struct tlsr8258_radio_data *radio, uint8_t *dst,
+					   uint16_t dst_size)
 {
-	uint8_t *src = tlsr8258_radio.rx_buffer;
+	uint8_t *src = radio->rx_buffer;
 	uint16_t dma_len = (uint16_t)src[0] + 4u;
 	uint16_t copy_len;
 
@@ -481,28 +503,6 @@ static bool tlsr8258_psdu_is_beacon_request(const uint8_t *psdu, uint8_t psdu_le
 	return psdu[hdr_len] == 0x07u;
 }
 
-static bool tlsr8258_psdu_is_assoc_request(const uint8_t *psdu, uint8_t psdu_len)
-{
-	uint16_t fcf;
-	uint8_t hdr_len;
-
-	if (psdu == NULL || psdu_len < 4u) {
-		return false;
-	}
-
-	fcf = sys_get_le16(psdu);
-	if ((fcf & 0x0007u) != 0x03u) {
-		return false;
-	}
-
-	hdr_len = tlsr8258_mac_hdr_size(fcf, psdu_len);
-	if (hdr_len == 0u || hdr_len >= psdu_len) {
-		return false;
-	}
-
-	return psdu[hdr_len] == 0x01u;
-}
-
 static bool tlsr8258_psdu_is_ack_for_seq(const uint8_t *psdu, uint8_t psdu_len, uint8_t seq)
 {
 	if (psdu == NULL || psdu_len < 3u) {
@@ -512,7 +512,8 @@ static bool tlsr8258_psdu_is_ack_for_seq(const uint8_t *psdu, uint8_t psdu_len, 
 	return ((psdu[0] & 0x07u) == 0x02u) && (psdu[2] == seq);
 }
 
-static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_len, uint8_t seq)
+static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_len, uint8_t seq,
+					      const struct tlsr8258_radio_data *radio)
 {
 	bool has_ack_match_fields = false;
 	bool is_ack;
@@ -536,7 +537,7 @@ static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_
 	}
 
 	rx_is_pending_response = has_ack_match_fields && !is_ack &&
-				     tlsr8258_filter_match_for_ack(psdu);
+				     tlsr8258_filter_match_for_ack(psdu, radio);
 	/* Legacy equivalent: return has_ack_match_fields && !is_ack && ... */
 
 	return rx_is_pending_response;
@@ -571,13 +572,13 @@ static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
 	return (rx[rx[0] + 3u] & 0x51u) == 0x10u;
 }
 
-static bool tlsr8258_filter_match(uint8_t *payload)
+static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *payload)
 {
-	if (tlsr8258_radio_promiscuous_get()) {
+	if (tlsr8258_radio_promiscuous_get(radio)) {
 		return true;
 	}
 
-	if (memcmp(&payload[TLSR8258_PAN_ID_OFFSET], tlsr8258_radio.filter_pan_id,
+	if (memcmp(&payload[TLSR8258_PAN_ID_OFFSET], radio->filter_pan_id,
 		   TLSR8258_PAN_ID_SIZE) != 0 &&
 	    sys_get_le16(&payload[TLSR8258_PAN_ID_OFFSET]) != 0xffffu) {
 		return false;
@@ -585,11 +586,11 @@ static bool tlsr8258_filter_match(uint8_t *payload)
 
 	switch (payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) {
 	case TLSR8258_DEST_ADDR_TYPE_SHORT:
-		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], tlsr8258_radio.filter_short_addr,
+		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_short_addr,
 			      TLSR8258_SHORT_ADDR_SIZE) == 0 ||
 		       sys_get_le16(&payload[TLSR8258_DEST_ADDR_OFFSET]) == 0xffffu;
 	case TLSR8258_DEST_ADDR_TYPE_IEEE:
-		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], tlsr8258_radio.filter_ieee_addr,
+		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_ieee_addr,
 			      TLSR8258_IEEE_ADDR_SIZE) == 0;
 	default:
 		return false;
@@ -610,9 +611,10 @@ static uint8_t tlsr8258_lqi_from_rssi(int8_t rssi)
 
 #endif /* !CONFIG_IEEE802154_RAW_MODE */
 
-static bool tlsr8258_filter_match_for_ack(const uint8_t *payload)
+static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
+					  const struct tlsr8258_radio_data *radio)
 {
-	uint16_t filter_pan = sys_get_le16(tlsr8258_radio.filter_pan_id);
+	uint16_t filter_pan = sys_get_le16(radio->filter_pan_id);
 	uint16_t payload_pan = sys_get_le16(&payload[TLSR8258_PAN_ID_OFFSET]);
 
 	if ((filter_pan != 0xffffu) && (payload_pan != filter_pan) && (payload_pan != 0xffffu)) {
@@ -621,7 +623,7 @@ static bool tlsr8258_filter_match_for_ack(const uint8_t *payload)
 
 	switch (payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) {
 	case TLSR8258_DEST_ADDR_TYPE_SHORT: {
-		uint16_t filter_short = sys_get_le16(tlsr8258_radio.filter_short_addr);
+		uint16_t filter_short = sys_get_le16(radio->filter_short_addr);
 		uint16_t payload_short = sys_get_le16(&payload[TLSR8258_DEST_ADDR_OFFSET]);
 
 		if (payload_short == 0xffffu) {
@@ -631,7 +633,7 @@ static bool tlsr8258_filter_match_for_ack(const uint8_t *payload)
 		return (filter_short != 0xffffu) && (payload_short == filter_short);
 	}
 	case TLSR8258_DEST_ADDR_TYPE_IEEE:
-		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], tlsr8258_radio.filter_ieee_addr,
+		return memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_ieee_addr,
 			      TLSR8258_IEEE_ADDR_SIZE) == 0;
 	default:
 		return false;
@@ -652,7 +654,8 @@ static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length)
 }
 
 static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
-					bool tx_prepared, uint32_t tx_prepared_at_cycles)
+					bool tx_prepared, uint32_t tx_prepared_at_cycles,
+					struct tlsr8258_radio_data *radio)
 {
 	uint8_t ack_psdu[3] = {0x02u, 0x00u, 0u};
 	uint16_t waited = 0u;
@@ -662,25 +665,25 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		return;
 	}
 
-	if (!tlsr8258_filter_match_for_ack(payload)) {
+	if (!tlsr8258_filter_match_for_ack(payload, radio)) {
 		if (tx_prepared) {
-			tlsr8258_rf_set_rxmode();
+			tlsr8258_rf_set_rxmode(radio);
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		}
 		return;
 	}
 
 	ack_psdu[2] = payload[2];
-	if (tlsr8258_set_tx_payload(ack_psdu, sizeof(ack_psdu)) < 0) {
+	if (tlsr8258_set_tx_payload(radio, ack_psdu, sizeof(ack_psdu)) < 0) {
 		if (tx_prepared) {
-			tlsr8258_rf_set_rxmode();
+			tlsr8258_rf_set_rxmode(radio);
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		}
 		return;
 	}
 
 	if (!tx_prepared) {
-		tlsr8258_rf_set_txmode();
+		tlsr8258_rf_set_txmode(radio);
 	} else {
 		prep_elapsed_us = k_cyc_to_us_floor32(k_cycle_get_32() - tx_prepared_at_cycles);
 	}
@@ -689,7 +692,7 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		k_busy_wait(TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us);
 	}
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);
+	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
 
 	while (waited < 300u) {
@@ -704,7 +707,7 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		waited++;
 	}
 
-	tlsr8258_rf_set_rxmode();
+	tlsr8258_rf_set_rxmode(radio);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 }
 
@@ -718,9 +721,10 @@ static int8_t tlsr8258_rx_rssi_dbm(const uint8_t *rx)
 }
 
 static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
-				       uint16_t snapshot_size)
+				       uint16_t snapshot_size,
+				       struct tlsr8258_radio_data *radio)
 {
-	uint8_t *rx = tlsr8258_radio.rx_buffer;
+	uint8_t *rx = radio->rx_buffer;
 	uint8_t *payload = &rx[TLSR8258_PAYLOAD_OFFSET];
 	uint16_t rx_ack = irq_status & RF_IRQ_RX_EVENTS;
 	uint16_t snapshot_len = 0u;
@@ -730,21 +734,25 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	bool ack_requested = tlsr8258_ack_requested(payload, length);
 	uint32_t ack_prepared_at_cycles = 0u;
 
-	tlsr8258_rx_capture_debug_count++;
-	tlsr8258_rx_capture_irq_debug = irq_status;
+	if (radio->debug != NULL) {
+		radio->debug->rx_capture_debug_count++;
+		radio->debug->rx_capture_irq_debug = irq_status;
+	}
 	if (rx_ack == 0u) {
 		rx_ack = RF_IRQ_RX;
 	}
 	TLSR_REG16(0x0f20) = rx_ack;
-	tlsr8258_rf_irq_ack_debug = rx_ack;
-	tlsr8258_radio_rx_count_inc();
+	if (radio->debug != NULL) {
+		radio->debug->rf_irq_ack_debug = rx_ack;
+	}
+	tlsr8258_radio_rx_count_inc(radio);
 	if (ack_requested) {
-		tlsr8258_rf_set_txmode();
+		tlsr8258_rf_set_txmode(radio);
 		ack_prepared_at_cycles = k_cycle_get_32();
 	}
 
 	if ((snapshot != NULL) && (snapshot_size > 0u)) {
-		snapshot_len = tlsr8258_snapshot_rx_frame(snapshot, snapshot_size);
+		snapshot_len = tlsr8258_snapshot_rx_frame(radio, snapshot, snapshot_size);
 		if (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) {
 			rx = snapshot;
 			payload = &rx[TLSR8258_PAYLOAD_OFFSET];
@@ -755,13 +763,12 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	rx_rssi_dbm = tlsr8258_rx_rssi_dbm(rx);
 	rx_dma_len = (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) ? snapshot_len : (uint16_t)rx[0] + 4u;
 	rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
-	if (tlsr8258_rx_queue_try_enqueue(&tlsr8258_rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm)) {
-		k_sem_give(&tlsr8258_rx_sem);
-	}
-	tlsr8258_send_ack_if_needed(payload, length, ack_requested, ack_prepared_at_cycles);
+	(void)tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm);
+	tlsr8258_send_ack_if_needed(payload, length, ack_requested, ack_prepared_at_cycles, radio);
 }
 
-static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
+static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
+				 const struct tlsr8258_rx_frame *frame)
 {
 	const uint8_t *rx = frame->dma;
 	struct tlsr8258_rx_frame_view view;
@@ -790,7 +797,7 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 #if defined(CONFIG_IEEE802154_RAW_MODE)
 	ARG_UNUSED(rx);
 #else
-	if (tlsr8258_radio.iface == NULL || !tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
+	if (radio->iface == NULL || !tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
 		return;
 	}
 
@@ -806,11 +813,11 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 		return;
 	}
 
-	if (!tlsr8258_filter_match((uint8_t *)&rx[TLSR8258_PAYLOAD_OFFSET])) {
+	if (!tlsr8258_filter_match(radio, (uint8_t *)&rx[TLSR8258_PAYLOAD_OFFSET])) {
 		return;
 	}
 
-	pkt = net_pkt_rx_alloc_with_buffer(tlsr8258_radio.iface, length, NET_AF_UNSPEC, 0,
+	pkt = net_pkt_rx_alloc_with_buffer(radio->iface, length, NET_AF_UNSPEC, 0,
 					   K_NO_WAIT);
 	if (pkt == NULL) {
 		return;
@@ -825,7 +832,7 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 	net_pkt_set_ieee802154_rssi_dbm(pkt, rssi);
 	net_pkt_set_ieee802154_lqi(pkt, tlsr8258_lqi_from_rssi(rssi));
 
-	if (net_recv_data(tlsr8258_radio.iface, pkt) < 0) {
+	if (net_recv_data(radio->iface, pkt) < 0) {
 		net_pkt_unref(pkt);
 	}
 #endif
@@ -833,6 +840,7 @@ static void tlsr8258_rx_dispatch(const struct tlsr8258_rx_frame *frame)
 
 static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 {
+	struct tlsr8258_radio_data *radio = arg1;
 	struct tlsr8258_rx_frame frame;
 	const uint8_t *psdu;
 	uint8_t psdu_len;
@@ -840,125 +848,140 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 	bool ack_pending;
 	bool is_pending_response;
 
-	ARG_UNUSED(arg1);
 	ARG_UNUSED(arg2);
 	ARG_UNUSED(arg3);
 
 	while (true) {
-		k_sem_take(&tlsr8258_rx_sem, K_FOREVER);
-		while (tlsr8258_rx_queue_try_dequeue(&tlsr8258_rx_queue, &frame)) {
-			psdu = NULL;
-			psdu_len = 0u;
-			is_ack = false;
-			ack_pending = false;
-			is_pending_response = false;
-			if (frame.len >= TLSR8258_PAYLOAD_OFFSET) {
-				psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];
-				psdu_len = frame.dma[4];
-				is_ack = tlsr8258_psdu_is_ack_for_seq(
-					psdu, psdu_len, tlsr8258_radio.op.tx_seq);
-				ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);
-				{
-					uint8_t tx_seq = tlsr8258_radio.op.tx_seq;
+		if (!tlsr8258_rx_queue_wait_dequeue(&radio->rx_queue, &frame, K_FOREVER)) {
+			continue;
+		}
 
-					is_pending_response = tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq);
-				}
-			}
-			tlsr8258_rx_dispatch(&frame);
+		psdu = NULL;
+		psdu_len = 0u;
+		is_ack = false;
+		ack_pending = false;
+		is_pending_response = false;
+		if (frame.len >= TLSR8258_PAYLOAD_OFFSET) {
+			psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];
+			psdu_len = frame.dma[4];
+			is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, radio->op.tx_seq);
+			ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);
 			{
-				bool rx_complete;
-				uint32_t key = irq_lock();
+				uint8_t tx_seq = radio->op.tx_seq;
 
-				rx_complete = (tlsr8258_radio.op.state ==
-					       TLSR8258_RADIO_OP_WAITING_POST_TX_RX) &&
-					      tlsr8258_radio_op_on_rx(&tlsr8258_radio.op, is_ack,
-							      ack_pending,
+				is_pending_response =
+					tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq, radio);
+			}
+		}
+		tlsr8258_rx_dispatch(radio, &frame);
+		tlsr8258_rx_queue_release(&radio->rx_queue, frame.slot);
+		{
+			bool rx_complete;
+			uint32_t key = irq_lock();
+
+			rx_complete = (radio->op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX) &&
+				      tlsr8258_radio_op_on_rx(&radio->op, is_ack, ack_pending,
 							      is_pending_response);
-				irq_unlock(key);
-				if (rx_complete) {
-					k_sem_give(&tlsr8258_tx_wait);
-				}
+			irq_unlock(key);
+			if (rx_complete) {
+				k_sem_give(&radio->tx_wait);
 			}
 		}
 	}
 }
 
-static void tlsr8258_rx_capture_isr(uint16_t irq_status)
+static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio)
 {
-	tlsr8258_rx_capture_common(irq_status, NULL, 0u);
+	tlsr8258_rx_capture_common(irq_status, NULL, 0u, radio);
 }
 
-static void tlsr8258_rf_isr(const void *unused)
+static void tlsr8258_rf_isr(const void *arg)
 {
+	const struct device *dev = arg;
+	struct tlsr8258_radio_data *radio = dev->data;
 	uint16_t irq = TLSR_REG16(0x0f20);
-	uint16_t effective_irq = tlsr8258_rf_irq_effective_status(
-		irq, tlsr8258_radio.rx_buffer, sizeof(tlsr8258_radio.rx_buffer));
-	uint8_t dma_len = tlsr8258_radio.rx_buffer[0];
+	uint16_t effective_irq =
+		tlsr8258_rf_irq_effective_status(irq, radio->rx_buffer, sizeof(radio->rx_buffer));
+	uint8_t dma_len = radio->rx_buffer[0];
 	uint8_t crc = 0u;
+	struct tlsr8258_radio_debug *debug = radio->debug;
 
-	ARG_UNUSED(unused);
-	tlsr8258_rf_isr_entry_count++;
-	tlsr8258_rf_irq_raw_debug = irq;
-	tlsr8258_rf_irq_effective_debug = effective_irq;
-	tlsr8258_rf_irq_mask_debug = TLSR_REG16(0x0f1c);
-	tlsr8258_rf_dma_len_debug = dma_len;
-	tlsr8258_rf_psdu_len_debug = tlsr8258_radio.rx_buffer[4];
-	if ((dma_len != 0u) && (dma_len < (TLSR8258_RX_BUF_SIZE - 3u))) {
-		crc = tlsr8258_radio.rx_buffer[dma_len + 3u];
+	if (debug != NULL) {
+		debug->rf_isr_entry_count++;
+		debug->rf_irq_raw_debug = irq;
+		debug->rf_irq_effective_debug = effective_irq;
+		debug->rf_irq_mask_debug = TLSR_REG16(0x0f1c);
+		debug->rf_dma_len_debug = dma_len;
+		debug->rf_psdu_len_debug = radio->rx_buffer[4];
 	}
-	tlsr8258_rf_crc_debug = crc;
-	tlsr8258_radio_last_irq_set(effective_irq);
+	if ((dma_len != 0u) && (dma_len < (TLSR8258_RX_BUF_SIZE - 3u))) {
+		crc = radio->rx_buffer[dma_len + 3u];
+	}
+	if (debug != NULL) {
+		debug->rf_crc_debug = crc;
+	}
+	tlsr8258_radio_last_irq_set(radio, effective_irq);
 
 	if (tlsr8258_rf_irq_has_rx_event(effective_irq)) {
-		tlsr8258_rf_branch_debug = 1u;
-		tlsr8258_rf_isr_rx_event_count++;
-		tlsr8258_rx_capture_isr(effective_irq);
+		if (debug != NULL) {
+			debug->rf_branch_debug = 1u;
+			debug->rf_isr_rx_event_count++;
+		}
+		tlsr8258_rx_capture_isr(effective_irq, radio);
 	} else if ((effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {
 		bool tx_complete;
 		uint32_t key;
 
-		tlsr8258_rf_branch_debug = 2u;
-		tlsr8258_rf_irq_ack_debug = effective_irq;
+		if (debug != NULL) {
+			debug->rf_branch_debug = 2u;
+			debug->rf_irq_ack_debug = effective_irq;
+		}
 		TLSR_REG16(0x0f20) = effective_irq;
-		tlsr8258_radio_tx_count_inc();
-		tlsr8258_rf_set_rxmode();
+		tlsr8258_radio_tx_count_inc(radio);
+		tlsr8258_rf_set_rxmode(radio);
 		key = irq_lock();
-		tx_complete = (tlsr8258_radio.op.state == TLSR8258_RADIO_OP_TX_PENDING) &&
-			      tlsr8258_radio_op_on_tx_success(&tlsr8258_radio.op);
+		tx_complete = (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) &&
+			      tlsr8258_radio_op_on_tx_success(&radio->op);
 		irq_unlock(key);
 		if (tx_complete) {
-			k_sem_give(&tlsr8258_tx_wait);
+			k_sem_give(&radio->tx_wait);
 		}
 	} else if ((effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
 		bool tx_failed = false;
 		uint32_t key;
 
-		tlsr8258_rf_branch_debug = 3u;
-		tlsr8258_rf_irq_ack_debug = effective_irq;
+		if (debug != NULL) {
+			debug->rf_branch_debug = 3u;
+			debug->rf_irq_ack_debug = effective_irq;
+		}
 		TLSR_REG16(0x0f20) = effective_irq;
-		tlsr8258_rf_set_rxmode();
+		tlsr8258_rf_set_rxmode(radio);
 		key = irq_lock();
-		if (tlsr8258_radio.op.state == TLSR8258_RADIO_OP_TX_PENDING ||
-		    tlsr8258_radio.op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX) {
-			tlsr8258_radio_op_on_tx_error(&tlsr8258_radio.op, -EIO);
+		if (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING ||
+		    radio->op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX) {
+			tlsr8258_radio_op_on_tx_error(&radio->op, -EIO);
 			tx_failed = true;
 		}
 		irq_unlock(key);
 		if (tx_failed) {
-			k_sem_give(&tlsr8258_tx_wait);
+			k_sem_give(&radio->tx_wait);
 		}
 	} else {
 		uint16_t ack = effective_irq != 0u ? effective_irq : RF_IRQ_ALL;
 
-		tlsr8258_rf_branch_debug = (effective_irq != 0u) ? 4u : 5u;
-		tlsr8258_rf_irq_ack_debug = ack;
+		if (debug != NULL) {
+			debug->rf_branch_debug = (effective_irq != 0u) ? 4u : 5u;
+			debug->rf_irq_ack_debug = ack;
+		}
 		TLSR_REG16(0x0f20) = ack;
 	}
 }
 
 static void tlsr8258_iface_init(struct net_if *iface)
 {
-	uint8_t *mac = tlsr8258_radio.mac_addr;
+	const struct device *dev = net_if_get_device(iface);
+	struct tlsr8258_radio_data *radio = dev->data;
+	uint8_t *mac = radio->mac_addr;
 	const uint8_t *runtime_ieee = zb_platform_runtime_ieee_addr_get();
 
 #if defined(CONFIG_IEEE802154_TLSR8258_RANDOM_MAC)
@@ -980,8 +1003,8 @@ static void tlsr8258_iface_init(struct net_if *iface)
 #endif
 
 	net_if_set_link_addr(iface, mac, TLSR8258_IEEE_ADDR_SIZE, NET_LINK_IEEE802154);
-	memcpy(tlsr8258_radio.filter_ieee_addr, mac, TLSR8258_IEEE_ADDR_SIZE);
-	tlsr8258_radio.iface = iface;
+	memcpy(radio->filter_ieee_addr, mac, TLSR8258_IEEE_ADDR_SIZE);
+	radio->iface = iface;
 	ieee802154_init(iface);
 }
 
@@ -994,9 +1017,9 @@ static enum ieee802154_hw_caps tlsr8258_get_capabilities(const struct device *de
 
 static int tlsr8258_cca(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_radio_data *radio = dev->data;
 
-	if (!tlsr8258_radio_started_get()) {
+	if (!tlsr8258_radio_started_get(radio)) {
 		return -ENETDOWN;
 	}
 
@@ -1007,19 +1030,19 @@ static int tlsr8258_cca(const struct device *dev)
 
 static int tlsr8258_set_channel(const struct device *dev, uint16_t channel)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_radio_data *radio = dev->data;
 
 	if (channel < 11u || channel > 26u) {
 		return -EINVAL;
 	}
 
-	if (tlsr8258_radio_current_channel_get() == channel) {
+	if (tlsr8258_radio_current_channel_get(radio) == channel) {
 		return -EALREADY;
 	}
 
-	tlsr8258_radio_current_channel_set(channel);
-	if (tlsr8258_radio_started_get()) {
-		tlsr8258_rf_set_rxmode();
+	tlsr8258_radio_current_channel_set(radio, channel);
+	if (tlsr8258_radio_started_get(radio)) {
+		tlsr8258_rf_set_rxmode(radio);
 	}
 
 	return 0;
@@ -1029,23 +1052,22 @@ static int tlsr8258_filter(const struct device *dev, bool set,
 			   enum ieee802154_filter_type type,
 			   const struct ieee802154_filter *filter)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_radio_data *radio = dev->data;
 
 	if (!set || filter == NULL) {
 		return -ENOTSUP;
 	}
 
 	if (type == IEEE802154_FILTER_TYPE_IEEE_ADDR) {
-		memcpy(tlsr8258_radio.filter_ieee_addr, filter->ieee_addr,
-		       TLSR8258_IEEE_ADDR_SIZE);
+		memcpy(radio->filter_ieee_addr, filter->ieee_addr, TLSR8258_IEEE_ADDR_SIZE);
 		return 0;
 	}
 	if (type == IEEE802154_FILTER_TYPE_SHORT_ADDR) {
-		sys_put_le16(filter->short_addr, tlsr8258_radio.filter_short_addr);
+		sys_put_le16(filter->short_addr, radio->filter_short_addr);
 		return 0;
 	}
 	if (type == IEEE802154_FILTER_TYPE_PAN_ID) {
-		sys_put_le16(filter->pan_id, tlsr8258_radio.filter_pan_id);
+		sys_put_le16(filter->pan_id, radio->filter_pan_id);
 		return 0;
 	}
 
@@ -1071,13 +1093,12 @@ static int tlsr8258_set_txpower(const struct device *dev, int16_t dbm)
 
 static int tlsr8258_start(const struct device *dev)
 {
+	struct tlsr8258_radio_data *radio = dev->data;
 	const uint16_t runtime_irq_mask =
 		tlsr8258_rf_irq_runtime_mask() |
 		RF_IRQ_TX_DS | RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT;
 
-	ARG_UNUSED(dev);
-
-	if (tlsr8258_radio_started_get()) {
+	if (tlsr8258_radio_started_get(radio)) {
 		return -EALREADY;
 	}
 
@@ -1087,28 +1108,28 @@ static int tlsr8258_start(const struct device *dev)
 	TLSR_REG8(0x0f15) = 0xf0u;
 	TLSR_REG16(0x0f04) = 113u;
 	TLSR_REG8(0x0f03) &= (uint8_t)~BIT(2);
-	tlsr8258_rf_debug_reset();
-	tlsr8258_rf_rx_buffer_set(tlsr8258_radio.rx_buffer, sizeof(tlsr8258_radio.rx_buffer));
-	tlsr8258_radio.rx_buffer[0] = 0u;
-	tlsr8258_radio.rx_buffer[4] = 0u;
+	tlsr8258_rf_debug_reset(radio);
+	tlsr8258_rf_rx_buffer_set(radio->rx_buffer, sizeof(radio->rx_buffer));
+	radio->rx_buffer[0] = 0u;
+	radio->rx_buffer[4] = 0u;
 	tlsr8258_rf_set_power_level(rf_power_level_list[23]);
 	TLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	TLSR_REG16(0x0f1c) = 0u;
 	TLSR_REG16(0x0f1c) = runtime_irq_mask;
 	TLSR_REG8(0x0430) |= BIT(1);
-	tlsr8258_rf_set_rxmode();
+	tlsr8258_rf_set_rxmode(radio);
 	irq_enable(TLSR8258_IRQ_ZB_RT);
-	tlsr8258_radio_started_set(true);
+	tlsr8258_radio_started_set(radio, true);
 
 	return 0;
 }
 
 static int tlsr8258_stop(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_radio_data *radio = dev->data;
 
-	if (!tlsr8258_radio_started_get()) {
+	if (!tlsr8258_radio_started_get(radio)) {
 		return -EALREADY;
 	}
 
@@ -1116,12 +1137,13 @@ static int tlsr8258_stop(const struct device *dev)
 	TLSR_REG16(0x0f1c) = 0u;
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	tlsr8258_rf_off();
-	tlsr8258_radio_started_set(false);
+	tlsr8258_radio_started_set(radio, false);
 
 	return 0;
 }
 
-static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len)
+static int tlsr8258_set_tx_payload(struct tlsr8258_radio_data *radio, const uint8_t *payload,
+				   uint8_t payload_len)
 {
 	uint32_t dma_len;
 
@@ -1139,12 +1161,12 @@ static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len)
 	 * byte 4 still includes the auto-generated FCS.
 	 */
 	dma_len = (uint32_t)payload_len + 1u;
-	tlsr8258_radio.tx_buffer[0] = (uint8_t)dma_len;
-	tlsr8258_radio.tx_buffer[1] = (uint8_t)(dma_len >> 8);
-	tlsr8258_radio.tx_buffer[2] = (uint8_t)(dma_len >> 16);
-	tlsr8258_radio.tx_buffer[3] = (uint8_t)(dma_len >> 24);
-	tlsr8258_radio.tx_buffer[4] = payload_len + TLSR8258_FCS_LENGTH;
-	memcpy(&tlsr8258_radio.tx_buffer[TLSR8258_PAYLOAD_OFFSET], payload, payload_len);
+	radio->tx_buffer[0] = (uint8_t)dma_len;
+	radio->tx_buffer[1] = (uint8_t)(dma_len >> 8);
+	radio->tx_buffer[2] = (uint8_t)(dma_len >> 16);
+	radio->tx_buffer[3] = (uint8_t)(dma_len >> 24);
+	radio->tx_buffer[4] = payload_len + TLSR8258_FCS_LENGTH;
+	memcpy(&radio->tx_buffer[TLSR8258_PAYLOAD_OFFSET], payload, payload_len);
 
 	return 0;
 }
@@ -1152,16 +1174,16 @@ static int tlsr8258_set_tx_payload(const uint8_t *payload, uint8_t payload_len)
 static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		       struct net_pkt *pkt, struct net_buf *frag)
 {
+	struct tlsr8258_radio_data *radio = dev->data;
 	uint8_t tx_seq = (frag != NULL && frag->len >= 3u) ? frag->data[2] : 0xffu;
 	bool expect_ack;
 	bool expect_post_tx_rx;
 	uint32_t wait_budget_us;
 	int ret;
 
-	ARG_UNUSED(dev);
 	ARG_UNUSED(pkt);
 
-	if (!tlsr8258_radio_started_get()) {
+	if (!tlsr8258_radio_started_get(radio)) {
 		return -ENETDOWN;
 	}
 
@@ -1176,42 +1198,51 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		}
 	}
 
-	ret = tlsr8258_set_tx_payload(frag->data, frag->len);
+	ret = tlsr8258_set_tx_payload(radio, frag->data, frag->len);
 	if (ret < 0) {
 		return ret;
 	}
 
 	expect_ack = tlsr8258_ack_requested(frag->data, frag->len);
-	expect_post_tx_rx = tlsr8258_psdu_is_data_request(frag->data, frag->len) ||
-				 tlsr8258_psdu_is_beacon_request(frag->data, frag->len) ||
-				 tlsr8258_psdu_is_assoc_request(frag->data, frag->len);
+	/*
+	 * Zigbee on Zephyr consumes follow-up MAC command responses from the
+	 * normal async RX path (`tlsr8258_zigbee_rx_sink`). Blocking `tx()`
+	 * until a pending-data/association response arrives turns a successful
+	 * poll into a spurious -EAGAIN. Keep the legacy post-TX wait only for
+	 * the non-Zigbee direct-radio path.
+	 */
+	if (tlsr8258_zigbee_rx_sink != NULL) {
+		expect_post_tx_rx = false;
+	} else {
+		expect_post_tx_rx = tlsr8258_psdu_is_data_request(frag->data, frag->len) ||
+					 tlsr8258_psdu_is_beacon_request(frag->data, frag->len);
+	}
 	wait_budget_us = expect_post_tx_rx ? 150000u : CONFIG_IEEE802154_TLSR8258_TX_WAIT_US;
 	k_timeout_t wait_timeout = K_USEC(expect_post_tx_rx ? 150000u :
 					      CONFIG_IEEE802154_TLSR8258_TX_WAIT_US);
 
 	irq_disable(TLSR8258_IRQ_ZB_RT);
-	k_sem_reset(&tlsr8258_tx_wait);
-	tlsr8258_radio_op_prepare_tx(&tlsr8258_radio.op, tx_seq, expect_ack,
-					 expect_post_tx_rx);
-	tlsr8258_rf_set_txmode();
+	k_sem_reset(&radio->tx_wait);
+	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, expect_ack, expect_post_tx_rx);
+	tlsr8258_rf_set_txmode(radio);
 	k_busy_wait(120);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	tlsr8258_tx_diag_put((0x10u << 24) | ((uint32_t)tx_seq << 16) | (uint32_t)mode);
-	tlsr8258_rf_tx_pkt(tlsr8258_radio.tx_buffer);
+	tlsr8258_tx_diag_put(radio, (0x10u << 24) | ((uint32_t)tx_seq << 16) | (uint32_t)mode);
+	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 	irq_enable(TLSR8258_IRQ_ZB_RT);
 
-	ret = k_sem_take(&tlsr8258_tx_wait, wait_timeout);
+	ret = k_sem_take(&radio->tx_wait, wait_timeout);
 	if (ret == -EAGAIN) {
-		tlsr8258_tx_diag_put((0x15u << 24) | ((uint32_t)tx_seq << 16) |
-				     wait_budget_us);
-		tlsr8258_radio_op_on_timeout(&tlsr8258_radio.op);
-		tlsr8258_rf_set_rxmode();
+		tlsr8258_tx_diag_put(radio, (0x15u << 24) | ((uint32_t)tx_seq << 16) |
+					 wait_budget_us);
+		tlsr8258_radio_op_on_timeout(&radio->op);
+		tlsr8258_rf_set_rxmode(radio);
 		TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-		return tlsr8258_radio_op_result_errno(&tlsr8258_radio.op);
+		return tlsr8258_radio_op_result_errno(&radio->op);
 	}
 
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	return tlsr8258_radio_op_result_errno(&tlsr8258_radio.op);
+	return tlsr8258_radio_op_result_errno(&radio->op);
 }
 
 static int tlsr8258_ed_scan(const struct device *dev, uint16_t duration,
@@ -1227,10 +1258,10 @@ static int tlsr8258_ed_scan(const struct device *dev, uint16_t duration,
 static int tlsr8258_configure(const struct device *dev, enum ieee802154_config_type type,
 			      const struct ieee802154_config *config)
 {
-	ARG_UNUSED(dev);
+	struct tlsr8258_radio_data *radio = dev->data;
 
 	if (type == IEEE802154_CONFIG_PROMISCUOUS) {
-		tlsr8258_radio_promiscuous_set(config->promiscuous);
+		tlsr8258_radio_promiscuous_set(radio, config->promiscuous);
 		return 0;
 	}
 
@@ -1264,8 +1295,23 @@ static const struct ieee802154_radio_api tlsr8258_radio_api = {
 	.attr_get = tlsr8258_attr_get,
 };
 
+static void tlsr8258_irq_config(const struct device *dev)
+{
+	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, DEVICE_DT_INST_GET(0), 0);
+	irq_disable(TLSR8258_IRQ_ZB_RT);
+	ARG_UNUSED(dev);
+}
+
+static struct tlsr8258_radio_data tlsr8258_radio_data_0;
+
+static const struct tlsr8258_radio_config tlsr8258_radio_config_0 = {
+	.irq_config_func = tlsr8258_irq_config,
+};
+
 static int tlsr8258_init(const struct device *dev)
 {
+	const struct tlsr8258_radio_config *config = dev->config;
+	struct tlsr8258_radio_data *radio = dev->data;
 	/*
 	 * Guard against double-invocation.  The Zephyr kernel calls this via
 	 * do_device_init() at POST_KERNEL level, but on TLSR8258 the .data
@@ -1276,49 +1322,50 @@ static int tlsr8258_init(const struct device *dev)
 	 */
 	static bool tlsr8258_hw_inited;
 
-	ARG_UNUSED(dev);
-
 	if (tlsr8258_hw_inited) {
 		return 0;
 	}
 
-	memset(&tlsr8258_radio, 0, sizeof(tlsr8258_radio));
-	tlsr8258_rf_debug_reset();
-	sys_put_le16(0xffffu, tlsr8258_radio.filter_pan_id);
-	sys_put_le16(0xffffu, tlsr8258_radio.filter_short_addr);
-	tlsr8258_radio_current_channel_set(11u);
+	memset(radio, 0, sizeof(*radio));
+#if defined(CONFIG_IEEE802154_TLSR8258_RETAINED_DEBUG)
+	radio->debug = &tlsr8258_radio_debug_state;
+#endif
+	tlsr8258_rf_debug_reset(radio);
+	sys_put_le16(0xffffu, radio->filter_pan_id);
+	sys_put_le16(0xffffu, radio->filter_short_addr);
+	tlsr8258_radio_current_channel_set(radio, 11u);
 
-	tlsr8258_rx_queue_init(&tlsr8258_rx_queue, tlsr8258_rx_slots, TLSR8258_RX_SLOT_COUNT);
-	k_sem_init(&tlsr8258_rx_sem, 0, TLSR8258_RX_SLOT_COUNT);
-	k_sem_init(&tlsr8258_tx_wait, 0, 1);
+	tlsr8258_rx_queue_init(&radio->rx_queue, radio->rx_slots, TLSR8258_RX_SLOT_COUNT);
+	k_sem_init(&radio->tx_wait, 0, 1);
 
-	k_thread_create(&tlsr8258_rx_worker_thread, tlsr8258_rx_worker_stack,
-			K_KERNEL_STACK_SIZEOF(tlsr8258_rx_worker_stack),
-			tlsr8258_rx_worker, NULL, NULL, NULL,
+	k_thread_create(&radio->rx_worker_thread, radio->rx_worker_stack,
+			K_KERNEL_STACK_SIZEOF(radio->rx_worker_stack),
+			tlsr8258_rx_worker, radio, NULL, NULL,
 			K_PRIO_COOP(2), 0, K_NO_WAIT);
 
 	tlsr8258_rf_init();
 	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get()));
-	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, NULL, 0);
-	irq_disable(TLSR8258_IRQ_ZB_RT);
+		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
+	config->irq_config_func(dev);
 	tlsr8258_hw_inited = true;
 
 	return 0;
 }
 
 #if defined(CONFIG_IEEE802154_RAW_MODE)
-DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio, NULL,
+DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio_data_0, &tlsr8258_radio_config_0,
 		      POST_KERNEL, CONFIG_IEEE802154_TLSR8258_INIT_PRIO,
 		      &tlsr8258_radio_api);
 #elif defined(CONFIG_NET_L2_IEEE802154)
-NET_DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio, NULL,
+NET_DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio_data_0,
+			  &tlsr8258_radio_config_0,
 			  CONFIG_IEEE802154_TLSR8258_INIT_PRIO,
 			  &tlsr8258_radio_api, IEEE802154_L2,
 			  NET_L2_GET_CTX_TYPE(IEEE802154_L2),
 			  TLSR8258_PHY_MAX_PSDU - TLSR8258_FCS_LENGTH);
 #elif defined(CONFIG_NET_L2_OPENTHREAD)
-NET_DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio, NULL,
+NET_DEVICE_DT_INST_DEFINE(0, tlsr8258_init, NULL, &tlsr8258_radio_data_0,
+			  &tlsr8258_radio_config_0,
 			  CONFIG_IEEE802154_TLSR8258_INIT_PRIO,
 			  &tlsr8258_radio_api, OPENTHREAD_L2,
 			  NET_L2_GET_CTX_TYPE(OPENTHREAD_L2), 1280);

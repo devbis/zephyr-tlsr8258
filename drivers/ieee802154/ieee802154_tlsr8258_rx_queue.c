@@ -7,17 +7,15 @@
 void tlsr8258_rx_queue_init(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slots,
 			    uint8_t slot_count)
 {
-	queue->slots = slots;
-	queue->slot_count = slot_count;
-	queue->head = 0u;
-	queue->tail = 0u;
-	queue->pending = 0u;
-	queue->drop_count = 0u;
+	k_fifo_init(&queue->free_fifo);
+	k_fifo_init(&queue->ready_fifo);
+	atomic_clear(&queue->drop_count);
 
 	for (uint8_t i = 0u; i < slot_count; i++) {
+		slots[i].fifo_reserved = NULL;
 		slots[i].len = 0u;
 		slots[i].rssi_dbm = 0;
-		slots[i].queued = false;
+		k_fifo_put(&queue->free_fifo, &slots[i]);
 	}
 }
 
@@ -26,48 +24,67 @@ bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_
 {
 	struct tlsr8258_rx_slot *slot;
 
-	if ((queue->slot_count == 0u) || (dma == NULL)) {
+	if (dma == NULL) {
 		return false;
 	}
 
-	if (queue->pending >= queue->slot_count) {
-		queue->drop_count++;
+	slot = k_fifo_get(&queue->free_fifo, K_NO_WAIT);
+	if (slot == NULL) {
+		atomic_inc(&queue->drop_count);
 		return false;
 	}
 
-	slot = &queue->slots[queue->tail];
 	memcpy(slot->dma, dma, len);
 	slot->len = len;
 	slot->rssi_dbm = rssi_dbm;
-	slot->queued = true;
+	k_fifo_put(&queue->ready_fifo, slot);
 
-	queue->tail = (uint8_t)((queue->tail + 1u) % queue->slot_count);
-	queue->pending++;
+	return true;
+}
+
+static bool tlsr8258_rx_queue_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
+				      k_timeout_t timeout)
+{
+	struct tlsr8258_rx_slot *slot;
+
+	if (frame == NULL) {
+		return false;
+	}
+
+	slot = k_fifo_get(&queue->ready_fifo, timeout);
+	if (slot == NULL) {
+		return false;
+	}
+
+	frame->slot = slot;
+	frame->dma = slot->dma;
+	frame->len = slot->len;
+	frame->rssi_dbm = slot->rssi_dbm;
 
 	return true;
 }
 
 bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame)
 {
-	struct tlsr8258_rx_slot *slot;
+	return tlsr8258_rx_queue_dequeue(queue, frame, K_NO_WAIT);
+}
 
-	if ((queue->pending == 0u) || (frame == NULL)) {
-		return false;
+bool tlsr8258_rx_queue_wait_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
+				    k_timeout_t timeout)
+{
+	return tlsr8258_rx_queue_dequeue(queue, frame, timeout);
+}
+
+void tlsr8258_rx_queue_release(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slot)
+{
+	if (slot == NULL) {
+		return;
 	}
 
-	slot = &queue->slots[queue->head];
-	frame->dma = slot->dma;
-	frame->len = slot->len;
-	frame->rssi_dbm = slot->rssi_dbm;
-	slot->queued = false;
-
-	queue->head = (uint8_t)((queue->head + 1u) % queue->slot_count);
-	queue->pending--;
-
-	return true;
+	k_fifo_put(&queue->free_fifo, slot);
 }
 
 uint32_t tlsr8258_rx_queue_drop_count(const struct tlsr8258_rx_queue *queue)
 {
-	return queue->drop_count;
+	return (uint32_t)atomic_get(&queue->drop_count);
 }

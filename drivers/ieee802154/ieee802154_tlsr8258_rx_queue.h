@@ -3,32 +3,33 @@
 #ifndef ZEPHYR_DRIVERS_IEEE802154_TLSR8258_RX_QUEUE_H_
 #define ZEPHYR_DRIVERS_IEEE802154_TLSR8258_RX_QUEUE_H_
 
+#include <zephyr/kernel.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 
 #define TLSR8258_RX_SLOT_DMA_SIZE 256u
 
+struct tlsr8258_rx_slot;
+
 struct tlsr8258_rx_frame {
+	struct tlsr8258_rx_slot *slot;
 	uint8_t *dma;
 	uint8_t len;
 	int8_t rssi_dbm;
 };
 
 struct tlsr8258_rx_slot {
+	void *fifo_reserved;
 	uint8_t dma[TLSR8258_RX_SLOT_DMA_SIZE];
 	uint8_t len;
 	int8_t rssi_dbm;
-	/* Authoritative slot state: true only while the slot holds an enqueued frame. */
-	bool queued;
 };
 
 struct tlsr8258_rx_queue {
-	struct tlsr8258_rx_slot *slots;
-	uint8_t slot_count;
-	uint8_t head;
-	uint8_t tail;
-	uint8_t pending;
-	uint32_t drop_count;
+	struct k_fifo free_fifo;
+	struct k_fifo ready_fifo;
+	atomic_t drop_count;
 };
 
 /*
@@ -50,6 +51,9 @@ bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_
  * before the slot is enqueued again.
  */
 bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame);
+bool tlsr8258_rx_queue_wait_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
+				    k_timeout_t timeout);
+void tlsr8258_rx_queue_release(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slot);
 uint32_t tlsr8258_rx_queue_drop_count(const struct tlsr8258_rx_queue *queue);
 
 #endif /* ZEPHYR_DRIVERS_IEEE802154_TLSR8258_RX_QUEUE_H_ */
