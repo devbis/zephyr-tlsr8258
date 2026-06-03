@@ -95,6 +95,45 @@ static int zb_nvs_geometry_init(void)
 	return 0;
 }
 
+static bool zb_nvs_partition_appears_blank(void)
+{
+	uint8_t sample[16];
+	off_t tail_off;
+	int rc;
+
+	if (!zb_nvs_geometry_ready || zb_nvs.flash_device == NULL ||
+	    zb_nvs.sector_count == 0U || zb_nvs.sector_size < sizeof(sample)) {
+		return false;
+	}
+
+	for (uint16_t sector = 0U; sector < zb_nvs.sector_count; sector++) {
+		off_t head_off = zb_nvs.offset + ((off_t)sector * zb_nvs.sector_size);
+
+		rc = flash_read(zb_nvs.flash_device, head_off, sample, sizeof(sample));
+		if (rc < 0) {
+			return false;
+		}
+		for (size_t i = 0; i < sizeof(sample); i++) {
+			if (sample[i] != 0xffU) {
+				return false;
+			}
+		}
+
+		tail_off = head_off + zb_nvs.sector_size - sizeof(sample);
+		rc = flash_read(zb_nvs.flash_device, tail_off, sample, sizeof(sample));
+		if (rc < 0) {
+			return false;
+		}
+		for (size_t i = 0; i < sizeof(sample); i++) {
+			if (sample[i] != 0xffU) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 static bool zb_nvs_ensure_ready(void)
 {
 	int rc;
@@ -134,6 +173,12 @@ static bool zb_nvs_ensure_ready(void)
 	}
 
 	zb_nwk_ed_trace[9] = 0xA7B00004U;
+	if (zb_nvs_partition_appears_blank()) {
+		zb_nwk_ed_trace[9] = 0xA7B00009U;
+		zb_nvs_log_degraded("nvs blank, skip mount", 0);
+		return false;
+	}
+
 	rc = nvs_mount(&zb_nvs);
 	zb_nwk_ed_trace[7] = (u32)rc;
 	zb_nwk_ed_trace[9] = 0xA7B00005U;
