@@ -1162,6 +1162,16 @@ open_sector_done:
 	tlsr8258_nvs_trace[3] = (uint16_t)(fs->ate_wra & 0xFFFFU);
 	tlsr8258_nvs_trace[4] = (uint16_t)(fs->data_wra & 0xFFFFU);
 
+	/*
+	 * A completely blank open sector already has the correct data write
+	 * address at the sector base. Running the generic data_wra scan would
+	 * repeatedly compare the same erased range byte-by-byte, which is
+	 * especially expensive on TLSR8258's XIP flash path during early boot.
+	 */
+	if (empty_open_sector) {
+		goto open_sector_scan_done;
+	}
+
 	while (fs->ate_wra >= fs->data_wra) {
 		tlsr8258_nvs_trace[10] = (uint16_t)(fs->ate_wra & 0xFFFFU);
 		tlsr8258_nvs_trace[11] = (uint16_t)(fs->data_wra & 0xFFFFU);
@@ -1204,6 +1214,8 @@ open_sector_done:
 		fs->ate_wra -= ate_size;
 		tlsr8258_nvs_trace[15]++;
 	}
+
+open_sector_scan_done:
 
 	/* if the sector after the write sector is not empty gc was interrupted
 	 * we might need to restart gc if it has not yet finished. Otherwise
