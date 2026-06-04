@@ -286,6 +286,13 @@ static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *ra
 
 static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
 
+static inline struct tlsr8258_radio_data *tlsr8258_zigbee_radio_data_get(void)
+{
+	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zb));
+
+	return (dev != NULL) ? dev->data : NULL;
+}
+
 void tlsr8258_zigbee_register_rx_sink(tlsr8258_zigbee_rx_sink_t sink)
 {
 	tlsr8258_zigbee_rx_sink = sink;
@@ -294,7 +301,11 @@ void tlsr8258_zigbee_register_rx_sink(tlsr8258_zigbee_rx_sink_t sink)
 void tlsr8258_zigbee_update_filters(uint16_t pan_id, uint16_t short_addr,
 				    const uint8_t *ieee_addr)
 {
-	struct tlsr8258_radio_data *radio = DEVICE_DT_GET(DT_NODELABEL(zb))->data;
+	struct tlsr8258_radio_data *radio = tlsr8258_zigbee_radio_data_get();
+
+	if (radio == NULL) {
+		return;
+	}
 
 	sys_put_le16(pan_id, radio->filter_pan_id);
 	sys_put_le16(short_addr, radio->filter_short_addr);
@@ -518,6 +529,7 @@ static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_
 	bool has_ack_match_fields = false;
 	bool is_ack;
 	bool rx_is_pending_response;
+	uint16_t payload_short = 0xffffu;
 
 	if (psdu == NULL || psdu_len < (TLSR8258_DEST_ADDR_OFFSET + TLSR8258_SHORT_ADDR_SIZE)) {
 		return false;
@@ -526,7 +538,8 @@ static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_
 	is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, seq);
 	switch (psdu[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) {
 	case TLSR8258_DEST_ADDR_TYPE_SHORT:
-		has_ack_match_fields = true;
+		payload_short = sys_get_le16(&psdu[TLSR8258_DEST_ADDR_OFFSET]);
+		has_ack_match_fields = payload_short != 0xffffu;
 		break;
 	case TLSR8258_DEST_ADDR_TYPE_IEEE:
 		has_ack_match_fields =
@@ -538,7 +551,6 @@ static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu, uint8_t psdu_
 
 	rx_is_pending_response = has_ack_match_fields && !is_ack &&
 				     tlsr8258_filter_match_for_ack(psdu, radio);
-	/* Legacy equivalent: return has_ack_match_fields && !is_ack && ... */
 
 	return rx_is_pending_response;
 }
@@ -905,6 +917,8 @@ static void tlsr8258_rf_isr(const void *arg)
 	uint8_t dma_len = radio->rx_buffer[0];
 	uint8_t crc = 0u;
 	struct tlsr8258_radio_debug *debug = radio->debug;
+	bool has_rx = tlsr8258_rf_irq_has_rx_event(effective_irq);
+	bool has_tx = (effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u;
 
 	if (debug != NULL) {
 		debug->rf_isr_entry_count++;
@@ -922,23 +936,26 @@ static void tlsr8258_rf_isr(const void *arg)
 	}
 	tlsr8258_radio_last_irq_set(radio, effective_irq);
 
-	if (tlsr8258_rf_irq_has_rx_event(effective_irq)) {
-		if (debug != NULL) {
-			debug->rf_branch_debug = 1u;
-			debug->rf_isr_rx_event_count++;
-		}
-		tlsr8258_rx_capture_isr(effective_irq, radio);
-	} else if ((effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {
+	/*
+	 * Handle TX completion before RX when both bits are asserted in the same
+	 * ISR.  Data Request polling can receive the ACK/pending frame quickly
+	 * enough that hardware reports a combined TX+RX event; if RX wins, the
+	 * radio-op remains TX_PENDING and tx() times out even though the frame was
+	 * received and delivered asynchronously.
+	 */
+	if (has_tx) {
 		bool tx_complete;
 		uint32_t key;
 
 		if (debug != NULL) {
-			debug->rf_branch_debug = 2u;
-			debug->rf_irq_ack_debug = effective_irq;
+			debug->rf_branch_debug = has_rx ? 6u : 2u;
+			debug->rf_irq_ack_debug = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		}
-		TLSR_REG16(0x0f20) = effective_irq;
+		TLSR_REG16(0x0f20) = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		tlsr8258_radio_tx_count_inc(radio);
-		tlsr8258_rf_set_rxmode(radio);
+		if (!has_rx) {
+			tlsr8258_rf_set_rxmode(radio);
+		}
 		key = irq_lock();
 		tx_complete = (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) &&
 			      tlsr8258_radio_op_on_tx_success(&radio->op);
@@ -946,7 +963,23 @@ static void tlsr8258_rf_isr(const void *arg)
 		if (tx_complete) {
 			k_sem_give(&radio->tx_wait);
 		}
-	} else if ((effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
+	}
+
+	if (has_rx) {
+		if (debug != NULL) {
+			debug->rf_branch_debug = has_tx ? 7u : 1u;
+			debug->rf_isr_rx_event_count++;
+		}
+		tlsr8258_rx_capture_isr(effective_irq, radio);
+		if (has_tx) {
+			uint16_t residual_irq =
+				effective_irq & ~(RF_IRQ_TX | RF_IRQ_TX_DS | RF_IRQ_RX_EVENTS);
+
+			if (residual_irq != 0u) {
+				TLSR_REG16(0x0f20) = residual_irq;
+			}
+		}
+	} else if (!has_tx && (effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
 		bool tx_failed = false;
 		uint32_t key;
 
@@ -963,16 +996,23 @@ static void tlsr8258_rf_isr(const void *arg)
 			tx_failed = true;
 		}
 		irq_unlock(key);
-		if (tx_failed) {
-			k_sem_give(&radio->tx_wait);
-		}
-	} else {
-		uint16_t ack = effective_irq != 0u ? effective_irq : RF_IRQ_ALL;
+			if (tx_failed) {
+				k_sem_give(&radio->tx_wait);
+			}
+		} else {
+			uint16_t ack = effective_irq != 0u ? effective_irq : RF_IRQ_ALL;
 
-		if (debug != NULL) {
-			debug->rf_branch_debug = (effective_irq != 0u) ? 4u : 5u;
-			debug->rf_irq_ack_debug = ack;
-		}
+			if (has_tx) {
+				ack &= ~(RF_IRQ_TX | RF_IRQ_TX_DS);
+			}
+			if (ack == 0u) {
+				return;
+			}
+
+			if (debug != NULL && !has_tx) {
+				debug->rf_branch_debug = (effective_irq != 0u) ? 4u : 5u;
+				debug->rf_irq_ack_debug = ack;
+			}
 		TLSR_REG16(0x0f20) = ack;
 	}
 }
@@ -1205,21 +1245,16 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 
 	expect_ack = tlsr8258_ack_requested(frag->data, frag->len);
 	/*
-	 * Zigbee on Zephyr consumes follow-up MAC command responses from the
-	 * normal async RX path (`tlsr8258_zigbee_rx_sink`). Blocking `tx()`
-	 * until a pending-data/association response arrives turns a successful
-	 * poll into a spurious -EAGAIN. Keep the legacy post-TX wait only for
-	 * the non-Zigbee direct-radio path.
+	 * Under the Zigbee async RX sink, keep tx() short and let the upper
+	 * layer consume Data Request follow-up traffic asynchronously. Waiting
+	 * synchronously here widens interview poll jitter and makes the driver
+	 * sensitive to missing Frame Pending follow-up frames.
 	 */
-	if (tlsr8258_zigbee_rx_sink != NULL) {
-		expect_post_tx_rx = false;
-	} else {
-		expect_post_tx_rx = tlsr8258_psdu_is_data_request(frag->data, frag->len) ||
-					 tlsr8258_psdu_is_beacon_request(frag->data, frag->len);
-	}
+	expect_post_tx_rx = (tlsr8258_zigbee_rx_sink == NULL) &&
+				 (tlsr8258_psdu_is_data_request(frag->data, frag->len) ||
+				  tlsr8258_psdu_is_beacon_request(frag->data, frag->len));
 	wait_budget_us = expect_post_tx_rx ? 150000u : CONFIG_IEEE802154_TLSR8258_TX_WAIT_US;
-	k_timeout_t wait_timeout = K_USEC(expect_post_tx_rx ? 150000u :
-					      CONFIG_IEEE802154_TLSR8258_TX_WAIT_US);
+	k_timeout_t wait_timeout = K_USEC(wait_budget_us);
 
 	irq_disable(TLSR8258_IRQ_ZB_RT);
 	k_sem_reset(&radio->tx_wait);
