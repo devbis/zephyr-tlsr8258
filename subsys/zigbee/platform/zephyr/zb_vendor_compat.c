@@ -170,6 +170,23 @@ static void zb_tx_cache_reset(void)
 	memset(aps_txCache_tbl, 0, sizeof(aps_txCache_tbl));
 }
 
+static void zb_nwk_capability_apply_runtime_defaults(void)
+{
+#if ZB_ED_ROLE
+	/*
+	 * The minimal Zephyr port currently commissions only as a Zigbee end
+	 * device.  Make the association capability explicit instead of relying on
+	 * zero-initialized bitfields: the secure-join interview depends on the
+	 * Security Capability bit being set.
+	 */
+	g_zbNIB.capabilityInfo.altPanCoord = 0U;
+	g_zbNIB.capabilityInfo.devType = 0U;
+	g_zbNIB.capabilityInfo.rcvOnWhenIdle = g_zbMacPib.rxOnWhenIdle ? 1U : 0U;
+	g_zbNIB.capabilityInfo.secuCapability = 1U;
+	g_zbNIB.capabilityInfo.allocAddr = 1U;
+#endif
+}
+
 static void zb_mac_pib_apply_runtime_defaults(bool cold_reset)
 {
 	if (cold_reset) {
@@ -181,6 +198,7 @@ static void zb_mac_pib_apply_runtime_defaults(bool cold_reset)
 
 	g_zbMacPib.associationPermit = 0U;
 	g_zbMacPib.frameTotalWaitTime = 800U;
+	zb_nwk_capability_apply_runtime_defaults();
 
 	memset(&g_zbMacCtx, 0, sizeof(g_zbMacCtx));
 	g_zbMacCtx.curChannel = g_zbMacPib.phyChannelCur;
