@@ -45,6 +45,24 @@ zdo_attrCfg_t zdo_cfg_attributes = ZDO_ED_MINIMAL_CFG_INIT;
 u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
 
 static bool g_zdoUnderRejoinMode = FALSE;
+#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
+volatile u32 zb_zdo_ed_trace[16] = {0x5a444f45U};
+
+static void zdo_ed_trace_put(u32 tag)
+{
+	u8 count = (u8)zb_zdo_ed_trace[1];
+	u8 span = (u8)(ARRAY_SIZE(zb_zdo_ed_trace) - 2U);
+	u8 slot = (u8)(2U + (count % span));
+
+	zb_zdo_ed_trace[slot] = tag;
+	zb_zdo_ed_trace[1] = count + 1U;
+}
+#else
+static void zdo_ed_trace_put(u32 tag)
+{
+	ARG_UNUSED(tag);
+}
+#endif
 
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 
@@ -107,15 +125,28 @@ static void zdo_ed_minimal_assoc_join_done(u8 status)
 {
 	zdo_start_device_confirm_t cnf;
 
+	zdo_ed_trace_put((0x10U << 24) |
+			 ((u32)status << 16) |
+			 ((u32)(g_zdoEdAsync.joinPending ? 1U : 0U) << 8) |
+			 (u32)(zdoAppIndCbLst != NULL));
 	if (!g_zdoEdAsync.joinPending) {
+		zdo_ed_trace_put(0x10ff0000U);
 		return;
 	}
 
 	g_zdoEdAsync.joinPending = FALSE;
 	cnf = zdo_ed_minimal_build_start_dev_cnf(status, FALSE);
+	zdo_ed_trace_put((0x11U << 24) |
+			 ((u32)cnf.status << 16) |
+			 ((u32)cnf.channel_num << 8) |
+			 (u32)(zdoAppIndCbLst != NULL &&
+			       zdoAppIndCbLst->zdpStartDevCnfCb != NULL));
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
+		zdo_ed_trace_put(0x12000000U);
 		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
+	} else {
+		zdo_ed_trace_put(0x12ff0000U);
 	}
 }
 
@@ -147,6 +178,10 @@ void tl_zdoEdMinimalDiscoveryDone(u8 status)
 
 void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode)
 {
+	zdo_ed_trace_put((0x01U << 24) |
+			 ((u32)status << 16) |
+			 ((u32)(rejoinMode ? 1U : 0U) << 8) |
+			 ((u32)(g_zdoEdAsync.joinPending ? 1U : 0U)));
 	if (rejoinMode) {
 		zdo_ed_minimal_rejoin_done(status);
 	} else {
@@ -157,6 +192,9 @@ void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode)
 void zdo_zdpCbTblRegister(zdo_appIndCb_t *cbTbl)
 {
 	zdoAppIndCbLst = cbTbl;
+	zdo_ed_trace_put((0x02U << 24) |
+			 (u32)(cbTbl != NULL) |
+			 ((u32)(cbTbl != NULL && cbTbl->zdpStartDevCnfCb != NULL) << 8));
 }
 
 void zdo_touchLinkCbRegister(zdo_touchLinkCb_t *cbTbl)
@@ -364,14 +402,18 @@ void zdo_nwkDiscoveryStop(void)
 zdo_status_t zdo_nwkAssocJoinStart(void)
 {
 	if (g_zdoEdAsync.joinPending) {
+		zdo_ed_trace_put(0x03ff0001U);
 		return ZDO_NOT_PERMITTED;
 	}
 
 	g_zdoEdAsync.joinPending = TRUE;
+	zdo_ed_trace_put(0x03000001U);
 	if (!tl_zbNwkEdMinimalAssocJoinStart()) {
 		g_zdoEdAsync.joinPending = FALSE;
+		zdo_ed_trace_put(0x03ff0002U);
 		return ZDO_INVALID_REQUEST;
 	}
+	zdo_ed_trace_put(0x03000002U);
 
 	return ZDO_SUCCESS;
 }

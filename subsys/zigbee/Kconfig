@@ -93,6 +93,14 @@ config ZIGBEE_MAC_TRX_STUBS
 	  Build weak MAC trx stub handlers for incomplete stack integration.
 	  Keep this disabled for normal Zigbee builds.
 
+config ZIGBEE_DEBUG_TRACES
+	bool "Enable Zigbee debug trace buffers"
+	default n
+	help
+	  Keep RAM-backed debug trace buffers used for low-level Zigbee bring-up.
+	  Disable this for normal builds to reduce RAM pressure and avoid keeping
+	  always-on diagnostics in production images.
+
 endif # ZIGBEE
 
 config ZIGBEE_RADIO_PORT
