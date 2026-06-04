@@ -71,6 +71,7 @@ typedef struct {
 	u16 fixedJoinShortAddr;
 	extPANId_t fixedJoinExtPanId;
 	u8 fixedJoinNwkKey[SEC_KEY_LEN];
+	bool fixedJoinUsesPreconfiguredNwkKey;
 	addrExt_t fixedJoinTcAddr;
 
 	u32 remainingScanChannels;
@@ -149,13 +150,16 @@ volatile u32 zb_nwk_beacon_success_count;
 volatile u32 zb_nwk_beacon_last_len;
 volatile u32 zb_nwk_beacon_last_fcf;
 volatile u32 zb_nwk_ed_interview_trace[4];
+#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 volatile u32 zb_nwk_ed_timer_trace[64] = {0xb7e50000U};
 static u8 zb_nwk_ed_timer_trace_pos;
+#endif
 
 static void nwk_ed_minimal_joined_idle_poll_schedule(u32 timeoutMs);
 static void nwk_ed_minimal_timeout_req_schedule(u32 timeoutMs);
 static void nwk_ed_minimal_transport_key_done_task(void *arg);
 
+#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 static void nwk_ed_minimal_timer_trace_put(u32 tag)
 {
 	u8 span = (u8)(ARRAY_SIZE(zb_nwk_ed_timer_trace) - 2U);
@@ -174,6 +178,12 @@ static void nwk_ed_minimal_timer_trace_put(u32 tag)
 	zb_nwk_ed_timer_trace_pos++;
 	zb_nwk_ed_timer_trace[1] = zb_nwk_ed_timer_trace_pos;
 }
+#else
+static void nwk_ed_minimal_timer_trace_put(u32 tag)
+{
+	ARG_UNUSED(tag);
+}
+#endif
 
 extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
 extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
@@ -222,12 +232,6 @@ static void nwk_ed_minimal_timer_cancel(void)
 				       ((u32)g_nwkEdCtx.state << 16) |
 				       g_nwkEdCtx.assocPollCount);
 	ev_unon_timer(&g_nwkEdCtx.stateTimer);
-}
-
-static void nwk_ed_minimal_timer_reinit(void)
-{
-	ev_unon_timer(&g_nwkEdCtx.stateTimer);
-	memset(&g_nwkEdCtx.stateTimer, 0, sizeof(g_nwkEdCtx.stateTimer));
 }
 
 static void nwk_ed_minimal_timeout_req_cancel(void)
@@ -500,26 +504,36 @@ static void nwk_ed_minimal_mark_preconfigured_join_secure(void)
 	aps_ib.aps_use_insecure_join = FALSE;
 }
 
-static void nwk_ed_minimal_install_fixed_join_key_if_needed(void)
+static bool nwk_ed_minimal_install_fixed_join_key_if_needed(void)
 {
 	ss_material_set_t *material;
 	u8 *active_key = nwk_ed_minimal_active_nwk_key_get();
 
-	if (!nwk_ed_minimal_key_is_set(g_nwkEdCtx.fixedJoinNwkKey)) {
-		return;
+	if (!g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey ||
+	    !nwk_ed_minimal_key_is_set(g_nwkEdCtx.fixedJoinNwkKey)) {
+		return FALSE;
 	}
 
-	if (!nwk_ed_minimal_key_is_set(active_key) ||
-	    memcmp(active_key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN) != 0) {
+	if (!nwk_ed_minimal_key_is_set(active_key)) {
 		material = &ss_ib.nwkSecurMaterialSet[0];
 		memcpy(material->key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN);
 		material->keySeqNum = 0U;
 		material->keyType = 1U;
 		ss_ib.activeSecureMaterialIndex = 0U;
 		ss_ib.activeKeySeqNum = 0U;
+		nwk_ed_minimal_mark_preconfigured_join_secure();
+		return TRUE;
+	}
+
+	if (memcmp(active_key, g_nwkEdCtx.fixedJoinNwkKey, SEC_KEY_LEN) != 0) {
+		return FALSE;
+	}
+	if ((ss_ib.preConfiguredKeyType & SS_PRECONFIGURED_NWKKEY) == 0U) {
+		return FALSE;
 	}
 
 	nwk_ed_minimal_mark_preconfigured_join_secure();
+	return TRUE;
 }
 
 static u8 nwk_ed_minimal_end_device_initiator_bit(void)
@@ -794,7 +808,6 @@ static void nwk_ed_minimal_enter_interview(bool rejoinMode)
 	g_nwkEdCtx.interviewRejoinMode = rejoinMode;
 	g_nwkEdCtx.assocPollCount = 0U;
 	g_nwkEdCtx.interviewKickScheduled = FALSE;
-	nwk_ed_minimal_timer_reinit();
 	zb_nwk_ed_interview_trace[0] = 0xb7e10000U | ((u32)rejoinMode << 8) |
 				       g_nwkEdCtx.state;
 
@@ -982,7 +995,6 @@ static bool nwk_ed_minimal_send_rejoin_request(void)
 
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_REJOIN;
 	g_nwkEdCtx.assocPollCount = 0U;
-	nwk_ed_minimal_timer_reinit();
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
 	LOG_INF("rejoin request sent: short 0x%04x pan 0x%04x parent 0x%04x ch %u",
 		g_nwkEdCtx.activeShortAddr, g_nwkEdCtx.activePanId,
@@ -1068,15 +1080,14 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 			       (u16)rc;
 	zb_nwk_ed_trace[13] = ((u32)panId << 16) | parentShortAddr;
 	if (rc == -EBUSY) {
-		LOG_DBG("association request CCA busy ch=%u retry=%u", channel,
-			g_nwkEdCtx.assocEbusyRetry);
-		g_nwkEdCtx.assocEbusyRetry++;
-		g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN
+			LOG_DBG("association request CCA busy ch=%u retry=%u", channel,
+				g_nwkEdCtx.assocEbusyRetry);
+			g_nwkEdCtx.assocEbusyRetry++;
+			g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN
 					      : NWK_ED_MINIMAL_STATE_JOINING;
-		nwk_ed_minimal_timer_reinit();
-		nwk_ed_minimal_timer_start(
-			g_nwkEdCtx.assocEbusyRetry <= NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY
-			? NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS
+			nwk_ed_minimal_timer_start(
+				g_nwkEdCtx.assocEbusyRetry <= NWK_ED_MINIMAL_ASSOC_EBUSY_MAX_RETRY
+				? NWK_ED_MINIMAL_ASSOC_EBUSY_RETRY_MS
 			: NWK_ED_MINIMAL_JOIN_POLL_MS);
 		return TRUE;
 	} else if (rc < 0) {
@@ -1085,7 +1096,6 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	}
 
 	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
-	nwk_ed_minimal_timer_reinit();
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
 	LOG_INF("%s started: pan 0x%04x parent 0x%04x ch %u",
 		rejoinMode ? "rejoin" : "join", panId, parentShortAddr, channel);
@@ -1582,9 +1592,13 @@ void tl_zbNwkEdMinimalOperationAbort(void)
 {
 	zb_nwk_ed_interview_trace[1] = 0xb7e20000U | g_nwkEdCtx.state;
 	nwk_ed_minimal_timer_cancel();
+	nwk_ed_minimal_timeout_req_cancel();
+	ev_unon_timer(&g_nwkEdCtx.opTimer);
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
+	g_nwkEdCtx.interviewKickScheduled = FALSE;
+	g_nwkEdCtx.endDevTimeoutReqScheduled = FALSE;
 }
 
 void tl_zbNwkEdMinimalOperationComplete(u8 status)
@@ -1592,9 +1606,13 @@ void tl_zbNwkEdMinimalOperationComplete(u8 status)
 	zb_nwk_ed_interview_trace[2] = 0xb7e30000U | ((u32)status << 8) |
 				       g_nwkEdCtx.state;
 	g_nwkEdCtx.lastJoinStatus = status;
+	nwk_ed_minimal_timeout_req_cancel();
+	ev_unon_timer(&g_nwkEdCtx.opTimer);
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
+	g_nwkEdCtx.interviewKickScheduled = FALSE;
+	g_nwkEdCtx.endDevTimeoutReqScheduled = FALSE;
 }
 
 bool tl_zbNwkEdMinimalManagerIdle(void)
@@ -1885,8 +1903,11 @@ void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 	}
 	if (nwkKey != NULL) {
 		memcpy(g_nwkEdCtx.fixedJoinNwkKey, nwkKey, sizeof(g_nwkEdCtx.fixedJoinNwkKey));
+		g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey =
+			nwk_ed_minimal_key_is_set(g_nwkEdCtx.fixedJoinNwkKey);
 	} else {
 		memset(g_nwkEdCtx.fixedJoinNwkKey, 0, sizeof(g_nwkEdCtx.fixedJoinNwkKey));
+		g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey = FALSE;
 	}
 	if (tcAddr != NULL) {
 		ZB_IEEE_ADDR_COPY(g_nwkEdCtx.fixedJoinTcAddr, tcAddr);
@@ -2003,14 +2024,16 @@ static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_r
 		return;
 	}
 
-	if (!g_nwkEdCtx.discoveryForRejoin) {
-		return;
-	}
-
 	if (g_nwkEdCtx.haveBeaconCandidate) {
 		return;
 	}
 
+	/*
+	 * Fresh joins may need to attach through a router parent when beacon
+	 * responses are missing or stale. Treat observed directed/broadcast MAC
+	 * traffic as a parent hint for both discovery modes and prefer coordinator
+	 * hints when they are visible.
+	 */
 	preferNewCandidate = !g_nwkEdCtx.parentCandidateValid;
 	if (!preferNewCandidate &&
 	    g_nwkEdCtx.candidateShortAddr != MAC_SHORT_ADDR_BROADCAST &&
@@ -2193,9 +2216,12 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 			zb_nwk_beacon_parse_fail_count++;
 			return;
 		}
-		if (!g_nwkEdCtx.discoveryForRejoin && !associationPermit) {
-			return;
-		}
+		/*
+		 * The beacon permit bit is a useful hint but not a reliable hard
+		 * filter in mixed coordinator/router networks: permit-join state may
+		 * lag across devices while association admission remains authoritative.
+		 */
+		ARG_UNUSED(associationPermit);
 
 		zb_nwk_beacon_success_count++;
 		zb_nwk_ed_trace[8]++;
@@ -2215,15 +2241,6 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 	if (hdr.frameType == MAC_FRAME_DATA && hdr.srcPanValid && hdr.srcShortValid &&
 	    hdr.dstShortValid && hdr.dstShortAddr == MAC_SHORT_ADDR_BROADCAST) {
 		if (!discoveryActive) {
-			return;
-		}
-		/*
-		 * Factory-new discovery cannot safely infer a parent from arbitrary
-		 * broadcast traffic, but coordinator-originated broadcasts still
-		 * provide a valid centralized-network candidate when beacon
-		 * responses are absent.
-		 */
-		if (!g_nwkEdCtx.discoveryForRejoin && hdr.srcShortAddr != 0x0000U) {
 			return;
 		}
 
@@ -2253,14 +2270,6 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		    hdr.dstShortValid &&
 		    hdr.dstShortAddr != MAC_SHORT_ADDR_BROADCAST) {
 			if (!discoveryActive) {
-				return;
-			}
-			/*
-			 * During factory-new join, only trust parent hints that are
-			 * explicitly directed at the coordinator. Rejoin may reuse
-			 * any observed parent-directed polling traffic.
-			 */
-			if (!g_nwkEdCtx.discoveryForRejoin && hdr.dstShortAddr != 0x0000U) {
 				return;
 			}
 			memset(&evt, 0, sizeof(evt));
@@ -2296,6 +2305,39 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		}
 		if (hdr.dstExtValid) {
 			ZB_IEEE_ADDR_COPY(evt.assocRsp.dstExtAddr, hdr.dstExtAddr);
+		}
+		/*
+		 * Some coordinators send the first interview payload immediately
+		 * after the Association Response, before the deferred join-event
+		 * task runs. Pre-arm the short-address context and radio filters
+		 * here so that an immediate Transport Key frame to the assigned
+		 * short address is accepted instead of being dropped against the
+		 * old broadcast filter window.
+		 */
+		if (assocStatus == MAC_SUCCESS &&
+		    evt.assocRsp.assignedShortAddr < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+		    hdr.srcShortValid &&
+		    hdr.srcShortAddr == g_nwkEdCtx.activeParentShortAddr &&
+		    (!hdr.dstExtValid ||
+		     memcmp(hdr.dstExtAddr, g_zbMacPib.extAddress, sizeof(addrExt_t)) == 0) &&
+		    (!hdr.dstShortValid ||
+		     hdr.dstShortAddr == MAC_SHORT_ADDR_BROADCAST ||
+		     hdr.dstShortAddr == g_zbMacPib.shortAddress)) {
+			g_nwkEdCtx.activeShortAddr = evt.assocRsp.assignedShortAddr;
+			g_zbMacPib.panId = g_nwkEdCtx.activePanId;
+			g_zbMacPib.shortAddress = evt.assocRsp.assignedShortAddr;
+			g_zbMacPib.coordShortAddress = g_nwkEdCtx.activeParentShortAddr;
+			g_zbMacPib.associatedPanCoord = TRUE;
+			g_zbMacPib.phyChannelCur = g_nwkEdCtx.activeChannel;
+			if (hdr.srcExtValid) {
+				ZB_IEEE_ADDR_COPY(g_zbMacPib.coordExtAddress, hdr.srcExtAddr);
+			}
+			g_zbNIB.panId = g_nwkEdCtx.activePanId;
+			g_zbNIB.nwkAddr = evt.assocRsp.assignedShortAddr;
+			ZB_EXTPANID_COPY(g_zbNIB.extPANId, g_nwkEdCtx.activeExtPanId);
+			zb_radio_port_update_filters(g_nwkEdCtx.activePanId,
+					     evt.assocRsp.assignedShortAddr,
+					     g_zbMacPib.extAddress);
 		}
 		if (nwk_ed_minimal_rx_evt_push(&evt)) {
 			(void)TL_SCHEDULE_TASK(nwk_ed_minimal_rx_event_task, NULL);
