@@ -37,29 +37,32 @@ extern uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt);
 #define APP_BDB_COMMISSIONING_RETRY_MS 5000U
 
 #if defined(CONFIG_ZIGBEE_BDB)
-static bool commissioning_start_requested;
-static bool bdb_runtime_ready;
-static bool leave_recommission_pending;
-static struct ev_timer_event_t *commissioning_retry_timer;
-__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[16];
-volatile uint32_t zb_app_bdb_retry_trace[16] = {0xa4bd0000U};
-volatile uint32_t zb_rejoin_callback_trace[16] = {0xa5c10000U};
-volatile uint32_t zb_restore_diag_trace[16] = {0xa5d10000U};
-static uint8_t zb_app_bdb_retry_trace_pos;
-static uint8_t zb_rejoin_callback_trace_pos;
-static const uint8_t app_bdb_fixed_tc_addr[8] = {
-	0x60, 0x2d, 0xce, 0xfe, 0xff, 0x89, 0xc0, 0x1c,
-};
+	static bool commissioning_start_requested;
+	static bool bdb_runtime_ready;
+	static bool leave_recommission_pending;
+	static struct ev_timer_event_t *commissioning_retry_timer;
+	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[16];
+#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
+	volatile uint32_t zb_app_bdb_retry_trace[16] = {0xa4bd0000U};
+	volatile uint32_t zb_rejoin_callback_trace[16] = {0xa5c10000U};
+	volatile uint32_t zb_restore_diag_trace[16] = {0xa5d10000U};
+	static uint8_t zb_app_bdb_retry_trace_pos;
+	static uint8_t zb_rejoin_callback_trace_pos;
+#endif
+	static const uint8_t app_bdb_fixed_tc_addr[8] = {
+		0x60, 0x2d, 0xce, 0xfe, 0xff, 0x89, 0xc0, 0x1c,
+	};
 
 extern bool zb_isDeviceJoinedNwk(void);
 extern bool zdo_ifZdoNwkManagerIdle(void);
 extern uint8_t zb_setPollRate(uint32_t newRate);
 extern uint32_t zb_getPollRate(void);
 
-static void app_bdb_retry_trace_put(uint32_t tag)
-{
-	enum {
-		trace_slots = sizeof(zb_app_bdb_retry_trace) / sizeof(zb_app_bdb_retry_trace[0]),
+#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
+	static void app_bdb_retry_trace_put(uint32_t tag)
+	{
+		enum {
+			trace_slots = sizeof(zb_app_bdb_retry_trace) / sizeof(zb_app_bdb_retry_trace[0]),
 	};
 	uint8_t slot = (uint8_t)(2U + (zb_app_bdb_retry_trace_pos %
 				       (trace_slots - 2U)));
@@ -69,19 +72,30 @@ static void app_bdb_retry_trace_put(uint32_t tag)
 	zb_app_bdb_retry_trace[1] = zb_app_bdb_retry_trace_pos;
 }
 
-void app_bdb_rejoin_callback_trace_put(uint32_t tag)
-{
-	enum {
-		trace_slots = sizeof(zb_rejoin_callback_trace) /
-			      sizeof(zb_rejoin_callback_trace[0]),
+	void app_bdb_rejoin_callback_trace_put(uint32_t tag)
+	{
+		enum {
+			trace_slots = sizeof(zb_rejoin_callback_trace) /
+				      sizeof(zb_rejoin_callback_trace[0]),
 	};
 	uint8_t slot = (uint8_t)(2U + (zb_rejoin_callback_trace_pos %
 				       (trace_slots - 2U)));
 
 	zb_rejoin_callback_trace[slot] = tag;
-	zb_rejoin_callback_trace_pos++;
-	zb_rejoin_callback_trace[1] = zb_rejoin_callback_trace_pos;
-}
+		zb_rejoin_callback_trace_pos++;
+		zb_rejoin_callback_trace[1] = zb_rejoin_callback_trace_pos;
+	}
+#else
+	static void app_bdb_retry_trace_put(uint32_t tag)
+	{
+		ARG_UNUSED(tag);
+	}
+
+	void app_bdb_rejoin_callback_trace_put(uint32_t tag)
+	{
+		ARG_UNUSED(tag);
+	}
+#endif
 
 static void app_bdb_activate_poll_rate(void)
 {
@@ -189,11 +203,17 @@ bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 		return false;
 	}
 
-	memset(profile, 0, sizeof(*profile));
-	profile->channel_mask = ((uint32_t)1U << CONFIG_ZIGBEE_CHANNEL);
-	memcpy(profile->tc_addr, app_bdb_fixed_tc_addr,
-	       sizeof(app_bdb_fixed_tc_addr));
-	profile->tc_addr_valid = true;
+		memset(profile, 0, sizeof(*profile));
+		profile->channel_mask = ((uint32_t)1U << CONFIG_ZIGBEE_CHANNEL);
+		/*
+		 * Real network joins must learn the NWK key during interview via the
+		 * Trust Center Transport Key exchange.  Do not preload a test key
+		 * here: it short-circuits interview and breaks live-network joins.
+		 */
+		profile->network_key_valid = false;
+		memcpy(profile->tc_addr, app_bdb_fixed_tc_addr,
+		       sizeof(app_bdb_fixed_tc_addr));
+		profile->tc_addr_valid = true;
 
 	return true;
 #endif
