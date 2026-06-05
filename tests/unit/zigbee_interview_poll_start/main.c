@@ -183,6 +183,58 @@ static void test_post_join_announce_arms_interview_poll_unconditionally(void)
 	free(source);
 }
 
+static void test_assoc_handoff_arms_bdb_interview_poll(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
+	const char *func = "static void bdb_ed_assoc_handoff_start(void)";
+	const char *cond = "g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE";
+	const char *next_func = "static void bdb_ed_secure_join_handoff_start(void)";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	EXPECT_TRUE(contains_between(source, func, cond, "bdb_ed_post_join_poll_kick();"));
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "TL_ZB_TIMER_SCHEDULE(bdb_ed_assoc_request_key_guard, NULL, 200);"));
+
+	free(source);
+}
+
+static void test_locked_fixed_target_is_not_replaced_by_traffic_hints(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_minimal.c");
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	EXPECT_TRUE(contains(source,
+			     "static bool nwk_ed_minimal_fixed_join_target_locked(void)\n"
+			     "{\n"
+			     "\treturn g_nwkEdCtx.fixedJoinValid &&\n"
+			     "\t       (g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey ||\n"
+			     "\t\t(!ZB_IEEE_ADDR_IS_ZERO(g_nwkEdCtx.fixedJoinTcAddr) &&\n"
+			     "\t\t !ZB_IEEE_ADDR_IS_INVALID(g_nwkEdCtx.fixedJoinTcAddr)));\n"
+			     "}"));
+	EXPECT_TRUE(contains(source,
+			     "if (nwk_ed_minimal_fixed_join_target_locked()) {\n"
+			     "\t\tparentShortAddr = g_nwkEdCtx.fixedJoinShortAddr;\n"
+			     "\t\tpanId = g_nwkEdCtx.fixedJoinPanId;\n"
+			     "\t\tZB_EXTPANID_COPY(extPanId, g_nwkEdCtx.fixedJoinExtPanId);\n"
+			     "\t\tchannel = g_nwkEdCtx.fixedJoinChannel;\n"
+			     "\t} else if (g_nwkEdCtx.parentCandidateValid) {"));
+	EXPECT_TRUE(contains_between(source,
+				     "static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_rx_evt_t *evt)",
+				     "LOG_INF(\"traffic candidate: pan 0x%04x parent 0x%04x ch %u rssi %d\",",
+				     "if (!nwk_ed_minimal_fixed_join_target_locked()) {\n"
+				     "\t\t\ttl_zbNwkEdMinimalSetFixedJoinTarget("));
+
+	free(source);
+}
+
 int main(void)
 {
 	test_interview_poll_start_can_restart_active_interview();
@@ -190,6 +242,8 @@ int main(void)
 	test_joined_rx_gate_allows_pre_interview_assoc_window();
 	test_joined_tx_gate_allows_pre_interview_assoc_window();
 	test_post_join_announce_arms_interview_poll_unconditionally();
+	test_assoc_handoff_arms_bdb_interview_poll();
+	test_locked_fixed_target_is_not_replaced_by_traffic_hints();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_interview_poll_start: %d failure(s)\n", failures);

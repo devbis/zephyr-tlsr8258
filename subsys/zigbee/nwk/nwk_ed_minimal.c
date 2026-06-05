@@ -150,6 +150,7 @@ volatile u32 zb_nwk_beacon_success_count;
 volatile u32 zb_nwk_beacon_last_len;
 volatile u32 zb_nwk_beacon_last_fcf;
 volatile u32 zb_nwk_ed_interview_trace[4];
+volatile u32 zb_nwk_ed_poll_trace[8] = {0x4e504f4cU};
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 volatile u32 zb_nwk_ed_timer_trace[64] = {0xb7e50000U};
 static u8 zb_nwk_ed_timer_trace_pos;
@@ -186,6 +187,7 @@ static void nwk_ed_minimal_timer_trace_put(u32 tag)
 #endif
 
 extern void tl_zdoEdMinimalDiscoveryDone(u8 status);
+extern void tl_zdoEdMinimalAssocDone(u8 status, bool rejoinMode);
 extern void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode);
 extern void bdb_ed_runtime_join_complete(void);
 extern u8 zb_zdoSendDevAnnance(void);
@@ -401,6 +403,14 @@ static void nwk_ed_minimal_apply_tc_context(void)
 		ss_securityModeSet(SS_SEMODE_DISTRIBUTED);
 		LOG_INF("join security: distributed/no tc");
 	}
+}
+
+static bool nwk_ed_minimal_fixed_join_target_locked(void)
+{
+	return g_nwkEdCtx.fixedJoinValid &&
+	       (g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey ||
+		(!ZB_IEEE_ADDR_IS_ZERO(g_nwkEdCtx.fixedJoinTcAddr) &&
+		 !ZB_IEEE_ADDR_IS_INVALID(g_nwkEdCtx.fixedJoinTcAddr)));
 }
 
 static bool nwk_ed_minimal_parse_beacon_candidate(const u8 *psdu, u8 len,
@@ -639,7 +649,9 @@ static bool nwk_ed_minimal_send_timeout_request(void)
 
 	frame[idx - NWK_ED_MINIMAL_NWK_AUX_HDR_LEN] = NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE;
 	idx = (u8)(idx + enc_len);
-	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+	/* Frame counter NOT persisted here — synchronous NVS write inside the
+	 * TX path can stall the Zigbee thread on TLSR8258 flash GC, breaking
+	 * interview/TCLK timing.  Counter is persisted on join completion. */
 
 	rc = zb_platform_radio_send_raw_psdu(frame, idx);
 	if (rc < 0) {
@@ -825,8 +837,7 @@ static bool nwk_ed_minimal_send_data_request(void)
 		 MAC_SHORT_ADDR_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN + 1U];
 	u8 idx = 0;
 	u16 fcf = 0;
-	bool useShortSrc = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_INTERVIEW || g_zbNwkCtx.joined) &&
-			   (g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED);
+	bool useShortSrc = g_zbNIB.nwkAddr < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED;
 	int rc;
 
 	fcf |= MAC_FRAME_COMMAND;
@@ -852,8 +863,18 @@ static bool nwk_ed_minimal_send_data_request(void)
 		idx += sizeof(addrExt_t);
 	}
 	frame[idx++] = MAC_CMD_DATA_REQUEST;
+	zb_nwk_ed_poll_trace[1]++;
+	zb_nwk_ed_poll_trace[2] = ((u32)g_nwkEdCtx.state << 24) |
+				  ((u32)(useShortSrc ? 1U : 0U) << 16) |
+				  g_nwkEdCtx.activeChannel;
+	zb_nwk_ed_poll_trace[3] = ((u32)g_nwkEdCtx.activeParentShortAddr << 16) |
+				  g_zbNIB.nwkAddr;
+	zb_nwk_ed_poll_trace[4] = ((u32)fcf << 16) | idx;
 
 	rc = zb_platform_radio_send_raw_psdu(frame, idx);
+	zb_nwk_ed_poll_trace[5] = ((u32)(u8)rc << 24) |
+				  ((u32)frame[MAC_FCF_FIELD_LEN] << 16) |
+				  frame[idx - 1U];
 	nwk_ed_minimal_timer_trace_put((0x05U << 24) |
 				       ((u32)g_nwkEdCtx.state << 16) |
 				       ((u32)(u8)idx << 8) |
@@ -980,7 +1001,7 @@ static bool nwk_ed_minimal_send_rejoin_request(void)
 		}
 		frame[sec_ctrl_idx] = NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE;
 		idx = payload_idx + enc_len;
-		(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+		/* Frame counter persisted on join completion only; see note above. */
 	}
 
 	rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
@@ -1015,7 +1036,12 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	u8 channel;
 	int rc;
 
-	if (g_nwkEdCtx.parentCandidateValid) {
+	if (nwk_ed_minimal_fixed_join_target_locked()) {
+		parentShortAddr = g_nwkEdCtx.fixedJoinShortAddr;
+		panId = g_nwkEdCtx.fixedJoinPanId;
+		ZB_EXTPANID_COPY(extPanId, g_nwkEdCtx.fixedJoinExtPanId);
+		channel = g_nwkEdCtx.fixedJoinChannel;
+	} else if (g_nwkEdCtx.parentCandidateValid) {
 		parentShortAddr = g_nwkEdCtx.parentCandidateShortAddr;
 		panId = g_nwkEdCtx.candidatePanId;
 		ZB_EXTPANID_COPY(extPanId, g_nwkEdCtx.candidateExtPanId);
@@ -1439,6 +1465,14 @@ static void nwk_ed_minimal_runtime_reset(void)
 	g_nwkEdCtx.parentCandidateShortAddr = MAC_SHORT_ADDR_NONE;
 	ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.parentCandidateIeee);
 	g_nwkEdCtx.lastJoinStatus = ZDO_NOT_SUPPORTED;
+	g_nwkEdCtx.fixedJoinValid = FALSE;
+	g_nwkEdCtx.fixedJoinChannel = 0xFFU;
+	g_nwkEdCtx.fixedJoinPanId = MAC_INVALID_PANID;
+	g_nwkEdCtx.fixedJoinShortAddr = MAC_SHORT_ADDR_NONE;
+	memset(g_nwkEdCtx.fixedJoinExtPanId, 0, sizeof(g_nwkEdCtx.fixedJoinExtPanId));
+	memset(g_nwkEdCtx.fixedJoinNwkKey, 0, sizeof(g_nwkEdCtx.fixedJoinNwkKey));
+	g_nwkEdCtx.fixedJoinUsesPreconfiguredNwkKey = FALSE;
+	ZB_IEEE_ADDR_ZERO(g_nwkEdCtx.fixedJoinTcAddr);
 	g_nwkEdCtx.remainingScanChannels = 0U;
 	g_nwkEdCtx.activeScanChannel = 0xFFU;
 	g_nwkEdCtx.haveBeaconCandidate = FALSE;
@@ -1462,6 +1496,8 @@ static void nwk_ed_minimal_runtime_reset(void)
 	g_nwkEdCtx.rxEvtDropCount = 0U;
 	g_nwkEdCtx.rxEvtOverflowCount = 0U;
 	g_nwkEdCtx.lastRxEvtDropType = NWK_ED_MINIMAL_RX_EVT_NONE;
+	g_nwkEdCtx.beaconEbusyRetry = 0U;
+	g_nwkEdCtx.assocEbusyRetry = 0U;
 	g_nwkEdRxEvtHead = 0U;
 	g_nwkEdRxEvtTail = 0U;
 	g_nwkEdRxEvtCount = 0U;
@@ -1673,12 +1709,7 @@ void tl_zbNwkEdMinimalRejoinResponseReceived(u8 status, u16 nwkAddr, u16 parentS
 	if (!aps_ib.aps_authenticated) {
 		LOG_INF("rejoin response accepted: short 0x%04x pan 0x%04x parent 0x%04x, waiting transport key",
 			nwkAddr, g_nwkEdCtx.activePanId, parentShortAddr);
-		/* Keep ZDO/BDB in the pre-join state until the transport key has
-		 * actually been installed.  Signalling success here causes BDB to
-		 * start post-join procedures while NWK/APS security is still
-		 * incomplete, which splits runtime state and can preempt the real
-		 * transport-key interview traffic.
-		 */
+		tl_zdoEdMinimalAssocDone(ZDO_SUCCESS, TRUE);
 		nwk_ed_minimal_enter_interview(TRUE);
 		return;
 	}
@@ -2000,10 +2031,13 @@ static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *ev
 		g_nwkEdCtx.candidateShortAddr = evt->beacon.parentShortAddr;
 		ZB_EXTPANID_COPY(g_nwkEdCtx.candidateExtPanId, evt->beacon.extPanId);
 		tl_zbNwkEdMinimalParentCandidateSet(evt->beacon.parentShortAddr, NULL);
-		tl_zbNwkEdMinimalSetFixedJoinTarget(evt->beacon.channel, evt->beacon.panId,
-						    evt->beacon.parentShortAddr, evt->beacon.extPanId,
-						    have_profile && profile.network_key_valid ? profile.network_key : NULL,
-						    have_profile && profile.tc_addr_valid ? profile.tc_addr : NULL);
+		if (!nwk_ed_minimal_fixed_join_target_locked()) {
+			tl_zbNwkEdMinimalSetFixedJoinTarget(
+				evt->beacon.channel, evt->beacon.panId,
+				evt->beacon.parentShortAddr, evt->beacon.extPanId,
+				have_profile && profile.network_key_valid ? profile.network_key : NULL,
+				have_profile && profile.tc_addr_valid ? profile.tc_addr : NULL);
+		}
 		if (have_profile) {
 			LOG_INF("matched beacon candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
 				evt->beacon.panId, evt->beacon.parentShortAddr, evt->beacon.channel,
@@ -2053,9 +2087,11 @@ static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_r
 		g_nwkEdCtx.candidateShortAddr = evt->traffic.parentShortAddr;
 		memset(g_nwkEdCtx.candidateExtPanId, 0, sizeof(g_nwkEdCtx.candidateExtPanId));
 		tl_zbNwkEdMinimalParentCandidateSet(evt->traffic.parentShortAddr, NULL);
-		tl_zbNwkEdMinimalSetFixedJoinTarget(evt->traffic.channel, evt->traffic.panId,
-						    evt->traffic.parentShortAddr, NULL,
-						    NULL, NULL);
+		if (!nwk_ed_minimal_fixed_join_target_locked()) {
+			tl_zbNwkEdMinimalSetFixedJoinTarget(evt->traffic.channel, evt->traffic.panId,
+							    evt->traffic.parentShortAddr, NULL,
+							    NULL, NULL);
+		}
 		LOG_INF("traffic candidate: pan 0x%04x parent 0x%04x ch %u rssi %d",
 			evt->traffic.panId, evt->traffic.parentShortAddr,
 			evt->traffic.channel, evt->rssi);
@@ -2118,10 +2154,7 @@ static void nwk_ed_minimal_handle_assoc_rsp_event(const nwk_ed_minimal_rx_evt_t 
 			LOG_INF("%s associated: short 0x%04x pan 0x%04x parent 0x%04x, waiting transport key",
 				rejoinMode ? "rejoin" : "join", evt->assocRsp.assignedShortAddr,
 				g_nwkEdCtx.activePanId, g_nwkEdCtx.activeParentShortAddr);
-			/* Delay the join-confirm callback until the transport key is
-			 * installed so higher layers do not start BDB/TCLK work before
-			 * the end-device interview is complete.
-			 */
+			tl_zdoEdMinimalAssocDone(ZDO_SUCCESS, rejoinMode);
 			nwk_ed_minimal_enter_interview(rejoinMode);
 			return;
 		}

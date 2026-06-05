@@ -30,6 +30,28 @@ static bool tlsr8258_rf_dma_frame_valid(const uint8_t *rx, size_t rx_size)
 	return (rx[dma_len + 3u] & 0x51u) == 0x10u;
 }
 
+static bool tlsr8258_rf_dma_frame_sane(const uint8_t *rx, size_t rx_size)
+{
+	uint8_t dma_len;
+
+	if ((rx == NULL) || (rx_size < 8u)) {
+		return false;
+	}
+
+	dma_len = rx[0];
+	if ((dma_len == 0u) || (dma_len >= (rx_size - 3u))) {
+		return false;
+	}
+
+	/*
+	 * Keep the IRQ path tolerant to DMA-header differences.  On hardware we
+	 * sometimes see a valid RX IRQ with a sensible DMA span but an invalid or
+	 * transient PSDU-length byte at rx[4].  Let the upper RX path validate the
+	 * frame instead of dropping it in the ISR.
+	 */
+	return dma_len >= 9u;
+}
+
 uint16_t tlsr8258_rf_irq_runtime_mask(void)
 {
 	return RF_IRQ_RX_EVENTS | RF_IRQ_TX;
@@ -38,9 +60,10 @@ uint16_t tlsr8258_rf_irq_runtime_mask(void)
 uint16_t tlsr8258_rf_irq_effective_status(uint16_t irq, const uint8_t *rx, size_t rx_size)
 {
 	bool dma_valid = tlsr8258_rf_dma_frame_valid(rx, rx_size);
+	bool dma_sane = tlsr8258_rf_dma_frame_sane(rx, rx_size);
 
 	if ((irq & RF_IRQ_RX_EVENTS) != 0u) {
-		if (!dma_valid) {
+		if (!dma_valid && !dma_sane) {
 			return irq & (uint16_t)~RF_IRQ_RX_EVENTS;
 		}
 
