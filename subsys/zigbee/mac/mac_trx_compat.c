@@ -289,7 +289,6 @@ typedef struct {
 #define ZB_MINIMAL_NWK_AUX_HDR_LEN 14U
 #define ZB_MINIMAL_NWK_MIC_LEN     4U
 #define ZB_MINIMAL_APS_MIC_LEN     4U
-#define ZB_MINIMAL_CCM_L_VAL       2U
 #define ZB_MINIMAL_TX_RETRIES      4U
 #define ZB_MINIMAL_TX_RETRY_US     5000U
 #define ZB_MINIMAL_NWK_SEC_CTRL    0x2DU
@@ -309,17 +308,38 @@ static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
 static zb_minimal_pending_leave_t g_minimal_pending_leave;
 volatile u32 zb_minimal_zdo_trace[8] = {0x5a444f31U};
 volatile u32 zb_minimal_join_rx_trace[8] = {0x4a525831U};
+volatile u32 zb_minimal_join_filter_trace[8] = {0x4a464c54U};
+volatile u32 zb_minimal_join_gate_trace[8] = {0x4a474154U};
 
-static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
+static bool zb_minimal_security_key_is_set(const u8 *key)
 {
-	for (u8 i = 0U; i < SECUR_N_SECUR_MATERIAL; i++) {
-		if (ss_ib.nwkSecurMaterialSet[i].keySeqNum == key_seq) {
-			return ss_ib.nwkSecurMaterialSet[i].key;
+	if (key == NULL) {
+		return false;
+	}
+
+	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+		if (key[i] != 0U) {
+			return true;
 		}
 	}
 
-	if (ss_ib.activeSecureMaterialIndex < SECUR_N_SECUR_MATERIAL) {
-		return ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+	return false;
+}
+
+static u8 *zb_minimal_nwk_key_by_seq(u8 key_seq)
+{
+	if (key_seq == 0U) {
+		key_seq = ss_ib.activeKeySeqNum;
+	}
+
+	for (u8 i = 0U; i < SECUR_N_SECUR_MATERIAL; i++) {
+		u8 idx = (u8)((ss_ib.activeSecureMaterialIndex + i) & 0x01U);
+		u8 *key = ss_ib.nwkSecurMaterialSet[idx].key;
+
+		if ((ss_ib.nwkSecurMaterialSet[idx].keySeqNum == key_seq) &&
+		    zb_minimal_security_key_is_set(key)) {
+			return key;
+		}
 	}
 
 	return NULL;
@@ -480,7 +500,8 @@ static int zb_minimal_send_aps_ack(const zb_minimal_nwk_frame_t *nwk, const zb_m
 
 	frame[aps_hdr_idx - nwk_hdr_len + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
 	idx = aps_hdr_idx + enc_len;
-	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+	/* Frame counter persisted at safe sync points only — NVS write in the
+	 * TX hot path can stall the Zigbee thread mid-interview on TLSR8258. */
 
 	for (attempt = 0U; attempt < ZB_MINIMAL_TX_RETRIES; attempt++) {
 		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
@@ -494,128 +515,6 @@ static int zb_minimal_send_aps_ack(const zb_minimal_nwk_frame_t *nwk, const zb_m
 	}
 
 	return rc;
-}
-
-static void zb_minimal_aes_encrypt_block(const u8 *key, const u8 *in, u8 *out)
-{
-	drv_aes_encrypt((u8 *)key, (u8 *)in, out);
-}
-
-static void zb_minimal_ccm_xor_block(u8 *dst, const u8 *src)
-{
-	for (u8 i = 0U; i < 16U; i++) {
-		dst[i] ^= src[i];
-	}
-}
-
-static void zb_minimal_ccm_mac_block(const u8 *key, u8 state[16], const u8 block[16])
-{
-	u8 tmp[16];
-
-	memcpy(tmp, state, sizeof(tmp));
-	zb_minimal_ccm_xor_block(tmp, block);
-	zb_minimal_aes_encrypt_block(key, tmp, state);
-}
-
-static void zb_minimal_ccm_ctr_block(const u8 *key, const u8 nonce[13], u16 counter, u8 stream[16])
-{
-	u8 a_i[16] = {0};
-
-	a_i[0] = ZB_MINIMAL_CCM_L_VAL - 1U;
-	memcpy(&a_i[1], nonce, 13U);
-	a_i[14] = (u8)(counter >> 8);
-	a_i[15] = (u8)counter;
-	zb_minimal_aes_encrypt_block(key, a_i, stream);
-}
-
-static void zb_minimal_ccm_add_aad(const u8 *key, u8 state[16], const u8 *aad, u8 aad_len)
-{
-	u8 block[16] = {0};
-	u8 idx = 0U;
-	u8 off = 0U;
-
-	if ((aad == NULL) || (aad_len == 0U)) {
-		return;
-	}
-
-	block[idx++] = 0U;
-	block[idx++] = aad_len;
-	while ((off < aad_len) && (idx < sizeof(block))) {
-		block[idx++] = aad[off++];
-	}
-	zb_minimal_ccm_mac_block(key, state, block);
-
-	while (off < aad_len) {
-		memset(block, 0, sizeof(block));
-		for (idx = 0U; (idx < sizeof(block)) && (off < aad_len); idx++) {
-			block[idx] = aad[off++];
-		}
-		zb_minimal_ccm_mac_block(key, state, block);
-	}
-}
-
-static void zb_minimal_ccm_add_msg(const u8 *key, u8 state[16], const u8 *msg, u8 msg_len)
-{
-	u8 block[16] = {0};
-	u8 off = 0U;
-	u8 idx;
-
-	while (off < msg_len) {
-		memset(block, 0, sizeof(block));
-		for (idx = 0U; (idx < sizeof(block)) && (off < msg_len); idx++) {
-			block[idx] = msg[off++];
-		}
-		zb_minimal_ccm_mac_block(key, state, block);
-	}
-}
-
-static bool zb_minimal_ccm_decrypt_frame_auth(const u8 *key, const u8 nonce[13], u8 mic_len,
-					      u8 *cipher, u8 cipher_len, const u8 *aad,
-					      u8 aad_len, u8 *mic)
-{
-	u8 mac_state[16] = {0};
-	u8 b0[16] = {0};
-	u8 s0[16];
-	u8 tag[16];
-	u8 stream[16];
-	u8 flags = (u8)(ZB_MINIMAL_CCM_L_VAL - 1U);
-	u8 off = 0U;
-	u16 counter = 1U;
-
-	if ((key == NULL) || (nonce == NULL) || (cipher == NULL) || (mic == NULL) ||
-	    (mic_len != ZB_MINIMAL_NWK_MIC_LEN)) {
-		return false;
-	}
-
-	while (off < cipher_len) {
-		u8 blk_len = MIN((u8)16U, (u8)(cipher_len - off));
-
-		zb_minimal_ccm_ctr_block(key, nonce, counter++, stream);
-		for (u8 i = 0U; i < blk_len; i++) {
-			cipher[off + i] ^= stream[i];
-		}
-		off += blk_len;
-	}
-
-	if (aad_len != 0U) {
-		flags |= 0x40U;
-	}
-	flags |= (u8)(((mic_len - 2U) / 2U) << 3);
-	b0[0] = flags;
-	memcpy(&b0[1], nonce, 13U);
-	b0[14] = (u8)(cipher_len >> 8);
-	b0[15] = cipher_len;
-
-	zb_minimal_ccm_mac_block(key, mac_state, b0);
-	zb_minimal_ccm_add_aad(key, mac_state, aad, aad_len);
-	zb_minimal_ccm_add_msg(key, mac_state, cipher, cipher_len);
-
-	zb_minimal_ccm_ctr_block(key, nonce, 0U, s0);
-	for (u8 i = 0U; i < mic_len; i++) {
-		tag[i] = mac_state[i] ^ s0[i];
-	}
-
-	return memcmp(tag, mic, mic_len) == 0;
 }
 
 static bool zb_minimal_parse_mac_frame(const u8 *psdu, u8 len, zb_minimal_mac_frame_t *frame)
@@ -726,20 +625,26 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	zb_minimal_mac_addr_info_t info;
 	bool dst_match = false;
 	bool src_match = false;
-	bool allow_broadcast = !g_zbNwkCtx.joined;
 
 	if (!zb_minimal_parse_mac_addr_info(psdu, len, &info)) {
+		zb_minimal_join_filter_trace[1] = 0xf0010000U | len;
 		return false;
 	}
+	zb_minimal_join_filter_trace[1] =
+		((u32)(info.dst_short_valid ? 1U : 0U) << 31) |
+		((u32)(info.dst_ext_valid ? 1U : 0U) << 30) |
+		((u32)(info.src_short_valid ? 1U : 0U) << 29) |
+		((u32)(info.src_ext_valid ? 1U : 0U) << 28) |
+		((u32)info.dst_short_addr << 16) | info.src_short_addr;
 
 	if (info.dst_short_valid) {
-		dst_match = (info.dst_short_addr == g_zbMacPib.shortAddress) ||
-			    (allow_broadcast && info.dst_short_addr == MAC_SHORT_ADDR_BROADCAST);
+		dst_match = (info.dst_short_addr == g_zbMacPib.shortAddress);
 	} else if (info.dst_ext_valid) {
 		dst_match = memcmp(info.dst_ext_addr, g_zbMacPib.extAddress, sizeof(addrExt_t)) == 0;
 	}
 
 	if (!dst_match) {
+		zb_minimal_join_filter_trace[2] = 0xf0020000U | info.dst_short_addr;
 		return false;
 	}
 
@@ -751,8 +656,17 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 		src_match = memcmp(info.src_ext_addr, g_zbMacPib.coordExtAddress,
 				   sizeof(addrExt_t)) == 0;
 	} else {
-		src_match = true;
+		src_match = false;
 	}
+	zb_minimal_join_filter_trace[3] =
+		((u32)(src_match ? 1U : 0U) << 24) | g_zbMacPib.coordShortAddress;
+
+	if (!src_match) {
+		zb_minimal_join_filter_trace[4] = 0xf0030000U | info.src_short_addr;
+		return false;
+	}
+
+	zb_minimal_join_filter_trace[4] = 0xf0040000U | info.src_short_addr;
 
 	return src_match;
 }
@@ -869,8 +783,8 @@ static bool zb_minimal_decrypt_nwk_payload(u8 *nwk_psdu, u8 nwk_len, zb_minimal_
 	cipher_len = (u8)(frame->payload_len - frame->mic_len);
 	mic = &cipher[cipher_len];
 
-	if (!zb_minimal_ccm_decrypt_frame_auth(key, nonce, frame->mic_len, cipher, cipher_len, aad,
-					       frame->header_len, mic)) {
+	if (!zb_minimal_ccm_decrypt_auth(key, nonce, frame->mic_len, cipher, cipher_len, aad,
+					 frame->header_len, mic)) {
 		LOG_DBG("joined RX: nwk auth failed src=0x%04x key_seq=%u", frame->src_addr,
 			frame->key_seq);
 		return false;
@@ -997,9 +911,9 @@ static bool zb_minimal_decrypt_aps_payload(u8 *aps_psdu, u8 aps_len, zb_minimal_
 	u8 hashed_key[SEC_KEY_LEN];
 	u8 *mic;
 	u8 cipher_len;
+	u8 aad_len;
 	u8 sec_ctrl_idx;
 	bool transport_key_sec = false;
-	bool auth_ok;
 
 	if ((aps_psdu == NULL) || (frame == NULL) || !frame->security) {
 		return false;
@@ -1053,6 +967,7 @@ static bool zb_minimal_decrypt_aps_payload(u8 *aps_psdu, u8 aps_len, zb_minimal_
 	nonce[12] = aad[sec_ctrl_idx];
 
 	cipher = (u8 *)frame->payload;
+	aad_len = (u8)(frame->payload - aps_psdu);
 	cipher_len = (u8)(frame->payload_len - frame->mic_len);
 	mic = &cipher[cipher_len];
 
@@ -1062,11 +977,8 @@ static bool zb_minimal_decrypt_aps_payload(u8 *aps_psdu, u8 aps_len, zb_minimal_
 	}
 
 	memcpy(cipher_shadow, cipher, cipher_len);
-	auth_ok = zb_minimal_ccm_decrypt_frame_auth(key, nonce, frame->mic_len, cipher_shadow,
-						    cipher_len, aad,
-						    (u8)(frame->payload - aps_psdu), mic);
-
-	if (!auth_ok) {
+	if (!zb_minimal_ccm_decrypt_auth(key, nonce, frame->mic_len, cipher_shadow, cipher_len, aad,
+					 aad_len, mic)) {
 		if (transport_key_sec) {
 		}
 		LOG_DBG("joined RX: APS auth failed key_id=%u", frame->key_id);
@@ -1401,7 +1313,7 @@ static int zb_minimal_send_nwk_leave_command(u8 options)
 
 	frame[nwk_hdr_idx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
 	idx = payload_idx + enc_len;
-	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+	/* Frame counter persisted at safe sync points only — see note above. */
 
 	for (attempt = 0U; attempt < ZB_MINIMAL_TX_RETRIES; attempt++) {
 		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
@@ -1819,17 +1731,49 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 
 void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
 {
+	bool can_process = false;
+	u16 mac_frame_ctrl = 0U;
+	u8 frame_type = 0xffU;
+
 	ARG_UNUSED(rxBuf);
-	ARG_UNUSED(ackPkt);
 	ARG_UNUSED(timestamp);
-	ARG_UNUSED(rssi);
+
+	zb_minimal_join_gate_trace[1]++;
+	if ((data != NULL) && (len >= 2U)) {
+		mac_frame_ctrl = zb_u16_from_le(data);
+		frame_type = (u8)(mac_frame_ctrl & MAC_FCF_FRAME_TYPE_MASK);
+	}
+	zb_minimal_join_gate_trace[2] = ((u32)frame_type << 24) |
+					 ((u32)len << 16) |
+					 ((u32)ackPkt << 8) |
+					 rf_getChannel();
+	zb_minimal_join_gate_trace[5] = mac_frame_ctrl;
+	zb_minimal_join_gate_trace[6] =
+		((u32)((mac_frame_ctrl & MAC_FCF_FRAME_PENDING_MASK) != 0U) << 24) |
+		((u32)((mac_frame_ctrl & MAC_FCF_ACK_REQ_BIT) != 0U) << 16) |
+		((u32)(data != NULL ? data[2] : 0U) << 8) |
+		frame_type;
 
 	tl_zbNwkEdMinimalMacRxIndicate(data, len, rssi);
+	can_process = (data != NULL) &&
+		      (len >= MAC_MIN_HDR_LEN) &&
+		      tl_zbNwkEdMinimalCanProcessDataFrames();
+	zb_minimal_join_gate_trace[3] = ((u32)(g_zbNwkCtx.joined ? 1U : 0U) << 24) |
+					 ((u32)(can_process ? 1U : 0U) << 16) |
+					 ((u32)(u8)rssi << 8) |
+					 frame_type;
 
-	if ((data == NULL) || (len < MAC_MIN_HDR_LEN) || !tl_zbNwkEdMinimalCanProcessDataFrames()) {
+	if (!can_process) {
+		zb_minimal_join_gate_trace[4] = ((u32)(data == NULL ? 1U : 0U) << 24) |
+						 ((u32)(len < MAC_MIN_HDR_LEN ? 1U : 0U) << 16) |
+						 ((u32)(frame_type == MAC_FRAME_DATA ? 1U : 0U) << 8) |
+						 (u32)(g_zbNwkCtx.joined ? 1U : 0U);
 		return;
 	}
 
+	zb_minimal_join_gate_trace[4] = 0xd0010000U |
+					 ((u32)(frame_type == MAC_FRAME_DATA ? 1U : 0U) << 8) |
+					 rf_getChannel();
 	zb_minimal_handle_joined_data_frame(data, len);
 }
 
