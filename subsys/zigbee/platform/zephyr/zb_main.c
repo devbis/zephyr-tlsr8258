@@ -12,6 +12,7 @@
 #include "ev_poll.h"
 #include "ev_buffer.h"
 #include "zb_common_stub.h"
+#include "zdo/zdo_api.h"
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -42,7 +43,19 @@ static bool zb_bootstrap_done;
 static bool zb_core_init_done;
 static bool zb_commissioning_pending;
 static bool zb_waiting_for_radio_log;
+static bool zb_persistent_rejoin_in_progress;
+static uint32_t zb_persistent_rejoin_started_ms;
+static uint32_t zb_last_commission_retry_ms;
 extern volatile u32 zb_nwk_ed_trace[];
+
+#define ZB_COMMISSION_RETRY_POLL_MS 5000U
+/*
+ * Maximum time the bootstrap will block on a persisted-state rejoin before
+ * giving up and letting fresh commissioning run.  Stale joined=1 with no
+ * usable Transport Key would otherwise keep the device parked here forever
+ * because the NWK manager never returns to IDLE.
+ */
+#define ZB_PERSISTENT_REJOIN_GIVEUP_MS 12000U
 
 void __weak zb_platform_app_bootstrap_ready(void)
 {
@@ -140,11 +153,18 @@ static void zb_core_bootstrap_once(void)
 	zb_platform_app_bootstrap_ready();
 	zb_nwk_ed_trace[15] = 0xA5B00001U;
 
+	if (zb_platform_bdb_service_persistent_rejoin()) {
+		zb_persistent_rejoin_in_progress = true;
+		zb_persistent_rejoin_started_ms = k_uptime_get_32();
+		zb_nwk_ed_trace[15] = 0xA5B0000DU;
+	}
+
 	if (zb_platform_app_enable_radio_smoke_probe()) {
 		zb_radio_smoke_probe();
 	}
 
-	if (zb_platform_app_should_start_commissioning()) {
+	if (!zb_persistent_rejoin_in_progress &&
+	    zb_platform_app_should_start_commissioning()) {
 		zb_nwk_ed_trace[15] = 0xA5B00002U;
 		zb_commissioning_pending = true;
 	} else {
@@ -154,9 +174,51 @@ static void zb_core_bootstrap_once(void)
 	zb_bootstrap_done = true;
 }
 
+static void zb_process_deferred_persistent_rejoin(void)
+{
+	if (!zb_bootstrap_done) {
+		return;
+	}
+
+	if (zb_isDeviceJoinedNwk() && zdo_ifZdoNwkManagerIdle()) {
+		zb_persistent_rejoin_in_progress = false;
+		zb_persistent_rejoin_started_ms = 0U;
+	}
+
+	if (zb_persistent_rejoin_in_progress) {
+		/*
+		 * Give up if the persisted-state rejoin keeps the NWK manager
+		 * non-idle past the budget without delivering a real join.
+		 * Otherwise stale joined=1 in NV blocks commissioning forever.
+		 */
+		uint32_t elapsed = k_uptime_get_32() - zb_persistent_rejoin_started_ms;
+
+		if (zb_persistent_rejoin_started_ms != 0U &&
+		    elapsed > ZB_PERSISTENT_REJOIN_GIVEUP_MS &&
+		    !zb_isDeviceJoinedNwk()) {
+			zb_platform_bdb_abandon_persistent_rejoin();
+			zb_persistent_rejoin_in_progress = false;
+			zb_persistent_rejoin_started_ms = 0U;
+			zb_nwk_ed_trace[15] = 0xA5B0000FU;
+		}
+		return;
+	}
+
+	if (zb_platform_bdb_service_persistent_rejoin()) {
+		zb_persistent_rejoin_in_progress = true;
+		zb_persistent_rejoin_started_ms = k_uptime_get_32();
+		zb_nwk_ed_trace[15] = 0xA5B0000EU;
+	}
+}
+
 static void zb_process_deferred_commissioning(void)
 {
 	if (!zb_bootstrap_done || !zb_commissioning_pending) {
+		return;
+	}
+
+	if (!zdo_ifZdoNwkManagerIdle()) {
+		zb_nwk_ed_trace[15] = 0xA5B0000AU;
 		return;
 	}
 
@@ -164,6 +226,29 @@ static void zb_process_deferred_commissioning(void)
 	zb_commissioning_pending = false;
 	zb_platform_app_start_commissioning();
 	zb_nwk_ed_trace[15] = 0xA5B00006U;
+}
+
+static void zb_requeue_commissioning_if_needed(void)
+{
+	uint32_t now_ms;
+
+	if (!zb_bootstrap_done || zb_commissioning_pending || zb_isDeviceJoinedNwk()) {
+		return;
+	}
+
+	if (!zb_platform_app_should_start_commissioning()) {
+		return;
+	}
+
+	now_ms = k_uptime_get_32();
+	if ((zb_last_commission_retry_ms != 0U) &&
+	    ((now_ms - zb_last_commission_retry_ms) < ZB_COMMISSION_RETRY_POLL_MS)) {
+		return;
+	}
+
+	zb_last_commission_retry_ms = now_ms;
+	zb_commissioning_pending = true;
+	zb_nwk_ed_trace[15] = 0xA5B0000CU;
 }
 
 static void zb_thread_fn(void *a, void *b, void *c)
@@ -187,7 +272,15 @@ static void zb_thread_fn(void *a, void *b, void *c)
 
 		ev_timer_process();
 		ev_poll_process();
+		zb_process_deferred_persistent_rejoin();
 		zb_process_deferred_commissioning();
+		zb_requeue_commissioning_if_needed();
+		if (zb_commissioning_pending) {
+			zb_nwk_ed_trace[15] = 0xA5B0000BU;
+			k_yield();
+			k_busy_wait(1000);
+			continue;
+		}
 
 		if (k_sem_take(&zb_ev_sem, K_NO_WAIT) == 0) {
 			zb_nwk_ed_trace[15] = 0xA5B00007U;

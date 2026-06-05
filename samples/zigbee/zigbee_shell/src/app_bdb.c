@@ -52,6 +52,12 @@ extern uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt);
 	static const uint8_t app_bdb_fixed_tc_addr[8] = {
 		0x60, 0x2d, 0xce, 0xfe, 0xff, 0x89, 0xc0, 0x1c,
 	};
+	static const uint8_t app_bdb_fixed_ext_pan_id[8] = {
+		0x3b, 0x09, 0x9d, 0x06, 0x4f, 0x8f, 0xee, 0x70,
+	};
+#define APP_BDB_FIXED_CHANNEL 11U
+#define APP_BDB_FIXED_PAN_ID  0x5b27U
+#define APP_BDB_FIXED_PARENT  0x0000U
 
 extern bool zb_isDeviceJoinedNwk(void);
 extern bool zdo_ifZdoNwkManagerIdle(void);
@@ -189,8 +195,25 @@ static void app_bdb_commissioning_retry_schedule(void)
 
 bool app_bdb_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
+#if !defined(CONFIG_ZIGBEE_BDB)
 	ARG_UNUSED(target);
 	return false;
+#else
+	if (target == NULL) {
+		return false;
+	}
+
+	memset(target, 0, sizeof(*target));
+	target->channel = APP_BDB_FIXED_CHANNEL;
+	target->pan_id = APP_BDB_FIXED_PAN_ID;
+	target->short_addr = APP_BDB_FIXED_PARENT;
+	memcpy(target->ext_pan_id, app_bdb_fixed_ext_pan_id,
+	       sizeof(app_bdb_fixed_ext_pan_id));
+	memcpy(target->tc_addr, app_bdb_fixed_tc_addr, sizeof(app_bdb_fixed_tc_addr));
+	target->tc_addr_valid = true;
+
+	return true;
+#endif
 }
 
 bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
@@ -316,13 +339,14 @@ void app_bdb_start_commissioning(void)
 			app_bdb_commissioning_retry_schedule();
 			zb_nwk_ed_trace[14] = 0xA4B00010U | status;
 		}
+		/* Keep this path non-blocking: the Zigbee thread must return to the
+		 * scheduler so the queued BDB start task can run immediately. */
 		zb_nwk_ed_trace[14] = 0xA4B00020U | status;
-		LOG_INF("zigbee_shell commissioning start requested (bdb status: 0x%02x)", status);
 	} else {
 		commissioning_start_requested = false;
 		app_bdb_commissioning_retry_schedule();
+		/* Trace is enough here; synchronous logging can stall commissioning. */
 		zb_nwk_ed_trace[14] = 0xA4B00030U | status;
-		LOG_WRN("zigbee_shell commissioning start rejected (bdb status: 0x%02x)", status);
 	}
 #endif
 }

@@ -409,24 +409,27 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 	ss_dev_pair_set_t keyPair;
 	const u8 *apsKey;
 	const u8 *linkKey;
+	bool useNwkSecurity;
 
+	zb_request_key_trace[3] = 0xa9b20001U;
 	if ((payload == NULL) || (payload_len == 0U) || (ss_ib.tcLinkKey == NULL)) {
+		zb_request_key_trace[3] = 0xa9b2ff01U;
 		return -EINVAL;
 	}
+	zb_request_key_trace[3] = 0xa9b20002U;
 	if (!zb_minimal_tc_link_key_context_get(&keyPair)) {
+		zb_request_key_trace[3] = 0xa9b2ff02U;
 		return -EINVAL;
 	}
 	linkKey = keyPair.linkKey;
 	nwkKey = zb_minimal_active_nwk_key_get();
-	if (nwkKey == NULL || ss_ib.securityLevel == 0U) {
-		return -EACCES;
-	}
+	useNwkSecurity = (nwkKey != NULL) && (ss_ib.securityLevel != 0U);
 
 	apsCnt = zb_minimal_next_aps_counter();
 
 	idx += zb_minimal_build_mac_header(&frame[idx], macDst);
 	nwkHdrIdx = idx;
-	nwkHdrLen = zb_minimal_build_nwk_header(&frame[idx], nwkDst, 30U, TRUE,
+	nwkHdrLen = zb_minimal_build_nwk_header(&frame[idx], nwkDst, 30U, useNwkSecurity,
 						       &nwkFrameCounter);
 	idx += nwkHdrLen;
 	nwkPayloadIdx = idx;
@@ -436,15 +439,42 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 		return -EINVAL;
 	}
 	frame[apsHdrIdx] |= 0x20U;
+	/*
+	 * Force key_id = Key-Transport Key (0x02) in the APS security control
+	 * byte.  The vendor helper ss_apsEnAuxHdrFill encodes Request-Key for
+	 * TCLK as Key-Load Key (0x03), but the Zigbee spec (R22 §4.4.10.4)
+	 * requires APS Request-Key from a joining device to be APS-encrypted
+	 * with the Key-Transport Key.  Coordinators (Z2M/Ember) decrypt with
+	 * Key-Transport Key and silently drop the frame when MIC mismatches,
+	 * which leaves us waiting on the 5s TCLK timeout for nothing.
+	 *
+	 * sec_ctrl bits 3-4 = key_id, where 0b10 = 0x10 selects Key-Transport.
+	 * This override must run BEFORE the AAD/nonce capture below, otherwise
+	 * the encryption nonce will not match the coordinator's decrypt nonce.
+	 */
+	frame[apsHdrIdx + 2U] = (u8)((frame[apsHdrIdx + 2U] & (u8)~0x18U) | 0x10U);
 	memcpy(aad, &frame[idx], apsHdrLen);
 	apsSecCtrl = frame[apsHdrIdx + 2U];
 	frameCounter = BUILD_U32(frame[apsHdrIdx + 3U], frame[apsHdrIdx + 4U],
 				 frame[apsHdrIdx + 5U], frame[apsHdrIdx + 6U]);
 	apsKey = zb_minimal_request_key_aps_key_get(apsSecCtrl, linkKey, keyHash);
 	if (apsKey == NULL) {
+		zb_request_key_trace[3] = 0xa9b2ff03U;
 		return -EINVAL;
 	}
-	(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+	zb_request_key_trace[3] = 0xa9b20003U;
+	/*
+	 * Do NOT persist the outgoing frame counter from inside the synchronous
+	 * TX path.  On TLSR8258 the Zephyr NVS write/GC can take hundreds of
+	 * milliseconds (or hang if a flash op fails to complete), which would
+	 * starve the Zigbee thread mid-interview.  The counter lives in
+	 * ss_ib.outgoingFrameCounter (RAM) and gets persisted at safer
+	 * synchronization points (complete_join -> zb_info_save, network
+	 * leave, etc.).  Losing a handful of counter increments across a crash
+	 * during the interview window is recoverable; the device hasn't
+	 * committed to the network until Transport Key install.
+	 */
+	zb_request_key_trace[3] = 0xa9b20004U;
 	idx += apsHdrLen;
 
 	sec_payload = &frame[idx];
@@ -457,25 +487,44 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 					     (u8)apsHdrLen, sec_payload, payload_len,
 					     &sec_payload[payload_len]);
 	if (enc_len != (u8)(payload_len + ZB_MINIMAL_APS_MIC_LEN)) {
+		zb_request_key_trace[3] = 0xa9b2ff04U;
 		return -EINVAL;
 	}
+	/*
+	 * After CCM* encryption, clear the security_level field on the wire APS
+	 * security control byte.  Zigbee R22 §4.5.1.1.2 mandates that the
+	 * transmitter sets sec_level=0 on wire; the receiver promotes it to the
+	 * configured level (5 = ENC-MIC-32) before computing AAD/nonce for
+	 * decryption.  Our encryption already used sec_level=5 in AAD and nonce
+	 * (via the unmodified header bytes), so the receiver's promoted AAD/nonce
+	 * will match.  EmberZNet (Z2M backend) silently drops APS-secured frames
+	 * with non-zero wire sec_level, which is why our Request-Key frames are
+	 * acknowledged at MAC level but ignored at APS level by the coordinator.
+	 */
+	frame[apsHdrIdx + 2U] &= (u8)~0x07U;
+	zb_request_key_trace[3] = 0xa9b20005U;
 	idx += enc_len;
 
-	memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
-	COPY_U32TOBUFFER(&nonce[8], nwkFrameCounter);
-	nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
-	enc_len = zb_minimal_ccm_encrypt_auth(nwkKey, nonce, ZB_MINIMAL_NWK_MIC_LEN,
-					      &frame[nwkHdrIdx], (u8)nwkHdrLen,
-					      &frame[nwkPayloadIdx],
-					      (u8)(idx - nwkPayloadIdx), &frame[idx]);
-	if (enc_len != (u8)((idx - nwkPayloadIdx) + ZB_MINIMAL_NWK_MIC_LEN)) {
-		return -EINVAL;
+	if (useNwkSecurity) {
+		memcpy(nonce, g_zbMacPib.extAddress, sizeof(addrExt_t));
+		COPY_U32TOBUFFER(&nonce[8], nwkFrameCounter);
+		nonce[12] = ZB_MINIMAL_NWK_SEC_CTRL;
+		enc_len = zb_minimal_ccm_encrypt_auth(nwkKey, nonce, ZB_MINIMAL_NWK_MIC_LEN,
+						      &frame[nwkHdrIdx], (u8)nwkHdrLen,
+						      &frame[nwkPayloadIdx],
+						      (u8)(idx - nwkPayloadIdx), &frame[idx]);
+		if (enc_len != (u8)((idx - nwkPayloadIdx) + ZB_MINIMAL_NWK_MIC_LEN)) {
+			return -EINVAL;
+		}
+		frame[nwkHdrIdx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
+		idx = nwkPayloadIdx + enc_len;
 	}
-	frame[nwkHdrIdx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
-	idx = nwkPayloadIdx + enc_len;
 
+	zb_request_key_trace[3] = 0xa9b20006U;
 	for (attempt = 0U; attempt < ZB_MINIMAL_ZDO_TX_RETRIES; attempt++) {
+		zb_request_key_trace[3] = 0xa9b20010U | attempt;
 		rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
+		zb_request_key_trace[3] = 0xa9b20020U | ((u32)attempt << 8) | (u8)rc;
 		if (rc >= 0) {
 			LOG_INF("minimal APS RequestKey tx dst=0x%04x mac=0x%04x aps=%u fc=%u",
 				nwkDst, macDst, apsCnt, frameCounter);
@@ -489,6 +538,7 @@ static int zb_minimal_send_aps_request_key_frame(u16 nwkDst, u16 macDst, const u
 		k_busy_wait(ZB_MINIMAL_ZDO_TX_RETRY_DELAY_US);
 	}
 
+	zb_request_key_trace[3] = 0xa9b2ff05U;
 	LOG_WRN("minimal APS RequestKey tx failed rc=%d", rc);
 	return RET_OPERATION_FAILED;
 }
@@ -623,7 +673,8 @@ static u8 zb_minimal_send_aps_data_frame(u8 srcEp, const epInfo_t *dst, u16 clus
 
 		frame[nwkHdrIdx + 8U] = ZB_MINIMAL_NWK_SEC_CTRL_WIRE;
 		idx = apsHdrIdx + encLen;
-		(void)nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
+		/* Frame counter is persisted at safe sync points only; see comment
+		 * in zb_minimal_send_aps_request_key_frame. */
 	}
 
 	rc = -EBUSY;
@@ -993,6 +1044,11 @@ u8 zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequestKeyReq)
 	}
 
 	memcpy(reqCopy, pRequestKeyReq, sizeof(*reqCopy));
+
+#if defined(CONFIG_IEEE802154_RAW_MODE)
+	zb_minimal_request_key_task(reqCopy);
+	return RET_OK;
+#endif
 
 	if (TL_SCHEDULE_TASK(zb_minimal_request_key_task, reqCopy) != RET_OK) {
 		ev_buf_free((u8 *)reqCopy);

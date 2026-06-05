@@ -547,6 +547,16 @@ bool bdb_addIdentifyActiveEpForFB(findBindDst_t dstInfo);
 status_t bdb_defaultReportingCfg(u8 endpoint, u16 profileID, u16 clusterID, u16 attrID, u16 minReportInt, u16 maxReportInt, u8 *reportableChange);
 
 /*
+ * @fn      bdb_zdoAssocDone
+ *
+ * @brief   association/interview handoff handle
+ *
+ * @param   startDevCnf
+ *
+ */
+void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
+
+/*
  * @fn      bdb_zdoStartDevCnf
  *
  * @brief	node start confirm handle
