@@ -68,7 +68,16 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_PHY_MAX_PSDU 127u
 #define TLSR8258_FCS_LENGTH 2u
 #define TLSR8258_MIN_FRAME_LENGTH 3u
-#define TLSR8258_ACK_TURNAROUND_US 120u
+/*
+ * Total prep budget between set_txmode and tx_pkt for a MAC ACK.  ACK is now
+ * sent inline at the top of rx_capture_common (before snapshot/enqueue) so
+ * prep_elapsed_us is small (~20us); the busy_wait inside send_ack_if_needed
+ * dominates and places the ACK PSDU on air ~200us after this constant from
+ * end-of-RX.  802.15.4 aTurnaroundTime is 192us, so 200us provides a small
+ * safe margin above the spec lower bound while staying well within the
+ * macAckWaitDuration (~864us) upper bound.
+ */
+#define TLSR8258_ACK_TURNAROUND_US 200u
 #define TLSR8258_ACK_REQUEST BIT(5)
 #define TLSR8258_FRAME_PENDING BIT(4)
 #define TLSR8258_IEEE_ADDR_SIZE 8u
@@ -445,6 +454,34 @@ static uint16_t tlsr8258_snapshot_rx_frame(struct tlsr8258_radio_data *radio, ui
 	return copy_len;
 }
 
+static uint8_t tlsr8258_dma_payload_len_get(const uint8_t *rx, uint16_t dma_total_len)
+{
+	uint8_t payload_len;
+	uint8_t fallback_len;
+	uint16_t available_len;
+
+	if ((rx == NULL) || (dma_total_len < TLSR8258_PAYLOAD_OFFSET)) {
+		return 0u;
+	}
+
+	available_len = dma_total_len - TLSR8258_PAYLOAD_OFFSET;
+	payload_len = rx[4];
+	if ((payload_len >= 2u) && (payload_len <= available_len)) {
+		return payload_len;
+	}
+
+	if (rx[0] < 9u) {
+		return 0u;
+	}
+
+	fallback_len = (uint8_t)(rx[0] - 9u);
+	if ((fallback_len >= 2u) && (fallback_len <= available_len)) {
+		return fallback_len;
+	}
+
+	return 0u;
+}
+
 static uint8_t tlsr8258_mac_hdr_size(uint16_t fcf, uint8_t psdu_len)
 {
 	uint8_t idx = 3u;
@@ -468,6 +505,79 @@ static uint8_t tlsr8258_mac_hdr_size(uint16_t fcf, uint8_t psdu_len)
 	}
 
 	return (idx <= psdu_len) ? idx : 0u;
+}
+
+static bool tlsr8258_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len);
+static bool tlsr8258_psdu_is_beacon_request(const uint8_t *psdu, uint8_t psdu_len);
+
+static bool tlsr8258_psdu_src_matches_local(const uint8_t *psdu, uint8_t psdu_len,
+					    const struct tlsr8258_radio_data *radio)
+{
+	uint16_t fcf;
+	uint8_t idx = 3u;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+
+	if ((psdu == NULL) || (radio == NULL) || (psdu_len < idx)) {
+		return false;
+	}
+
+	fcf = sys_get_le16(psdu);
+	dst_mode = (uint8_t)((fcf >> 10) & 0x03u);
+	src_mode = (uint8_t)((fcf >> 14) & 0x03u);
+
+	if (dst_mode != 0u) {
+		idx += TLSR8258_PAN_ID_SIZE;
+		idx += (dst_mode == 0x03u) ? TLSR8258_IEEE_ADDR_SIZE : TLSR8258_SHORT_ADDR_SIZE;
+	}
+
+	if (src_mode == 0u) {
+		return false;
+	}
+
+	if ((fcf & BIT(6)) == 0u) {
+		idx += TLSR8258_PAN_ID_SIZE;
+	}
+
+	if (src_mode == 0x02u) {
+		if ((uint16_t)(idx + TLSR8258_SHORT_ADDR_SIZE) > psdu_len) {
+			return false;
+		}
+
+		return memcmp(&psdu[idx], radio->filter_short_addr, TLSR8258_SHORT_ADDR_SIZE) == 0;
+	}
+
+	if (src_mode == 0x03u) {
+		if ((uint16_t)(idx + TLSR8258_IEEE_ADDR_SIZE) > psdu_len) {
+			return false;
+		}
+
+		return memcmp(&psdu[idx], radio->filter_ieee_addr, TLSR8258_IEEE_ADDR_SIZE) == 0;
+	}
+
+	return false;
+}
+
+static bool tlsr8258_psdu_is_self_originated_command(const uint8_t *psdu, uint8_t psdu_len,
+						      const struct tlsr8258_radio_data *radio)
+{
+	uint16_t fcf;
+
+	if ((psdu == NULL) || (radio == NULL) || (psdu_len < 4u)) {
+		return false;
+	}
+
+	fcf = sys_get_le16(psdu);
+	if ((fcf & 0x0007u) != 0x03u) {
+		return false;
+	}
+
+	if (!tlsr8258_psdu_src_matches_local(psdu, psdu_len, radio)) {
+		return false;
+	}
+
+	return tlsr8258_psdu_is_data_request(psdu, psdu_len) ||
+	       tlsr8258_psdu_is_beacon_request(psdu, psdu_len);
 }
 
 static bool tlsr8258_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len)
@@ -575,8 +685,11 @@ static void tlsr8258_rf_init(void)
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 static bool tlsr8258_rx_length_ok(const uint8_t *rx)
 {
-	return rx[0] < (TLSR8258_RX_BUF_SIZE - 3u) &&
-	       rx[0] == (uint8_t)(rx[4] + 9u);
+	if (rx[0] >= (TLSR8258_RX_BUF_SIZE - 3u)) {
+		return false;
+	}
+
+	return tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u) != 0u;
 }
 
 static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
@@ -700,6 +813,20 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		prep_elapsed_us = k_cyc_to_us_floor32(k_cycle_get_32() - tx_prepared_at_cycles);
 	}
 
+	/*
+	 * Surface the measured prep gap (us from set_txmode to here) and the
+	 * residual we are about to busy_wait in retained debug RAM so we can
+	 * verify on-chip whether our turnaround math actually delays the ACK by
+	 * the intended amount.
+	 */
+	if (radio->debug != NULL) {
+		uint32_t residual = (prep_elapsed_us < TLSR8258_ACK_TURNAROUND_US)
+					    ? (TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us)
+					    : 0u;
+		radio->debug->rf_branch_debug = (uint8_t)(prep_elapsed_us & 0xffu);
+		radio->debug->rf_irq_ack_debug = (uint16_t)((residual > 0xffffu) ? 0xffffu : residual);
+	}
+
 	if (prep_elapsed_us < TLSR8258_ACK_TURNAROUND_US) {
 		k_busy_wait(TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us);
 	}
@@ -742,8 +869,9 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	uint16_t snapshot_len = 0u;
 	uint16_t rx_dma_len;
 	int8_t rx_rssi_dbm;
-	uint8_t length = rx[4];
-	bool ack_requested = tlsr8258_ack_requested(payload, length);
+	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
+	bool self_originated = tlsr8258_psdu_is_self_originated_command(payload, length, radio);
+	bool ack_requested = !self_originated && tlsr8258_ack_requested(payload, length);
 	uint32_t ack_prepared_at_cycles = 0u;
 
 	if (radio->debug != NULL) {
@@ -758,9 +886,27 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 		radio->debug->rf_irq_ack_debug = rx_ack;
 	}
 	tlsr8258_radio_rx_count_inc(radio);
+	if (self_originated) {
+		tlsr8258_rf_set_rxmode(radio);
+		return;
+	}
+
+	/*
+	 * Send the MAC ACK FIRST, before any snapshot/enqueue work.  Capture
+	 * analysis showed the previous ordering (set_txmode -> snapshot ->
+	 * enqueue -> send_ack) inflated wall-clock between set_txmode and
+	 * tx_pkt by ~1 ms, putting our ACK on air past macAckWaitDuration
+	 * (~864 us).  EmberZNet then never sees the ACK and retransmits the
+	 * frame until macMaxFrameRetries is reached.  Doing the ACK inline
+	 * with minimum prep keeps the ACK comfortably within the spec window.
+	 * The chip is in TX mode while we ACK; rx_buffer is not being
+	 * overwritten, so we can safely read from it after the ACK TX returns.
+	 */
 	if (ack_requested) {
 		tlsr8258_rf_set_txmode(radio);
 		ack_prepared_at_cycles = k_cycle_get_32();
+		tlsr8258_send_ack_if_needed(payload, length, true,
+					    ack_prepared_at_cycles, radio);
 	}
 
 	if ((snapshot != NULL) && (snapshot_size > 0u)) {
@@ -768,7 +914,7 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 		if (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) {
 			rx = snapshot;
 			payload = &rx[TLSR8258_PAYLOAD_OFFSET];
-			length = rx[4];
+			length = tlsr8258_dma_payload_len_get(rx, snapshot_len);
 		}
 	}
 
@@ -776,7 +922,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	rx_dma_len = (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) ? snapshot_len : (uint16_t)rx[0] + 4u;
 	rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
 	(void)tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm);
-	tlsr8258_send_ack_if_needed(payload, length, ack_requested, ack_prepared_at_cycles, radio);
 }
 
 static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
@@ -875,7 +1020,7 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 		is_pending_response = false;
 		if (frame.len >= TLSR8258_PAYLOAD_OFFSET) {
 			psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];
-			psdu_len = frame.dma[4];
+			psdu_len = tlsr8258_dma_payload_len_get(frame.dma, frame.len);
 			is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, radio->op.tx_seq);
 			ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);
 			{

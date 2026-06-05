@@ -15,7 +15,9 @@ extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
+extern void tl_zbNwkEdMinimalOperationAbort(void);
 extern void bdb_outgoingFrameCountUpdate(u8 repower);
+extern void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 #define ZB_SHELL_HA_PROFILE_ID 0x0104U
@@ -25,6 +27,7 @@ extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 #define ZB_SHELL_CLUSTER_IDENTIFY 0x0003U
 
 static bool zb_bdb_bootstrap_ready;
+static bool zb_bdb_restore_joined_target_pending;
 static const u16 zb_shell_in_clusters[] = {
 	ZB_SHELL_CLUSTER_BASIC,
 	ZB_SHELL_CLUSTER_IDENTIFY,
@@ -72,6 +75,7 @@ static bdb_appCb_t zb_shell_bdb_cb = {
 };
 
 static zdo_appIndCb_t zb_shell_zdo_cb = {
+	.zdpAssocDoneCb = bdb_zdoAssocDone,
 	.zdpStartDevCnfCb = bdb_zdoStartDevCnf,
 };
 
@@ -178,7 +182,7 @@ static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
 	}
 }
 
-static void zb_platform_bdb_restore_joined_target(void)
+static bool zb_platform_bdb_restore_joined_target(void)
 {
 	u8 *nwkKey = NULL;
 	int rc;
@@ -188,7 +192,7 @@ static void zb_platform_bdb_restore_joined_target(void)
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
 	    g_zbMacPib.coordShortAddress == MAC_SHORT_ADDR_NONE ||
 	    !zb_platform_bdb_has_valid_join_context()) {
-		return;
+		return false;
 	}
 
 	if (ss_ib.activeSecureMaterialIndex < SECUR_N_SECUR_MATERIAL) {
@@ -207,7 +211,7 @@ static void zb_platform_bdb_restore_joined_target(void)
 	if (rc != 0) {
 		LOG_WRN("zb bdb restore: radio start failed on channel %u rc=%d",
 			g_zbMacPib.phyChannelCur, rc);
-		return;
+		return false;
 	}
 
 	bdb_outgoingFrameCountUpdate(1U);
@@ -216,10 +220,65 @@ static void zb_platform_bdb_restore_joined_target(void)
 			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
 		LOG_WRN("zb bdb restore: secure rejoin start failed on channel %u",
 			g_zbMacPib.phyChannelCur);
-		return;
+		return false;
 	}
 
 	zb_info_save(NULL);
+	return true;
+}
+
+bool zb_platform_bdb_service_persistent_rejoin(void)
+{
+#if !defined(CONFIG_ZIGBEE_BDB)
+	return false;
+#else
+	if (!zb_bdb_restore_joined_target_pending) {
+		return false;
+	}
+
+	if (!zdo_ifZdoNwkManagerIdle()) {
+		return false;
+	}
+
+	if (!zb_platform_bdb_restore_joined_target()) {
+		if (!g_zbNwkCtx.joined || !zb_platform_bdb_has_valid_join_context()) {
+			zb_bdb_restore_joined_target_pending = false;
+		}
+		return false;
+	}
+
+	zb_bdb_restore_joined_target_pending = false;
+	return true;
+#endif
+}
+
+void zb_platform_bdb_abandon_persistent_rejoin(void)
+{
+#if !defined(CONFIG_ZIGBEE_BDB)
+	return;
+#else
+	LOG_WRN("zb bdb restore: abandoning persistent rejoin, falling back to fresh commissioning");
+
+	zb_bdb_restore_joined_target_pending = false;
+
+	/*
+	 * Tear down any in-flight NWK rejoin/discovery operation and ZDO
+	 * back-off state so the manager returns to IDLE.
+	 */
+	zdo_nwkRejoinWithBackOffStop();
+	tl_zbNwkEdMinimalOperationAbort();
+
+	/*
+	 * Wipe the persisted joined context: it cannot be trusted (we never
+	 * actually finished the previous interview) and would otherwise cause
+	 * the same stale rejoin attempt on every retry.  This also clears the
+	 * stale fixed-target left over from the previous attempt.
+	 */
+	(void)zb_platform_clear_persistent_state();
+	g_bdbAttrs.nodeIsOnANetwork = 0U;
+	BDB_STATE_SET(BDB_STATE_IDLE);
+	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
+#endif
 }
 
 static void zb_platform_bdb_apply_fixed_target(void)
@@ -304,7 +363,6 @@ int zb_platform_bdb_init_default(void)
 	af_simple_descriptor_t *registered_desc;
 
 	if (zb_bdb_bootstrap_ready) {
-		zb_platform_bdb_restore_joined_target();
 		return 0;
 	}
 
@@ -315,7 +373,8 @@ int zb_platform_bdb_init_default(void)
 
 	zb_platform_bdb_drop_stale_joined_state_if_needed();
 	zb_platform_bdb_repair_joined_flag_if_needed();
-	zb_platform_bdb_restore_joined_target();
+	zb_bdb_restore_joined_target_pending =
+		g_zbNwkCtx.joined && zb_platform_bdb_has_valid_join_context();
 
 	/* Let the application register its endpoint and initialize ZCL.
 	 * This must run before BDB attribute init so g_bdbCtx.simpleDesc
@@ -361,15 +420,12 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 #else
 	u8 status;
 
-	LOG_INF("zb bdb steer: request");
 	if (zb_platform_bdb_init_default() != 0) {
 		LOG_ERR("zb bdb steer: init failed");
 		return 0xFFU;
 	}
 
-	LOG_INF("zb bdb steer: start");
 	status = bdb_networkSteerStart();
-	LOG_INF("zb bdb steer start status=0x%02x", status);
 	return status;
 #endif
 }

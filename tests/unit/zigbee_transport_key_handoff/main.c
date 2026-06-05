@@ -157,26 +157,49 @@ static void test_transport_key_handler_sets_authenticated_before_signalling_done
 	free(source);
 }
 
-static void test_bdb_tclk_short_circuits_when_transport_key_already_installed(void)
+static void test_bdb_assoc_and_secure_join_handoffs_are_split(void)
 {
 	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
-	const char *func = "_CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)";
-	const char *raw_else = "#else";
+	const char *assoc_func = "_CODE_BDB_ void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf)";
+	const char *join_func = "_CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)";
+	const char *touchlink_func = "_CODE_BDB_ static void bdb_touchLinkCallback(u8 status, void *arg)";
+	const char *retrieve_func = "_CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)";
+	const char *network_steer_case = "    case BDB_STATE_COMMISSIONING_NETWORK_STEER:";
+	const char *formation_case = "    case BDB_STATE_COMMISSIONING_NETWORK_FORMATION:";
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
 
-	/* When zb_minimal_handle_transport_key has already set
-	 * aps_ib.aps_authenticated before the BDB retrieval timer fires,
-	 * bdb_retrieveTcLinkKeyStart must detect the installed key and call
-	 * bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS) immediately
-	 * rather than sending a Node Desc request.  The guard must appear in
-	 * the CONFIG_IEEE802154_RAW_MODE branch (the production path) before
-	 * the #else that leads to the legacy stub path. */
-	EXPECT_TRUE(contains_between(source, func, raw_else,
-				     "if (aps_ib.aps_authenticated && ss_ib.securityLevel != 0U)"));
+	EXPECT_TRUE(contains_between(source, assoc_func, touchlink_func,
+				     "bdb_ed_assoc_handoff_start();"));
+	EXPECT_TRUE(contains_between(source, join_func, formation_case,
+				     "bdb_ed_secure_join_handoff_start();"));
+	EXPECT_FALSE(contains_between(source, retrieve_func, network_steer_case,
+				      "if (aps_ib.aps_authenticated && ss_ib.securityLevel != 0U)"));
+
+	free(source);
+}
+
+static void test_bdb_assoc_handoff_arms_transport_key_wait_and_secure_handoff_cancels_it(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
+	const char *assoc_helper = "static void bdb_ed_assoc_handoff_start(void)";
+	const char *secure_helper = "static void bdb_ed_secure_join_handoff_start(void)";
+	const char *timer_stop = "_CODE_BDB_ static void bdb_retrieveTcLinkKeyTimerStop(void)";
+
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+
+	EXPECT_TRUE(contains_between(source, assoc_helper, secure_helper,
+				     "TL_ZB_TIMER_SCHEDULE(bdb_waitTransportKeyTimeout,"));
+	EXPECT_TRUE(contains_between(source, assoc_helper, secure_helper,
+				     "TRANSPORT_NETWORK_KEY_WAIT_TIME"));
+	EXPECT_TRUE(contains_between(source, secure_helper, timer_stop,
+				     "bdb_retrieveTcLinkKeyTimerStop();"));
 
 	free(source);
 }
@@ -186,7 +209,8 @@ int main(void)
 	test_transport_key_done_schedules_join_completion_on_task_queue();
 	test_aps_transport_key_decrypt_hashes_key_load_key_like_vendor();
 	test_transport_key_handler_sets_authenticated_before_signalling_done();
-	test_bdb_tclk_short_circuits_when_transport_key_already_installed();
+	test_bdb_assoc_and_secure_join_handoffs_are_split();
+	test_bdb_assoc_handoff_arms_transport_key_wait_and_secure_handoff_cancels_it();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_transport_key_handoff: %d failure(s)\n", failures);
