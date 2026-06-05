@@ -82,6 +82,7 @@ typedef struct {
 	bool joinPending;
 	bool rejoinPending;
 	bool rejoinWithBackoff;
+	bool assocNotified;
 } zdo_ed_minimal_async_ctx_t;
 
 static zdo_ed_minimal_async_ctx_t g_zdoEdAsync;
@@ -121,9 +122,49 @@ static void zdo_ed_minimal_discovery_done(u8 status)
 	}
 }
 
+static void zdo_ed_minimal_promote_discovery_to_join(void)
+{
+	if (!g_zdoEdAsync.discoveryPending || g_zdoEdAsync.joinPending) {
+		return;
+	}
+
+	g_zdoEdAsync.discoveryPending = FALSE;
+	g_zdoEdAsync.discoveryCb = NULL;
+	g_zdoEdAsync.joinPending = TRUE;
+	g_zdoEdAsync.assocNotified = FALSE;
+	zdo_ed_trace_put(0x03000003U);
+}
+
+static void zdo_ed_minimal_assoc_handoff_done(u8 status, bool rejoinMode)
+{
+	zdo_start_device_confirm_t cnf;
+
+	if (!rejoinMode) {
+		zdo_ed_minimal_promote_discovery_to_join();
+	}
+
+	bool pending = rejoinMode ? g_zdoEdAsync.rejoinPending : g_zdoEdAsync.joinPending;
+
+	zdo_ed_trace_put((0x13U << 24) |
+			 ((u32)status << 16) |
+			 ((u32)(rejoinMode ? 1U : 0U) << 8) |
+			 (u32)(pending ? 1U : 0U));
+	if ((status != ZDO_SUCCESS) || !pending || g_zdoEdAsync.assocNotified) {
+		return;
+	}
+
+	g_zdoEdAsync.assocNotified = TRUE;
+	cnf = zdo_ed_minimal_build_start_dev_cnf(status, rejoinMode);
+	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpAssocDoneCb != NULL) {
+		zdoAppIndCbLst->zdpAssocDoneCb(&cnf);
+	}
+}
+
 static void zdo_ed_minimal_assoc_join_done(u8 status)
 {
 	zdo_start_device_confirm_t cnf;
+
+	zdo_ed_minimal_promote_discovery_to_join();
 
 	zdo_ed_trace_put((0x10U << 24) |
 			 ((u32)status << 16) |
@@ -134,6 +175,7 @@ static void zdo_ed_minimal_assoc_join_done(u8 status)
 		return;
 	}
 
+	g_zdoEdAsync.assocNotified = FALSE;
 	g_zdoEdAsync.joinPending = FALSE;
 	cnf = zdo_ed_minimal_build_start_dev_cnf(status, FALSE);
 	zdo_ed_trace_put((0x11U << 24) |
@@ -161,6 +203,7 @@ static void zdo_ed_minimal_rejoin_done(u8 status)
 		return;
 	}
 
+	g_zdoEdAsync.assocNotified = FALSE;
 	g_zdoEdAsync.rejoinPending = FALSE;
 	g_zdoEdAsync.rejoinWithBackoff = FALSE;
 	g_zdoUnderRejoinMode = FALSE;
@@ -174,6 +217,11 @@ static void zdo_ed_minimal_rejoin_done(u8 status)
 void tl_zdoEdMinimalDiscoveryDone(u8 status)
 {
 	zdo_ed_minimal_discovery_done(status);
+}
+
+void tl_zdoEdMinimalAssocDone(u8 status, bool rejoinMode)
+{
+	zdo_ed_minimal_assoc_handoff_done(status, rejoinMode);
 }
 
 void tl_zdoEdMinimalJoinDone(u8 status, bool rejoinMode)
@@ -194,7 +242,8 @@ void zdo_zdpCbTblRegister(zdo_appIndCb_t *cbTbl)
 	zdoAppIndCbLst = cbTbl;
 	zdo_ed_trace_put((0x02U << 24) |
 			 (u32)(cbTbl != NULL) |
-			 ((u32)(cbTbl != NULL && cbTbl->zdpStartDevCnfCb != NULL) << 8));
+			 ((u32)(cbTbl != NULL && cbTbl->zdpStartDevCnfCb != NULL) << 8) |
+			 ((u32)(cbTbl != NULL && cbTbl->zdpAssocDoneCb != NULL) << 9));
 }
 
 void zdo_touchLinkCbRegister(zdo_touchLinkCb_t *cbTbl)
@@ -407,6 +456,7 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
 	}
 
 	g_zdoEdAsync.joinPending = TRUE;
+	g_zdoEdAsync.assocNotified = FALSE;
 	zdo_ed_trace_put(0x03000001U);
 	if (!tl_zbNwkEdMinimalAssocJoinStart()) {
 		g_zdoEdAsync.joinPending = FALSE;
@@ -425,6 +475,7 @@ void zdo_ed_minimal_rejoin_restart_prepare(void)
 					  ((uint32_t)(g_zdoEdAsync.rejoinWithBackoff ? 1U : 0U) << 9));
 	g_zdoEdAsync.rejoinPending = FALSE;
 	g_zdoEdAsync.rejoinWithBackoff = FALSE;
+	g_zdoEdAsync.assocNotified = FALSE;
 	g_zdoUnderRejoinMode = FALSE;
 	tl_zbNwkEdMinimalOperationAbort();
 }
@@ -442,6 +493,7 @@ zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
 	g_zdoUnderRejoinMode = TRUE;
 	g_zdoEdAsync.rejoinPending = TRUE;
 	g_zdoEdAsync.rejoinWithBackoff = FALSE;
+	g_zdoEdAsync.assocNotified = FALSE;
 
 	return ZDO_SUCCESS;
 }
@@ -459,6 +511,7 @@ zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 	g_zdoUnderRejoinMode = TRUE;
 	g_zdoEdAsync.rejoinPending = TRUE;
 	g_zdoEdAsync.rejoinWithBackoff = TRUE;
+	g_zdoEdAsync.assocNotified = FALSE;
 
 	return ZDO_SUCCESS;
 }
@@ -468,6 +521,7 @@ void zdo_nwkRejoinWithBackOffStop(void)
 	if (g_zdoEdAsync.rejoinPending && g_zdoEdAsync.rejoinWithBackoff) {
 		g_zdoEdAsync.rejoinPending = FALSE;
 		g_zdoEdAsync.rejoinWithBackoff = FALSE;
+		g_zdoEdAsync.assocNotified = FALSE;
 		tl_zbNwkEdMinimalOperationAbort();
 	}
 

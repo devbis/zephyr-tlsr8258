@@ -45,6 +45,14 @@ const uint8_t *zb_platform_runtime_ieee_addr_get(void);
  */
 int zb_platform_bdb_init_default(void);
 uint8_t zb_platform_bdb_network_steer_start(void);
+bool zb_platform_bdb_service_persistent_rejoin(void);
+/*
+ * Abandon any in-flight persisted-state rejoin and return the BDB/NWK state
+ * machine to IDLE so that fresh commissioning can proceed.  Used by the
+ * bootstrap when a stale joined=1 keeps the NWK manager non-idle past its
+ * budget without delivering a real join.
+ */
+void zb_platform_bdb_abandon_persistent_rejoin(void);
 int zb_platform_restore_persistent_state(void);
 int zb_platform_clear_persistent_state(void);
 void zb_platform_app_network_left(void);

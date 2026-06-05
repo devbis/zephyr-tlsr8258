@@ -243,6 +243,7 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 				      const uint8_t **psdu, uint8_t *psdu_len)
 {
 	uint8_t payload_len;
+	uint8_t fallback_len;
 	uint8_t available_len;
 
 	if ((dma == NULL) || (psdu == NULL) || (psdu_len == NULL) || (dma_len < 7U)) {
@@ -250,11 +251,20 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 	}
 
 	payload_len = dma[4];
-	if (payload_len < 2U) {
-		return -EINVAL;
+	available_len = (uint8_t)(dma_len - 5U);
+	if ((payload_len < 2U) || (payload_len > available_len)) {
+		if (dma[0] < 9U) {
+			return -EINVAL;
+		}
+
+		fallback_len = (uint8_t)(dma[0] - 9U);
+		if ((fallback_len < 2U) || (fallback_len > available_len)) {
+			return -EINVAL;
+		}
+
+		payload_len = fallback_len;
 	}
 
-	available_len = (uint8_t)(dma_len - 5U);
 	if (payload_len > available_len) {
 		return -EINVAL;
 	}
