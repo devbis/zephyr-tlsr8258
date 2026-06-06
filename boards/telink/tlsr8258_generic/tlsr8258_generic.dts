@@ -42,8 +42,8 @@
 			reg = <0x00000000 0x0007e000>;
 		};
 
-		nvs_storage: partition@7e000 {
-			label = "nvs_storage";
+		zigbee_nv_partition: partition@7e000 {
+			label = "zigbee_nv";
 			reg = <0x0007e000 0x00002000>;
 		};
 	};
