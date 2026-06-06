@@ -378,7 +378,10 @@ do {                                                                    \
 #define __no_optimization __attribute__((optimize("-O0")))
 #endif
 
-#ifndef __weak
+#if defined(__APPLE__) && defined(__clang__) && !defined(__OBJC__)
+#undef __weak
+#define __weak __attribute__((__weak__))
+#elif !defined(__weak)
 #define __weak __attribute__((__weak__))
 #endif
 
