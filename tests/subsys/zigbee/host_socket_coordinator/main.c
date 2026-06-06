@@ -1,0 +1,147 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <zephyr/zigbee/native_sim_socket_medium.h>
+
+#include "coord_logic.h"
+
+static int failures;
+
+#define EXPECT_TRUE(expr) do { \
+	if (!(expr)) { \
+		printf("FAIL %s:%d: expected true: %s\n", __FILE__, __LINE__, #expr); \
+		failures++; \
+	} \
+} while (0)
+
+#define EXPECT_EQ(actual, expected) do { \
+	long long _actual = (long long)(actual); \
+	long long _expected = (long long)(expected); \
+	if (_actual != _expected) { \
+		printf("FAIL %s:%d: %s=%lld expected %lld\n", __FILE__, __LINE__, \
+		       #actual, _actual, _expected); \
+		failures++; \
+	} \
+} while (0)
+
+#define EXPECT_STR_EQ(actual, expected) do { \
+	if (strcmp((actual), (expected)) != 0) { \
+		printf("FAIL %s:%d: %s=\"%s\" expected \"%s\"\n", __FILE__, __LINE__, \
+		       #actual, (actual), (expected)); \
+		failures++; \
+	} \
+} while (0)
+
+static void send_filter(struct zb_host_socket_coord *coord)
+{
+	static const uint8_t ieee_addr[] = { 0x02, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4 };
+	struct zb_native_sim_socket_medium_msg filter = {
+		.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER,
+		.node_id = 0x2202U,
+		.pan_id = 0x5b27U,
+		.short_addr = 0xffffU,
+		.channel = 11U,
+		.rx_on = true,
+	};
+
+	memcpy(filter.ieee_addr, ieee_addr, sizeof(filter.ieee_addr));
+	EXPECT_EQ(zb_host_socket_coord_process(coord, &filter, NULL), 0);
+}
+
+static void expect_single_output(struct zb_host_socket_coord *coord,
+				 const struct zb_native_sim_socket_medium_msg *input,
+				 enum zb_host_socket_frame_type expected_type)
+{
+	struct zb_native_sim_socket_medium_msg output;
+	enum zb_host_socket_frame_type actual_type;
+
+	memset(&output, 0, sizeof(output));
+	EXPECT_EQ(zb_host_socket_coord_process(coord, input, &output), 1);
+	EXPECT_EQ(output.type, ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX);
+	actual_type = zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len);
+	EXPECT_EQ(actual_type, expected_type);
+}
+
+static void test_join_and_interview_flow(void)
+{
+	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_msg input;
+	char model_id[32];
+
+	zb_host_socket_coord_init(&coord);
+	send_filter(&coord);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ASSOC_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U,
+					     ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_REQ, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP);
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_RSP, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U,
+					     ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ_RSP,
+					     "native-sim-ed");
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+
+	EXPECT_TRUE(coord.got_timeout_req);
+	EXPECT_TRUE(coord.got_device_announce);
+	EXPECT_TRUE(coord.interview_complete);
+	zb_host_socket_coord_observed_model_id(&coord, model_id, sizeof(model_id));
+	EXPECT_STR_EQ(model_id, "native-sim-ed");
+}
+
+static void test_permit_join_disabled_rejects_association(void)
+{
+	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_msg input;
+	struct zb_native_sim_socket_medium_msg output;
+
+	zb_host_socket_coord_init(&coord);
+	coord.permit_join = false;
+	send_filter(&coord);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ASSOC_REQ, NULL);
+	memset(&output, 0, sizeof(output));
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
+	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
+		  ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
+	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 1);
+}
+
+int main(void)
+{
+	test_join_and_interview_flow();
+	test_permit_join_disabled_rejects_association();
+
+	if (failures != 0) {
+		printf("host_socket_coordinator: %d failure(s)\n", failures);
+		return 1;
+	}
+
+	printf("host_socket_coordinator: PASS\n");
+	return 0;
+}
