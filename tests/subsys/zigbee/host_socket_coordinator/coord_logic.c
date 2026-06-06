@@ -7,8 +7,12 @@
 #define ZB_COORD_SHORT_ADDR 0x0000u
 #define ZB_NO_SHORT_ADDR    0xffffu
 #define ZB_DEVICE_IEEE      0xa4c138e050020002ULL
+#define ZB_COORD_IEEE       0x00124b0000000001ULL
 #define ZB_PROFILE_HA       0x0104u
 #define ZB_PAN_ID           0x5b27u
+#define ZB_ADDR_MODE_SHORT  0x02u
+#define ZB_ADDR_MODE_EXT    0x03u
+#define ZB_STANDARD_NWK_KEY 0x01u
 
 #define ZB_MAC_FCF_COMMAND_SHORT 0x8863u
 #define ZB_MAC_CMD_ASSOC_REQ     0x01u
@@ -38,6 +42,144 @@ static void put_le16(uint8_t *buf, uint16_t value)
 static uint16_t get_le16(const uint8_t *buf)
 {
 	return (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+}
+
+static bool parse_mac_command(const uint8_t *psdu, size_t psdu_len,
+			      uint16_t *fcf_out, size_t *cmd_idx_out)
+{
+	uint16_t fcf;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+	bool intra_pan;
+	size_t idx = 3U;
+
+	if (psdu == NULL || psdu_len < 4U) {
+		return false;
+	}
+
+	fcf = get_le16(&psdu[0]);
+	if ((fcf & 0x0007U) != 0x0003U) {
+		return false;
+	}
+
+	dst_mode = (uint8_t)((fcf >> 10) & 0x03U);
+	src_mode = (uint8_t)((fcf >> 14) & 0x03U);
+	intra_pan = (fcf & 0x0040U) != 0U;
+
+	if (dst_mode != 0U) {
+		idx += 2U;
+		if (dst_mode == ZB_ADDR_MODE_SHORT) {
+			idx += 2U;
+		} else if (dst_mode == ZB_ADDR_MODE_EXT) {
+			idx += 8U;
+		} else {
+			return false;
+		}
+	}
+
+	if (src_mode != 0U) {
+		if (!intra_pan) {
+			idx += 2U;
+		}
+		if (src_mode == ZB_ADDR_MODE_SHORT) {
+			idx += 2U;
+		} else if (src_mode == ZB_ADDR_MODE_EXT) {
+			idx += 8U;
+		} else {
+			return false;
+		}
+	}
+
+	if (idx >= psdu_len) {
+		return false;
+	}
+
+	if (fcf_out != NULL) {
+		*fcf_out = fcf;
+	}
+	if (cmd_idx_out != NULL) {
+		*cmd_idx_out = idx;
+	}
+
+	return true;
+}
+
+static size_t mac_header_len_from_fcf(const uint8_t *psdu, size_t psdu_len, uint16_t *fcf_out)
+{
+	uint16_t fcf;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+	bool intra_pan;
+	size_t idx = 3U;
+
+	if (psdu == NULL || psdu_len < idx) {
+		return 0U;
+	}
+
+	fcf = get_le16(&psdu[0]);
+	dst_mode = (uint8_t)((fcf >> 10) & 0x03U);
+	src_mode = (uint8_t)((fcf >> 14) & 0x03U);
+	intra_pan = (fcf & 0x0040U) != 0U;
+
+	if (dst_mode != 0U) {
+		idx += 2U;
+		idx += (dst_mode == ZB_ADDR_MODE_SHORT) ? 2U :
+		       (dst_mode == ZB_ADDR_MODE_EXT) ? 8U : 0U;
+		if ((dst_mode != ZB_ADDR_MODE_SHORT) && (dst_mode != ZB_ADDR_MODE_EXT)) {
+			return 0U;
+		}
+	}
+
+	if (src_mode != 0U) {
+		if (!intra_pan) {
+			idx += 2U;
+		}
+		idx += (src_mode == ZB_ADDR_MODE_SHORT) ? 2U :
+		       (src_mode == ZB_ADDR_MODE_EXT) ? 8U : 0U;
+		if ((src_mode != ZB_ADDR_MODE_SHORT) && (src_mode != ZB_ADDR_MODE_EXT)) {
+			return 0U;
+		}
+	}
+
+	if (idx > psdu_len) {
+		return 0U;
+	}
+
+	if (fcf_out != NULL) {
+		*fcf_out = fcf;
+	}
+
+	return idx;
+}
+
+static bool identify_real_transport_key(const uint8_t *psdu, size_t psdu_len)
+{
+	const uint8_t *nwk;
+	const uint8_t *aps;
+	const uint8_t *payload;
+	uint16_t mac_fcf;
+	uint16_t nwk_fcf;
+	size_t mac_hdr_len;
+
+	mac_hdr_len = mac_header_len_from_fcf(psdu, psdu_len, &mac_fcf);
+	if (mac_hdr_len == 0U || (mac_fcf & 0x0007U) != 0x0001U ||
+	    psdu_len < (mac_hdr_len + 10U)) {
+		return false;
+	}
+
+	nwk = &psdu[mac_hdr_len];
+	nwk_fcf = get_le16(nwk);
+	if ((nwk_fcf & 0x0003U) != 0x0000U) {
+		return false;
+	}
+
+	aps = &nwk[8];
+	if ((aps[0] & 0x03U) != 0x01U || psdu_len < (mac_hdr_len + 12U)) {
+		return false;
+	}
+
+	payload = &aps[2];
+	return payload[0] == 0x05U && payload[1] == ZB_STANDARD_NWK_KEY;
 }
 
 static void put_le64(uint8_t *buf, uint64_t value)
@@ -105,12 +247,14 @@ static size_t encode_data_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16
 
 enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t *psdu, size_t psdu_len)
 {
+	uint16_t fcf;
 	uint16_t cluster;
 	uint8_t command;
+	size_t cmd_idx;
 	size_t payload_len;
 
-	if (psdu_len >= 10U && get_le16(&psdu[0]) == ZB_MAC_FCF_COMMAND_SHORT) {
-		switch (psdu[9]) {
+	if (parse_mac_command(psdu, psdu_len, &fcf, &cmd_idx)) {
+		switch (psdu[cmd_idx]) {
 		case ZB_MAC_CMD_ASSOC_REQ:
 			return ZB_HOST_SOCKET_FRAME_ASSOC_REQ;
 		case ZB_MAC_CMD_ASSOC_RSP:
@@ -120,6 +264,10 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 		default:
 			break;
 		}
+	}
+
+	if (identify_real_transport_key(psdu, psdu_len)) {
+		return ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY;
 	}
 
 	if (psdu_len < 18U || get_le16(&psdu[0]) != 0x8861u) {
@@ -165,13 +313,37 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 
 	switch (type) {
 	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
-		len = encode_mac_command(wire, 1U, dst, src, ZB_MAC_CMD_ASSOC_RSP);
-		put_le16(&wire[10], dst);
-		wire[12] = 0U;
-		return 13U;
+		put_le16(&wire[0], 0x8c63u);
+		wire[2] = 1U;
+		put_le16(&wire[3], ZB_PAN_ID);
+		put_le64(&wire[5], ZB_DEVICE_IEEE);
+		put_le16(&wire[13], src);
+		wire[15] = ZB_MAC_CMD_ASSOC_RSP;
+		put_le16(&wire[16], dst);
+		wire[18] = 0U;
+		return 19U;
 	case ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY:
-		payload[0] = 0x05U;
-		return encode_data_frame(wire, 2U, dst, src, 0x0038u, 0x05U, payload, 1U);
+		put_le16(&wire[0], 0x8861u);
+		wire[2] = 2U;
+		put_le16(&wire[3], ZB_PAN_ID);
+		put_le16(&wire[5], dst);
+		put_le16(&wire[7], src);
+		put_le16(&wire[9], 0x0008u);
+		put_le16(&wire[11], dst);
+		put_le16(&wire[13], src);
+		wire[15] = 30U;
+		wire[16] = 1U;
+		wire[17] = 0x01U;
+		wire[18] = 1U;
+		wire[19] = 0x05U;
+		wire[20] = ZB_STANDARD_NWK_KEY;
+		for (size_t i = 0U; i < 16U; i++) {
+			wire[21U + i] = (uint8_t)(i + 1U);
+		}
+		wire[37] = 1U;
+		put_le64(&wire[38], ZB_DEVICE_IEEE);
+		put_le64(&wire[46], ZB_COORD_IEEE);
+		return 54U;
 	case ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP:
 		payload[0] = ZB_NWK_TIMEOUT_RSP;
 		payload[1] = 0x00U;

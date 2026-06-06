@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <zephyr/net/ieee802154.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/sys/byteorder.h>
 
 #include <nsi_errno.h>
@@ -60,6 +61,24 @@ static bool cmd_node_id_set;
 
 static K_KERNEL_STACK_DEFINE(native_sim_socket_rx_stack,
 			     CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_STACK_SIZE);
+
+static const char *native_sim_socket_msg_type_str(enum zb_native_sim_socket_medium_msg_type type)
+{
+	switch (type) {
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO:
+		return "HELLO";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER:
+		return "FILTER";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX:
+		return "TX";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX:
+		return "RX";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS:
+		return "STATUS";
+	default:
+		return "UNKNOWN";
+	}
+}
 
 static void native_sim_socket_cmd_server_port_set(char *argv, int offset)
 {
@@ -153,11 +172,18 @@ static void native_sim_socket_publish_state(const struct device *dev,
 	rc = zb_native_sim_socket_medium_encode(packet, sizeof(packet), &msg, &packet_len);
 	if (rc < 0) {
 		LOG_WRN("medium state encode failed (rc=%d)", rc);
+		printk("zb_sock_radio: publish %s encode failed rc=%d\n",
+		       native_sim_socket_msg_type_str(type), rc);
 		return;
 	}
 
+	printk("zb_sock_radio: publish %s node=0x%04x ch=%u pan=0x%04x short=0x%04x rx_on=%u fd=%d\n",
+	       native_sim_socket_msg_type_str(type), msg.node_id, msg.channel,
+	       msg.pan_id, msg.short_addr, msg.rx_on ? 1U : 0U, data->fd);
 	if (nsi_host_write(data->fd, packet, packet_len) < 0) {
 		LOG_WRN("medium state write failed (errno=%d)", nsi_host_get_errno());
+		printk("zb_sock_radio: publish %s write failed errno=%d\n",
+		       native_sim_socket_msg_type_str(type), nsi_host_get_errno());
 	}
 }
 
@@ -206,12 +232,16 @@ static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
 
 		if (zb_native_sim_socket_medium_decode(&msg, packet, (size_t)len) < 0) {
 			LOG_WRN("medium decode failed (len=%ld)", len);
+			printk("zb_sock_radio: rx decode failed len=%ld\n", len);
 			continue;
 		}
 
 		if (msg.type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX ||
 		    msg.node_id != native_sim_socket_node_id(cfg) ||
 		    msg.channel != data->channel) {
+			printk("zb_sock_radio: ignore %s node=0x%04x ch=%u len=%zu local_node=0x%04x local_ch=%u\n",
+			       native_sim_socket_msg_type_str(msg.type), msg.node_id, msg.channel,
+			       msg.psdu_len, native_sim_socket_node_id(cfg), data->channel);
 			continue;
 		}
 
@@ -226,6 +256,8 @@ static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
 		frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
 				      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
 		frame.rssi_dbm = msg.rssi_dbm;
+		printk("zb_sock_radio: deliver RX node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
+		       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
 		(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
 		k_yield();
 	}
@@ -254,6 +286,7 @@ static int native_sim_socket_set_channel(const struct device *dev, uint16_t chan
 	}
 
 	data->channel = (uint8_t)channel;
+	printk("zb_sock_radio: set_channel %u\n", channel);
 	native_sim_socket_publish_state(dev, ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER);
 	return 0;
 }
@@ -271,12 +304,18 @@ static int native_sim_socket_filter(const struct device *dev, bool set,
 	switch (type) {
 	case IEEE802154_FILTER_TYPE_PAN_ID:
 		data->peer.pan_id = filter->pan_id;
+		printk("zb_sock_radio: filter PAN 0x%04x\n", data->peer.pan_id);
 		break;
 	case IEEE802154_FILTER_TYPE_SHORT_ADDR:
 		data->peer.short_addr = filter->short_addr;
+		printk("zb_sock_radio: filter SHORT 0x%04x\n", data->peer.short_addr);
 		break;
 	case IEEE802154_FILTER_TYPE_IEEE_ADDR:
 		memcpy(data->peer.ieee_addr, filter->ieee_addr, sizeof(data->peer.ieee_addr));
+		printk("zb_sock_radio: filter IEEE %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+		       data->peer.ieee_addr[0], data->peer.ieee_addr[1], data->peer.ieee_addr[2],
+		       data->peer.ieee_addr[3], data->peer.ieee_addr[4], data->peer.ieee_addr[5],
+		       data->peer.ieee_addr[6], data->peer.ieee_addr[7]);
 		break;
 	default:
 		return -ENOTSUP;
@@ -312,6 +351,8 @@ static int native_sim_socket_tx(const struct device *dev,
 		return -ENOTSUP;
 	}
 	if (!data->started || data->fd < 0 || frag == NULL) {
+		printk("zb_sock_radio: tx blocked started=%u fd=%d frag=%p\n",
+		       data->started ? 1U : 0U, data->fd, frag);
 		return -EIO;
 	}
 
@@ -325,10 +366,14 @@ static int native_sim_socket_tx(const struct device *dev,
 
 	rc = zb_native_sim_socket_medium_encode(packet, sizeof(packet), &msg, &packet_len);
 	if (rc < 0) {
+		printk("zb_sock_radio: tx encode failed rc=%d len=%u\n", rc, frag->len);
 		return rc;
 	}
 
+	printk("zb_sock_radio: TX node=0x%04x ch=%u len=%u\n",
+	       msg.node_id, msg.channel, frag->len);
 	if (nsi_host_write(data->fd, packet, packet_len) < 0) {
+		printk("zb_sock_radio: tx write failed errno=%d\n", nsi_host_get_errno());
 		return -nsi_host_get_errno();
 	}
 
@@ -349,13 +394,21 @@ static int native_sim_socket_start(const struct device *dev)
 		fd = ieee802154_native_sim_socket_open(native_sim_socket_server_host(cfg),
 						       native_sim_socket_server_port(cfg));
 		if (fd < 0) {
+			printk("zb_sock_radio: open failed host=%s port=%u rc=%d\n",
+			       native_sim_socket_server_host(cfg),
+			       native_sim_socket_server_port(cfg), fd);
 			return -nsi_errno_from_mid(-fd);
 		}
 
 		data->fd = fd;
+		printk("zb_sock_radio: open host=%s port=%u fd=%d node=0x%04x\n",
+		       native_sim_socket_server_host(cfg),
+		       native_sim_socket_server_port(cfg), data->fd,
+		       native_sim_socket_node_id(cfg));
 	}
 
 	data->started = true;
+	printk("zb_sock_radio: start ch=%u\n", data->channel);
 	native_sim_socket_publish_state(dev, ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO);
 	return 0;
 }
@@ -369,6 +422,7 @@ static int native_sim_socket_stop(const struct device *dev)
 	}
 
 	data->started = false;
+	printk("zb_sock_radio: stop\n");
 	native_sim_socket_publish_state(dev, ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER);
 	return 0;
 }
@@ -400,6 +454,11 @@ static int native_sim_socket_init(const struct device *dev)
 	memcpy(data->mac_addr, cfg->mac_addr, sizeof(data->mac_addr));
 	zb_native_sim_socket_medium_peer_reset(&data->peer);
 	memcpy(data->peer.ieee_addr, cfg->mac_addr, sizeof(data->peer.ieee_addr));
+	printk("zb_sock_radio: init node=0x%04x host=%s port=%u mac=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+	       native_sim_socket_node_id(cfg), native_sim_socket_server_host(cfg),
+	       native_sim_socket_server_port(cfg), data->mac_addr[0], data->mac_addr[1],
+	       data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
+	       data->mac_addr[6], data->mac_addr[7]);
 
 	k_thread_create(&data->rx_thread, data->rx_stack, data->rx_stack_size,
 			native_sim_socket_rx_thread, (void *)dev, NULL, NULL,
