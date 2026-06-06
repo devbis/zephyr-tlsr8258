@@ -17,8 +17,8 @@
 #include <errno.h>
 #include "drv_nv.h"
 
-#if !FIXED_PARTITION_EXISTS(nvs_storage)
-#error "Zigbee requires a fixed partition labeled nvs_storage"
+#if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
+#error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
 #endif
 
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
@@ -59,7 +59,7 @@ static void zb_nvs_log_degraded(const char *reason, int rc)
 
 static const struct device *zb_nvs_flash_device_get(void)
 {
-	return FIXED_PARTITION_DEVICE(nvs_storage);
+	return FIXED_PARTITION_DEVICE(zigbee_nv_partition);
 }
 
 static int zb_nvs_geometry_init(void)
@@ -79,8 +79,8 @@ static int zb_nvs_geometry_init(void)
 		return -ENODEV;
 	}
 
-	partition_offset = FIXED_PARTITION_OFFSET(nvs_storage);
-	partition_size = FIXED_PARTITION_SIZE(nvs_storage);
+	partition_offset = FIXED_PARTITION_OFFSET(zigbee_nv_partition);
+	partition_size = FIXED_PARTITION_SIZE(zigbee_nv_partition);
 	zb_nvs.flash_device = flash_device;
 	zb_nvs.offset = partition_offset;
 

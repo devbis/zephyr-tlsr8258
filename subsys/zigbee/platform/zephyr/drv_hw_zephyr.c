@@ -11,8 +11,8 @@
 #include "drv_hw.h"
 #include "drv_nv.h"
 
-#if !FIXED_PARTITION_EXISTS(nvs_storage)
-#error "Zigbee requires a fixed partition labeled nvs_storage"
+#if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
+#error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
 #endif
 
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -134,7 +134,7 @@ static bool flash_area_write_allowed(const struct flash_area *fa)
 		return false;
 	}
 
-	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(nvs_storage))) {
+	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(zigbee_nv_partition))) {
 		return true;
 	}
 #if FIXED_PARTITION_EXISTS(slot1_partition)
