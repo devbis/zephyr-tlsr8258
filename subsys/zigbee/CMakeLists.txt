@@ -52,6 +52,10 @@ zephyr_library_sources(
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258
     platform/zephyr/zb_radio_port_tlsr8258.c
 )
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET
+    platform/common/zb_native_sim_socket_medium.c
+    platform/zephyr/zb_radio_port_native_sim_socket.c
+)
 
 # Common utilities
 zephyr_library_sources(

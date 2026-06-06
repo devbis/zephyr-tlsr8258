@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: native_sim socket-backed IEEE 802.15.4 radio
+
+compatible: "zephyr,native-sim-socket-ieee802154"
+
+include: base.yaml
+
+properties:
+  local-mac-address:
+    type: uint8-array
+    required: true
+    description: |
+      EUI-64 address presented by the simulated radio to Zephyr.
+
+  server-host:
+    type: string
+    default: "127.0.0.1"
+    description: |
+      IPv4 address of the host-side socket medium/coordinator process.
+
+  server-port:
+    type: int
+    required: true
+    description: |
+      UDP port used by the host-side socket medium/coordinator process.
+
+  node-id:
+    type: int
+    required: true
+    description: |
+      Stable node identifier sent over the localhost socket-medium protocol.
