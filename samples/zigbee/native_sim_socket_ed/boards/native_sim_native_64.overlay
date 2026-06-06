@@ -1,0 +1,14 @@
+/ {
+	chosen {
+		zephyr,ieee802154 = &zigbee_radio;
+	};
+
+	zigbee_radio: zigbee_radio {
+		compatible = "zephyr,native-sim-socket-ieee802154";
+		status = "okay";
+		local-mac-address = [02 00 02 50 e0 38 c1 a4];
+		server-host = "127.0.0.1";
+		server-port = <19011>;
+		node-id = <0x2202>;
+	};
+};
