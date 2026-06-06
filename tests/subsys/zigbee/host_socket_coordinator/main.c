@@ -52,6 +52,27 @@ static void send_filter(struct zb_host_socket_coord *coord)
 	EXPECT_EQ(zb_host_socket_coord_process(coord, &filter, NULL), 0);
 }
 
+static struct zb_native_sim_socket_medium_msg make_native_assoc_req(void)
+{
+	static const uint8_t psdu[] = {
+		0x63, 0xC8, 0x01,
+		0x27, 0x5B,
+		0x00, 0x00,
+		0x02, 0x00, 0x02, 0x50, 0xE0, 0x38, 0xC1, 0xA4,
+		0x01,
+		0x80,
+	};
+	struct zb_native_sim_socket_medium_msg msg = {
+		.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX,
+		.node_id = 0x2202U,
+		.channel = 11U,
+		.psdu = psdu,
+		.psdu_len = sizeof(psdu),
+	};
+
+	return msg;
+}
+
 static void expect_single_output(struct zb_host_socket_coord *coord,
 				 const struct zb_native_sim_socket_medium_msg *input,
 				 enum zb_host_socket_frame_type expected_type)
@@ -132,10 +153,30 @@ static void test_permit_join_disabled_rejects_association(void)
 	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 1);
 }
 
+static void test_native_assoc_request_format_is_accepted(void)
+{
+	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_msg input;
+	struct zb_native_sim_socket_medium_msg output;
+
+	zb_host_socket_coord_init(&coord);
+	send_filter(&coord);
+
+	input = make_native_assoc_req();
+	EXPECT_EQ(zb_host_socket_coord_identify_frame(input.psdu, input.psdu_len),
+		  ZB_HOST_SOCKET_FRAME_ASSOC_REQ);
+	memset(&output, 0, sizeof(output));
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
+	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
+		  ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
+	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 0);
+}
+
 int main(void)
 {
 	test_join_and_interview_flow();
 	test_permit_join_disabled_rejects_association();
+	test_native_assoc_request_format_is_accepted();
 
 	if (failures != 0) {
 		printf("host_socket_coordinator: %d failure(s)\n", failures);
