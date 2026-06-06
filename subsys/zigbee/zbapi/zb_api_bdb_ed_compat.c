@@ -27,6 +27,16 @@ aps_pib_attributes_t aps_ib __attribute__((weak)) = {
 	.aps_use_insecure_join = TRUE,
 };
 
+#if defined(__APPLE__)
+/*
+ * Mach-O ld64 rejects pointer relocations into the packed ss_info_base_t
+ * layout. Populate the pointer members at runtime from zdo_ssInfoInit().
+ */
+ss_info_base_t ss_ib __attribute__((weak)) = {
+	.securityLevel = 0,
+	.trust_center_address = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+};
+#else
 ss_info_base_t ss_ib __attribute__((weak)) = {
 	.tcLinkKey = (u8 *)tcLinkKeyCentralDefault,
 	.distributeLinkKey = (u8 *)linkKeyDistributedMaster,
@@ -34,6 +44,7 @@ ss_info_base_t ss_ib __attribute__((weak)) = {
 	.securityLevel = 0,
 	.trust_center_address = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
 };
+#endif
 
 ss_dev_keyPair_t g_ssDevKeyPair __attribute__((weak));
 
