@@ -5,8 +5,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define ARG_UNUSED(x) (void)(x)
+#define printk printf
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

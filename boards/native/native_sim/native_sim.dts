@@ -95,7 +95,7 @@
 					reg = <0x000de000 0x0001e000>;
 				};
 
-				storage_partition: partition@fc000 {
+				nvs_storage: storage_partition: partition@fc000 {
 					label = "storage";
 					reg = <0x000fc000 0x00004000>;
 				};
