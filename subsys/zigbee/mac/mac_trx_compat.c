@@ -23,6 +23,13 @@
 
 LOG_MODULE_REGISTER(zigbee_mac_trx_compat, CONFIG_ZIGBEE_LOG_LEVEL);
 
+static void zb_minimal_debug_join_drop(const char *reason, u32 value0, u32 value1)
+{
+	ARG_UNUSED(reason);
+	ARG_UNUSED(value0);
+	ARG_UNUSED(value1);
+}
+
 sys_diagnostics_t g_sysDiags;
 zb_info_t g_zbInfo;
 
@@ -644,6 +651,11 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	}
 
 	if (!dst_match) {
+		zb_minimal_debug_join_drop("dst mismatch",
+					    ((u32)(info.dst_short_valid ? 1U : 0U) << 31) |
+						    ((u32)(info.dst_ext_valid ? 1U : 0U) << 30) |
+						    info.dst_short_addr,
+					    zb_u32_from_le(g_zbMacPib.extAddress));
 		zb_minimal_join_filter_trace[2] = 0xf0020000U | info.dst_short_addr;
 		return false;
 	}
@@ -662,6 +674,26 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 		((u32)(src_match ? 1U : 0U) << 24) | g_zbMacPib.coordShortAddress;
 
 	if (!src_match) {
+		if (!aps_ib.aps_authenticated &&
+		    info.dst_ext_valid &&
+		    memcmp(info.dst_ext_addr, g_zbMacPib.extAddress, sizeof(addrExt_t)) == 0 &&
+		    g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+		    (ZB_IEEE_ADDR_IS_ZERO(g_zbMacPib.coordExtAddress) ||
+		     ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress))) {
+			zb_minimal_debug_join_drop("src deferred",
+						    ((u32)(info.src_short_valid ? 1U : 0U) << 31) |
+							    ((u32)(info.src_ext_valid ? 1U : 0U) << 30) |
+							    info.src_short_addr,
+						    ((u32)g_zbMacPib.coordShortAddress << 16) |
+							    zb_u16_from_le(g_zbMacPib.coordExtAddress));
+			return true;
+		}
+		zb_minimal_debug_join_drop("src mismatch",
+					    ((u32)(info.src_short_valid ? 1U : 0U) << 31) |
+						    ((u32)(info.src_ext_valid ? 1U : 0U) << 30) |
+						    info.src_short_addr,
+					    ((u32)g_zbMacPib.coordShortAddress << 16) |
+						    zb_u16_from_le(g_zbMacPib.coordExtAddress));
 		zb_minimal_join_filter_trace[4] = 0xf0030000U | info.src_short_addr;
 		return false;
 	}
@@ -1592,6 +1624,8 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	const u8 *src_ieee;
 
 	if ((aps == NULL) || (aps->frame_type != 1U) || (aps->payload_len < 27U)) {
+		zb_minimal_debug_join_drop("tk bad aps", aps != NULL ? aps->frame_type : 0xffffffffU,
+					    aps != NULL ? aps->payload_len : 0xffffffffU);
 		return false;
 	}
 
@@ -1601,6 +1635,8 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	}
 
 	if (payload[0] != 0x05U || payload[1] != SS_STANDARD_NETWORK_KEY) {
+		zb_minimal_debug_join_drop("tk bad payload",
+					    ((u32)payload[0] << 8) | payload[1], aps->payload_len);
 		return false;
 	}
 
@@ -1610,6 +1646,9 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	zb_minimal_join_rx_trace[6] = 0xa6060000U | ((u32)payload[0] << 8) | payload[1];
 	if (!ZB_IS_64BIT_ADDR_ZERO(dst_ieee) &&
 	    memcmp(dst_ieee, g_zbMacPib.extAddress, sizeof(addrExt_t)) != 0) {
+		zb_minimal_debug_join_drop("tk dst ieee mismatch",
+					    zb_u32_from_le(dst_ieee),
+					    zb_u32_from_le(g_zbMacPib.extAddress));
 		return false;
 	}
 
@@ -1626,6 +1665,7 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, src_ieee);
 	}
 	zb_info_save(NULL);
+	zb_minimal_debug_join_drop("tk installed", key_seq, g_zbNwkCtx.joined ? 1U : 0U);
 	LOG_INF("joined RX: installed nwk key seq=%u tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		key_seq, ss_ib.trust_center_address[0], ss_ib.trust_center_address[1],
 		ss_ib.trust_center_address[2], ss_ib.trust_center_address[3],
@@ -1652,14 +1692,17 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 		return;
 	}
 	if (!zb_minimal_interview_frame_relevant(psdu, len)) {
+		zb_minimal_debug_join_drop("frame irrelevant", mac_frame_ctrl, len);
 		return;
 	}
 
 	if (!zb_minimal_parse_mac_frame(psdu, len, &mac)) {
+		zb_minimal_debug_join_drop("mac parse fail", mac_frame_ctrl, len);
 		return;
 	}
 
 	if (!zb_minimal_parse_nwk_frame(mac.payload, mac.payload_len, &nwk)) {
+		zb_minimal_debug_join_drop("nwk parse fail", mac.payload_len, mac.frame_ctrl);
 		return;
 	}
 	zb_minimal_join_rx_trace[1] = 0xa6010000U | ((u32)nwk.frame_type << 8) |
@@ -1698,6 +1741,10 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 
 	if (!zb_minimal_parse_aps_frame(nwk.payload, nwk.payload_len, &aps)) {
 		zb_minimal_join_rx_trace[4] = 0xa6040000U | nwk.payload_len;
+		zb_minimal_debug_join_drop("aps parse fail",
+					    ((u32)nwk.payload[0] << 24) | ((u32)nwk.payload_len << 8) |
+						    nwk.frame_type,
+					    nwk.frame_ctrl);
 		return;
 	}
 

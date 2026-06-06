@@ -78,6 +78,18 @@ static const char *frame_type_str(enum zb_host_socket_frame_type type)
 	}
 }
 
+static void dump_psdu_hex(const uint8_t *psdu, size_t len)
+{
+	if (psdu == NULL || len == 0U) {
+		return;
+	}
+
+	fputs(" psdu=", stderr);
+	for (size_t i = 0U; i < len; i++) {
+		fprintf(stderr, "%02x", psdu[i]);
+	}
+}
+
 static void usage(FILE *stream, const char *argv0)
 {
 	fprintf(stream,
@@ -197,6 +209,8 @@ static int maybe_reply(int fd, const struct sockaddr_in *peer_addr,
 		medium_msg_type_str(output->type),
 		frame_type_str(zb_host_socket_coord_identify_frame(output->psdu, output->psdu_len)),
 		output->node_id, output->channel, output->psdu_len);
+	dump_psdu_hex(output->psdu, output->psdu_len);
+	fputc('\n', stderr);
 
 	rc = (int)sendto(fd, packet, packet_len, 0,
 			 (const struct sockaddr *)peer_addr, sizeof(*peer_addr));
@@ -274,6 +288,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, " frame=%s",
 				frame_type_str(zb_host_socket_coord_identify_frame(input.psdu,
 									 input.psdu_len)));
+			dump_psdu_hex(input.psdu, input.psdu_len);
 		}
 		fputc('\n', stderr);
 
