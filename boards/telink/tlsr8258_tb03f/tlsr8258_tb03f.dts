@@ -92,8 +92,8 @@
 			label = "image-scratch";
 			reg = <0x00070000 0x0000e000>;
 		};
-		nvs_storage: partition@7e000 {
-			label = "nvs_storage";
+		zigbee_nv_partition: partition@7e000 {
+			label = "zigbee_nv";
 			reg = <0x0007e000 0x00002000>;
 		};
 	};
