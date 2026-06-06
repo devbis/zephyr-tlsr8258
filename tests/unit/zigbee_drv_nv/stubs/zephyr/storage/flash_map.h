@@ -23,9 +23,11 @@ off_t test_fixed_partition_offset(void);
 size_t test_fixed_partition_size(void);
 bool device_is_ready(const struct device *dev);
 
+#define zigbee_nv_partition 1
+
 #define DT_NODELABEL(label) label
 #define DT_FIXED_PARTITION_ID(node_id) 1
-#define FIXED_PARTITION_EXISTS(label) 1
+#define FIXED_PARTITION_EXISTS(label) label
 #define FIXED_PARTITION_DEVICE(label) test_fixed_partition_device()
 #define FIXED_PARTITION_OFFSET(label) test_fixed_partition_offset()
 #define FIXED_PARTITION_SIZE(label) test_fixed_partition_size()
