@@ -4,8 +4,10 @@
 set(zephyr_build_path ${APPLICATION_BINARY_DIR}/zephyr)
 get_property(CCACHE GLOBAL PROPERTY RULE_LAUNCH_COMPILE)
 
-target_link_options(native_simulator INTERFACE
-  "-T ${ZEPHYR_BASE}/boards/native/common/natsim_linker_script.ld")
+if(NOT CMAKE_HOST_APPLE)
+  target_link_options(native_simulator INTERFACE
+    "-T ${ZEPHYR_BASE}/boards/native/common/natsim_linker_script.ld")
+endif()
 
 if(SYSROOT_DIR)
   message(NOTICE "Appending --sysroot=${SYSROOT_DIR} to native_simulator")

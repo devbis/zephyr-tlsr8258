@@ -22,4 +22,11 @@ static inline int aloha_channel_access(struct net_if *iface)
 }
 
 /* Declare the public channel access algorithm function used by L2. */
+#ifdef __APPLE__
+int ieee802154_wait_for_clear_channel(struct net_if *iface)
+{
+	return aloha_channel_access(iface);
+}
+#else
 FUNC_ALIAS(aloha_channel_access, ieee802154_wait_for_clear_channel, int);
+#endif
