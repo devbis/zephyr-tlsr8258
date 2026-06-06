@@ -46,17 +46,30 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     bool key_set = false;
 #if NV_ENABLE
     ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
-#if ZB_COORDINATOR_ROLE
-    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
-#else
-    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
-#endif
 
     /*
      * user can process network key(Decrypt) here :
      * ss_ib.nwkSecurMaterialSet[0].key and ss_ib.nwkSecurMaterialSet[1].key
      *
      * */
+#endif
+#if ZB_COORDINATOR_ROLE
+    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+#if defined(__APPLE__)
+    /*
+     * The Darwin native_sim image cannot encode relocations into the packed
+     * ss_ib default initializer, so rebuild the canonical pointer defaults
+     * here before higher layers repair any persisted key-selection flags.
+     */
+    ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+    ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+    ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+    if (ret != NV_SUCC) {
+        ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
+    }
 #endif
     for (u8 i = 0; i < SEC_KEY_LEN; i++) {
         if (ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key[i] != 0U) {

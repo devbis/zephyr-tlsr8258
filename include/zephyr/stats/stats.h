@@ -127,7 +127,11 @@ struct stats_name_map {
 	uint16_t snm_off;
 	const char *snm_name;
 	/** @endcond */
-} __attribute__((packed));
+}
+#if !defined(__APPLE__)
+__attribute__((packed))
+#endif
+;
 
 /**
  * @brief Store metadata for one statistics group.
