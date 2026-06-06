@@ -6,17 +6,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/storage/flash_map.h>
 
 #define CONFIG_ZIGBEE_NV_SECTOR_COUNT 2
-#ifdef FIXED_PARTITION_ID
-#undef FIXED_PARTITION_ID
-#endif
-#define FIXED_PARTITION_ID(label) 1
-
-#include "../../../subsys/zigbee/platform/zephyr/drv_nv_zephyr.c"
 
 #define MAX_FAKE_ENTRIES 64
 #define MAX_FAKE_VALUE_LEN 256
+
+struct fake_device {
+	int unused;
+};
 
 struct fake_nvs_entry {
 bool used;
@@ -26,12 +26,19 @@ uint8_t data[MAX_FAKE_VALUE_LEN];
 };
 
 static struct fake_nvs_entry fake_entries[MAX_FAKE_ENTRIES];
+static struct fake_device fake_device;
 static struct flash_area fake_area = {
 .fa_id = 1,
 .fa_off = 0,
 .fa_size = 0x10000,
-.fa_dev = (const struct device *)0x1,
+.fa_dev = (const struct device *)&fake_device,
 };
+static struct flash_parameters fake_flash_parameters = {
+.erase_value = 0xff,
+};
+volatile uint32_t zb_nwk_ed_trace[16];
+
+#include "../../../subsys/zigbee/platform/zephyr/drv_nv_zephyr.c"
 
 static struct fake_nvs_entry *find_entry(uint16_t id)
 {
@@ -78,6 +85,73 @@ ARG_UNUSED(fa);
 const struct device *flash_area_get_device(const struct flash_area *fa)
 {
 return fa->fa_dev;
+}
+
+const struct device *test_fixed_partition_device(void)
+{
+	return fake_area.fa_dev;
+}
+
+off_t test_fixed_partition_offset(void)
+{
+	return fake_area.fa_off;
+}
+
+size_t test_fixed_partition_size(void)
+{
+	return fake_area.fa_size;
+}
+
+bool device_is_ready(const struct device *dev)
+{
+	return dev == fake_area.fa_dev;
+}
+
+int flash_get_page_info_by_offs(const struct device *dev, off_t offs,
+			       struct flash_pages_info *info)
+{
+	ARG_UNUSED(offs);
+	if (dev != fake_area.fa_dev) {
+		return -ENODEV;
+	}
+
+	info->start_offset = 0;
+	info->size = 0x1000;
+	info->index = 0;
+	return 0;
+}
+
+const struct flash_parameters *flash_get_parameters(const struct device *dev)
+{
+	if (dev != fake_area.fa_dev) {
+		return NULL;
+	}
+
+	return &fake_flash_parameters;
+}
+
+int flash_read(const struct device *dev, off_t offs, void *dst, size_t len)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(offs);
+	memset(dst, 0xff, len);
+	return 0;
+}
+
+int flash_write(const struct device *dev, off_t offs, const void *src, size_t len)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(offs);
+	ARG_UNUSED(src);
+	return (int)len;
+}
+
+uint8_t crc8_ccitt(uint8_t seed, const void *src, size_t len)
+{
+	ARG_UNUSED(seed);
+	ARG_UNUSED(src);
+	ARG_UNUSED(len);
+	return 0;
 }
 
 int nvs_mount(struct nvs_fs *fs)
