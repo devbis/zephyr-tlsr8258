@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_NATIVE_SIM_SOCKET
+	bool "native_sim socket IEEE 802.15.4 driver"
+	depends on BOARD_NATIVE_SIM_NATIVE_64
+	depends on DT_HAS_ZEPHYR_NATIVE_SIM_SOCKET_IEEE802154_ENABLED
+	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	help
+	  Experimental IEEE 802.15.4 driver for native_sim/native/64 which
+	  exchanges raw PSDUs with a host-side coordinator/medium process over
+	  UDP localhost sockets.
+
+if IEEE802154_NATIVE_SIM_SOCKET
+
+config IEEE802154_NATIVE_SIM_SOCKET_INIT_PRIO
+	int "native_sim socket IEEE 802.15.4 initialization priority"
+	default 80
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_STACK_SIZE
+	int "native_sim socket RX worker stack size"
+	default 2048
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_THREAD_PRIO
+	int "native_sim socket RX worker priority"
+	default 2
+
+endif # IEEE802154_NATIVE_SIM_SOCKET

@@ -162,7 +162,7 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 	return false;
 }
 
-static int zb_radio_on_rx_sink(const struct tlsr8258_rx_frame_view *frame)
+static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 {
 	int16_t rssi_clamped;
 	const uint8_t *rx_dma;
