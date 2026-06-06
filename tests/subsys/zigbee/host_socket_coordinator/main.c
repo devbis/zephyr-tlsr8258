@@ -172,11 +172,49 @@ static void test_native_assoc_request_format_is_accepted(void)
 	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 0);
 }
 
+static void test_transport_key_uses_extended_mac_destination(void)
+{
+	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_msg input;
+	struct zb_native_sim_socket_medium_msg output;
+
+	zb_host_socket_coord_init(&coord);
+	send_filter(&coord);
+
+	input = make_native_assoc_req();
+	memset(&output, 0, sizeof(output));
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
+	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
+		  ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	memset(&output, 0, sizeof(output));
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
+	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
+		  ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
+	EXPECT_EQ(output.psdu_len, 60);
+	EXPECT_EQ(output.psdu[0], 0x61);
+	EXPECT_EQ(output.psdu[1], 0x8c);
+	EXPECT_EQ(output.psdu[3], 0x27);
+	EXPECT_EQ(output.psdu[4], 0x5b);
+	EXPECT_EQ(output.psdu[5], 0x02);
+	EXPECT_EQ(output.psdu[6], 0x00);
+	EXPECT_EQ(output.psdu[7], 0x02);
+	EXPECT_EQ(output.psdu[8], 0x50);
+	EXPECT_EQ(output.psdu[9], 0xe0);
+	EXPECT_EQ(output.psdu[10], 0x38);
+	EXPECT_EQ(output.psdu[11], 0xc1);
+	EXPECT_EQ(output.psdu[12], 0xa4);
+	EXPECT_EQ(output.psdu[13], 0x00);
+	EXPECT_EQ(output.psdu[14], 0x00);
+}
+
 int main(void)
 {
 	test_join_and_interview_flow();
 	test_permit_join_disabled_rejects_association();
 	test_native_assoc_request_format_is_accepted();
+	test_transport_key_uses_extended_mac_destination();
 
 	if (failures != 0) {
 		printf("host_socket_coordinator: %d failure(s)\n", failures);

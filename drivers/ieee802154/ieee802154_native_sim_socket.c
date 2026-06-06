@@ -145,6 +145,8 @@ static const char *native_sim_socket_server_host(const struct native_sim_socket_
 	return (cmd_server_host != NULL) ? cmd_server_host : cfg->server_host;
 }
 
+static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms);
+
 static void native_sim_socket_publish_state(const struct device *dev,
 					    enum zb_native_sim_socket_medium_msg_type type)
 {
@@ -180,85 +182,126 @@ static void native_sim_socket_publish_state(const struct device *dev,
 	printk("zb_sock_radio: publish %s node=0x%04x ch=%u pan=0x%04x short=0x%04x rx_on=%u fd=%d\n",
 	       native_sim_socket_msg_type_str(type), msg.node_id, msg.channel,
 	       msg.pan_id, msg.short_addr, msg.rx_on ? 1U : 0U, data->fd);
-	if (nsi_host_write(data->fd, packet, packet_len) < 0) {
-		LOG_WRN("medium state write failed (errno=%d)", nsi_host_get_errno());
+	if (ieee802154_native_sim_socket_send(data->fd, packet, packet_len) < 0) {
+		LOG_WRN("medium state write failed (errno=%d)", errno);
 		printk("zb_sock_radio: publish %s write failed errno=%d\n",
-		       native_sim_socket_msg_type_str(type), nsi_host_get_errno());
+		       native_sim_socket_msg_type_str(type), errno);
+	}
+
+	native_sim_socket_pump_rx(dev, 5);
+}
+
+static bool native_sim_socket_try_rx_once(const struct device *dev)
+{
+	struct native_sim_socket_data *data = dev->data;
+	const struct native_sim_socket_config *cfg = dev->config;
+	static uint32_t rx_try_trace_count;
+	static uint32_t rx_eagain_trace_count;
+	uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
+	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
+		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
+	struct zb_native_sim_socket_medium_msg msg;
+	struct zb_radio_rx_frame_view frame;
+	long len;
+	int err;
+
+	if (data->fd < 0) {
+		return false;
+	}
+
+	if (rx_try_trace_count < 8U) {
+		printk("zb_sock_radio: try RX fd=%d ch=%u started=%u\n",
+		       data->fd, data->channel, data->started ? 1U : 0U);
+		rx_try_trace_count++;
+	}
+
+	len = ieee802154_native_sim_socket_recv(data->fd, packet, sizeof(packet));
+	if (len < 0) {
+		err = errno;
+		if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR) {
+			if (rx_eagain_trace_count < 8U) {
+				printk("zb_sock_radio: try RX no data errno=%d\n", err);
+				rx_eagain_trace_count++;
+			}
+			return false;
+		}
+
+		LOG_ERR("medium read failed (errno=%d)", err);
+		(void)nsi_host_close(data->fd);
+		data->fd = -1;
+		data->started = false;
+		return false;
+	}
+
+	if (len == 0) {
+		return false;
+	}
+
+	if (zb_native_sim_socket_medium_decode(&msg, packet, (size_t)len) < 0) {
+		LOG_WRN("medium decode failed (len=%ld)", len);
+		printk("zb_sock_radio: rx decode failed len=%ld\n", len);
+		return true;
+	}
+
+	if (msg.type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX ||
+	    msg.node_id != native_sim_socket_node_id(cfg) ||
+	    msg.channel != data->channel) {
+		printk("zb_sock_radio: ignore %s node=0x%04x ch=%u len=%zu local_node=0x%04x local_ch=%u\n",
+		       native_sim_socket_msg_type_str(msg.type), msg.node_id, msg.channel,
+		       msg.psdu_len, native_sim_socket_node_id(cfg), data->channel);
+		return true;
+	}
+
+	if (msg.psdu_len > ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE) {
+		return true;
+	}
+
+	memset(dma, 0, sizeof(dma));
+	dma[4] = (uint8_t)(msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
+	memcpy(&dma[NATIVE_SIM_SOCKET_PAYLOAD_OFFSET], msg.psdu, msg.psdu_len);
+	frame.dma = dma;
+	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
+			      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
+	frame.rssi_dbm = msg.rssi_dbm;
+	printk("zb_sock_radio: deliver RX node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
+	       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
+	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
+	return true;
+}
+
+static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms)
+{
+	int remaining = wait_ms;
+
+	while (remaining-- >= 0) {
+		bool handled = false;
+
+		while (native_sim_socket_try_rx_once(dev)) {
+			handled = true;
+		}
+
+		if (handled || wait_ms == 0) {
+			return;
+		}
+
+		k_sleep(K_MSEC(1));
 	}
 }
 
 static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
 {
 	const struct device *dev = p1;
-	struct native_sim_socket_data *data = dev->data;
-	const struct native_sim_socket_config *cfg = dev->config;
 
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
+	printk("zb_sock_radio: rx thread start\n");
 
 	while (true) {
-		struct zb_native_sim_socket_medium_msg msg;
-		uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
-		uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
-			    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
-		struct zb_radio_rx_frame_view frame;
-		long len;
-		int err;
-
-		if (data->fd < 0) {
-			k_sleep(K_MSEC(10));
-			continue;
-		}
-
-		len = nsi_host_read(data->fd, packet, sizeof(packet));
-		if (len < 0) {
-			err = nsi_host_get_errno();
-			if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR) {
-				k_sleep(K_MSEC(1));
-				continue;
-			}
-
-			LOG_ERR("medium read failed (errno=%d)", err);
-			(void)nsi_host_close(data->fd);
-			data->fd = -1;
-			data->started = false;
-			continue;
-		}
-
-		if (len == 0) {
+		if (!native_sim_socket_try_rx_once(dev)) {
 			k_sleep(K_MSEC(1));
 			continue;
 		}
 
-		if (zb_native_sim_socket_medium_decode(&msg, packet, (size_t)len) < 0) {
-			LOG_WRN("medium decode failed (len=%ld)", len);
-			printk("zb_sock_radio: rx decode failed len=%ld\n", len);
-			continue;
-		}
-
-		if (msg.type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX ||
-		    msg.node_id != native_sim_socket_node_id(cfg) ||
-		    msg.channel != data->channel) {
-			printk("zb_sock_radio: ignore %s node=0x%04x ch=%u len=%zu local_node=0x%04x local_ch=%u\n",
-			       native_sim_socket_msg_type_str(msg.type), msg.node_id, msg.channel,
-			       msg.psdu_len, native_sim_socket_node_id(cfg), data->channel);
-			continue;
-		}
-
-		if (msg.psdu_len > ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE) {
-			continue;
-		}
-
-		memset(dma, 0, sizeof(dma));
-		dma[4] = (uint8_t)(msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
-		memcpy(&dma[NATIVE_SIM_SOCKET_PAYLOAD_OFFSET], msg.psdu, msg.psdu_len);
-		frame.dma = dma;
-		frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
-				      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
-		frame.rssi_dbm = msg.rssi_dbm;
-		printk("zb_sock_radio: deliver RX node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
-		       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
-		(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
 		k_yield();
 	}
 }
@@ -372,10 +415,12 @@ static int native_sim_socket_tx(const struct device *dev,
 
 	printk("zb_sock_radio: TX node=0x%04x ch=%u len=%u\n",
 	       msg.node_id, msg.channel, frag->len);
-	if (nsi_host_write(data->fd, packet, packet_len) < 0) {
-		printk("zb_sock_radio: tx write failed errno=%d\n", nsi_host_get_errno());
-		return -nsi_host_get_errno();
+	if (ieee802154_native_sim_socket_send(data->fd, packet, packet_len) < 0) {
+		printk("zb_sock_radio: tx write failed errno=%d\n", errno);
+		return -errno;
 	}
+
+	native_sim_socket_pump_rx(dev, 5);
 
 	return 0;
 }
@@ -405,6 +450,15 @@ static int native_sim_socket_start(const struct device *dev)
 		       native_sim_socket_server_host(cfg),
 		       native_sim_socket_server_port(cfg), data->fd,
 		       native_sim_socket_node_id(cfg));
+	}
+
+	if (!data->rx_thread_started) {
+		k_thread_create(&data->rx_thread, data->rx_stack, data->rx_stack_size,
+				native_sim_socket_rx_thread, (void *)dev, NULL, NULL,
+				K_PRIO_PREEMPT(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_THREAD_PRIO),
+				0, K_NO_WAIT);
+		k_thread_name_set(&data->rx_thread, "zb_sock_rx");
+		data->rx_thread_started = true;
 	}
 
 	data->started = true;
@@ -459,13 +513,6 @@ static int native_sim_socket_init(const struct device *dev)
 	       native_sim_socket_server_port(cfg), data->mac_addr[0], data->mac_addr[1],
 	       data->mac_addr[2], data->mac_addr[3], data->mac_addr[4], data->mac_addr[5],
 	       data->mac_addr[6], data->mac_addr[7]);
-
-	k_thread_create(&data->rx_thread, data->rx_stack, data->rx_stack_size,
-			native_sim_socket_rx_thread, (void *)dev, NULL, NULL,
-			K_PRIO_COOP(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_THREAD_PRIO),
-			0, K_NO_WAIT);
-	k_thread_name_set(&data->rx_thread, "zb_sock_rx");
-	data->rx_thread_started = true;
 
 	return 0;
 }

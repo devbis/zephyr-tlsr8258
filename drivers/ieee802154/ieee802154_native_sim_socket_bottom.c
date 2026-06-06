@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -46,4 +47,24 @@ int ieee802154_native_sim_socket_open(const char *host, uint16_t port)
 	}
 
 	return fd;
+}
+
+int ieee802154_native_sim_socket_rx_ready(int fd)
+{
+	struct pollfd pollfd = {
+		.fd = fd,
+		.events = POLLIN,
+	};
+
+	return poll(&pollfd, 1, 0) == 1;
+}
+
+long ieee802154_native_sim_socket_recv(int fd, void *buffer, unsigned long size)
+{
+	return recv(fd, buffer, size, 0);
+}
+
+long ieee802154_native_sim_socket_send(int fd, const void *buffer, unsigned long size)
+{
+	return send(fd, buffer, size, 0);
 }
