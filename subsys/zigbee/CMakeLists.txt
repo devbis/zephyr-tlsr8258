@@ -41,7 +41,6 @@ zephyr_library_sources(
     platform/zephyr/zb_task_queue_zephyr.c
     platform/zephyr/zb_main.c
     platform/zephyr/drv_hw_zephyr.c
-    platform/zephyr/drv_rand_zephyr.c
     platform/zephyr/drv_radio_map.c
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
@@ -49,6 +48,12 @@ zephyr_library_sources(
     platform/zephyr/zb_vendor_compat.c
     platform/zephyr/zb_persistence_zephyr.c
 )
+if(NOT CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR
+   AND NOT CONFIG_XOSHIRO_RANDOM_GENERATOR
+   AND NOT CONFIG_TIMER_RANDOM_GENERATOR
+   AND NOT CONFIG_ARM64_RANDOM_GENERATOR)
+    zephyr_library_sources(platform/zephyr/drv_rand_zephyr.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258
     platform/zephyr/zb_radio_port_tlsr8258.c
 )
