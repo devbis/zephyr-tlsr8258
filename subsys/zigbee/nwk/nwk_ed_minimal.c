@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/spinlock.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
@@ -1035,6 +1036,7 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	extPANId_t extPanId;
 	u8 channel;
 	int rc;
+	nwk_ed_minimal_state_t prev_state = g_nwkEdCtx.state;
 
 	if (nwk_ed_minimal_fixed_join_target_locked()) {
 		parentShortAddr = g_nwkEdCtx.fixedJoinShortAddr;
@@ -1100,6 +1102,13 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	capability |= BIT(7); /* allocate short address */
 	frame[idx++] = capability;
 
+	/*
+	 * On the localhost socket medium the coordinator can reply within the
+	 * same scheduling slice, before zb_platform_radio_send_raw_psdu()
+	 * returns. Mark the runtime as joining first so an immediate
+	 * Association Response is not discarded as stale discovery traffic.
+	 */
+	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
 	rc = zb_platform_radio_send_raw_psdu(frame, idx);
 	zb_nwk_ed_trace[11]++;
 	zb_nwk_ed_trace[12] = ((u32)(u8)idx << 24) | ((u32)MAC_CMD_ASSOCIATION_REQUEST << 16) |
@@ -1117,11 +1126,11 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 			: NWK_ED_MINIMAL_JOIN_POLL_MS);
 		return TRUE;
 	} else if (rc < 0) {
+		g_nwkEdCtx.state = prev_state;
 		LOG_WRN("association request tx failed (rc=%d len=%u ch=%u)", rc, idx, channel);
 		return FALSE;
 	}
 
-	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
 	nwk_ed_minimal_timer_start(NWK_ED_MINIMAL_JOIN_POLL_MS);
 	LOG_INF("%s started: pan 0x%04x parent 0x%04x ch %u",
 		rejoinMode ? "rejoin" : "join", panId, parentShortAddr, channel);

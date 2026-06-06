@@ -15,6 +15,7 @@
 #define ZB_STANDARD_NWK_KEY 0x01u
 
 #define ZB_MAC_FCF_COMMAND_SHORT 0x8863u
+#define ZB_MAC_FCF_DATA_EXT_SHORT 0x8c61u
 #define ZB_MAC_CMD_ASSOC_REQ     0x01u
 #define ZB_MAC_CMD_ASSOC_RSP     0x02u
 #define ZB_MAC_CMD_DATA_REQ      0x04u
@@ -245,6 +246,32 @@ static size_t encode_data_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16
 	return idx;
 }
 
+static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t dst_short,
+					 uint16_t src_short)
+{
+	put_le16(&wire[0], ZB_MAC_FCF_DATA_EXT_SHORT);
+	wire[2] = seq;
+	put_le16(&wire[3], ZB_PAN_ID);
+	put_le64(&wire[5], ZB_DEVICE_IEEE);
+	put_le16(&wire[13], src_short);
+	put_le16(&wire[15], 0x0008u);
+	put_le16(&wire[17], dst_short);
+	put_le16(&wire[19], src_short);
+	wire[21] = 30U;
+	wire[22] = 1U;
+	wire[23] = 0x01U;
+	wire[24] = 1U;
+	wire[25] = 0x05U;
+	wire[26] = ZB_STANDARD_NWK_KEY;
+	for (size_t i = 0U; i < 16U; i++) {
+		wire[27U + i] = (uint8_t)(i + 1U);
+	}
+	wire[43] = 1U;
+	put_le64(&wire[44], ZB_DEVICE_IEEE);
+	put_le64(&wire[52], ZB_COORD_IEEE);
+	return 60U;
+}
+
 enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t *psdu, size_t psdu_len)
 {
 	uint16_t fcf;
@@ -313,37 +340,12 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 
 	switch (type) {
 	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
-		put_le16(&wire[0], 0x8c63u);
-		wire[2] = 1U;
-		put_le16(&wire[3], ZB_PAN_ID);
-		put_le64(&wire[5], ZB_DEVICE_IEEE);
-		put_le16(&wire[13], src);
-		wire[15] = ZB_MAC_CMD_ASSOC_RSP;
-		put_le16(&wire[16], dst);
-		wire[18] = 0U;
-		return 19U;
+		len = encode_mac_command(wire, 1U, ZB_NO_SHORT_ADDR, src, ZB_MAC_CMD_ASSOC_RSP);
+		put_le16(&wire[10], dst);
+		wire[12] = 0U;
+		return len + 3U;
 	case ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY:
-		put_le16(&wire[0], 0x8861u);
-		wire[2] = 2U;
-		put_le16(&wire[3], ZB_PAN_ID);
-		put_le16(&wire[5], dst);
-		put_le16(&wire[7], src);
-		put_le16(&wire[9], 0x0008u);
-		put_le16(&wire[11], dst);
-		put_le16(&wire[13], src);
-		wire[15] = 30U;
-		wire[16] = 1U;
-		wire[17] = 0x01U;
-		wire[18] = 1U;
-		wire[19] = 0x05U;
-		wire[20] = ZB_STANDARD_NWK_KEY;
-		for (size_t i = 0U; i < 16U; i++) {
-			wire[21U + i] = (uint8_t)(i + 1U);
-		}
-		wire[37] = 1U;
-		put_le64(&wire[38], ZB_DEVICE_IEEE);
-		put_le64(&wire[46], ZB_COORD_IEEE);
-		return 54U;
+		return encode_transport_key_frame(wire, 2U, dst, src);
 	case ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP:
 		payload[0] = ZB_NWK_TIMEOUT_RSP;
 		payload[1] = 0x00U;
