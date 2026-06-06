@@ -10,12 +10,16 @@
  */
 #include <zephyr/drivers/flash.h>
 #include <zephyr/kernel.h>
-#include <zephyr/storage/flash_map.h>
 #include <zephyr/kvss/nvs.h>
+#include <zephyr/storage/flash_map.h>
 #include <zephyr/sys/crc.h>
 #include <zephyr/zigbee/zb_types.h>
 #include <errno.h>
 #include "drv_nv.h"
+
+#if !FIXED_PARTITION_EXISTS(nvs_storage)
+#error "Zigbee requires a fixed partition labeled nvs_storage"
+#endif
 
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
 
@@ -53,49 +57,39 @@ static void zb_nvs_log_degraded(const char *reason, int rc)
 	printk("zigbee NV degraded: %s (%d)\n", reason, rc);
 }
 
-static int zb_nvs_flash_area_id_get(void)
+static const struct device *zb_nvs_flash_device_get(void)
 {
-	if (CONFIG_ZIGBEE_NV_FLASH_AREA_ID >= 0) {
-		return CONFIG_ZIGBEE_NV_FLASH_AREA_ID;
-	}
-
-#if FIXED_PARTITION_EXISTS(nvs_storage)
-	return DT_FIXED_PARTITION_ID(DT_NODELABEL(nvs_storage));
-#else
-	return -ENOENT;
-#endif
+	return FIXED_PARTITION_DEVICE(nvs_storage);
 }
 
 static int zb_nvs_geometry_init(void)
 {
-	const struct flash_area *fa;
+	const struct device *flash_device;
 	struct flash_pages_info page_info;
-	int area_id;
+	size_t partition_size;
+	off_t partition_offset;
 	int rc;
 
 	if (zb_nvs_geometry_ready) {
 		return 0;
 	}
 
-	area_id = zb_nvs_flash_area_id_get();
-	if (area_id < 0) {
-		return area_id;
+	flash_device = zb_nvs_flash_device_get();
+	if (!device_is_ready(flash_device)) {
+		return -ENODEV;
 	}
 
-	rc = flash_area_open((uint8_t)area_id, &fa);
-	if (rc < 0) {
-		return rc;
-	}
-	zb_nvs.flash_device = flash_area_get_device(fa);
-	zb_nvs.offset       = fa->fa_off;
-	rc = flash_get_page_info_by_offs(zb_nvs.flash_device, fa->fa_off, &page_info);
+	partition_offset = FIXED_PARTITION_OFFSET(nvs_storage);
+	partition_size = FIXED_PARTITION_SIZE(nvs_storage);
+	zb_nvs.flash_device = flash_device;
+	zb_nvs.offset = partition_offset;
+
+	rc = flash_get_page_info_by_offs(zb_nvs.flash_device, partition_offset, &page_info);
 	if (rc < 0 || page_info.size == 0U) {
-		flash_area_close(fa);
 		return (rc < 0) ? rc : -EINVAL;
 	}
 	zb_nvs.sector_size = page_info.size;
-	zb_nvs.sector_count = fa->fa_size / page_info.size;
-	flash_area_close(fa);
+	zb_nvs.sector_count = partition_size / page_info.size;
 
 	if (zb_nvs.sector_count == 0U) {
 		return -EINVAL;
