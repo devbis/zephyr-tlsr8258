@@ -26,6 +26,58 @@ struct daemon_config {
 	bool permit_join;
 };
 
+static const char *medium_msg_type_str(enum zb_native_sim_socket_medium_msg_type type)
+{
+	switch (type) {
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO:
+		return "HELLO";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER:
+		return "FILTER";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX:
+		return "TX";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX:
+		return "RX";
+	case ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS:
+		return "STATUS";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static const char *frame_type_str(enum zb_host_socket_frame_type type)
+{
+	switch (type) {
+	case ZB_HOST_SOCKET_FRAME_ASSOC_REQ:
+		return "ASSOC_REQ";
+	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
+		return "ASSOC_RSP";
+	case ZB_HOST_SOCKET_FRAME_DATA_REQ:
+		return "DATA_REQ";
+	case ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY:
+		return "TRANSPORT_KEY";
+	case ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_REQ:
+		return "TIMEOUT_REQ";
+	case ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP:
+		return "TIMEOUT_RSP";
+	case ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE:
+		return "DEVICE_ANNOUNCE";
+	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ:
+		return "ACTIVE_EP_REQ";
+	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP:
+		return "ACTIVE_EP_RSP";
+	case ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ:
+		return "SIMPLE_DESC_REQ";
+	case ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_RSP:
+		return "SIMPLE_DESC_RSP";
+	case ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ:
+		return "BASIC_MODEL_ID_READ";
+	case ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ_RSP:
+		return "BASIC_MODEL_ID_READ_RSP";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 static void usage(FILE *stream, const char *argv0)
 {
 	fprintf(stream,
@@ -140,6 +192,12 @@ static int maybe_reply(int fd, const struct sockaddr_in *peer_addr,
 		return rc;
 	}
 
+	fprintf(stderr,
+		"socket coordinator: reply %s frame=%s node=0x%04x ch=%u len=%zu\n",
+		medium_msg_type_str(output->type),
+		frame_type_str(zb_host_socket_coord_identify_frame(output->psdu, output->psdu_len)),
+		output->node_id, output->channel, output->psdu_len);
+
 	rc = (int)sendto(fd, packet, packet_len, 0,
 			 (const struct sockaddr *)peer_addr, sizeof(*peer_addr));
 	if (rc < 0) {
@@ -206,6 +264,18 @@ int main(int argc, char **argv)
 			fprintf(stderr, "socket coordinator: dropped malformed packet len=%zd\n", len);
 			continue;
 		}
+
+		fprintf(stderr,
+			"socket coordinator: recv %s from %s:%u node=0x%04x ch=%u pan=0x%04x short=0x%04x rx_on=%u len=%zu",
+			medium_msg_type_str(input.type), inet_ntoa(peer_addr.sin_addr),
+			ntohs(peer_addr.sin_port), input.node_id, input.channel, input.pan_id,
+			input.short_addr, input.rx_on ? 1U : 0U, input.psdu_len);
+		if (input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX && input.psdu != NULL) {
+			fprintf(stderr, " frame=%s",
+				frame_type_str(zb_host_socket_coord_identify_frame(input.psdu,
+									 input.psdu_len)));
+		}
+		fputc('\n', stderr);
 
 		if (!have_active_peer ||
 		    input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO ||
