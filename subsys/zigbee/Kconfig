@@ -63,14 +63,6 @@ config ZIGBEE_NV_SECTOR_COUNT
 	int "NVS sector count for Zigbee storage"
 	default 2
 
-config ZIGBEE_NV_FLASH_AREA_ID
-	int "Flash area id for Zigbee NVS backend"
-	default -1
-	range -1 255
-	help
-	  Select the flash-map area used by the Zigbee NVS backend.
-	  Set to -1 to use the default nvs_storage partition when present.
-
 config ZIGBEE_LOG_LEVEL
 	int "Zigbee log level"
 	default 3
