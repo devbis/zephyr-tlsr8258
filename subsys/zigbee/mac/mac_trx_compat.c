@@ -1102,12 +1102,14 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
  * app_profile.c so that the fallback interview path answers with the
  * same strings as the real ZCL attribute table.
  */
-const char __weak *zb_platform_app_basic_mfr_name(void)
+const char *zb_platform_app_basic_mfr_name(void) __weak;
+const char *zb_platform_app_basic_mfr_name(void)
 {
 	return "Telink";
 }
 
-const char __weak *zb_platform_app_basic_model_id(void)
+const char *zb_platform_app_basic_model_id(void) __weak;
+const char *zb_platform_app_basic_model_id(void)
 {
 	return "tlsr8258-zigbee-shell";
 }
