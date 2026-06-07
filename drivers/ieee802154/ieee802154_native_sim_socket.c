@@ -151,6 +151,7 @@ static const char *native_sim_socket_server_host(const struct native_sim_socket_
 static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms);
 static int native_sim_socket_send_msg(const struct device *dev,
 				      const struct zb_native_sim_socket_medium_msg *msg);
+static int native_sim_socket_query_cca(const struct device *dev, bool *busy);
 
 static void native_sim_socket_publish_state(const struct device *dev,
 					    enum zb_native_sim_socket_medium_msg_type type)
@@ -358,7 +359,7 @@ static enum ieee802154_hw_caps native_sim_socket_get_capabilities(const struct d
 	return IEEE802154_HW_FCS | IEEE802154_HW_FILTER;
 }
 
-static int native_sim_socket_cca(const struct device *dev)
+static int native_sim_socket_query_cca(const struct device *dev, bool *busy)
 {
 	const struct native_sim_socket_config *cfg = dev->config;
 	struct native_sim_socket_data *data = dev->data;
@@ -398,7 +399,24 @@ static int native_sim_socket_cca(const struct device *dev)
 		return -EIO;
 	}
 
-	return data->cca_busy ? -EBUSY : 0;
+	if (busy != NULL) {
+		*busy = data->cca_busy;
+	}
+
+	return 0;
+}
+
+static int native_sim_socket_cca(const struct device *dev)
+{
+	bool busy = false;
+	int rc;
+
+	rc = native_sim_socket_query_cca(dev, &busy);
+	if (rc < 0) {
+		return rc;
+	}
+
+	return busy ? -EBUSY : 0;
 }
 
 static int native_sim_socket_set_channel(const struct device *dev, uint16_t channel)
@@ -478,6 +496,12 @@ static int native_sim_socket_tx(const struct device *dev,
 		printk("zb_sock_radio: tx blocked started=%u fd=%d frag=%p\n",
 		       data->started ? 1U : 0U, data->fd, frag);
 		return -EIO;
+	}
+
+	rc = native_sim_socket_cca(dev);
+	if (rc < 0) {
+		printk("zb_sock_radio: tx CCA blocked rc=%d\n", rc);
+		return rc;
 	}
 
 	memset(&msg, 0, sizeof(msg));
