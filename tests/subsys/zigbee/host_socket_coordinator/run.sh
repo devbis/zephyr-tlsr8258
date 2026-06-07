@@ -14,6 +14,7 @@ cc="${CC:-cc}"
 	tests/subsys/zigbee/host_socket_coordinator/main.c \
 	tests/subsys/zigbee/host_socket_coordinator/coord_logic.c \
 	subsys/zigbee/platform/common/zb_native_sim_socket_medium.c \
+	subsys/zigbee/platform/common/zb_native_sim_socket_medium_model.c \
 	-o "$out"
 
 "$out"
