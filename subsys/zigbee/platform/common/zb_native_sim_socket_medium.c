@@ -12,6 +12,8 @@
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_MAGIC 0x4d535a42u
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_HEADER_SIZE 28U
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_FLAG_RX_ON BIT(0)
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ 0x01U
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP 0x02U
 
 static void zb_native_sim_socket_medium_put_le16(uint8_t *buf, uint16_t value)
 {
@@ -209,4 +211,61 @@ bool zb_native_sim_socket_medium_peer_accepts_psdu(
 	}
 
 	return false;
+}
+
+int zb_native_sim_socket_medium_status_encode_cca_req(uint8_t *buffer, size_t capacity,
+						      size_t *encoded_len)
+{
+	if (buffer == NULL || encoded_len == NULL) {
+		return -EINVAL;
+	}
+
+	if (capacity < ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN) {
+		return -ENOSPC;
+	}
+
+	buffer[0] = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ;
+	*encoded_len = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN;
+	return 0;
+}
+
+bool zb_native_sim_socket_medium_status_is_cca_req(const uint8_t *buffer, size_t len)
+{
+	return buffer != NULL &&
+	       len == ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN &&
+	       buffer[0] == ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ;
+}
+
+int zb_native_sim_socket_medium_status_encode_cca_rsp(uint8_t *buffer, size_t capacity,
+						      bool busy, size_t *encoded_len)
+{
+	if (buffer == NULL || encoded_len == NULL) {
+		return -EINVAL;
+	}
+
+	if (capacity < ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN) {
+		return -ENOSPC;
+	}
+
+	buffer[0] = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP;
+	buffer[1] = busy ? 1U : 0U;
+	*encoded_len = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN;
+	return 0;
+}
+
+int zb_native_sim_socket_medium_status_decode_cca_rsp(const uint8_t *buffer, size_t len,
+						      bool *busy)
+{
+	if (buffer == NULL || busy == NULL) {
+		return -EINVAL;
+	}
+
+	if (len != ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN ||
+	    buffer[0] != ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP ||
+	    buffer[1] > 1U) {
+		return -EBADMSG;
+	}
+
+	*busy = buffer[1] != 0U;
+	return 0;
 }
