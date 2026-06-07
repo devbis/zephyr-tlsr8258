@@ -293,6 +293,23 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	nop
 	tsub r2, r2, r1
 	TC32_COPY_FROM_SRAM_MIRROR
+
+	/*
+	 * Copy the .ramfunc section from its flash LMA to its RAM VMA.
+	 * The asm z_prep_c above replaces the C arch_data_copy(), which is
+	 * where Zephyr's generic XIP layer (arch/common/xip.c) normally
+	 * issues this copy via arch_early_memcpy.  Without this block, any
+	 * function marked __ramfunc would execute from uninitialised RAM
+	 * and the CPU would fault on first cross-region call.
+	 */
+	tloadr r0, .Lramfunc_load_start
+	tloadr r1, .Lramfunc_region_start
+	tloadr r2, .Lramfunc_end
+	nop
+	nop
+	tsub r2, r2, r1
+	TC32_COPY_FROM_SRAM_MIRROR
+
 	tjl z_cstart
 
 .Lprep_hang:
@@ -315,6 +332,12 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	.word __data_region_start
 .Ldata_end:
 	.word __data_region_end
+.Lramfunc_load_start:
+	.word __ramfunc_load_start
+.Lramfunc_region_start:
+	.word __ramfunc_region_start
+.Lramfunc_end:
+	.word __ramfunc_end
 
 SECTION_FUNC(boot_ram_mirror, __irq)
 z_tc32_irq_entry:
