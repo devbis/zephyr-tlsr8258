@@ -14,6 +14,7 @@
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_FLAG_RX_ON BIT(0)
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ 0x01U
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP 0x02U
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP 0x03U
 
 static void zb_native_sim_socket_medium_put_le16(uint8_t *buf, uint16_t value)
 {
@@ -267,5 +268,40 @@ int zb_native_sim_socket_medium_status_decode_cca_rsp(const uint8_t *buffer, siz
 	}
 
 	*busy = buffer[1] != 0U;
+	return 0;
+}
+
+int zb_native_sim_socket_medium_status_encode_tx_result_rsp(uint8_t *buffer, size_t capacity,
+							    bool collision,
+							    size_t *encoded_len)
+{
+	if (buffer == NULL || encoded_len == NULL) {
+		return -EINVAL;
+	}
+
+	if (capacity < ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP_LEN) {
+		return -ENOSPC;
+	}
+
+	buffer[0] = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP;
+	buffer[1] = collision ? 1U : 0U;
+	*encoded_len = ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP_LEN;
+	return 0;
+}
+
+int zb_native_sim_socket_medium_status_decode_tx_result_rsp(const uint8_t *buffer, size_t len,
+							    bool *collision)
+{
+	if (buffer == NULL || collision == NULL) {
+		return -EINVAL;
+	}
+
+	if (len != ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP_LEN ||
+	    buffer[0] != ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP ||
+	    buffer[1] > 1U) {
+		return -EBADMSG;
+	}
+
+	*collision = buffer[1] != 0U;
 	return 0;
 }
