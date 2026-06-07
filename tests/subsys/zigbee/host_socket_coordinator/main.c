@@ -270,6 +270,31 @@ static void test_status_cca_payload_helpers(void)
 	EXPECT_TRUE(!cca_busy);
 }
 
+static void test_status_tx_result_payload_helpers(void)
+{
+	uint8_t payload[8];
+	size_t payload_len = 0U;
+	bool collision = false;
+
+	EXPECT_EQ(zb_native_sim_socket_medium_status_encode_tx_result_rsp(payload,
+									  sizeof(payload),
+									  false,
+									  &payload_len), 0);
+	EXPECT_EQ(payload_len, 2);
+	EXPECT_EQ(zb_native_sim_socket_medium_status_decode_tx_result_rsp(payload, payload_len,
+									    &collision), 0);
+	EXPECT_TRUE(!collision);
+
+	EXPECT_EQ(zb_native_sim_socket_medium_status_encode_tx_result_rsp(payload,
+									  sizeof(payload),
+									  true,
+									  &payload_len), 0);
+	EXPECT_EQ(payload_len, 2);
+	EXPECT_EQ(zb_native_sim_socket_medium_status_decode_tx_result_rsp(payload, payload_len,
+									    &collision), 0);
+	EXPECT_TRUE(collision);
+}
+
 int main(void)
 {
 	test_join_and_interview_flow();
@@ -279,6 +304,7 @@ int main(void)
 	test_medium_model_airtime_formula();
 	test_medium_model_busy_window_and_collision();
 	test_status_cca_payload_helpers();
+	test_status_tx_result_payload_helpers();
 
 	if (failures != 0) {
 		printf("host_socket_coordinator: %d failure(s)\n", failures);
