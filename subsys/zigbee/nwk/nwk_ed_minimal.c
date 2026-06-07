@@ -1481,7 +1481,16 @@ static void nwk_ed_minimal_repair_joined_context_if_needed(void)
 	nwk_ed_minimal_sync_zb_info_from_runtime();
 	zb_radio_port_update_filters(g_nwkEdCtx.activePanId, g_nwkEdCtx.activeShortAddr,
 				     g_zbMacPib.extAddress);
-	zb_info_save(NULL);
+	/*
+	 * Defer zb_info_save() ~15s — same rationale as
+	 * nwk_ed_minimal_complete_join: the flash save chain holds
+	 * arch_irq_lock long enough to stall the post-join ZDO interview on
+	 * the Zephyr NVS backend.  This repair path runs after a context
+	 * mismatch is detected (mostly a non-volatile-restore corner case),
+	 * so the delayed save is safe.
+	 */
+	(void)TL_ZB_TIMER_SCHEDULE(nwk_ed_minimal_deferred_zb_info_save_timer,
+				   NULL, 15000U);
 }
 
 static void nwk_ed_minimal_runtime_reset(void)

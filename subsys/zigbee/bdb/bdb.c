@@ -348,6 +348,19 @@ _CODE_BDB_ static void bdb_commissioningInfoSave(void *arg)
     g_bdbAttrs.commissioningMode.networkSteer = 1;
 }
 
+/*
+ * Timer-callback wrapper used by bdb_mgmtPermitJoiningConfirm to defer the
+ * synchronous flash-write chain inside bdb_commissioningInfoSave until well
+ * after the post-join ZDO interview has had a chance to complete.  Returning
+ * -1 makes the ZB scheduler discard the timer so it fires exactly once.
+ */
+_CODE_BDB_ static s32 bdb_commissioning_info_save_timer(void *arg)
+{
+    ARG_UNUSED(arg);
+    bdb_commissioningInfoSave(NULL);
+    return -1;
+}
+
 /*********************************************************************
  * @fn      queueInit
  *
@@ -960,7 +973,22 @@ _CODE_BDB_ static void bdb_mgmtPermitJoiningConfirm(void *arg)
     }
 
     if (g_bdbAttrs.nodeIsOnANetwork) {
-        bdb_commissioningInfoSave(NULL);
+        /*
+         * Defer bdb_commissioningInfoSave by 15s instead of running it
+         * synchronously in the permit-joining confirm callback.  The save
+         * chains nv_nwkFrameCountSaveToFlash + zdo_ssInfoSaveToFlash +
+         * zb_info_save, each of which holds arch_irq_lock through a flash
+         * page program / sector erase (~100-200ms with IRQs masked).  On
+         * the Zephyr NVS backend this stalls the ZB thread long enough
+         * that the post-join Node_Desc_req / Active_EP_req / SimpleDesc_req
+         * exchange never gets serviced and Z2M marks the device FAILED.
+         * Same rationale and same 15s window as the deferred
+         * zb_info_save() in nwk_ed_minimal_complete_join — the persistence
+         * is only consulted on the next power-up, so a long delay is
+         * safe as long as we eventually save before any reset.
+         */
+        (void)TL_ZB_TIMER_SCHEDULE(bdb_commissioning_info_save_timer,
+                                   NULL, 15000U);
     }
 }
 

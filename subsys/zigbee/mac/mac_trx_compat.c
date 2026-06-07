@@ -1615,6 +1615,13 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 	}
 }
 
+static s32 zb_minimal_transport_key_save_timer(void *arg)
+{
+	ARG_UNUSED(arg);
+	zb_info_save(NULL);
+	return -1;
+}
+
 static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 {
 	ss_material_set_t *material;
@@ -1664,7 +1671,21 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	if (!ZB_IS_64BIT_ADDR_ZERO(src_ieee)) {
 		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, src_ieee);
 	}
-	zb_info_save(NULL);
+	/*
+	 * Defer zb_info_save() ~15s instead of running it synchronously here.
+	 * On the Zephyr NVS backend the save chain (nv_nwkFrameCount +
+	 * zdo_ssInfoSaveToFlash + zb_info_save) holds arch_irq_lock through
+	 * back-to-back flash page programs / sector erases, stalling the ZB
+	 * thread long enough that the post-join Node_Desc_req /
+	 * Active_EP_req / SimpleDesc_req exchange never gets serviced and
+	 * the device falls into a watchdog reset loop (PC stuck at __reset,
+	 * irq_en=0).  The persistence is only consulted on the next
+	 * power-up, so the long delay is safe as long as the save lands
+	 * before any reset.  Mirrors the same fix applied to
+	 * nwk_ed_minimal_complete_join and bdb_mgmtPermitJoiningConfirm.
+	 */
+	(void)TL_ZB_TIMER_SCHEDULE(zb_minimal_transport_key_save_timer,
+				   NULL, 15000U);
 	zb_minimal_debug_join_drop("tk installed", key_seq, g_zbNwkCtx.joined ? 1U : 0U);
 	LOG_INF("joined RX: installed nwk key seq=%u tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		key_seq, ss_ib.trust_center_address[0], ss_ib.trust_center_address[1],
