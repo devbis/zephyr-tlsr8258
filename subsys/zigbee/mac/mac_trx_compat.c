@@ -317,6 +317,28 @@ volatile u32 zb_minimal_zdo_trace[8] = {0x5a444f31U};
 volatile u32 zb_minimal_join_rx_trace[8] = {0x4a525831U};
 volatile u32 zb_minimal_join_filter_trace[8] = {0x4a464c54U};
 volatile u32 zb_minimal_join_gate_trace[8] = {0x4a474154U};
+/*
+ * Post-Transport-Key path trace.  Each step on the join interview path
+ * writes a unique marker so an SWS dump can show the LAST instruction the
+ * device executed before locking up.  Slot semantics:
+ *   [0] = 0x504f5354 ('POST') sentinel
+ *   [1] = TK handler entry          (0x10000000 | seq)
+ *   [2] = after key install         (0x20000000 | seq)
+ *   [3] = after deferred timer      (0x30000000 | seq)
+ *   [4] = TK done callback          (0x40000000 | seq)
+ *   [5] = complete_join entry       (0x50000000 | seq)
+ *   [6] = finish_join done          (0x60000000 | seq)
+ *   [7] = bdb_retrieveTcLinkKeyDone (0x70000000 | seq)
+ *   [8] = join_complete_maybe_fin   (0x80000000 | seq)
+ *   [9] = PERMITJOIN bdb_task case  (0x90000000 | seq)
+ *   [10] = after send_dev_annce     (0xa0000000 | status)
+ *   [11] = mgmtPermitJoiningConfirm (0xb0000000 | seq)
+ *   [12] = post_join_poll_task      (0xc0000000 | seq)
+ *   [13] = transport_key_done_task  (0xd0000000 | seq)
+ *   [14] = transport key save timer (0xe0000000 — fires at 15s)
+ *   [15] = reserved
+ */
+volatile u32 zb_post_tk_trace[16] = {0x504f5354U};
 
 static bool zb_minimal_security_key_is_set(const u8 *key)
 {
@@ -1618,6 +1640,7 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 static s32 zb_minimal_transport_key_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
+	zb_post_tk_trace[14] = 0xe0000000U | (zb_post_tk_trace[14] + 1U);
 	zb_info_save(NULL);
 	return -1;
 }
@@ -1635,6 +1658,7 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 					    aps != NULL ? aps->payload_len : 0xffffffffU);
 		return false;
 	}
+	zb_post_tk_trace[1] = 0x10000000U | (zb_post_tk_trace[1] + 1U);
 
 	payload = aps->payload;
 	if (aps->security &&
@@ -1668,6 +1692,7 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	ss_ib.securityLevel = 5U;
 	aps_ib.aps_authenticated = 1U;
 	aps_ib.aps_use_insecure_join = FALSE;
+	zb_post_tk_trace[2] = 0x20000000U | (zb_post_tk_trace[2] + 1U);
 	if (!ZB_IS_64BIT_ADDR_ZERO(src_ieee)) {
 		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, src_ieee);
 	}
@@ -1687,13 +1712,16 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	(void)TL_ZB_TIMER_SCHEDULE(zb_minimal_transport_key_save_timer,
 				   NULL, 15000U);
 	zb_minimal_debug_join_drop("tk installed", key_seq, g_zbNwkCtx.joined ? 1U : 0U);
+	zb_post_tk_trace[3] = 0x30000000U | (zb_post_tk_trace[3] + 1U);
 	LOG_INF("joined RX: installed nwk key seq=%u tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		key_seq, ss_ib.trust_center_address[0], ss_ib.trust_center_address[1],
 		ss_ib.trust_center_address[2], ss_ib.trust_center_address[3],
 		ss_ib.trust_center_address[4], ss_ib.trust_center_address[5],
 		ss_ib.trust_center_address[6], ss_ib.trust_center_address[7]);
 	zb_minimal_join_rx_trace[7] = 0xa6070000U | key_seq;
+	zb_post_tk_trace[4] = 0x40000000U | (zb_post_tk_trace[4] + 1U);
 	tl_zbNwkEdMinimalTransportKeyDone();
+	zb_post_tk_trace[4] |= 0x00008000U;  /* returned from TransportKeyDone */
 	return true;
 }
 

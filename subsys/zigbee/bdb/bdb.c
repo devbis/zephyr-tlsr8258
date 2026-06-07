@@ -29,6 +29,7 @@
 #include "zb_common_stub.h"
 
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
+extern volatile u32 zb_post_tk_trace[16];
 #include "../zcl/zcl_include.h"
 #include "../zcl/zll_commissioning/zcl_zll_commissioning_internal.h"
 #include "includes/bdb.h"
@@ -145,6 +146,11 @@ static void bdb_ed_join_complete_maybe_finish(void)
 {
     u32 evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN;
 
+    zb_post_tk_trace[8] = 0x80000000U | (zb_post_tk_trace[8] + 1U) |
+			   ((u32)BDB_STATE_GET() << 16) |
+			   ((u32)(g_bdbCtx.edRuntimeReady ? 1U : 0U) << 12) |
+			   ((u32)(g_bdbCtx.tcLinkKeyReady ? 1U : 0U) << 8);
+
     if (BDB_STATE_GET() != BDB_STATE_COMMISSIONING_NETWORK_STEER ||
         !g_bdbCtx.edRuntimeReady || !g_bdbCtx.tcLinkKeyReady) {
         return;
@@ -152,6 +158,7 @@ static void bdb_ed_join_complete_maybe_finish(void)
 
     BDB_STATUS_SET(BDB_COMMISSION_STA_SUCCESS);
     g_bdbAttrs.nodeIsOnANetwork = 1;
+    zb_post_tk_trace[8] |= 0x00004000U;  /* scheduled PERMITJOIN */
     TL_SCHEDULE_TASK(bdb_task, (void *)evt);
 }
 
@@ -952,6 +959,8 @@ _CODE_BDB_ static u8 bdb_commissioningNetworkFormation(void)
 _CODE_BDB_ static void bdb_mgmtPermitJoiningConfirm(void *arg)
 {
     ARG_UNUSED(arg);
+    zb_post_tk_trace[11] = 0xb0000000U | (zb_post_tk_trace[11] + 1U) |
+			    ((u32)BDB_STATE_GET() << 16);
 
 #if ZB_ROUTER_ROLE
     /* Enable permit join for more than bdbcMinCommissioningTime seconds */
@@ -1049,6 +1058,7 @@ _CODE_BDB_ static s32 bdb_waitTransportKeyTimeout(void *arg)
  */
 _CODE_BDB_ void bdb_retrieveTcLinkKeyDone(u8 status)
 {
+    zb_post_tk_trace[7] = 0x70000000U | (zb_post_tk_trace[7] + 1U) | ((u32)status << 8);
     bdb_retrieveTcLinkKeyTimerStop();
     if (status == BDB_COMMISSION_STA_SUCCESS) {
         g_bdbCtx.tcLinkKeyReady = 1;
@@ -1445,10 +1455,14 @@ static void bdb_task(void *arg)
         if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY) {
             TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyStart, NULL, 1000);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN) {
+            zb_post_tk_trace[9] = 0x90000000U | (zb_post_tk_trace[9] + 1U);
             u8 devAnnStatus = zb_zdoSendDevAnnance();
+            zb_post_tk_trace[10] = 0xa0000000U | (zb_post_tk_trace[10] + 1U) |
+				    ((u32)devAnnStatus << 8);
             if (devAnnStatus == ZDO_SUCCESS) {
                 tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
             }
+            zb_post_tk_trace[10] |= 0x00004000U;
 #if ZB_ROUTER_ROLE
             g_zbNwkCtx.joinAccept = 1;
             zb_mgmtPermitJoinReq(0xfffc, BDBC_MIN_COMMISSIONING_TIME, 0x01, &sn, NULL);
