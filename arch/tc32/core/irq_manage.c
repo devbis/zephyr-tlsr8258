@@ -85,17 +85,30 @@ void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 	 * with global IRQ still disabled. Hardware nested IRQ entry is not
 	 * enabled here; arch_is_in_isr() observes this counter for the whole
 	 * pending-drain loop.
+	 *
+	 * RF-first policy: if the 802.15.4 RF IRQ (ZB_RT, bit 13) is pending
+	 * at any point, service it before any other source and then EXIT the
+	 * drain loop. Other pending sources (system tick, UART, GPIO) remain
+	 * latched and re-trigger on the next IRQ entry; that's free because
+	 * the global enable runs straight after this function returns. This
+	 * collapses the worst-case RF-to-ACK latency tail: previously a system
+	 * tick latched alongside an RF RX would run AFTER the RF handler but
+	 * BEFORE the next pending-mask read, delaying the next back-to-back RF
+	 * event by the tick handler's runtime (timeout list walk, possible
+	 * thread wakeup — measured 20-100us). Now RF events drain back-to-back
+	 * with no inline tick service.
 	 */
 	_kernel.cpus[0].nested++;
 
 	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
-		unsigned int irq = pending_lsb_index(pending);
+		unsigned int irq;
+		bool rf_pending = (pending & BIT(TLSR8258_IRQ_ZB_RT)) != 0u;
 
-		z_tc32_irq_debug_src = *TLSR8258_REG_IRQ_SRC;
-		z_tc32_irq_debug_mask = *TLSR8258_REG_IRQ_MASK;
-		z_tc32_irq_debug_pending = pending;
-		z_tc32_irq_debug_irq = irq;
-		z_tc32_irq_debug_drained = drained;
+		if (rf_pending) {
+			irq = TLSR8258_IRQ_ZB_RT;
+		} else {
+			irq = pending_lsb_index(pending);
+		}
 
 		if (!irq_is_valid(irq)) {
 			break;
@@ -111,6 +124,13 @@ void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 		}
 
 		enter_irq(irq);
+
+		if (rf_pending) {
+			/* Let any other latched source re-trigger on the next
+			 * IRQ entry instead of running inline. Keeps RF tail
+			 * latency deterministic across back-to-back RX. */
+			break;
+		}
 	}
 
 	_kernel.cpus[0].nested--;
