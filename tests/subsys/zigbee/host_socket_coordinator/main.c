@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <zephyr/zigbee/native_sim_socket_medium.h>
+#include <zephyr/zigbee/native_sim_socket_medium_model.h>
 
 #include "coord_logic.h"
 
@@ -209,12 +210,49 @@ static void test_transport_key_uses_extended_mac_destination(void)
 	EXPECT_EQ(output.psdu[14], 0x00);
 }
 
+static void test_medium_model_airtime_formula(void)
+{
+	EXPECT_EQ(zb_native_sim_socket_medium_airtime_us(0U), 192U);
+	EXPECT_EQ(zb_native_sim_socket_medium_airtime_us(1U), 224U);
+	EXPECT_EQ(zb_native_sim_socket_medium_airtime_us(10U), 512U);
+	EXPECT_EQ(zb_native_sim_socket_medium_airtime_us(127U), 4256U);
+}
+
+static void test_medium_model_busy_window_and_collision(void)
+{
+	struct zb_native_sim_socket_medium_model model;
+	uint64_t busy_until_us = 0U;
+
+	zb_native_sim_socket_medium_model_init(&model);
+
+	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1000U));
+	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
+			  &model, 11U, 1000U, 1200U, &busy_until_us),
+		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK);
+	EXPECT_EQ(busy_until_us, 1200U);
+	EXPECT_TRUE(zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1000U));
+	EXPECT_TRUE(zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1199U));
+	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1200U));
+
+	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
+			  &model, 11U, 1000U, 1200U, &busy_until_us),
+		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
+			  &model, 11U, 1100U, 1400U, &busy_until_us),
+		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_COLLISION);
+	EXPECT_EQ(busy_until_us, 1400U);
+	EXPECT_TRUE(zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1399U));
+	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1400U));
+}
+
 int main(void)
 {
 	test_join_and_interview_flow();
 	test_permit_join_disabled_rejects_association();
 	test_native_assoc_request_format_is_accepted();
 	test_transport_key_uses_extended_mac_destination();
+	test_medium_model_airtime_formula();
+	test_medium_model_busy_window_and_collision();
 
 	if (failures != 0) {
 		printf("host_socket_coordinator: %d failure(s)\n", failures);

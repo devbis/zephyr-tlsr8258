@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <poll.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,21 +10,37 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <zephyr/zigbee/native_sim_socket_medium.h>
+#include <zephyr/zigbee/native_sim_socket_medium_model.h>
 
 #include "coord_logic.h"
 
 #define DEFAULT_BIND_HOST "127.0.0.1"
 #define DEFAULT_BIND_PORT 19011
 #define DEFAULT_MODEL_ID  "native-sim-ed"
+#define ZB_COORD_RX_TX_TURNAROUND_US 192U
 
 struct daemon_config {
 	const char *bind_host;
 	const char *model_id;
 	uint16_t bind_port;
 	bool permit_join;
+};
+
+struct pending_delivery {
+	bool valid;
+	uint16_t node_id;
+	uint8_t channel;
+	uint64_t tx_start_us;
+	uint64_t due_time_us;
+	size_t psdu_len;
+	enum zb_host_socket_frame_type frame_type;
+	struct sockaddr_in peer_addr;
+	uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
+	size_t packet_len;
 };
 
 static const char *medium_msg_type_str(enum zb_native_sim_socket_medium_msg_type type)
@@ -221,6 +238,114 @@ static int maybe_reply(int fd, const struct sockaddr_in *peer_addr,
 	return 0;
 }
 
+static uint64_t monotonic_time_us(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
+}
+
+static bool ranges_overlap(uint64_t start_a, uint64_t end_a, uint64_t start_b, uint64_t end_b)
+{
+	return start_a < end_b && start_b < end_a;
+}
+
+static int poll_timeout_ms(const struct pending_delivery *pending, uint64_t now_us)
+{
+	uint64_t delta_us;
+
+	if (pending == NULL || !pending->valid) {
+		return -1;
+	}
+
+	if (pending->due_time_us <= now_us) {
+		return 0;
+	}
+
+	delta_us = pending->due_time_us - now_us;
+	return (int)((delta_us + 999ULL) / 1000ULL);
+}
+
+static void clear_pending_delivery(struct pending_delivery *pending)
+{
+	if (pending == NULL) {
+		return;
+	}
+
+	memset(pending, 0, sizeof(*pending));
+}
+
+static int schedule_reply(struct pending_delivery *pending,
+			  struct zb_native_sim_socket_medium_model *medium,
+			  const struct sockaddr_in *peer_addr,
+			  const struct zb_native_sim_socket_medium_msg *input,
+			  const struct zb_native_sim_socket_medium_msg *output,
+			  uint64_t input_end_us)
+{
+	uint64_t reply_start_us;
+	uint64_t reply_end_us;
+	enum zb_native_sim_socket_medium_window_result reserve_result;
+	enum zb_host_socket_frame_type frame_type;
+	int rc;
+
+	if (pending == NULL || medium == NULL || peer_addr == NULL || input == NULL || output == NULL) {
+		return -EINVAL;
+	}
+
+	if (pending->valid) {
+		return -EBUSY;
+	}
+
+	reply_start_us = input_end_us + ZB_COORD_RX_TX_TURNAROUND_US;
+	reply_end_us = reply_start_us + zb_native_sim_socket_medium_airtime_us(output->psdu_len);
+	reserve_result = zb_native_sim_socket_medium_model_reserve_window(
+		medium, output->channel, reply_start_us, reply_end_us, NULL);
+	if (reserve_result != ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK) {
+		return -EAGAIN;
+	}
+
+	rc = zb_native_sim_socket_medium_encode(pending->packet, sizeof(pending->packet), output,
+						&pending->packet_len);
+	if (rc < 0) {
+		return rc;
+	}
+
+	frame_type = zb_host_socket_coord_identify_frame(output->psdu, output->psdu_len);
+	pending->valid = true;
+	pending->node_id = output->node_id;
+	pending->channel = output->channel;
+	pending->tx_start_us = reply_start_us;
+	pending->due_time_us = reply_end_us;
+	pending->psdu_len = output->psdu_len;
+	pending->frame_type = frame_type;
+	pending->peer_addr = *peer_addr;
+	return 0;
+}
+
+static int maybe_send_pending(int fd, struct pending_delivery *pending, uint64_t now_us)
+{
+	int rc;
+
+	if (pending == NULL || !pending->valid || now_us < pending->due_time_us) {
+		return 0;
+	}
+
+	fprintf(stderr,
+		"socket coordinator: reply RX frame=%s node=0x%04x ch=%u len=%zu delayed-us=%llu\n",
+		frame_type_str(pending->frame_type), pending->node_id, pending->channel,
+		pending->psdu_len,
+		(unsigned long long)(pending->due_time_us - pending->tx_start_us));
+	rc = (int)sendto(fd, pending->packet, pending->packet_len, 0,
+			 (const struct sockaddr *)&pending->peer_addr, sizeof(pending->peer_addr));
+	if (rc < 0) {
+		return -errno;
+	}
+
+	clear_pending_delivery(pending);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct daemon_config cfg = {
@@ -230,6 +355,8 @@ int main(int argc, char **argv)
 		.permit_join = true,
 	};
 	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_model medium;
+	struct pending_delivery pending = { 0 };
 	struct sockaddr_in active_peer = { 0 };
 	bool have_active_peer = false;
 	int fd;
@@ -251,18 +378,49 @@ int main(int argc, char **argv)
 	}
 
 	zb_host_socket_coord_init(&coord);
+	zb_native_sim_socket_medium_model_init(&medium);
 	coord.permit_join = cfg.permit_join;
 
 	fprintf(stderr, "socket coordinator: listening on %s:%u model-id=%s permit-join=%s\n",
 		cfg.bind_host, cfg.bind_port, cfg.model_id, cfg.permit_join ? "on" : "off");
 
 	for (;;) {
+		struct pollfd pfd = {
+			.fd = fd,
+			.events = POLLIN,
+		};
 		struct sockaddr_in peer_addr;
 		socklen_t peer_addr_len = sizeof(peer_addr);
 		struct zb_native_sim_socket_medium_msg input;
 		struct zb_native_sim_socket_medium_msg output;
 		uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
+		uint64_t now_us;
+		int poll_rc;
 		ssize_t len;
+
+		now_us = monotonic_time_us();
+		poll_rc = poll(&pfd, 1, poll_timeout_ms(&pending, now_us));
+		if (poll_rc < 0) {
+			if (errno == EINTR) {
+				continue;
+			}
+			fprintf(stderr, "socket coordinator: poll failed (%d)\n", errno);
+			break;
+		}
+
+		now_us = monotonic_time_us();
+		rc = maybe_send_pending(fd, &pending, now_us);
+		if (rc < 0) {
+			fprintf(stderr, "socket coordinator: delayed send failed (%d)\n", -rc);
+			break;
+		}
+		if (poll_rc == 0) {
+			continue;
+		}
+
+		if ((pfd.revents & POLLIN) == 0) {
+			continue;
+		}
 
 		len = recvfrom(fd, packet, sizeof(packet), 0,
 			       (struct sockaddr *)&peer_addr, &peer_addr_len);
@@ -302,12 +460,49 @@ int main(int argc, char **argv)
 		}
 
 		memset(&output, 0, sizeof(output));
-		rc = zb_host_socket_coord_process(&coord, &input, &output);
-		if (rc > 0) {
-			rc = maybe_reply(fd, &peer_addr, &output);
-			if (rc < 0) {
-				fprintf(stderr, "socket coordinator: send failed (%d)\n", -rc);
-				break;
+		if (input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX) {
+			uint64_t input_end_us =
+				now_us + zb_native_sim_socket_medium_airtime_us(input.psdu_len);
+			enum zb_native_sim_socket_medium_window_result reserve_result;
+
+			reserve_result = zb_native_sim_socket_medium_model_reserve_window(
+				&medium, input.channel, now_us, input_end_us, NULL);
+			if (reserve_result != ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK) {
+				if (pending.valid &&
+				    pending.channel == input.channel &&
+				    ranges_overlap(now_us, input_end_us,
+						   pending.tx_start_us, pending.due_time_us)) {
+					fprintf(stderr,
+						"socket coordinator: cancel pending reply frame=%s due to collision on ch=%u\n",
+						frame_type_str(pending.frame_type), input.channel);
+					clear_pending_delivery(&pending);
+				}
+
+				fprintf(stderr,
+					"socket coordinator: drop TX collision node=0x%04x ch=%u len=%zu\n",
+					input.node_id, input.channel, input.psdu_len);
+				continue;
+			}
+
+			rc = zb_host_socket_coord_process(&coord, &input, &output);
+			if (rc > 0) {
+				rc = schedule_reply(&pending, &medium, &peer_addr, &input, &output,
+						    input_end_us);
+				if (rc < 0) {
+					fprintf(stderr,
+						"socket coordinator: reply scheduling failed (%d)\n",
+						-rc);
+					break;
+				}
+			}
+		} else {
+			rc = zb_host_socket_coord_process(&coord, &input, &output);
+			if (rc > 0) {
+				rc = maybe_reply(fd, &peer_addr, &output);
+				if (rc < 0) {
+					fprintf(stderr, "socket coordinator: send failed (%d)\n", -rc);
+					break;
+				}
 			}
 		}
 
