@@ -144,3 +144,74 @@ try:
 except TimeoutError:
     pass
 ' "$port"
+
+python3 -c '
+import socket
+import struct
+import sys
+
+MAGIC = 0x4D535A42
+VER = 1
+MSG_HELLO = 1
+MSG_FILTER = 2
+MSG_TX = 3
+MSG_STATUS = 5
+PORT = int(sys.argv[1])
+PAN = 0x5B27
+STATUS_TX_RESULT_RSP = 0x03
+TX_RESULT_OK = 0
+TX_RESULT_COLLISION = 1
+
+def encode(msg_type, node_id, short_addr, ieee_tail, psdu=b"", channel=11, rx_on=True):
+    ieee = b"\x00\x00\x00\x00\x00\x00" + bytes([ieee_tail, 0xA4])
+    return struct.pack(
+        "<IBBBBHHHbbBBH8s",
+        MAGIC, VER, msg_type, 1 if rx_on else 0, channel,
+        node_id, PAN, short_addr,
+        0, 0, 0, 0, len(psdu), ieee
+    ) + psdu
+
+def decode(pkt):
+    header = struct.unpack("<IBBBBHHHbbBBH8s", pkt[:28])
+    return {
+        "msg_type": header[2],
+        "channel": header[4],
+        "node_id": header[5],
+        "psdu": pkt[28:28 + header[12]],
+    }
+
+def make_broadcast_psdu(seq, filler_len):
+    base = bytes([0x63, 0x88, seq, 0x27, 0x5B, 0xFF, 0xFF, 0x34, 0x12, 0x99])
+    return base + bytes([0xEE]) * filler_len
+
+def expect_tx_status(sock, node_id, expected):
+    pkt = decode(sock.recvfrom(256)[0])
+    if pkt["msg_type"] != MSG_STATUS or pkt["node_id"] != node_id:
+        raise SystemExit(f"unexpected TX status header: {pkt!r}")
+    if len(pkt["psdu"]) != 2 or pkt["psdu"][0] != STATUS_TX_RESULT_RSP or pkt["psdu"][1] != expected:
+        raise SystemExit(f"unexpected TX status payload: {pkt!r}")
+
+sock_ok = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_ok.settimeout(1.0)
+sock_ok.sendto(encode(MSG_HELLO, 0x2210, 0x1010, 0x10), ("127.0.0.1", PORT))
+sock_ok.sendto(encode(MSG_FILTER, 0x2210, 0x1010, 0x10), ("127.0.0.1", PORT))
+sock_ok.sendto(encode(MSG_TX, 0x2210, 0x1010, 0x10, make_broadcast_psdu(0x61, 4), rx_on=False),
+               ("127.0.0.1", PORT))
+expect_tx_status(sock_ok, 0x2210, TX_RESULT_OK)
+
+sock_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+for s in (sock_a, sock_b):
+    s.settimeout(1.0)
+
+sock_a.sendto(encode(MSG_HELLO, 0x2211, 0x1011, 0x11), ("127.0.0.1", PORT))
+sock_a.sendto(encode(MSG_FILTER, 0x2211, 0x1011, 0x11), ("127.0.0.1", PORT))
+sock_b.sendto(encode(MSG_HELLO, 0x2212, 0x1012, 0x12), ("127.0.0.1", PORT))
+sock_b.sendto(encode(MSG_FILTER, 0x2212, 0x1012, 0x12), ("127.0.0.1", PORT))
+sock_a.sendto(encode(MSG_TX, 0x2211, 0x1011, 0x11, make_broadcast_psdu(0x71, 90), rx_on=False),
+               ("127.0.0.1", PORT))
+sock_b.sendto(encode(MSG_TX, 0x2212, 0x1012, 0x12, make_broadcast_psdu(0x72, 90), rx_on=False),
+               ("127.0.0.1", PORT))
+expect_tx_status(sock_a, 0x2211, TX_RESULT_COLLISION)
+expect_tx_status(sock_b, 0x2212, TX_RESULT_COLLISION)
+' "$port"
