@@ -19,6 +19,7 @@ extern "C" {
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_BROADCAST_SHORT 0xffffU
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN 1U
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN 2U
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_TX_RESULT_RSP_LEN 2U
 
 enum zb_native_sim_socket_medium_msg_type {
 	ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO = 1,
@@ -70,6 +71,11 @@ int zb_native_sim_socket_medium_status_encode_cca_rsp(uint8_t *buffer, size_t ca
 						      bool busy, size_t *encoded_len);
 int zb_native_sim_socket_medium_status_decode_cca_rsp(const uint8_t *buffer, size_t len,
 						      bool *busy);
+int zb_native_sim_socket_medium_status_encode_tx_result_rsp(uint8_t *buffer, size_t capacity,
+							    bool collision,
+							    size_t *encoded_len);
+int zb_native_sim_socket_medium_status_decode_tx_result_rsp(const uint8_t *buffer, size_t len,
+							    bool *collision);
 
 #ifdef __cplusplus
 }

@@ -45,12 +45,14 @@ struct native_sim_socket_data {
 	k_thread_stack_t *rx_stack;
 	size_t rx_stack_size;
 	struct k_sem status_sem;
+	struct k_sem tx_status_sem;
 	struct zb_native_sim_socket_medium_peer peer;
 	uint8_t mac_addr[8];
 	int fd;
 	int16_t tx_power_dbm;
 	uint8_t channel;
 	int8_t status_rssi_dbm;
+	int tx_status_rc;
 	bool started;
 	bool cca_busy;
 	bool rx_thread_started;
@@ -259,6 +261,7 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 
 	if (msg.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS) {
 		bool cca_busy;
+		bool tx_collision;
 
 		if (zb_native_sim_socket_medium_status_decode_cca_rsp(msg.psdu, msg.psdu_len,
 								      &cca_busy) == 0) {
@@ -267,6 +270,12 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 			k_sem_give(&data->status_sem);
 			printk("zb_sock_radio: status CCA busy=%u rssi=%d\n",
 			       cca_busy ? 1U : 0U, msg.rssi_dbm);
+		} else if (zb_native_sim_socket_medium_status_decode_tx_result_rsp(
+				   msg.psdu, msg.psdu_len, &tx_collision) == 0) {
+			data->tx_status_rc = tx_collision ? -EBUSY : 0;
+			k_sem_give(&data->tx_status_sem);
+			printk("zb_sock_radio: status TX result=%s\n",
+			       tx_collision ? "collision" : "ok");
 		}
 		return true;
 	}
@@ -504,6 +513,9 @@ static int native_sim_socket_tx(const struct device *dev,
 		return rc;
 	}
 
+	k_sem_reset(&data->tx_status_sem);
+	data->tx_status_rc = -EIO;
+
 	memset(&msg, 0, sizeof(msg));
 	msg.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX;
 	msg.node_id = native_sim_socket_node_id(cfg);
@@ -526,8 +538,13 @@ static int native_sim_socket_tx(const struct device *dev,
 	}
 
 	native_sim_socket_pump_rx(dev, 5);
+	rc = k_sem_take(&data->tx_status_sem, K_MSEC(20));
+	if (rc < 0) {
+		printk("zb_sock_radio: tx status timeout rc=%d\n", rc);
+		return -EIO;
+	}
 
-	return 0;
+	return data->tx_status_rc;
 }
 
 static int native_sim_socket_start(const struct device *dev)
@@ -612,6 +629,8 @@ static int native_sim_socket_init(const struct device *dev)
 	data->channel = 11U;
 	data->status_rssi_dbm = 0;
 	k_sem_init(&data->status_sem, 0, 1);
+	k_sem_init(&data->tx_status_sem, 0, 1);
+	data->tx_status_rc = -EIO;
 	memcpy(data->mac_addr, cfg->mac_addr, sizeof(data->mac_addr));
 	zb_native_sim_socket_medium_peer_reset(&data->peer);
 	memcpy(data->peer.ieee_addr, cfg->mac_addr, sizeof(data->peer.ieee_addr));
