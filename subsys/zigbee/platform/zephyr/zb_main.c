@@ -268,13 +268,25 @@ static void zb_thread_fn(void *a, void *b, void *c)
 
 	LOG_INF("Zigbee thread started");
 
+	/*
+	 * No k_yield() / k_sem_take(FOREVER) in this loop.  Under TLSR8258
+	 * Zephyr, k_yield() through z_sched_yield() corrupts the ready-queue
+	 * link pointers after the Transport-Key install (PC pins inside
+	 * unready_thread on a store to [NULL+4]) and wedges the chip with
+	 * reg_irq_en stuck at 0.  Busy-wait-only pacing leaves the ZB thread
+	 * permanently runnable, lets the higher-priority system tick / RF IRQ
+	 * preempt as normal, and stays out of the scheduler's spinlock path
+	 * that triggers the corruption.  Net wall-clock is unchanged vs the
+	 * yield+busy_wait combo; we just pay extra CPU cycles per poll loop
+	 * during idle (~1 ms granularity is fine for this thread).
+	 */
 	while (1) {
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
 			ev_timer_process();
 			ev_poll_process();
 			if (!zb_bootstrap_done) {
-				k_yield();
+				k_busy_wait(1000);
 				continue;
 			}
 		}
@@ -286,7 +298,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		zb_requeue_commissioning_if_needed();
 		if (zb_commissioning_pending) {
 			zb_nwk_ed_trace[15] = 0xA5B0000BU;
-			k_yield();
 			k_busy_wait(1000);
 			continue;
 		}
@@ -296,20 +307,8 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			continue;
 		}
 
-		if (ev_timer_nearestGet() != NULL) {
-			/*
-			 * Keep vendor-style timer progress alive even when no external
-			 * event wakes the Zigbee thread.  TLSR8258 hardware proved the
-			 * Zephyr delayed-work timeout path was not expiring here.
-			 */
-			zb_nwk_ed_trace[15] = 0xA5B00008U;
-			k_yield();
-			k_busy_wait(1000);
-			continue;
-		}
-
-		zb_nwk_ed_trace[15] = 0xA5B00009U;
-		(void)k_sem_take(&zb_ev_sem, K_FOREVER);
+		zb_nwk_ed_trace[15] = 0xA5B00008U;
+		k_busy_wait(1000);
 	}
 }
 
