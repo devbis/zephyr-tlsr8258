@@ -74,3 +74,73 @@ if payload_len != 2 or op != 0x02 or busy not in (0, 1):
 if rssi_dbm not in (-96, -60):
     raise SystemExit(f"unexpected STATUS rssi: {rssi_dbm}")
 ' "$port"
+
+python3 -c '
+import socket
+import struct
+import sys
+
+MAGIC = 0x4D535A42
+VER = 1
+MSG_HELLO = 1
+MSG_FILTER = 2
+MSG_TX = 3
+MSG_RX = 4
+PORT = int(sys.argv[1])
+PAN = 0x5B27
+
+def encode(msg_type, node_id, short_addr, ieee_tail, psdu=b"", channel=11, rx_on=True):
+    ieee = b"\x00\x00\x00\x00\x00\x00" + bytes([ieee_tail, 0xA4])
+    return struct.pack(
+        "<IBBBBHHHbbBBH8s",
+        MAGIC, VER, msg_type, 1 if rx_on else 0, channel,
+        node_id, PAN, short_addr,
+        0, 0, 0, 0, len(psdu), ieee
+    ) + psdu
+
+def decode(pkt):
+    header = struct.unpack("<IBBBBHHHbbBBH8s", pkt[:28])
+    return {
+        "msg_type": header[2],
+        "channel": header[4],
+        "node_id": header[5],
+        "short_addr": header[7],
+        "rssi_dbm": header[9],
+        "psdu_len": header[12],
+        "psdu": pkt[28:28 + header[12]],
+    }
+
+def make_broadcast_psdu(seq, filler_len):
+    base = bytes([0x63, 0x88, seq, 0x27, 0x5B, 0xFF, 0xFF, 0x34, 0x12, 0x99])
+    return base + bytes([0xEE]) * filler_len
+
+sock_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_c = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+for s in (sock_a, sock_b, sock_c):
+    s.settimeout(0.5)
+
+sock_a.sendto(encode(MSG_HELLO, 0x2202, 0x1001, 0x02), ("127.0.0.1", PORT))
+sock_a.sendto(encode(MSG_FILTER, 0x2202, 0x1001, 0x02), ("127.0.0.1", PORT))
+sock_b.sendto(encode(MSG_HELLO, 0x2203, 0x1002, 0x03), ("127.0.0.1", PORT))
+sock_b.sendto(encode(MSG_FILTER, 0x2203, 0x1002, 0x03), ("127.0.0.1", PORT))
+sock_c.sendto(encode(MSG_HELLO, 0x2204, 0x1003, 0x04), ("127.0.0.1", PORT))
+sock_c.sendto(encode(MSG_FILTER, 0x2204, 0x1003, 0x04), ("127.0.0.1", PORT))
+
+probe_psdu = make_broadcast_psdu(0x41, 8)
+sock_a.sendto(encode(MSG_TX, 0x2202, 0x1001, 0x02, probe_psdu, rx_on=False), ("127.0.0.1", PORT))
+fanout = decode(sock_b.recvfrom(256)[0])
+if fanout["msg_type"] != MSG_RX or fanout["node_id"] != 0x2203 or fanout["psdu"] != probe_psdu:
+    raise SystemExit(f"unexpected peer fanout: {fanout!r}")
+
+collision_a = make_broadcast_psdu(0x51, 90)
+collision_c = make_broadcast_psdu(0x52, 90)
+sock_a.sendto(encode(MSG_TX, 0x2202, 0x1001, 0x02, collision_a, rx_on=False), ("127.0.0.1", PORT))
+sock_c.sendto(encode(MSG_TX, 0x2204, 0x1003, 0x04, collision_c, rx_on=False), ("127.0.0.1", PORT))
+sock_b.settimeout(0.2)
+try:
+    pkt = sock_b.recvfrom(256)[0]
+    raise SystemExit(f"unexpected RX after collision: {decode(pkt)!r}")
+except TimeoutError:
+    pass
+' "$port"
