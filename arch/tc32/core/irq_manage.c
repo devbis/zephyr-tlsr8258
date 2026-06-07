@@ -24,6 +24,17 @@ volatile uint32_t __noinit z_tc32_irq_debug_pending;
 volatile uint32_t __noinit z_tc32_irq_debug_irq;
 volatile uint32_t __noinit z_tc32_irq_debug_drained;
 
+/*
+ * Owner tracking for chip-level reg_irq_en (0x800643) — populated by the
+ * inline arch_irq_lock()/arch_irq_unlock() in <zephyr/arch/tc32/irq.h>.
+ * Placed in .data (initialised to zero) so SWS can read consistently even
+ * after a reset loop.
+ */
+volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
+volatile uint32_t z_tc32_irq_lock_depth;
+volatile uint32_t z_tc32_irq_lock_max_depth;
+volatile uintptr_t z_tc32_irq_lock_overflow_ra;
+
 FUNC_NORETURN void z_irq_spurious(const void *unused)
 {
 	ARG_UNUSED(unused);
