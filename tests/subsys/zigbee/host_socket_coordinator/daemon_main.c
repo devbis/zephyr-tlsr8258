@@ -22,9 +22,7 @@
 #define DEFAULT_BIND_PORT 19011
 #define DEFAULT_MODEL_ID  "native-sim-ed"
 #define ZB_COORD_RX_TX_TURNAROUND_US 192U
-#define ZB_COORD_CCA_BUSY_RSSI_DBM   (-60)
 #define ZB_COORD_CCA_IDLE_RSSI_DBM   (-96)
-#define ZB_COORD_RX_RSSI_DBM         (-40)
 #define ZB_COORD_RX_LQI              255U
 #define ZB_MEDIUM_MAX_PEERS          8U
 #define ZB_MEDIUM_MAX_PENDING        16U
@@ -437,7 +435,7 @@ static int schedule_reply(struct pending_delivery *pending, size_t pending_count
 	reply_start_us = input_end_us + ZB_COORD_RX_TX_TURNAROUND_US;
 	reply_end_us = reply_start_us + zb_native_sim_socket_medium_airtime_us(output->psdu_len);
 	reserve_result = zb_native_sim_socket_medium_model_reserve_window(
-		medium, output->channel, reply_start_us, reply_end_us, NULL);
+		medium, output->channel, reply_start_us, reply_end_us, output->tx_power_dbm, NULL);
 	if (reserve_result != ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK) {
 		return -EAGAIN;
 	}
@@ -539,7 +537,8 @@ static int handle_status_request(int fd, const struct sockaddr_in *peer_addr,
 	output.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS;
 	output.node_id = input->node_id;
 	output.channel = input->channel;
-	output.rssi_dbm = busy ? ZB_COORD_CCA_BUSY_RSSI_DBM : ZB_COORD_CCA_IDLE_RSSI_DBM;
+	output.rssi_dbm = zb_native_sim_socket_medium_model_channel_rssi_dbm(
+		medium, input->channel, now_us, ZB_COORD_CCA_IDLE_RSSI_DBM);
 	output.psdu = payload;
 	output.psdu_len = payload_len;
 	return send_output(fd, peer_addr, &output);
@@ -572,7 +571,8 @@ static int schedule_peer_fanout(struct pending_delivery *pending, size_t pending
 		output.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX;
 		output.node_id = peers[i].peer.node_id;
 		output.channel = input->channel;
-		output.rssi_dbm = ZB_COORD_RX_RSSI_DBM;
+		output.rssi_dbm =
+			zb_native_sim_socket_medium_model_signal_rssi_dbm(input->tx_power_dbm);
 		output.lqi = ZB_COORD_RX_LQI;
 		output.psdu = input->psdu;
 		output.psdu_len = input->psdu_len;
@@ -782,7 +782,8 @@ int main(int argc, char **argv)
 			enum zb_native_sim_socket_medium_window_result reserve_result;
 
 			reserve_result = zb_native_sim_socket_medium_model_reserve_window(
-				&medium, input.channel, now_us, input_end_us, NULL);
+				&medium, input.channel, now_us, input_end_us,
+				input.tx_power_dbm, NULL);
 			if (reserve_result != ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK) {
 				rc = cancel_overlapping_pending(fd, pending, ZB_MEDIUM_MAX_PENDING,
 								input.channel, now_us, input_end_us);
