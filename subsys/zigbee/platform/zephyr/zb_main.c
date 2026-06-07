@@ -22,7 +22,16 @@ extern void tl_zbMacInit(u8 coldReset);
 extern void tl_zbNwkInit(u8 coldReset);
 
 static const addrExt_t zb_fixed_ieee_addr = {
-	0x02, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	/*
+	 * Experimental: bump to ...05 to bypass cached Ember NCP child-table
+	 * state for our previous IEEE.  SWS dump showed Z2M sending NWK-encrypted
+	 * frames to us right after AssocResp success — i.e. the coordinator
+	 * thought we were already joined with an NWK key, so it skipped sending
+	 * an unsolicited Transport-Key.  Z2M device/remove + bridge restart did
+	 * not clear that state, suggesting it lives in the Ember adapter NVRAM
+	 * and only a brand-new IEEE will look like a fresh joiner.
+	 */
+	0x05, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 };
 
 void zb_platform_apply_runtime_ieee_addr(void)
