@@ -44,12 +44,15 @@ struct native_sim_socket_data {
 	struct k_thread rx_thread;
 	k_thread_stack_t *rx_stack;
 	size_t rx_stack_size;
+	struct k_sem status_sem;
 	struct zb_native_sim_socket_medium_peer peer;
 	uint8_t mac_addr[8];
 	int fd;
 	int16_t tx_power_dbm;
 	uint8_t channel;
+	int8_t status_rssi_dbm;
 	bool started;
+	bool cca_busy;
 	bool rx_thread_started;
 };
 
@@ -146,6 +149,8 @@ static const char *native_sim_socket_server_host(const struct native_sim_socket_
 }
 
 static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms);
+static int native_sim_socket_send_msg(const struct device *dev,
+				      const struct zb_native_sim_socket_medium_msg *msg);
 
 static void native_sim_socket_publish_state(const struct device *dev,
 					    enum zb_native_sim_socket_medium_msg_type type)
@@ -243,12 +248,32 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 		return true;
 	}
 
-	if (msg.type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX ||
-	    msg.node_id != native_sim_socket_node_id(cfg) ||
+	if (msg.node_id != native_sim_socket_node_id(cfg) ||
 	    msg.channel != data->channel) {
 		printk("zb_sock_radio: ignore %s node=0x%04x ch=%u len=%zu local_node=0x%04x local_ch=%u\n",
 		       native_sim_socket_msg_type_str(msg.type), msg.node_id, msg.channel,
 		       msg.psdu_len, native_sim_socket_node_id(cfg), data->channel);
+		return true;
+	}
+
+	if (msg.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS) {
+		bool cca_busy;
+
+		if (zb_native_sim_socket_medium_status_decode_cca_rsp(msg.psdu, msg.psdu_len,
+								      &cca_busy) == 0) {
+			data->cca_busy = cca_busy;
+			data->status_rssi_dbm = msg.rssi_dbm;
+			k_sem_give(&data->status_sem);
+			printk("zb_sock_radio: status CCA busy=%u rssi=%d\n",
+			       cca_busy ? 1U : 0U, msg.rssi_dbm);
+		}
+		return true;
+	}
+
+	if (msg.type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX) {
+		printk("zb_sock_radio: ignore %s node=0x%04x ch=%u len=%zu\n",
+		       native_sim_socket_msg_type_str(msg.type), msg.node_id, msg.channel,
+		       msg.psdu_len);
 		return true;
 	}
 
@@ -267,6 +292,26 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
 	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
 	return true;
+}
+
+static int native_sim_socket_send_msg(const struct device *dev,
+				      const struct zb_native_sim_socket_medium_msg *msg)
+{
+	uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
+	size_t packet_len;
+	int rc;
+	struct native_sim_socket_data *data = dev->data;
+
+	rc = zb_native_sim_socket_medium_encode(packet, sizeof(packet), msg, &packet_len);
+	if (rc < 0) {
+		return rc;
+	}
+
+	if (ieee802154_native_sim_socket_send(data->fd, packet, packet_len) < 0) {
+		return -errno;
+	}
+
+	return 0;
 }
 
 static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms)
@@ -315,9 +360,45 @@ static enum ieee802154_hw_caps native_sim_socket_get_capabilities(const struct d
 
 static int native_sim_socket_cca(const struct device *dev)
 {
-	const struct native_sim_socket_data *data = dev->data;
+	const struct native_sim_socket_config *cfg = dev->config;
+	struct native_sim_socket_data *data = dev->data;
+	struct zb_native_sim_socket_medium_msg msg;
+	uint8_t payload[ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN];
+	size_t payload_len = 0U;
+	int rc;
 
-	return data->started ? 0 : -EIO;
+	if (!data->started || data->fd < 0) {
+		return -EIO;
+	}
+
+	rc = zb_native_sim_socket_medium_status_encode_cca_req(payload, sizeof(payload),
+							       &payload_len);
+	if (rc < 0) {
+		return rc;
+	}
+
+	memset(&msg, 0, sizeof(msg));
+	msg.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS;
+	msg.node_id = native_sim_socket_node_id(cfg);
+	msg.channel = data->channel;
+	msg.psdu = payload;
+	msg.psdu_len = payload_len;
+
+	k_sem_reset(&data->status_sem);
+	rc = native_sim_socket_send_msg(dev, &msg);
+	if (rc < 0) {
+		printk("zb_sock_radio: cca request send failed rc=%d\n", rc);
+		return rc;
+	}
+
+	native_sim_socket_pump_rx(dev, 1);
+	rc = k_sem_take(&data->status_sem, K_MSEC(20));
+	if (rc < 0) {
+		printk("zb_sock_radio: cca request timeout rc=%d\n", rc);
+		return -EIO;
+	}
+
+	return data->cca_busy ? -EBUSY : 0;
 }
 
 static int native_sim_socket_set_channel(const struct device *dev, uint16_t channel)
@@ -505,6 +586,8 @@ static int native_sim_socket_init(const struct device *dev)
 	data->fd = -1;
 	data->tx_power_dbm = 0;
 	data->channel = 11U;
+	data->status_rssi_dbm = 0;
+	k_sem_init(&data->status_sem, 0, 1);
 	memcpy(data->mac_addr, cfg->mac_addr, sizeof(data->mac_addr));
 	zb_native_sim_socket_medium_peer_reset(&data->peer);
 	memcpy(data->peer.ieee_addr, cfg->mac_addr, sizeof(data->peer.ieee_addr));

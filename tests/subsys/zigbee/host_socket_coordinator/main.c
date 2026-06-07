@@ -245,6 +245,31 @@ static void test_medium_model_busy_window_and_collision(void)
 	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1400U));
 }
 
+static void test_status_cca_payload_helpers(void)
+{
+	uint8_t payload[8];
+	size_t payload_len = 0U;
+	bool cca_busy = false;
+
+	EXPECT_EQ(zb_native_sim_socket_medium_status_encode_cca_req(payload, sizeof(payload),
+								    &payload_len), 0);
+	EXPECT_EQ(payload_len, 1);
+	EXPECT_TRUE(zb_native_sim_socket_medium_status_is_cca_req(payload, payload_len));
+
+	EXPECT_EQ(zb_native_sim_socket_medium_status_encode_cca_rsp(payload, sizeof(payload), true,
+								    &payload_len), 0);
+	EXPECT_EQ(payload_len, 2);
+	EXPECT_EQ(zb_native_sim_socket_medium_status_decode_cca_rsp(payload, payload_len,
+								    &cca_busy), 0);
+	EXPECT_TRUE(cca_busy);
+
+	EXPECT_EQ(zb_native_sim_socket_medium_status_encode_cca_rsp(payload, sizeof(payload), false,
+								    &payload_len), 0);
+	EXPECT_EQ(zb_native_sim_socket_medium_status_decode_cca_rsp(payload, payload_len,
+								    &cca_busy), 0);
+	EXPECT_TRUE(!cca_busy);
+}
+
 int main(void)
 {
 	test_join_and_interview_flow();
@@ -253,6 +278,7 @@ int main(void)
 	test_transport_key_uses_extended_mac_destination();
 	test_medium_model_airtime_formula();
 	test_medium_model_busy_window_and_collision();
+	test_status_cca_payload_helpers();
 
 	if (failures != 0) {
 		printf("host_socket_coordinator: %d failure(s)\n", failures);

@@ -17,6 +17,8 @@ extern "C" {
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE 192U
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_BROADCAST_PAN   0xffffU
 #define ZB_NATIVE_SIM_SOCKET_MEDIUM_BROADCAST_SHORT 0xffffU
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_REQ_LEN 1U
+#define ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN 2U
 
 enum zb_native_sim_socket_medium_msg_type {
 	ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO = 1,
@@ -61,6 +63,13 @@ int zb_native_sim_socket_medium_peer_apply(struct zb_native_sim_socket_medium_pe
 bool zb_native_sim_socket_medium_peer_accepts_psdu(
 	const struct zb_native_sim_socket_medium_peer *peer,
 	const uint8_t *psdu, size_t psdu_len);
+int zb_native_sim_socket_medium_status_encode_cca_req(uint8_t *buffer, size_t capacity,
+						      size_t *encoded_len);
+bool zb_native_sim_socket_medium_status_is_cca_req(const uint8_t *buffer, size_t len);
+int zb_native_sim_socket_medium_status_encode_cca_rsp(uint8_t *buffer, size_t capacity,
+						      bool busy, size_t *encoded_len);
+int zb_native_sim_socket_medium_status_decode_cca_rsp(const uint8_t *buffer, size_t len,
+						      bool *busy);
 
 #ifdef __cplusplus
 }

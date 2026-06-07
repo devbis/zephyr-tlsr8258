@@ -22,6 +22,8 @@
 #define DEFAULT_BIND_PORT 19011
 #define DEFAULT_MODEL_ID  "native-sim-ed"
 #define ZB_COORD_RX_TX_TURNAROUND_US 192U
+#define ZB_COORD_CCA_BUSY_RSSI_DBM   (-60)
+#define ZB_COORD_CCA_IDLE_RSSI_DBM   (-96)
 
 struct daemon_config {
 	const char *bind_host;
@@ -205,14 +207,14 @@ static bool same_endpoint(const struct sockaddr_in *a, const struct sockaddr_in 
 	       a->sin_addr.s_addr == b->sin_addr.s_addr;
 }
 
-static int maybe_reply(int fd, const struct sockaddr_in *peer_addr,
+static int send_output(int fd, const struct sockaddr_in *peer_addr,
 		       const struct zb_native_sim_socket_medium_msg *output)
 {
 	uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
 	size_t packet_len;
 	int rc;
 
-	if (output == NULL || output->type != ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX) {
+	if (output == NULL) {
 		return 0;
 	}
 
@@ -221,13 +223,21 @@ static int maybe_reply(int fd, const struct sockaddr_in *peer_addr,
 		return rc;
 	}
 
-	fprintf(stderr,
-		"socket coordinator: reply %s frame=%s node=0x%04x ch=%u len=%zu\n",
-		medium_msg_type_str(output->type),
-		frame_type_str(zb_host_socket_coord_identify_frame(output->psdu, output->psdu_len)),
-		output->node_id, output->channel, output->psdu_len);
-	dump_psdu_hex(output->psdu, output->psdu_len);
-	fputc('\n', stderr);
+	if (output->type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX) {
+		fprintf(stderr,
+			"socket coordinator: reply %s frame=%s node=0x%04x ch=%u len=%zu\n",
+			medium_msg_type_str(output->type),
+			frame_type_str(zb_host_socket_coord_identify_frame(output->psdu,
+									 output->psdu_len)),
+			output->node_id, output->channel, output->psdu_len);
+		dump_psdu_hex(output->psdu, output->psdu_len);
+		fputc('\n', stderr);
+	} else {
+		fprintf(stderr,
+			"socket coordinator: reply %s node=0x%04x ch=%u len=%zu\n",
+			medium_msg_type_str(output->type), output->node_id,
+			output->channel, output->psdu_len);
+	}
 
 	rc = (int)sendto(fd, packet, packet_len, 0,
 			 (const struct sockaddr *)peer_addr, sizeof(*peer_addr));
@@ -321,6 +331,42 @@ static int schedule_reply(struct pending_delivery *pending,
 	pending->frame_type = frame_type;
 	pending->peer_addr = *peer_addr;
 	return 0;
+}
+
+static int handle_status_request(int fd, const struct sockaddr_in *peer_addr,
+				 struct zb_native_sim_socket_medium_model *medium,
+				 const struct zb_native_sim_socket_medium_msg *input,
+				 uint64_t now_us)
+{
+	struct zb_native_sim_socket_medium_msg output;
+	uint8_t payload[ZB_NATIVE_SIM_SOCKET_MEDIUM_STATUS_CCA_RSP_LEN];
+	size_t payload_len = 0U;
+	bool busy;
+	int rc;
+
+	if (input == NULL || peer_addr == NULL || medium == NULL || fd < 0) {
+		return -EINVAL;
+	}
+
+	if (!zb_native_sim_socket_medium_status_is_cca_req(input->psdu, input->psdu_len)) {
+		return 0;
+	}
+
+	busy = zb_native_sim_socket_medium_model_channel_busy(medium, input->channel, now_us);
+	rc = zb_native_sim_socket_medium_status_encode_cca_rsp(payload, sizeof(payload), busy,
+							       &payload_len);
+	if (rc < 0) {
+		return rc;
+	}
+
+	memset(&output, 0, sizeof(output));
+	output.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS;
+	output.node_id = input->node_id;
+	output.channel = input->channel;
+	output.rssi_dbm = busy ? ZB_COORD_CCA_BUSY_RSSI_DBM : ZB_COORD_CCA_IDLE_RSSI_DBM;
+	output.psdu = payload;
+	output.psdu_len = payload_len;
+	return send_output(fd, peer_addr, &output);
 }
 
 static int maybe_send_pending(int fd, struct pending_delivery *pending, uint64_t now_us)
@@ -496,12 +542,22 @@ int main(int argc, char **argv)
 				}
 			}
 		} else {
-			rc = zb_host_socket_coord_process(&coord, &input, &output);
-			if (rc > 0) {
-				rc = maybe_reply(fd, &peer_addr, &output);
+			if (input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_STATUS) {
+				rc = handle_status_request(fd, &peer_addr, &medium, &input, now_us);
 				if (rc < 0) {
-					fprintf(stderr, "socket coordinator: send failed (%d)\n", -rc);
+					fprintf(stderr, "socket coordinator: status reply failed (%d)\n",
+						-rc);
 					break;
+				}
+			} else {
+				rc = zb_host_socket_coord_process(&coord, &input, &output);
+				if (rc > 0) {
+					rc = send_output(fd, &peer_addr, &output);
+					if (rc < 0) {
+						fprintf(stderr, "socket coordinator: send failed (%d)\n",
+							-rc);
+						break;
+					}
 				}
 			}
 		}
