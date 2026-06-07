@@ -383,7 +383,15 @@ static int tlsr8258_flash_write(const struct device *dev, off_t offset,
 	const struct tlsr8258_flash_config *config = dev->config;
 	struct tlsr8258_flash_data *dev_data = dev->data;
 	const uint8_t *src = data;
-	uint8_t page_buf[TLSR8258_FLASH_PAGE_SIZE];
+	/*
+	 * 256 B page buffer kept off the stack. Flash writes are serialized
+	 * by dev_data->lock (k_sem) below, so a single static buffer is safe.
+	 * Stack overflow into the parent (tlsr8258_flash_write_page_locked)
+	 * frame was corrupting saved r5 (key) and LR, leaking the chip-level
+	 * arch_irq_lock — symptom: reg_irq_en=0 forever after the first NV
+	 * save, killing the RF TX-done IRQ and all post-interview comms.
+	 */
+	static uint8_t page_buf[TLSR8258_FLASH_PAGE_SIZE];
 	struct tlsr8258_flash_write_ctx write_ctx = {
 		.page_buf = page_buf,
 	};
