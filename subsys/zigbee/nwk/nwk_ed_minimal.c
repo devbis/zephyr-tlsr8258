@@ -785,6 +785,13 @@ static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
 	tl_zdoEdMinimalJoinDone(status, rejoinMode);
 }
 
+static int nwk_ed_minimal_deferred_zb_info_save_timer(void *arg)
+{
+	ARG_UNUSED(arg);
+	zb_info_save(NULL);
+	return -1;
+}
+
 static void nwk_ed_minimal_complete_join(bool rejoinMode)
 {
 	g_zbNwkCtx.joined = 1U;
@@ -792,7 +799,24 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 	g_zbNwkCtx.parentIsChanged = 0U;
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.user_state = NLME_IDLE;
-	zb_info_save(NULL);
+	/*
+	 * Defer zb_info_save() ~15s after join.  Empirically: vendor's
+	 * tl_zbTaskPost pattern (which runs the save as the next zb-thread
+	 * task tick) still stalls the device hard enough on our Zephyr NVS
+	 * backend that the post-join polling stops mid-interview and Z2M
+	 * marks the device FAILED.  Capture analysis shows the device
+	 * receives the APS Transport-Key, then disappears off the air: the
+	 * task that runs zb_info_save chains nv_nwkFrameCountSaveToFlash +
+	 * zdo_ssInfoSaveToFlash + the blob write, and on TLSR8258+Zephyr
+	 * NVS that combination can hang the zb thread (see the earlier
+	 * fix that removed nv_nwkFrameCountSaveToFlash from the TX hot
+	 * path).  Postponing the save out to a long timer lets the
+	 * Node_Desc_req / Active_EP_req / SimpleDesc_req exchange complete
+	 * first; the persistence will land before the device is power-cycled,
+	 * which is the only situation where saved state actually matters.
+	 */
+	(void)TL_ZB_TIMER_SCHEDULE(nwk_ed_minimal_deferred_zb_info_save_timer,
+				   NULL, 15000U);
 
 	LOG_INF("%s complete: short 0x%04x pan 0x%04x parent 0x%04x",
 		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,

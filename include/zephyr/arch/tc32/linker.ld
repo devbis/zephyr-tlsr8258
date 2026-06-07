@@ -79,6 +79,25 @@ SECTIONS
 		PROVIDE(__boot_ram_mirror_end = .);
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
+	/*
+	 * .ram_code — vendor-style low-flash region that the TC32 icache
+	 * (configured at reset.S "SET_IC") locks into its cache lines, giving
+	 * deterministic single-cycle instruction fetch for hot paths such as
+	 * the 802.15.4 RF IRQ handler.  Symbols stay at FLASH addresses (no
+	 * LMA/VMA split, no software copy, no veneer thunks).  Anything
+	 * before _tc32_boot_copy_lma_end is also covered by the boot-ROM
+	 * auto-copy and by the icache range that reset.S derives from
+	 * _tc32_boot_copy_size_align_256_.
+	 */
+	SECTION_PROLOGUE(.ram_code,,)
+	{
+		. = ALIGN(4);
+		PROVIDE(__ram_code_start = .);
+		*(.ram_code)
+		*(".ram_code.*")
+		PROVIDE(__ram_code_end = .);
+	} GROUP_LINK_IN(ROMABLE_REGION)
+
 	. = ALIGN(16);
 	_tc32_boot_copy_lma_end = .;
 	PROVIDE(_rstored_ = .);
