@@ -110,7 +110,15 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_DEST_ADDR_OFFSET 5u
 #define TLSR8258_RSSI_TO_LQI_MIN -87
 #define TLSR8258_RSSI_TO_LQI_SCALE 3
-#define TLSR8258_RX_WORKER_STACK_SIZE 768
+/*
+ * The rx worker runs the full Zigbee receive path (NWK/APS, AES decryption of
+ * Transport Key, ZDP). 768 bytes overflowed downward into its own
+ * `struct k_thread` (which sits at the low end of this region), zeroing
+ * `base.qnode_dlist` while QUEUED stayed set — next call to
+ * `unready_thread()` then crashed in `sys_dlist_remove` writing
+ * `next->prev` with `next == NULL`. Caught via dlist trap on RA=unready_thread+0x22.
+ */
+#define TLSR8258_RX_WORKER_STACK_SIZE 2048
 #define TLSR8258_RX_SLOT_COUNT 4u
 struct tblcmdset {
 	uint16_t adr;
