@@ -69,15 +69,33 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_FCS_LENGTH 2u
 #define TLSR8258_MIN_FRAME_LENGTH 3u
 /*
- * Total prep budget between set_txmode and tx_pkt for a MAC ACK.  ACK is now
- * sent inline at the top of rx_capture_common (before snapshot/enqueue) so
- * prep_elapsed_us is small (~20us); the busy_wait inside send_ack_if_needed
- * dominates and places the ACK PSDU on air ~200us after this constant from
- * end-of-RX.  802.15.4 aTurnaroundTime is 192us, so 200us provides a small
- * safe margin above the spec lower bound while staying well within the
- * macAckWaitDuration (~864us) upper bound.
+ * Total prep budget between the fast-path set_txmode_for_ack call and the
+ * tx_pkt write for a MAC ACK.  Capture analysis:
+ *   - 150us TURNAROUND landed ACK ~80us after end-of-coord-PSDU (the lower
+ *     end of the 802.15.4 spec window; on the one run where this worked,
+ *     coord accepted and TK was delivered).
+ *   - 350us TURNAROUND pushed ACK to ~1.3ms after end-of-coord-PSDU, which
+ *     exceeds macAckWaitDuration (864us).  Coord dropped that ACK, exhausted
+ *     macMaxFrameRetries, and refused to queue Transport-Key.
+ * Stick with 150us — better to be slightly early than too late.  We use the
+ * fast-path set_txmode_for_ack (no PLL reload) to keep total latency tight.
+ *
+ * 2026-06: switched to vendor mac_phy.c pattern — the prep timestamp is now
+ * captured at the very start of rx_capture_common (matching libzigbee's
+ * txTime = clock_time() at rf_rx_irq_handler entry), and no set_txmode call
+ * precedes the ACK TX.  Vendor uses ZB_TX_WAIT_US = 120us measured from
+ * that point, so we mirror that constant here.
  */
-#define TLSR8258_ACK_TURNAROUND_US 200u
+#define TLSR8258_ACK_TURNAROUND_US 120u
+/*
+ * TC32 has no hardware divider, so converting (k_cycle_get_32() - start) to
+ * microseconds inside the ACK hot path costs ~3-6us per call via the
+ * software 32-bit divide emitted by k_cyc_to_us_floor32(). Pre-multiply the
+ * turnaround once at compile time and compare in the cycle domain instead.
+ */
+#define TLSR8258_ACK_TURNAROUND_CYC \
+	((uint32_t)TLSR8258_ACK_TURNAROUND_US * \
+	 (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u))
 #define TLSR8258_ACK_REQUEST BIT(5)
 #define TLSR8258_FRAME_PENDING BIT(4)
 #define TLSR8258_IEEE_ADDR_SIZE 8u
@@ -119,6 +137,57 @@ struct tlsr8258_radio_debug {
 	volatile uint8_t rf_branch_debug;
 	volatile uint32_t tx_diag_trace[32];
 	volatile uint8_t tx_diag_trace_head;
+	/*
+	 * Snapshot of RF chip control registers taken at the start of every
+	 * RX ISR.  Lets us inspect what state the chip is actually in without
+	 * having to halt via SWS — read these via debugger / TlsrPgm dump.
+	 *  reg_0f00: reg_rf_ll_cmd       (state machine command)
+	 *  reg_0f02: reg_rf_ll_ctrl_0    (TRX state: OFF/TX/RX bits)
+	 *  reg_0f03: reg_rf_ll_ctrl_1    (FSM timeout / CRC enables)
+	 *  reg_0f15: reg_rf_ll_ctrl_2    (pipe / mode select)
+	 *  reg_0f16: reg_rf_ll_ctrl_3    (auto-FSM mode bits, our LL_MODE_*)
+	 *  reg_0428: TX/RX gate register
+	 *  reg_0430: another RF control register
+	 */
+	volatile uint8_t rf_reg_0f00;
+	volatile uint8_t rf_reg_0f02;
+	volatile uint8_t rf_reg_0f03;
+	volatile uint8_t rf_reg_0f15;
+	volatile uint8_t rf_reg_0f16;
+	volatile uint8_t rf_reg_0428;
+	volatile uint8_t rf_reg_0430;
+	/*
+	 * Cycle-counter snapshots for ACK-path latency profiling.  Captured on
+	 * every ack-requested RX so the SWS-side reader gets a consistent set:
+	 *
+	 *  isr_entry_cyc      — first instruction of tlsr8258_rf_isr
+	 *  ack_capture_cyc    — ack_prepared_at_cycles inside rx_capture_common
+	 *  pre_busy_wait_cyc  — right before the cycle-domain spin in send_ack
+	 *  tx_kick_cyc        — right before tlsr8258_rf_tx_pkt for the ACK
+	 *  tx_done_cyc        — after TX_DS / CMD_DONE wait, before set_rxmode
+	 *
+	 * Time deltas (microseconds) computed by the driver into the matching
+	 * _us fields so they can be read directly without a software divide.
+	 */
+	volatile uint32_t isr_entry_cyc;
+	volatile uint32_t ack_capture_cyc;
+	volatile uint32_t pre_busy_wait_cyc;
+	volatile uint32_t tx_kick_cyc;
+	volatile uint32_t tx_done_cyc;
+	volatile uint16_t isr_to_capture_us;
+	volatile uint16_t capture_to_wait_us;
+	volatile uint16_t wait_duration_us;
+	volatile uint16_t tx_send_duration_us;
+	/*
+	 * Inter-ISR gap profiling. Each rf_isr entry computes the duration
+	 * since the previous entry; we track the LAST gap and the MAX seen so
+	 * far. If RF IRQ delivery is being delayed by a CPU-busy / IRQ-masked
+	 * critical section, inter_isr_gap_max_us will spike well above the
+	 * coordinator's macAckWaitDuration (864us).
+	 */
+	volatile uint32_t prev_isr_entry_cyc;
+	volatile uint32_t inter_isr_gap_us;
+	volatile uint32_t inter_isr_gap_max_us;
 };
 
 struct tlsr8258_radio_data {
@@ -430,6 +499,22 @@ static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	tlsr8258_rf_set_channel_offset(
 		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
+	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
+	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
+	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
+}
+
+/*
+ * Fast TX-mode switch for MAC ACK transmission from inside the RX ISR.
+ * Skips the channel-offset reload, which on TLSR8258 forces a PLL re-lock
+ * and adds variable (tens-to-hundreds of microseconds) latency.  The chip
+ * channel is already set correctly because we just RXed a frame on it, so
+ * the reload is wasted work that pushes our ACK past the 802.15.4 aTurn-
+ * aroundTime window the coordinator expects.
+ */
+static void tlsr8258_rf_set_txmode_for_ack(void)
+{
+	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
 	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
@@ -782,13 +867,21 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 					bool tx_prepared, uint32_t tx_prepared_at_cycles,
 					struct tlsr8258_radio_data *radio)
 {
-	uint8_t ack_psdu[3] = {0x02u, 0x00u, 0u};
+	/*
+	 * Hot-path layout (option D):
+	 *   - Caller (rx_capture_common) has already verified ack_requested via
+	 *     tlsr8258_ack_requested() — do NOT re-check here.
+	 *   - ACK PSDU is built from a 3-byte template (frame-control + seq);
+	 *     only the seq byte changes per ACK, so writing it inline avoids the
+	 *     stack copy that the previous local array forced.
+	 *   - Turnaround is measured in cycles, not microseconds, so the busy
+	 *     wait does not pay for k_cyc_to_us_floor32()'s software divide.
+	 *   - All radio->debug stores have moved out of the timing-critical
+	 *     window; they only run after the ACK is on air.
+	 */
+	uint8_t ack_psdu[3];
+	uint32_t elapsed_cyc;
 	uint16_t waited = 0u;
-	uint32_t prep_elapsed_us = 0u;
-
-	if (!tlsr8258_ack_requested(payload, length)) {
-		return;
-	}
 
 	if (!tlsr8258_filter_match_for_ack(payload, radio)) {
 		if (tx_prepared) {
@@ -798,6 +891,8 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		return;
 	}
 
+	ack_psdu[0] = 0x02u;
+	ack_psdu[1] = 0x00u;
 	ack_psdu[2] = payload[2];
 	if (tlsr8258_set_tx_payload(radio, ack_psdu, sizeof(ack_psdu)) < 0) {
 		if (tx_prepared) {
@@ -809,28 +904,38 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 
 	if (!tx_prepared) {
 		tlsr8258_rf_set_txmode(radio);
-	} else {
-		prep_elapsed_us = k_cyc_to_us_floor32(k_cycle_get_32() - tx_prepared_at_cycles);
+		tx_prepared_at_cycles = k_cycle_get_32();
+	}
+
+	uint32_t pre_wait_cyc = k_cycle_get_32();
+	if (radio->debug != NULL) {
+		radio->debug->pre_busy_wait_cyc = pre_wait_cyc;
+		uint32_t delta =
+			(pre_wait_cyc - tx_prepared_at_cycles) /
+			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+		radio->debug->capture_to_wait_us =
+			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
 	}
 
 	/*
-	 * Surface the measured prep gap (us from set_txmode to here) and the
-	 * residual we are about to busy_wait in retained debug RAM so we can
-	 * verify on-chip whether our turnaround math actually delays the ACK by
-	 * the intended amount.
+	 * Cycle-domain busy-wait. We deliberately spin on k_cycle_get_32()
+	 * instead of calling k_busy_wait(N) so the loop body has zero function
+	 * call overhead and the wait targets the exact cycle deadline.
 	 */
-	if (radio->debug != NULL) {
-		uint32_t residual = (prep_elapsed_us < TLSR8258_ACK_TURNAROUND_US)
-					    ? (TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us)
-					    : 0u;
-		radio->debug->rf_branch_debug = (uint8_t)(prep_elapsed_us & 0xffu);
-		radio->debug->rf_irq_ack_debug = (uint16_t)((residual > 0xffffu) ? 0xffffu : residual);
-	}
+	do {
+		elapsed_cyc = k_cycle_get_32() - tx_prepared_at_cycles;
+	} while (elapsed_cyc < TLSR8258_ACK_TURNAROUND_CYC);
 
-	if (prep_elapsed_us < TLSR8258_ACK_TURNAROUND_US) {
-		k_busy_wait(TLSR8258_ACK_TURNAROUND_US - prep_elapsed_us);
-	}
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	uint32_t tx_kick_cyc = k_cycle_get_32();
+	if (radio->debug != NULL) {
+		radio->debug->tx_kick_cyc = tx_kick_cyc;
+		uint32_t delta =
+			(tx_kick_cyc - pre_wait_cyc) /
+			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+		radio->debug->wait_duration_us =
+			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
+	}
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
 
@@ -846,8 +951,26 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		waited++;
 	}
 
+	uint32_t tx_done_cyc = k_cycle_get_32();
 	tlsr8258_rf_set_rxmode(radio);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+
+	/*
+	 * Post-ACK diagnostics. Moved here from the timing-critical section so
+	 * the busy_wait and tx kick run with no extra MMIO stores.
+	 */
+	if (radio->debug != NULL) {
+		radio->debug->tx_done_cyc = tx_done_cyc;
+		uint32_t elapsed_us = elapsed_cyc /
+				       (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+		uint32_t tx_us =
+			(tx_done_cyc - tx_kick_cyc) /
+			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+		radio->debug->tx_send_duration_us =
+			(uint16_t)((tx_us > 0xffffu) ? 0xffffu : tx_us);
+		radio->debug->rf_branch_debug = (uint8_t)(elapsed_us & 0xffu);
+		radio->debug->rf_irq_ack_debug = (uint16_t)((waited > 0xffffu) ? 0xffffu : waited);
+	}
 }
 
 static int8_t tlsr8258_rx_rssi_dbm(const uint8_t *rx)
@@ -869,44 +992,68 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	uint16_t snapshot_len = 0u;
 	uint16_t rx_dma_len;
 	int8_t rx_rssi_dbm;
+	/*
+	 * Capture the RX-ISR-entry timestamp FIRST — before any other work, in
+	 * particular before the PSDU decode that follows. The ACK busy_wait
+	 * in tlsr8258_send_ack_if_needed times from this point, matching the
+	 * vendor mac_phy.c txTime semantics (clock_time() at the very start
+	 * of rf_rx_irq_handler).
+	 */
+	uint32_t ack_prepared_at_cycles = k_cycle_get_32();
+	if (radio->debug != NULL) {
+		radio->debug->ack_capture_cyc = ack_prepared_at_cycles;
+		uint32_t delta =
+			(ack_prepared_at_cycles - radio->debug->isr_entry_cyc) /
+			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+		radio->debug->isr_to_capture_us =
+			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
+	}
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
 	bool self_originated = tlsr8258_psdu_is_self_originated_command(payload, length, radio);
 	bool ack_requested = !self_originated && tlsr8258_ack_requested(payload, length);
-	uint32_t ack_prepared_at_cycles = 0u;
 
-	if (radio->debug != NULL) {
-		radio->debug->rx_capture_debug_count++;
-		radio->debug->rx_capture_irq_debug = irq_status;
-	}
 	if (rx_ack == 0u) {
 		rx_ack = RF_IRQ_RX;
 	}
 	TLSR_REG16(0x0f20) = rx_ack;
-	if (radio->debug != NULL) {
-		radio->debug->rf_irq_ack_debug = rx_ack;
-	}
 	tlsr8258_radio_rx_count_inc(radio);
+
 	if (self_originated) {
 		tlsr8258_rf_set_rxmode(radio);
+		if (radio->debug != NULL) {
+			radio->debug->rx_capture_debug_count++;
+			radio->debug->rx_capture_irq_debug = irq_status;
+			radio->debug->rf_irq_ack_debug = rx_ack;
+		}
 		return;
 	}
 
 	/*
-	 * Send the MAC ACK FIRST, before any snapshot/enqueue work.  Capture
-	 * analysis showed the previous ordering (set_txmode -> snapshot ->
-	 * enqueue -> send_ack) inflated wall-clock between set_txmode and
-	 * tx_pkt by ~1 ms, putting our ACK on air past macAckWaitDuration
-	 * (~864 us).  EmberZNet then never sees the ACK and retransmits the
-	 * frame until macMaxFrameRetries is reached.  Doing the ACK inline
-	 * with minimum prep keeps the ACK comfortably within the spec window.
-	 * The chip is in TX mode while we ACK; rx_buffer is not being
-	 * overwritten, so we can safely read from it after the ACK TX returns.
+	 * MAC ACK transmission, hybrid vendor pattern.  TLSR8258 will not drive
+	 * the antenna from tx_pkt while the TRX state register sits in RX mode
+	 * (the DMA fires but no frame appears on air), so the lightweight
+	 * tlsr8258_rf_set_txmode_for_ack() is called first; it skips the
+	 * PLL/channel reload, so the state transition is only ~5us. The
+	 * ack_requested flag was decided once above; do NOT re-check inside
+	 * tlsr8258_send_ack_if_needed() (the second look-up adds a redundant
+	 * PSDU access on every RX while we are racing the coordinator's
+	 * aTurnaroundTime window).
 	 */
 	if (ack_requested) {
-		tlsr8258_rf_set_txmode(radio);
-		ack_prepared_at_cycles = k_cycle_get_32();
+		tlsr8258_rf_set_txmode_for_ack();
 		tlsr8258_send_ack_if_needed(payload, length, true,
 					    ack_prepared_at_cycles, radio);
+	}
+
+	/*
+	 * Debug bookkeeping deferred until after the ACK is on air. Same
+	 * principle as in send_ack_if_needed: nothing in the busy-wait /
+	 * tx-kick window should touch debug RAM.
+	 */
+	if (radio->debug != NULL) {
+		radio->debug->rx_capture_debug_count++;
+		radio->debug->rx_capture_irq_debug = irq_status;
+		radio->debug->rf_irq_ack_debug = rx_ack;
 	}
 
 	if ((snapshot != NULL) && (snapshot_size > 0u)) {
@@ -1052,8 +1199,25 @@ static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_d
 	tlsr8258_rx_capture_common(irq_status, NULL, 0u, radio);
 }
 
+/*
+ * Vendor-pattern .ram_code placement. Symbol stays at a FLASH address but
+ * sits inside the icache-locked low-flash window configured by reset.S
+ * SET_IC, so every instruction fetch in the RF IRQ handler is a 1-cycle
+ * cache hit instead of a multi-cycle XIP miss.  No SRAM copy, no veneer
+ * thunks, no _sw_isr_table timing window.
+ */
+__attribute__((section(".ram_code")))
 static void tlsr8258_rf_isr(const void *arg)
 {
+	/*
+	 * Capture the ISR-entry cycle counter as the very first instruction so
+	 * that downstream latency measurements (rx_capture_common timestamp,
+	 * busy_wait entry, tx kick, tx done) all have a common t=0 reference.
+	 * Stashed in a local because radio->debug is dereferenced through dev
+	 * a few instructions later; using a local first keeps the measurement
+	 * stable even if the compiler reorders the prologue.
+	 */
+	uint32_t isr_entry_cyc = k_cycle_get_32();
 	const struct device *dev = arg;
 	struct tlsr8258_radio_data *radio = dev->data;
 	uint16_t irq = TLSR_REG16(0x0f20);
@@ -1066,12 +1230,33 @@ static void tlsr8258_rf_isr(const void *arg)
 	bool has_tx = (effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u;
 
 	if (debug != NULL) {
+		uint32_t prev = debug->prev_isr_entry_cyc;
+		uint32_t gap_us = (isr_entry_cyc - prev) /
+				  (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+
+		debug->isr_entry_cyc = isr_entry_cyc;
+		debug->prev_isr_entry_cyc = isr_entry_cyc;
+		if (prev != 0u) {
+			debug->inter_isr_gap_us = gap_us;
+			if (gap_us > debug->inter_isr_gap_max_us) {
+				debug->inter_isr_gap_max_us = gap_us;
+			}
+		}
 		debug->rf_isr_entry_count++;
 		debug->rf_irq_raw_debug = irq;
 		debug->rf_irq_effective_debug = effective_irq;
 		debug->rf_irq_mask_debug = TLSR_REG16(0x0f1c);
 		debug->rf_dma_len_debug = dma_len;
 		debug->rf_psdu_len_debug = radio->rx_buffer[4];
+		/*
+		 * NOTE: reading registers 0x0f00, 0x0f02, 0x0428, 0x0430 inside
+		 * the RF ISR triggered a chip hang in testing — the device sent
+		 * exactly one BeaconReq and then stopped responding to RF and to
+		 * SWire.  Some of these RF control registers must have read-side
+		 * effects on the TLSR8258 state machine, so we skip the snapshot.
+		 * If we need to inspect chip state later, do it outside the ISR
+		 * (e.g. from a periodic timer in the main thread).
+		 */
 	}
 	if ((dma_len != 0u) && (dma_len < (TLSR8258_RX_BUF_SIZE - 3u))) {
 		crc = radio->rx_buffer[dma_len + 3u];
