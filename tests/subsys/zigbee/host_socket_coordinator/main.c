@@ -227,7 +227,7 @@ static void test_medium_model_busy_window_and_collision(void)
 
 	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1000U));
 	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
-			  &model, 11U, 1000U, 1200U, &busy_until_us),
+			  &model, 11U, 1000U, 1200U, 0, &busy_until_us),
 		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK);
 	EXPECT_EQ(busy_until_us, 1200U);
 	EXPECT_TRUE(zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1000U));
@@ -235,14 +235,37 @@ static void test_medium_model_busy_window_and_collision(void)
 	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1200U));
 
 	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
-			  &model, 11U, 1000U, 1200U, &busy_until_us),
+			  &model, 11U, 1000U, 1200U, 0, &busy_until_us),
 		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK);
 	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
-			  &model, 11U, 1100U, 1400U, &busy_until_us),
+			  &model, 11U, 1100U, 1400U, 0, &busy_until_us),
 		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_COLLISION);
 	EXPECT_EQ(busy_until_us, 1400U);
 	EXPECT_TRUE(zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1399U));
 	EXPECT_TRUE(!zb_native_sim_socket_medium_model_channel_busy(&model, 11U, 1400U));
+}
+
+static void test_medium_model_signal_rssi(void)
+{
+	struct zb_native_sim_socket_medium_model model;
+	uint64_t busy_until_us = 0U;
+
+	zb_native_sim_socket_medium_model_init(&model);
+
+	EXPECT_EQ(zb_native_sim_socket_medium_model_signal_rssi_dbm(0), -40);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_signal_rssi_dbm(8), -32);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_signal_rssi_dbm(-80), -96);
+
+	EXPECT_EQ(zb_native_sim_socket_medium_model_channel_rssi_dbm(&model, 11U, 1000U, -96), -96);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
+			  &model, 11U, 1000U, 1200U, 0, &busy_until_us),
+		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_OK);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_channel_rssi_dbm(&model, 11U, 1100U, -96), -40);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_reserve_window(
+			  &model, 11U, 1100U, 1400U, 8, &busy_until_us),
+		  ZB_NATIVE_SIM_SOCKET_MEDIUM_WINDOW_COLLISION);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_channel_rssi_dbm(&model, 11U, 1150U, -96), -32);
+	EXPECT_EQ(zb_native_sim_socket_medium_model_channel_rssi_dbm(&model, 11U, 1400U, -96), -96);
 }
 
 static void test_status_cca_payload_helpers(void)
@@ -303,6 +326,7 @@ int main(void)
 	test_transport_key_uses_extended_mac_destination();
 	test_medium_model_airtime_formula();
 	test_medium_model_busy_window_and_collision();
+	test_medium_model_signal_rssi();
 	test_status_cca_payload_helpers();
 	test_status_tx_result_payload_helpers();
 

@@ -89,13 +89,13 @@ MSG_RX = 4
 PORT = int(sys.argv[1])
 PAN = 0x5B27
 
-def encode(msg_type, node_id, short_addr, ieee_tail, psdu=b"", channel=11, rx_on=True):
+def encode(msg_type, node_id, short_addr, ieee_tail, psdu=b"", channel=11, rx_on=True, tx_dbm=0):
     ieee = b"\x00\x00\x00\x00\x00\x00" + bytes([ieee_tail, 0xA4])
     return struct.pack(
         "<IBBBBHHHbbBBH8s",
         MAGIC, VER, msg_type, 1 if rx_on else 0, channel,
         node_id, PAN, short_addr,
-        0, 0, 0, 0, len(psdu), ieee
+        tx_dbm, 0, 0, 0, len(psdu), ieee
     ) + psdu
 
 def decode(pkt):
@@ -128,10 +128,12 @@ sock_c.sendto(encode(MSG_HELLO, 0x2204, 0x1003, 0x04), ("127.0.0.1", PORT))
 sock_c.sendto(encode(MSG_FILTER, 0x2204, 0x1003, 0x04), ("127.0.0.1", PORT))
 
 probe_psdu = make_broadcast_psdu(0x41, 8)
-sock_a.sendto(encode(MSG_TX, 0x2202, 0x1001, 0x02, probe_psdu, rx_on=False), ("127.0.0.1", PORT))
+sock_a.sendto(encode(MSG_TX, 0x2202, 0x1001, 0x02, probe_psdu, rx_on=False, tx_dbm=8), ("127.0.0.1", PORT))
 fanout = decode(sock_b.recvfrom(256)[0])
 if fanout["msg_type"] != MSG_RX or fanout["node_id"] != 0x2203 or fanout["psdu"] != probe_psdu:
     raise SystemExit(f"unexpected peer fanout: {fanout!r}")
+if fanout["rssi_dbm"] != -32:
+    raise SystemExit(f"unexpected peer RSSI: {fanout!r}")
 
 collision_a = make_broadcast_psdu(0x51, 90)
 collision_c = make_broadcast_psdu(0x52, 90)
