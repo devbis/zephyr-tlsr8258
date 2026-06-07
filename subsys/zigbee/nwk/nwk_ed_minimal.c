@@ -143,6 +143,7 @@ static u8 g_nwkEdRxEvtHead;
 static u8 g_nwkEdRxEvtTail;
 static u8 g_nwkEdRxEvtCount;
 volatile u32 zb_nwk_ed_trace[16] = {0x4e574b45U};
+extern volatile u32 zb_post_tk_trace[16];
 volatile u32 zb_nwk_beacon_frame_count;
 volatile u32 zb_nwk_beacon_parse_fail_count;
 volatile u32 zb_nwk_beacon_discovery_inactive_count;
@@ -794,6 +795,7 @@ static int nwk_ed_minimal_deferred_zb_info_save_timer(void *arg)
 
 static void nwk_ed_minimal_complete_join(bool rejoinMode)
 {
+	zb_post_tk_trace[5] = 0x50000000U | (zb_post_tk_trace[5] + 1U);
 	g_zbNwkCtx.joined = 1U;
 	g_zbNwkCtx.is_factory_new = 0U;
 	g_zbNwkCtx.parentIsChanged = 0U;
@@ -822,6 +824,7 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,
 		g_zbMacPib.coordShortAddress);
 	nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
+	zb_post_tk_trace[6] = 0x60000000U | (zb_post_tk_trace[6] + 1U);
 	memset(&g_nwkEdCtx.opTimer, 0, sizeof(g_nwkEdCtx.opTimer));
 	if (!zb_nwk_schedule_task_or_timer(nwk_ed_minimal_post_join_poll_task,
 					       &g_nwkEdCtx.opTimer,
@@ -1770,6 +1773,9 @@ static void nwk_ed_minimal_transport_key_done_task(void *arg)
 {
 	ARG_UNUSED(arg);
 
+	zb_post_tk_trace[13] = 0xd0000000U | (zb_post_tk_trace[13] + 1U) |
+				((u32)g_nwkEdCtx.state << 16);
+
 	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_INTERVIEW) {
 		return;
 	}
@@ -1781,8 +1787,10 @@ static void nwk_ed_minimal_post_join_poll_task(void *arg)
 {
 	ARG_UNUSED(arg);
 
+	zb_post_tk_trace[12] = 0xc0000000U | (zb_post_tk_trace[12] + 1U);
 	tl_zbNwkEdMinimalPollEnsure();
 	bdb_ed_runtime_join_complete();
+	zb_post_tk_trace[12] |= 0x00008000U;
 	nwk_ed_minimal_joined_idle_poll_schedule(nwk_ed_minimal_effective_poll_rate());
 }
 
