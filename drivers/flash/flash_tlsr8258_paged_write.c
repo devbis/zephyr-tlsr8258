@@ -4,9 +4,18 @@
 
 #define TLSR8258_FLASH_PAGE_SIZE 256u
 
-int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len,
-			       tlsr8258_flash_page_writer_t writer,
-			       tlsr8258_watchdog_feed_t watchdog_feed)
+/* Forward declarations of the direct callees implemented in flash_tlsr8258.c.
+ * Calling them by name eliminates the function-pointer indirect-call
+ * sequence (`tjl trampoline; tjex r4`) whose XIP fetch hung the chip on
+ * the deferred NV-save path; the linker now emits a single direct-call
+ * long thunk.
+ */
+struct tlsr8258_flash_write_ctx;
+extern int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr, const uint8_t *buf,
+					    size_t len);
+extern void tlsr8258_flash_watchdog_clear(void);
+
+int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len)
 {
 	int ret = 0;
 
@@ -17,10 +26,8 @@ int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, siz
 		if (chunk > (TLSR8258_FLASH_PAGE_SIZE - page_off)) {
 			chunk = TLSR8258_FLASH_PAGE_SIZE - page_off;
 		}
-		if (watchdog_feed != NULL) {
-			watchdog_feed(ctx);
-		}
-		ret = writer(ctx, addr, buf, chunk);
+		tlsr8258_flash_watchdog_clear();
+		ret = tlsr8258_flash_write_page_locked(ctx, addr, buf, chunk);
 		if (ret < 0) {
 			break;
 		}
