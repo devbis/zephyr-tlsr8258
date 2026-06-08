@@ -6,12 +6,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef int (*tlsr8258_flash_page_writer_t)(void *ctx, uint32_t addr, const uint8_t *buf,
-					    size_t len);
-typedef void (*tlsr8258_watchdog_feed_t)(void *ctx);
-
-int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len,
-			       tlsr8258_flash_page_writer_t writer,
-			       tlsr8258_watchdog_feed_t watchdog_feed);
+/*
+ * Direct-call API: the previous function-pointer signature emitted a
+ * `tjl trampoline; tjex r4` indirect-call sequence whose XIP fetch of
+ * the trampoline (located in flash .text) hung the chip when the
+ * deferred NV-save chain crossed into the __ramfunc writer. Calling the
+ * writer / watchdog feeder directly lets the linker emit a single
+ * `__TC32ABSLongThunk_*` direct-call thunk, which fetches and dispatches
+ * reliably in this code path.
+ */
+int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len);
 
 #endif
