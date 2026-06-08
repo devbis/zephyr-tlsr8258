@@ -369,6 +369,15 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 	return 0;
 }
 
+/* Non-static wrapper called directly by tlsr8258_flash_write_pages
+ * (see flash_tlsr8258_paged_write.c).  Replaces the prior function-pointer
+ * indirect call.
+ */
+void tlsr8258_flash_watchdog_clear(void)
+{
+	tlsr8258_watchdog_clear();
+}
+
 static void tlsr8258_flash_watchdog_feed(void *ctx)
 {
 	ARG_UNUSED(ctx);
@@ -392,9 +401,9 @@ static void tlsr8258_flash_watchdog_feed(void *ctx)
  */
 static volatile unsigned int tlsr8258_flash_locked_key;
 
-__ramfunc static int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr,
-						     const uint8_t *buf,
-						     size_t len)
+__ramfunc int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr,
+					      const uint8_t *buf,
+					      size_t len)
 {
 	struct tlsr8258_flash_write_ctx *write_ctx = ctx;
 	int ret;
@@ -432,9 +441,7 @@ static int tlsr8258_flash_write(const struct device *dev, off_t offset,
 	}
 
 	k_sem_take(&dev_data->lock, K_FOREVER);
-	ret = tlsr8258_flash_write_pages(&write_ctx, (uint32_t)offset, src, len,
-					 tlsr8258_flash_write_page_locked,
-					 tlsr8258_flash_watchdog_feed);
+	ret = tlsr8258_flash_write_pages(&write_ctx, (uint32_t)offset, src, len);
 
 	k_sem_give(&dev_data->lock);
 	return ret;
