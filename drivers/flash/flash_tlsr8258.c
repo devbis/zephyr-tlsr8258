@@ -72,9 +72,22 @@ static const struct flash_parameters tlsr8258_flash_parameters = {
 	.erase_value = 0xff,
 };
 
+/*
+ * Bounded MSPI busy-wait. The vendor pattern was an unbounded loop on
+ * MSPI_CTRL.BUSY; if BUSY ever fails to clear (chip in a wedged state)
+ * the loop hangs holding arch_irq_lock, killing every interrupt. Bail
+ * after a few ms worth of cycles so a stuck transfer can't lock up the
+ * chip.
+ */
+#define TLSR8258_MSPI_WAIT_MAX_SPINS 0x40000u
 static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
 {
+	uint32_t spins = 0u;
+
 	while ((TLSR8258_REG_MSPI_CTRL & TLSR8258_FLD_MSPI_BUSY) != 0u) {
+		if (++spins >= TLSR8258_MSPI_WAIT_MAX_SPINS) {
+			break;
+		}
 	}
 }
 
@@ -362,17 +375,34 @@ static void tlsr8258_flash_watchdog_feed(void *ctx)
 	tlsr8258_watchdog_clear();
 }
 
-static int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr, const uint8_t *buf,
-					    size_t len)
+/*
+ * Both _locked AND write_page_ram run from SRAM (__ramfunc). When _locked
+ * was in regular flash text, the call into write_page_ram went through a
+ * linker-emitted long-range thunk that lives in .text. After
+ * arch_irq_lock disables reg_irq_en, the very next XIP fetch for that
+ * thunk silently wedged the bus on this chip — `_locked` never reached
+ * its arch_irq_unlock and IRQs stayed off forever, killing the RF
+ * TX-done IRQ and all post-interview comms. Placing _locked in __ramfunc
+ * keeps the whole lock → MSPI work → unlock sequence in SRAM with zero
+ * flash fetches in between.
+ *
+ * The `key` is stashed in a static instead of a stack local so a
+ * speculative stack-frame corruption in the deep RAM path can't smear
+ * the IRQ key (caught in earlier diagnostic runs).
+ */
+static volatile unsigned int tlsr8258_flash_locked_key;
+
+__ramfunc static int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr,
+						     const uint8_t *buf,
+						     size_t len)
 {
 	struct tlsr8258_flash_write_ctx *write_ctx = ctx;
-	unsigned int key;
 	int ret;
 
 	memcpy(write_ctx->page_buf, buf, len);
-	key = arch_irq_lock();
+	tlsr8258_flash_locked_key = arch_irq_lock();
 	ret = tlsr8258_flash_write_page_ram(addr, write_ctx->page_buf, len);
-	arch_irq_unlock(key);
+	arch_irq_unlock(tlsr8258_flash_locked_key);
 
 	return ret;
 }
