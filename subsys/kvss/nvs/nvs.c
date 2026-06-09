@@ -1317,6 +1317,19 @@ open_sector_scan_done:
 		rc = 0;
 	}
 
+	/*
+	 * A dirty open sector with no valid ATEs is not a reusable NVS sector.
+	 * data_wra can advance past a raw prefix even though the tail remains
+	 * blank, but the sector has no metadata describing that prefix.
+	 * Treat it as an invalid store instead of trying to reuse or erase it
+	 * from the startup path.
+	 */
+	if (empty_open_sector &&
+	    (fs->data_wra != (fs->ate_wra & ADDR_SECT_MASK))) {
+		rc = -EDEADLK;
+		goto end;
+	}
+
 	/* If the ate_wra is pointing to the first ate write location in a
 	 * sector and data_wra is not 0, erase the sector as it contains no
 	 * valid data (this also avoids closing a sector without any data).
