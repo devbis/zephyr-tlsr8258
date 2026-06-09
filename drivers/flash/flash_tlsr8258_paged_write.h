@@ -5,16 +5,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <zephyr/toolchain.h>
+
+#define TLSR8258_FLASH_PAGED_EXEC __attribute__((noinline, section(".ram_code")))
 
 /*
- * Direct-call API: the previous function-pointer signature emitted a
- * `tjl trampoline; tjex r4` indirect-call sequence whose XIP fetch of
- * the trampoline (located in flash .text) hung the chip when the
- * deferred NV-save chain crossed into the __ramfunc writer. Calling the
- * writer / watchdog feeder directly lets the linker emit a single
- * `__TC32ABSLongThunk_*` direct-call thunk, which fetches and dispatches
- * reliably in this code path.
+ * Experimental full-.ram_code flash path: keep the paged-write loop in the
+ * same low-flash window as the public entrypoints and low-level MSPI helpers
+ * so the write path has no XIP -> __ramfunc transition at all.
  */
-int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len);
+TLSR8258_FLASH_PAGED_EXEC int tlsr8258_flash_write_pages(void *ctx, uint32_t addr,
+							 const uint8_t *buf, size_t len);
 
 #endif

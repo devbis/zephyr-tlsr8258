@@ -15,7 +15,8 @@ extern int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr, const uint
 					    size_t len);
 extern void tlsr8258_flash_watchdog_clear(void);
 
-int tlsr8258_flash_write_pages(void *ctx, uint32_t addr, const uint8_t *buf, size_t len)
+TLSR8258_FLASH_PAGED_EXEC int tlsr8258_flash_write_pages(void *ctx, uint32_t addr,
+							 const uint8_t *buf, size_t len)
 {
 	int ret = 0;
 
