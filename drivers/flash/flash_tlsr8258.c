@@ -22,6 +22,8 @@
 #define TLSR8258_FLASH_CMD_READ_STATUS  0x05u
 #define TLSR8258_FLASH_CMD_PAGE_PROGRAM 0x02u
 #define TLSR8258_FLASH_CMD_SECTOR_ERASE 0x20u
+#define TLSR8258_FLASH_ENTRY __attribute__((noinline, section(".ram_code")))
+#define TLSR8258_FLASH_EXEC __attribute__((noinline, section(".ram_code")))
 
 #define TLSR8258_REG8(addr) (*(volatile uint8_t *)(addr))
 
@@ -67,28 +69,51 @@ struct tlsr8258_flash_write_ctx {
 	uint8_t *page_buf;
 };
 
+struct tlsr8258_flash_debug_trace {
+	uint32_t marker;
+	uint32_t phase;
+	uint32_t last_cmd;
+	uint32_t last_addr;
+	uint32_t last_status;
+	uint32_t wait_iters;
+	uint32_t wait_spins;
+	uint32_t last_ret;
+	uint32_t mspi_ctrl;
+	uint32_t mspi_data;
+	uint32_t mspi_mode;
+	uint32_t irq_en;
+};
+
+volatile struct tlsr8258_flash_debug_trace tlsr8258_flash_debug_trace;
+
 static const struct flash_parameters tlsr8258_flash_parameters = {
 	.write_block_size = 1,
 	.erase_value = 0xff,
 };
 
-/*
- * Bounded MSPI busy-wait. The vendor pattern was an unbounded loop on
- * MSPI_CTRL.BUSY; if BUSY ever fails to clear (chip in a wedged state)
- * the loop hangs holding arch_irq_lock, killing every interrupt. Bail
- * after a few ms worth of cycles so a stuck transfer can't lock up the
- * chip.
- */
-#define TLSR8258_MSPI_WAIT_MAX_SPINS 0x40000u
+static ALWAYS_INLINE void tlsr8258_flash_debug_update(uint32_t phase)
+{
+	tlsr8258_flash_debug_trace.phase = phase;
+	tlsr8258_flash_debug_trace.mspi_ctrl = TLSR8258_REG_MSPI_CTRL;
+	tlsr8258_flash_debug_trace.mspi_data = TLSR8258_REG_MSPI_DATA;
+	tlsr8258_flash_debug_trace.mspi_mode = TLSR8258_REG_MSPI_MODE;
+	tlsr8258_flash_debug_trace.irq_en = *TLSR8258_REG_IRQ_EN;
+}
+
 static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
 {
 	uint32_t spins = 0u;
 
+	tlsr8258_flash_debug_update(0xF0010001u);
 	while ((TLSR8258_REG_MSPI_CTRL & TLSR8258_FLD_MSPI_BUSY) != 0u) {
-		if (++spins >= TLSR8258_MSPI_WAIT_MAX_SPINS) {
-			break;
+		spins++;
+		if ((spins & 0xffffu) == 0u) {
+			tlsr8258_flash_debug_trace.wait_spins = spins;
+			tlsr8258_flash_debug_update(0xF0010002u);
 		}
 	}
+	tlsr8258_flash_debug_trace.wait_spins = spins;
+	tlsr8258_flash_debug_update(0xF0010003u);
 }
 
 static ALWAYS_INLINE void tlsr8258_mspi_high(void)
@@ -115,6 +140,19 @@ static ALWAYS_INLINE uint8_t tlsr8258_mspi_mode_manual(uint8_t mode)
 {
 	return mode & ~(TLSR8258_FLD_MSPI_DUAL_DATA_MODE_EN |
 			TLSR8258_FLD_MSPI_DUAL_ADDR_MODE_EN);
+}
+
+static ALWAYS_INLINE uint8_t tlsr8258_flash_irq_disable(void)
+{
+	uint8_t key = *TLSR8258_REG_IRQ_EN;
+
+	*TLSR8258_REG_IRQ_EN = 0u;
+	return key;
+}
+
+static ALWAYS_INLINE void tlsr8258_flash_irq_restore(uint8_t key)
+{
+	*TLSR8258_REG_IRQ_EN = key;
 }
 
 static ALWAYS_INLINE uint8_t tlsr8258_mspi_read(void)
@@ -210,7 +248,7 @@ static void tlsr8258_flash_apply_vdd_calibration(const struct tlsr8258_flash_con
 			      (reg_value & 0xf8u) | (calib_value & 0x07u));
 }
 
-static __ramfunc void tlsr8258_flash_sleep_us(uint32_t us)
+static TLSR8258_FLASH_EXEC void tlsr8258_flash_sleep_us(uint32_t us)
 {
 	uint32_t start = TLSR8258_REG_SYSTEM_TICK;
 	uint32_t ticks = us * TLSR8258_SYS_TICKS_PER_US;
@@ -219,40 +257,77 @@ static __ramfunc void tlsr8258_flash_sleep_us(uint32_t us)
 	}
 }
 
-static __ramfunc void tlsr8258_flash_send_cmd(uint8_t cmd)
+static TLSR8258_FLASH_EXEC void tlsr8258_flash_send_cmd(uint8_t cmd)
 {
+	tlsr8258_flash_debug_trace.last_cmd = cmd;
+	tlsr8258_flash_debug_update(0xF0020001u);
 	tlsr8258_mspi_high();
+	tlsr8258_flash_debug_update(0xF0020002u);
 	tlsr8258_flash_sleep_us(1u);
+	tlsr8258_flash_debug_update(0xF0020003u);
 	tlsr8258_mspi_low();
+	tlsr8258_flash_debug_update(0xF0020004u);
 	tlsr8258_mspi_write(cmd);
+	tlsr8258_flash_debug_update(0xF0020005u);
 	tlsr8258_mspi_wait();
+	tlsr8258_flash_debug_update(0xF0020006u);
 }
 
-static __ramfunc void tlsr8258_flash_send_addr(uint32_t addr)
+static TLSR8258_FLASH_EXEC void tlsr8258_flash_send_addr(uint32_t addr)
 {
+	tlsr8258_flash_debug_trace.last_addr = addr;
+	tlsr8258_flash_debug_update(0xF0030001u);
 	tlsr8258_mspi_write((uint8_t)(addr >> 16));
 	tlsr8258_mspi_wait();
 	tlsr8258_mspi_write((uint8_t)(addr >> 8));
 	tlsr8258_mspi_wait();
 	tlsr8258_mspi_write((uint8_t)addr);
 	tlsr8258_mspi_wait();
+	tlsr8258_flash_debug_update(0xF0030002u);
 }
 
-static __ramfunc int tlsr8258_flash_wait_done(void)
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_wait_done(void)
 {
+	tlsr8258_flash_debug_trace.wait_iters = 0u;
+	tlsr8258_flash_debug_trace.last_status = 0xffffffffu;
+	tlsr8258_flash_debug_update(0xF0040001u);
 	tlsr8258_flash_sleep_us(100u);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_STATUS);
+	tlsr8258_flash_debug_update(0xF0040002u);
 
-	for (uint32_t i = 0; i < 10000000u; i++) {
-		if ((tlsr8258_mspi_read() & BIT(0)) == 0u) {
+	for (uint32_t iter = 0; iter < 10000000u; iter++) {
+		uint8_t status;
+
+		tlsr8258_flash_debug_update(0xF0040010u);
+		tlsr8258_flash_sleep_us(1u);
+		tlsr8258_mspi_write(0u);
+		tlsr8258_flash_debug_update(0xF0040011u);
+		tlsr8258_mspi_wait();
+		tlsr8258_flash_debug_update(0xF0040012u);
+		status = tlsr8258_mspi_get();
+
+		tlsr8258_flash_debug_trace.wait_iters = iter;
+		tlsr8258_flash_debug_trace.last_status = status;
+		if ((iter & 0x3ffu) == 0u) {
+			tlsr8258_flash_debug_update(0xF0040013u);
+		}
+		if ((status & BIT(0)) == 0u) {
+			tlsr8258_flash_debug_update(0xF0040014u);
 			tlsr8258_mspi_high();
+			tlsr8258_flash_debug_update(0xF0040015u);
 			tlsr8258_flash_sleep_us(1u);
+			tlsr8258_flash_debug_trace.last_ret = 0u;
+			tlsr8258_flash_debug_update(0xF0040016u);
 			return 0;
 		}
 	}
 
+	tlsr8258_flash_debug_update(0xF00400fdu);
 	tlsr8258_mspi_high();
+	tlsr8258_flash_debug_update(0xF00400feu);
 	tlsr8258_flash_sleep_us(1u);
+	tlsr8258_flash_debug_trace.last_ret = (uint32_t)(-ETIMEDOUT);
+	tlsr8258_flash_debug_update(0xF00400ffu);
 	return -ETIMEDOUT;
 }
 
@@ -260,10 +335,10 @@ static __ramfunc int tlsr8258_flash_wait_done(void)
  * Runtime flash transactions must execute from RAM after XIP startup. The
  * TC32 boot mirror is reserved for reset/IRQ/suspend glue only.
  */
-__ramfunc int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len)
+TLSR8258_FLASH_EXEC int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len)
 {
+	uint8_t key = tlsr8258_flash_irq_disable();
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
-	unsigned int key = arch_irq_lock();
 	uint32_t start;
 
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
@@ -294,15 +369,18 @@ __ramfunc int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, size_t len)
 
 	tlsr8258_mspi_high();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
-	arch_irq_unlock(key);
+	tlsr8258_flash_irq_restore(key);
 	return 0;
 }
 
-__ramfunc int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf, size_t len)
+TLSR8258_FLASH_EXEC int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf,
+						      size_t len)
 {
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
 	int ret;
 
+	tlsr8258_flash_debug_trace.last_addr = addr;
+	tlsr8258_flash_debug_update(0xF0050001u);
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_PAGE_PROGRAM);
@@ -316,22 +394,31 @@ __ramfunc int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf, s
 	tlsr8258_mspi_high();
 	ret = tlsr8258_flash_wait_done();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
+	tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
+	tlsr8258_flash_debug_update(0xF0050002u);
 	return ret;
 }
 
-__ramfunc int tlsr8258_flash_erase_sector_ram(uint32_t addr)
+TLSR8258_FLASH_EXEC int tlsr8258_flash_erase_sector_ram(uint32_t addr)
 {
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
 	int ret;
 
+	tlsr8258_flash_debug_trace.last_addr = addr;
+	tlsr8258_flash_debug_update(0xF0060001u);
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	tlsr8258_flash_debug_update(0xF0060002u);
 	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_SECTOR_ERASE);
+	tlsr8258_flash_debug_update(0xF0060003u);
 	tlsr8258_flash_send_addr(addr);
 	tlsr8258_mspi_high();
+	tlsr8258_flash_debug_update(0xF0060004u);
 
 	ret = tlsr8258_flash_wait_done();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
+	tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
+	tlsr8258_flash_debug_update(0xF0060005u);
 	return ret;
 }
 
@@ -373,7 +460,7 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
  * (see flash_tlsr8258_paged_write.c).  Replaces the prior function-pointer
  * indirect call.
  */
-void tlsr8258_flash_watchdog_clear(void)
+TLSR8258_FLASH_EXEC void tlsr8258_flash_watchdog_clear(void)
 {
 	tlsr8258_watchdog_clear();
 }
@@ -399,25 +486,53 @@ static void tlsr8258_flash_watchdog_feed(void *ctx)
  * speculative stack-frame corruption in the deep RAM path can't smear
  * the IRQ key (caught in earlier diagnostic runs).
  */
-static volatile unsigned int tlsr8258_flash_locked_key;
+static volatile uint8_t tlsr8258_flash_locked_key;
 
-__ramfunc int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr,
-					      const uint8_t *buf,
-					      size_t len)
+TLSR8258_FLASH_EXEC int tlsr8258_flash_write_page_locked(void *ctx, uint32_t addr,
+							 const uint8_t *buf, size_t len)
 {
 	struct tlsr8258_flash_write_ctx *write_ctx = ctx;
 	int ret;
 
 	memcpy(write_ctx->page_buf, buf, len);
-	tlsr8258_flash_locked_key = arch_irq_lock();
+	tlsr8258_flash_locked_key = tlsr8258_flash_irq_disable();
 	ret = tlsr8258_flash_write_page_ram(addr, write_ctx->page_buf, len);
-	arch_irq_unlock(tlsr8258_flash_locked_key);
+	tlsr8258_flash_irq_restore(tlsr8258_flash_locked_key);
 
 	return ret;
 }
 
-static int tlsr8258_flash_write(const struct device *dev, off_t offset,
-				const void *data, size_t len)
+/*
+ * Erase had the same flash-fetch hazard as the original deferred write path:
+ * tlsr8258_flash_erase() took arch_irq_lock() in flash text and then called
+ * tlsr8258_flash_erase_sector_ram(). The TC32 linker emitted an absolute long
+ * thunk for that far call in .text, so the very first post-lock fetch still
+ * came from XIP and wedged the bus on the first sector erase. Running the
+ * lock -> erase_sector_ram -> unlock sequence from SRAM removes the flash
+ * thunk from the IRQ-masked window.
+ */
+TLSR8258_FLASH_EXEC int tlsr8258_flash_erase_sector_locked(uint32_t addr)
+{
+	int ret;
+
+	tlsr8258_flash_locked_key = tlsr8258_flash_irq_disable();
+	ret = tlsr8258_flash_erase_sector_ram(addr);
+	tlsr8258_flash_irq_restore(tlsr8258_flash_locked_key);
+
+	return ret;
+}
+
+/*
+ * Keep the public flash API entrypoints out of regular .text: callers reach
+ * them through the generic flash API from XIP code, and TC32 can wedge on the
+ * first cross-region jump into a high-RAM __ramfunc target. The entrypoint
+ * itself stays in the low-flash icache-locked window, while the actual MSPI
+ * transaction chain remains in __ramfunc.
+ */
+static TLSR8258_FLASH_ENTRY int tlsr8258_flash_write(const struct device *dev,
+						     off_t offset,
+						     const void *data,
+						     size_t len)
 {
 	const struct tlsr8258_flash_config *config = dev->config;
 	struct tlsr8258_flash_data *dev_data = dev->data;
@@ -447,26 +562,35 @@ static int tlsr8258_flash_write(const struct device *dev, off_t offset,
 	return ret;
 }
 
-static int tlsr8258_flash_erase(const struct device *dev, off_t offset, size_t len)
+static TLSR8258_FLASH_ENTRY int tlsr8258_flash_erase(const struct device *dev, off_t offset,
+						     size_t len)
 {
 	const struct tlsr8258_flash_config *config = dev->config;
 	struct tlsr8258_flash_data *dev_data = dev->data;
 	int ret = 0;
 
+	tlsr8258_flash_debug_trace.phase = 0xF1000001u;
+	tlsr8258_flash_debug_trace.last_addr = (uint32_t)offset;
+
 	if (!tlsr8258_flash_range_valid(config, offset, len) ||
 	    !IS_ALIGNED((size_t)offset, TLSR8258_FLASH_SECTOR_SIZE) ||
 	    !IS_ALIGNED(len, TLSR8258_FLASH_SECTOR_SIZE)) {
+		tlsr8258_flash_debug_trace.last_ret = (uint32_t)(-EINVAL);
+		tlsr8258_flash_debug_trace.phase = 0xF10000e1u;
 		return -EINVAL;
 	}
 
+	tlsr8258_flash_debug_trace.phase = 0xF1000002u;
 	k_sem_take(&dev_data->lock, K_FOREVER);
+	tlsr8258_flash_debug_trace.phase = 0xF1000003u;
 	while (len > 0u) {
-		unsigned int key;
-
+		tlsr8258_flash_debug_trace.last_addr = (uint32_t)offset;
+		tlsr8258_flash_debug_trace.phase = 0xF1000004u;
 		tlsr8258_watchdog_clear();
-		key = arch_irq_lock();
-		ret = tlsr8258_flash_erase_sector_ram((uint32_t)offset);
-		arch_irq_unlock(key);
+		tlsr8258_flash_debug_trace.phase = 0xF1000005u;
+		ret = tlsr8258_flash_erase_sector_locked((uint32_t)offset);
+		tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
+		tlsr8258_flash_debug_trace.phase = 0xF1000006u;
 		if (ret < 0) {
 			break;
 		}
@@ -476,6 +600,7 @@ static int tlsr8258_flash_erase(const struct device *dev, off_t offset, size_t l
 	}
 
 	k_sem_give(&dev_data->lock);
+	tlsr8258_flash_debug_trace.phase = 0xF1000007u;
 	return ret;
 }
 
@@ -506,6 +631,8 @@ static int tlsr8258_flash_init(const struct device *dev)
 	k_sem_init(&data->lock, 1, 1);
 	data->layout.pages_count = config->size / TLSR8258_FLASH_SECTOR_SIZE;
 	data->layout.pages_size = TLSR8258_FLASH_SECTOR_SIZE;
+	tlsr8258_flash_debug_trace.marker = 0xF1A58D00u;
+	tlsr8258_flash_debug_trace.phase = 0xF0000001u;
 	tlsr8258_flash_apply_vdd_calibration(config);
 
 	return 0;

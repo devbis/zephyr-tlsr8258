@@ -1,0 +1,29 @@
+menu "TLSR8258 flash hang repro"
+
+choice TLSR8258_FLASH_HANG_REPRO_MODE
+	prompt "Write mode"
+	default TLSR8258_FLASH_HANG_REPRO_MODE_DIRECT
+
+config TLSR8258_FLASH_HANG_REPRO_MODE_DIRECT
+	bool "Direct flash"
+
+config TLSR8258_FLASH_HANG_REPRO_MODE_NVS
+	bool "NVS"
+
+config TLSR8258_FLASH_HANG_REPRO_MODE_NVS_IDLE_LOOP
+	bool "NVS with busy idle loop"
+endchoice
+
+config TLSR8258_FLASH_HANG_REPRO_PERIOD_MS
+	int "Write period in ms"
+	default 1000
+	range 100 60000
+
+config TLSR8258_FLASH_HANG_REPRO_IDLE_US
+	int "Busy idle delay in us"
+	default 1000
+	range 100 5000
+
+endmenu
+
+source "Kconfig.zephyr"

@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: TLSR8258 flash hang repro
+tests:
+  sample.board.telink.tlsr8258_flash_hang_repro:
+    build_only: true
+    platform_allow:
+      - tlsr8258_generic
+      - tlsr8258_tb03f
+    integration_platforms:
+      - tlsr8258_generic
+    tags:
+      - telink
+      - tlsr8258
+      - flash
+      - nvs
+      - timer
