@@ -150,6 +150,16 @@ volatile u32 zb_nwk_beacon_discovery_inactive_count;
 volatile u32 zb_nwk_beacon_success_count;
 volatile u32 zb_nwk_beacon_last_len;
 volatile u32 zb_nwk_beacon_last_fcf;
+/*
+ * Dedicated AssocReq tx diagnostics. zb_nwk_ed_trace[11..13] capture the same
+ * info but are heavily clobbered by other writers (app_bdb, drv_nv), so we
+ * keep an unshared mirror here.
+ *   [0] = tx attempt counter
+ *   [1] = last rc from zb_platform_radio_send_raw_psdu (signed int32)
+ *   [2] = packed channel:8 | panId:16 | retry_count:8
+ *   [3] = packed idx:8 | nwkEdCtx.state:8 | unused:16
+ */
+volatile u32 zb_assoc_tx_trace[4] = {0x41535354U};
 volatile u32 zb_nwk_ed_interview_trace[4];
 volatile u32 zb_nwk_ed_poll_trace[8] = {0x4e504f4cU};
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
@@ -1132,6 +1142,12 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	zb_nwk_ed_trace[12] = ((u32)(u8)idx << 24) | ((u32)MAC_CMD_ASSOCIATION_REQUEST << 16) |
 			       (u16)rc;
 	zb_nwk_ed_trace[13] = ((u32)panId << 16) | parentShortAddr;
+	zb_assoc_tx_trace[0]++;
+	zb_assoc_tx_trace[1] = (u32)rc;
+	zb_assoc_tx_trace[2] = ((u32)channel << 24) | ((u32)panId << 8) |
+			        (u32)g_nwkEdCtx.assocEbusyRetry;
+	zb_assoc_tx_trace[3] = ((u32)(u8)idx << 24) |
+			        ((u32)(u8)g_nwkEdCtx.state << 16);
 	if (rc == -EBUSY) {
 			LOG_DBG("association request CCA busy ch=%u retry=%u", channel,
 				g_nwkEdCtx.assocEbusyRetry);
