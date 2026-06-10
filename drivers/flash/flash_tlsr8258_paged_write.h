@@ -17,4 +17,16 @@
 TLSR8258_FLASH_PAGED_EXEC int tlsr8258_flash_write_pages(void *ctx, uint32_t addr,
 							 const uint8_t *buf, size_t len);
 
+/*
+ * Assembly veneers in `flash_tlsr8258_entry.S` (.ram_code) that branch into
+ * the high-RAM __ramfunc helpers via `tloadr + tjex r4`. Callers in flash
+ * .text must route through these instead of calling the C entry points
+ * directly, otherwise the linker emits a long-range thunk in .text that
+ * wedges the bus on the first XIP fetch after arch_irq_lock disables
+ * reg_irq_en.
+ */
+int tlsr8258_flash_call_write_pages(void *ctx, uint32_t addr,
+				    const uint8_t *buf, size_t len);
+int tlsr8258_flash_call_erase_sector_locked(uint32_t addr);
+
 #endif
