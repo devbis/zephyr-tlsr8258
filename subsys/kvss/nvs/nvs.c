@@ -1320,14 +1320,27 @@ open_sector_scan_done:
 	/*
 	 * A dirty open sector with no valid ATEs is not a reusable NVS sector.
 	 * data_wra can advance past a raw prefix even though the tail remains
-	 * blank, but the sector has no metadata describing that prefix.
-	 * Treat it as an invalid store instead of trying to reuse or erase it
-	 * from the startup path.
+	 * blank; only reject the sector when the prefix really contains
+	 * non-erased bytes. The blank-prefix case is the normal first-mount
+	 * state right after `flash erase all` and must be accepted (rewind
+	 * data_wra so the first write lands at the sector base).
 	 */
 	if (empty_open_sector &&
 	    (fs->data_wra != (fs->ate_wra & ADDR_SECT_MASK))) {
-		rc = -EDEADLK;
-		goto end;
+		uint32_t sect_base = fs->ate_wra & ADDR_SECT_MASK;
+		uint32_t prefix_len = fs->data_wra - sect_base;
+		int cmp_rc = nvs_flash_cmp_const(fs, sect_base, erase_value,
+						 prefix_len);
+
+		if (cmp_rc < 0) {
+			rc = cmp_rc;
+			goto end;
+		}
+		if (cmp_rc != 0) {
+			rc = -EDEADLK;
+			goto end;
+		}
+		fs->data_wra = sect_base;
 	}
 
 	/* If the ate_wra is pointing to the first ate write location in a
