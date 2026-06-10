@@ -92,10 +92,14 @@ SECTION_FUNC(vectors, __start)
 	tj __irq
 
 	.org 0x18
-.Lirq_low_call_target:
-	.word z_tc32_handle_irqs
-.Lirq_low_ret_target:
-	.word .Lirq_restore
+	/*
+	 * Reserved boot-header slots (vendor convention places bin_size and
+	 * metadata here). z_tc32_irq_entry now jumps to z_tc32_handle_irqs
+	 * directly via `tjl` and no longer reads handler/return addresses
+	 * from SRAM 0x840018+, so these words can stay padded.
+	 */
+	.word 0
+	.word 0
 
 	.org 0x20
 __reset:
@@ -353,23 +357,15 @@ z_tc32_irq_entry:
 	tpush {r0-r5}
 
 	/*
-	 * IRQ vectors may execute from the TLSR boot mirror alias at 0x880000.
-	 * A relative call from there would enter z_tc32_handle_irqs through the
-	 * same alias, where PC-relative literal loads are not valid data reads.
-	 * Registers are already saved, so branch by absolute low code address.
+	 * Branch directly into z_tc32_handle_irqs. The prior absolute-address
+	 * dispatch via SRAM 0x840018 / 0x840020 assumed the Telink boot ROM
+	 * mirrored flash[0..0x1d00] into SRAM at boot; in practice the mirror
+	 * was empty on this chip and an IRQ-time fetch from 0x840018 returned
+	 * 0 -> tjex 0 -> faulted back into z_tc32_irq_entry as an IRQ storm.
+	 * `tjl` sets lr to the next instruction (.Lirq_restore) automatically,
+	 * matching what the absolute-address path used to load explicitly.
 	 */
-	tmov r1, #0x84
-	tshftl r1, r1, #16
-	tmov r0, #0x18
-	tadd r1, r1, r0
-	tloadr r0, [r1, #0x4]
-	nop
-	nop
-	tmov r14, r0
-	tloadr r0, [r1]
-	nop
-	nop
-	tjex r0
+	tjl z_tc32_handle_irqs
 
 #ifdef CONFIG_MULTITHREADING
 .Lno_irq_reschedule:
