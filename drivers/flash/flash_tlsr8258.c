@@ -457,8 +457,12 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 }
 
 /* Non-static wrapper called directly by tlsr8258_flash_write_pages
- * (see flash_tlsr8258_paged_write.c).  Replaces the prior function-pointer
- * indirect call.
+ * (see flash_tlsr8258_paged_write.c). The paged-write loop and this
+ * wrapper both live in .ram_code, so the call site issues a short
+ * intra-section branch; entry from flash .text into .ram_code is routed
+ * through the `tlsr8258_flash_call_write_pages` / `_call_erase_sector_locked`
+ * veneers in flash_tlsr8258_entry.S to avoid the linker-emitted
+ * long-range thunk that wedges on the first XIP fetch after arch_irq_lock.
  */
 TLSR8258_FLASH_EXEC void tlsr8258_flash_watchdog_clear(void)
 {
@@ -556,7 +560,7 @@ static TLSR8258_FLASH_ENTRY int tlsr8258_flash_write(const struct device *dev,
 	}
 
 	k_sem_take(&dev_data->lock, K_FOREVER);
-	ret = tlsr8258_flash_write_pages(&write_ctx, (uint32_t)offset, src, len);
+	ret = tlsr8258_flash_call_write_pages(&write_ctx, (uint32_t)offset, src, len);
 
 	k_sem_give(&dev_data->lock);
 	return ret;
@@ -588,7 +592,7 @@ static TLSR8258_FLASH_ENTRY int tlsr8258_flash_erase(const struct device *dev, o
 		tlsr8258_flash_debug_trace.phase = 0xF1000004u;
 		tlsr8258_watchdog_clear();
 		tlsr8258_flash_debug_trace.phase = 0xF1000005u;
-		ret = tlsr8258_flash_erase_sector_locked((uint32_t)offset);
+		ret = tlsr8258_flash_call_erase_sector_locked((uint32_t)offset);
 		tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
 		tlsr8258_flash_debug_trace.phase = 0xF1000006u;
 		if (ret < 0) {
