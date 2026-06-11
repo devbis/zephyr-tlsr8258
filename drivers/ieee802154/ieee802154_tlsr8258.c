@@ -1660,6 +1660,30 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 
 	ret = k_sem_take(&radio->tx_wait, wait_timeout);
 	if (ret == -EAGAIN) {
+		uint16_t pending_irq = TLSR_REG16(0x0f20);
+
+		/*
+		 * On this silicon, TX completions for DataReq (and other short
+		 * ACK-only round-trips) regularly miss the RF ISR — neither
+		 * RF_IRQ_TX/TX_DS nor RF_IRQ_STX_TIMEOUT/FSM_TIMEOUT fire while
+		 * the ISR is running, but the chip's IRQ status register at
+		 * 0x0f20 holds the bit by the time tx() polls after the
+		 * k_sem_take timeout.  Snapshot 0x0f20 BEFORE clearing it: if
+		 * TX_DS or TX is asserted, the transmission did complete and
+		 * the upper layer should not treat this as a failure.  Without
+		 * this fallback every DataReq poll returns -EAGAIN even though
+		 * the sniffer captures the frame and the coord's response.
+		 */
+		if ((pending_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {
+			tlsr8258_tx_diag_put(radio, (0x16u << 24) |
+						 ((uint32_t)tx_seq << 16) |
+						 pending_irq);
+			(void)tlsr8258_radio_op_on_tx_success(&radio->op);
+			tlsr8258_rf_set_rxmode(radio);
+			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+			return tlsr8258_radio_op_result_errno(&radio->op);
+		}
+
 		tlsr8258_tx_diag_put(radio, (0x15u << 24) | ((uint32_t)tx_seq << 16) |
 					 wait_budget_us);
 		tlsr8258_radio_op_on_timeout(&radio->op);
