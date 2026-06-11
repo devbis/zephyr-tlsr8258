@@ -176,8 +176,10 @@ static void zb_core_bootstrap_once(void)
 	zb_nwk_ed_trace[15] = 0xA5B00001U;
 
 	if (zb_platform_bdb_service_persistent_rejoin()) {
+		uint32_t started = k_uptime_get_32();
+
 		zb_persistent_rejoin_in_progress = true;
-		zb_persistent_rejoin_started_ms = k_uptime_get_32();
+		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 		zb_nwk_ed_trace[15] = 0xA5B0000DU;
 	}
 
@@ -227,8 +229,10 @@ static void zb_process_deferred_persistent_rejoin(void)
 	}
 
 	if (zb_platform_bdb_service_persistent_rejoin()) {
+		uint32_t started = k_uptime_get_32();
+
 		zb_persistent_rejoin_in_progress = true;
-		zb_persistent_rejoin_started_ms = k_uptime_get_32();
+		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 		zb_nwk_ed_trace[15] = 0xA5B0000EU;
 	}
 }
