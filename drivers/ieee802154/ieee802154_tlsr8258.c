@@ -1687,6 +1687,21 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		tlsr8258_tx_diag_put(radio, (0x15u << 24) | ((uint32_t)tx_seq << 16) |
 					 wait_budget_us);
 		tlsr8258_radio_op_on_timeout(&radio->op);
+
+		/*
+		 * Aggressive RF recovery: on this silicon, a tx_wait timeout
+		 * with neither the TX nor TIMEOUT IRQ bits set in 0x0f20 means
+		 * the RF state machine is wedged in an intermediate state.
+		 * Just calling tlsr8258_rf_set_rxmode() leaves the chip with
+		 * lingering TX-side configuration that prevents subsequent TXes
+		 * from ever generating a TX-done event (observed: 5 of 46 TXes
+		 * succeed, the rest pile up timeouts and eventually the chip
+		 * stops responding to SWS entirely).  Bounce the RF off then
+		 * back into RX mode to force the state machine to a clean RX
+		 * idle from any stuck TX-side state.
+		 */
+		tlsr8258_rf_off();
+		k_busy_wait(50);
 		tlsr8258_rf_set_rxmode(radio);
 		TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		return tlsr8258_radio_op_result_errno(&radio->op);
