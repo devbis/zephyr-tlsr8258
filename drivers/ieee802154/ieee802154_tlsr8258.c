@@ -1316,6 +1316,39 @@ static void tlsr8258_rf_isr(const void *arg)
 			if (residual_irq != 0u) {
 				TLSR_REG16(0x0f20) = residual_irq;
 			}
+		} else if (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) {
+			/*
+			 * Some TX completions on this chip arrive as RX_EVENT only
+			 * (the ACK reception that auto-follows a frame with the
+			 * ACK_REQUEST bit set), with neither RF_IRQ_TX nor RF_IRQ_TX_DS
+			 * asserted in the same ISR. Without a fallback, tx() times out
+			 * with -EAGAIN even though the frame was transmitted and ACKed
+			 * (sniffer confirms). Gate the fallback on the just-received
+			 * PSDU being an ACK whose sequence matches our outstanding
+			 * tx_seq — otherwise an unrelated RX (e.g., another device's
+			 * Data Request to the coordinator that we happen to receive in
+			 * promiscuous mode) would false-positive and unblock a TX that
+			 * actually didn't complete.
+			 */
+			uint8_t *rx = radio->rx_buffer;
+			uint8_t rx_psdu_len = tlsr8258_dma_payload_len_get(rx,
+									 TLSR8258_RX_BUF_SIZE);
+			bool tx_complete = false;
+
+			if (rx_psdu_len >= 3u &&
+			    tlsr8258_psdu_is_ack_for_seq(&rx[TLSR8258_PAYLOAD_OFFSET],
+							  rx_psdu_len,
+							  radio->op.tx_seq)) {
+				uint32_t key = irq_lock();
+
+				tx_complete = (radio->op.state ==
+					       TLSR8258_RADIO_OP_TX_PENDING) &&
+					      tlsr8258_radio_op_on_tx_success(&radio->op);
+				irq_unlock(key);
+			}
+			if (tx_complete) {
+				k_sem_give(&radio->tx_wait);
+			}
 		}
 	} else if (!has_tx && (effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
 		bool tx_failed = false;
