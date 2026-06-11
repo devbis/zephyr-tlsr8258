@@ -57,6 +57,19 @@ static uint32_t zb_persistent_rejoin_started_ms;
 static uint32_t zb_last_commission_retry_ms;
 extern volatile u32 zb_nwk_ed_trace[];
 
+/*
+ * Heartbeat counters for the zb_thread loop. Each one increments at a
+ * specific point per iteration; if the chip wedges in steady state, the
+ * pattern of advanced/frozen counters identifies which step blocks. All
+ * stages should track within 1 of each other in normal operation.
+ *   [0] = top of while(1)
+ *   [1] = past bootstrap_done check
+ *   [2] = after ev_timer_process
+ *   [3] = after ev_poll_process
+ *   [4] = after deferred-rejoin / deferred-commissioning / requeue
+ */
+volatile u32 zb_thread_heartbeat[5] = {0x48425452U};
+
 #define ZB_COMMISSION_RETRY_POLL_MS 5000U
 /*
  * Maximum time the bootstrap will block on a persisted-state rejoin before
@@ -281,6 +294,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	 * during idle (~1 ms granularity is fine for this thread).
 	 */
 	while (1) {
+		zb_thread_heartbeat[0]++;
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
 			ev_timer_process();
@@ -291,11 +305,15 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			}
 		}
 
+		zb_thread_heartbeat[1]++;
 		ev_timer_process();
+		zb_thread_heartbeat[2]++;
 		ev_poll_process();
+		zb_thread_heartbeat[3]++;
 		zb_process_deferred_persistent_rejoin();
 		zb_process_deferred_commissioning();
 		zb_requeue_commissioning_if_needed();
+		zb_thread_heartbeat[4]++;
 		if (zb_commissioning_pending) {
 			zb_nwk_ed_trace[15] = 0xA5B0000BU;
 			k_busy_wait(1000);
