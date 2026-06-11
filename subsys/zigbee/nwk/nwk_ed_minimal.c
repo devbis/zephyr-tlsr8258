@@ -160,6 +160,19 @@ volatile u32 zb_nwk_beacon_last_fcf;
  *   [3] = packed idx:8 | nwkEdCtx.state:8 | unused:16
  */
 volatile u32 zb_assoc_tx_trace[4] = {0x41535354U};
+/*
+ * Post-join crash diagnostic. Tracks the precise code path immediately
+ * after complete_join so SWS reads can pin where the reboot loop fires.
+ *   [0] = magic "PJOI" (initializer) + invocation count
+ *   [1] = state on entering complete_join + completed flag
+ *   [2] = post_join_poll_task: phase 1 (post tl_zbNwkEdMinimalPollEnsure)
+ *   [3] = post_join_poll_task: phase 2 (post bdb_ed_runtime_join_complete)
+ *   [4] = post_join_poll_task: phase 3 (post joined_idle_poll_schedule)
+ *   [5] = nwk_ed_minimal_send_data_request entry counter | last rc
+ *   [6] = nwk_ed_minimal_send_data_request post-tx counter
+ *   [7] = deferred zb_info_save timer fired counter
+ */
+volatile u32 zb_post_join_trace[8] = {0x504a4f49U};
 volatile u32 zb_nwk_ed_interview_trace[4];
 volatile u32 zb_nwk_ed_poll_trace[8] = {0x4e504f4cU};
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
@@ -799,13 +812,18 @@ static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
 static int nwk_ed_minimal_deferred_zb_info_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
+	zb_post_join_trace[7] = 0x70000000U | (zb_post_join_trace[7] + 1U);
 	zb_info_save(NULL);
+	zb_post_join_trace[7] |= 0x00008000U;
 	return -1;
 }
 
 static void nwk_ed_minimal_complete_join(bool rejoinMode)
 {
 	zb_post_tk_trace[5] = 0x50000000U | (zb_post_tk_trace[5] + 1U);
+	zb_post_join_trace[0]++;
+	zb_post_join_trace[1] = 0x10000000U | ((u32)g_nwkEdCtx.state << 16) |
+				  (rejoinMode ? 1U : 0U);
 	g_zbNwkCtx.joined = 1U;
 	g_zbNwkCtx.is_factory_new = 0U;
 	g_zbNwkCtx.parentIsChanged = 0U;
@@ -1805,9 +1823,12 @@ static void nwk_ed_minimal_post_join_poll_task(void *arg)
 
 	zb_post_tk_trace[12] = 0xc0000000U | (zb_post_tk_trace[12] + 1U);
 	tl_zbNwkEdMinimalPollEnsure();
+	zb_post_join_trace[2] = 0x20000000U | (zb_post_join_trace[2] + 1U);
 	bdb_ed_runtime_join_complete();
 	zb_post_tk_trace[12] |= 0x00008000U;
+	zb_post_join_trace[3] = 0x30000000U | (zb_post_join_trace[3] + 1U);
 	nwk_ed_minimal_joined_idle_poll_schedule(nwk_ed_minimal_effective_poll_rate());
+	zb_post_join_trace[4] = 0x40000000U | (zb_post_join_trace[4] + 1U);
 }
 
 static int nwk_ed_minimal_post_join_poll_timer(void *arg)
