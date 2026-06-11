@@ -1673,12 +1673,50 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		 * the upper layer should not treat this as a failure.  Without
 		 * this fallback every DataReq poll returns -EAGAIN even though
 		 * the sniffer captures the frame and the coord's response.
+		 *
+		 * If the first read doesn't show the bit, give the chip a brief
+		 * additional polling window (up to ~5 ms in 200 us steps) before
+		 * triggering the destructive RF reset. Under channel contention
+		 * the bit can latch slightly after our 10 ms semaphore expiry;
+		 * catching those late assertions here avoids the rf_off bounce
+		 * that itself costs further latency on the next TX.
 		 */
+		if ((pending_irq & (RF_IRQ_TX | RF_IRQ_TX_DS | RF_IRQ_STX_TIMEOUT |
+				    RF_IRQ_FSM_TIMEOUT)) == 0u) {
+			uint32_t extra_us;
+
+			for (extra_us = 0u; extra_us < 5000u; extra_us += 200u) {
+				k_busy_wait(200);
+				pending_irq = TLSR_REG16(0x0f20);
+				if ((pending_irq & (RF_IRQ_TX | RF_IRQ_TX_DS |
+						    RF_IRQ_STX_TIMEOUT |
+						    RF_IRQ_FSM_TIMEOUT)) != 0u) {
+					break;
+				}
+			}
+		}
+
 		if ((pending_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {
 			tlsr8258_tx_diag_put(radio, (0x16u << 24) |
 						 ((uint32_t)tx_seq << 16) |
 						 pending_irq);
 			(void)tlsr8258_radio_op_on_tx_success(&radio->op);
+			tlsr8258_rf_set_rxmode(radio);
+			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+			return tlsr8258_radio_op_result_errno(&radio->op);
+		}
+
+		if ((pending_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
+			/*
+			 * Chip reported a hardware TX timeout explicitly. This
+			 * is a soft failure — the RF state machine is still
+			 * coherent — so skip the rf_off bounce and just restore
+			 * RX mode. Upper layer gets -EIO to retry.
+			 */
+			tlsr8258_tx_diag_put(radio, (0x17u << 24) |
+						 ((uint32_t)tx_seq << 16) |
+						 pending_irq);
+			tlsr8258_radio_op_on_tx_error(&radio->op, -EIO);
 			tlsr8258_rf_set_rxmode(radio);
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 			return tlsr8258_radio_op_result_errno(&radio->op);
