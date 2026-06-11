@@ -223,7 +223,19 @@ static bool zb_platform_bdb_restore_joined_target(void)
 		return false;
 	}
 
-	zb_info_save(NULL);
+	/*
+	 * Skip the synchronous zb_info_save() that the vendor pattern would do
+	 * here. On TLSR8258 + Zephyr NVS, calling zb_info_save during the rejoin
+	 * start hot path crashes the chip (RF IRQs race against the flash
+	 * arch_irq_lock window; RTT log captures end with "rejoin request sent
+	 * ..." and the chip resets ~1-3 s later). The Zephyr-side join chain
+	 * already defers persistence via the 15 s timer scheduled from
+	 * nwk_ed_minimal_complete_join() on a real interview completion, which
+	 * is the only point where saving a joined blob actually matters across
+	 * power cycles. Re-stamping the saved blob from the rejoin path was
+	 * never needed for re-restoring state because the blob persists across
+	 * the rejoin attempt unchanged.
+	 */
 	return true;
 }
 
