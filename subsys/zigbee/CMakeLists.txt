@@ -58,6 +58,7 @@ zephyr_library_sources(
     platform/zephyr/drv_security_zephyr.c
     platform/zephyr/zb_vendor_compat.c
     platform/zephyr/zb_persistence_zephyr.c
+    platform/zephyr/zb_primitive_dispatch.c
 )
 if(NOT CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR
    AND NOT CONFIG_XOSHIRO_RANDOM_GENERATOR
@@ -138,6 +139,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk_neighbor.c
     nwk/nwk_addr_map.c
     nwk/nwk_address_assign.c
+    nwk/nwk_formation.c
     zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
