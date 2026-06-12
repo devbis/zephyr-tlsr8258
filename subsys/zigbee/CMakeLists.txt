@@ -80,6 +80,7 @@ zephyr_library_sources(
     common/ringbuffer.c
     common/zb_minimal_ccm.c
     common/utility.c
+    common/zb_config.c
 )
 
 # MAC layer

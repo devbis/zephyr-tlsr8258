@@ -42,7 +42,10 @@
 zdo_appIndCb_t *zdoAppIndCbLst = NULL;
 zdo_touchLinkCb_t *zdoTouchLinkCb = NULL;
 zdo_attrCfg_t zdo_cfg_attributes = ZDO_ED_MINIMAL_CFG_INIT;
-u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS;
+/* TRANSPORT_NETWORK_KEY_WAIT_TIME is defined in zb_config.c (SDK copy).
+ * zdo_init() below overrides it with ZDO_ED_MINIMAL_TRANSPORT_KEY_WAIT_TIME_MS.
+ */
+extern u32 TRANSPORT_NETWORK_KEY_WAIT_TIME;
 
 static bool g_zdoUnderRejoinMode = FALSE;
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
