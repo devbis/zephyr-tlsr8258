@@ -121,6 +121,18 @@ static bool nwk_router_minimal_resolve_profile(uint8_t *channel,
 	return true;
 }
 
+static bool nwk_router_minimal_has_restored_state(void)
+{
+	/* zb_platform_restore_persistent_state() loads g_zbInfo (with the
+	 * nested macPib/nwkNib) and g_zbNwkCtx from NVS at boot. A fully
+	 * formed router shows joined=1 and a real PAN ID; a fresh device
+	 * has joined=0 or pan=0xffff.
+	 */
+	return g_zbNwkCtx.joined &&
+	       g_zbMacPib.panId != MAC_INVALID_PANID &&
+	       g_zbMacPib.panId != 0U;
+}
+
 uint8_t zb_routerStart(void)
 {
 	zdo_start_device_confirm_t cnf;
@@ -131,6 +143,7 @@ uint8_t zb_routerStart(void)
 	uint16_t short_addr;
 	bool key_provided;
 	bool from_app;
+	bool restored = false;
 	int rc;
 
 	if (nwk_router_minimal_started) {
@@ -138,24 +151,40 @@ uint8_t zb_routerStart(void)
 		return 0U;
 	}
 
-	from_app = nwk_router_minimal_resolve_profile(&channel, &pan_id,
-						      &short_addr, ext_pan_id,
-						      nwk_key, &key_provided);
+	if (nwk_router_minimal_has_restored_state()) {
+		/* Reboot with valid NVS state: keep restored PIB/NIB and
+		 * just reprogram the radio. Skip key generation and skip
+		 * zb_info_save (state is already persisted from the prior
+		 * boot's formation).
+		 */
+		restored = true;
+		channel = g_zbMacPib.phyChannelCur;
+		pan_id = g_zbMacPib.panId;
+		short_addr = g_zbMacPib.shortAddress;
+		memcpy(ext_pan_id, g_zbNIB.extPANId, EXT_ADDR_LEN);
+		from_app = false;
+		key_provided = true; /* keep restored key */
+	} else {
+		from_app = nwk_router_minimal_resolve_profile(&channel, &pan_id,
+							      &short_addr, ext_pan_id,
+							      nwk_key, &key_provided);
 
-	if (!key_provided) {
-		nwk_router_minimal_fill_nwk_key(nwk_key);
+		if (!key_provided) {
+			nwk_router_minimal_fill_nwk_key(nwk_key);
+		}
+
+		nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
+
+		/* Store the network key into the security IB so the APS
+		 * encrypt/decrypt path can find it. Slot 0 / seqNum 0
+		 * mirrors the vendor stack's freshly-formed-network
+		 * convention.
+		 */
+		memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwk_key, SEC_KEY_LEN);
+		ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0U;
+		ss_ib.activeKeySeqNum = 0U;
+		memset(nwk_key, 0, sizeof(nwk_key));
 	}
-
-	nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
-
-	/* Store the network key into the security IB so the APS
-	 * encrypt/decrypt path can find it. Slot 0 / seqNum 0 mirrors the
-	 * vendor stack's freshly-formed-network convention.
-	 */
-	memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwk_key, SEC_KEY_LEN);
-	ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0U;
-	ss_ib.activeKeySeqNum = 0U;
-	memset(nwk_key, 0, sizeof(nwk_key));
 
 	rc = zb_radio_port_set_channel(channel);
 	if (rc != 0) {
@@ -171,10 +200,19 @@ uint8_t zb_routerStart(void)
 
 	nwk_router_minimal_started = true;
 
-	LOG_INF("zb router formed (%s): pan 0x%04x ch %u short 0x%04x key %s",
-		from_app ? "app-profile" : "default",
+	LOG_INF("zb router %s: pan 0x%04x ch %u short 0x%04x%s%s",
+		restored ? "restored" : "formed",
 		pan_id, channel, short_addr,
-		key_provided ? "from-app" : "generated");
+		restored ? "" : (from_app ? " (app-profile)" : " (default)"),
+		restored ? "" : (key_provided ? " key=from-app" : " key=generated"));
+
+	if (!restored) {
+		/* Persist the freshly-formed network so the next boot
+		 * comes back via the restore branch above instead of
+		 * re-forming with a new key.
+		 */
+		zb_info_save(NULL);
+	}
 
 	/* Hand the synthesized confirm to BDB so the application sees a
 	 * successful commissioning event and registers its endpoint.
