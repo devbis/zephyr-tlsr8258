@@ -168,6 +168,13 @@ extern sys_diagnostics_t g_sysDiags;
 #define ZB_64BIT_ADDR_ZERO(addr)        (memset((addr), 0, EXT_ADDR_LEN))
 #define ZB_64BIT_ADDR_COPY(dst, src)    (memcpy((dst), (src), EXT_ADDR_LEN))
 #define ZB_64BIT_ADDR_CMP(a, b)         ((bool)!memcmp((a), (b), EXT_ADDR_LEN))
+
+/* Channel mask covering 802.15.4 channels 11..26 (bits 11..26 set).
+ * Mirrors tl_zigbee_sdk zigbee/common/includes/zb_common.h.
+ */
+#ifndef ZB_TRANSCEIVER_ALL_CHANNELS_MASK
+#define ZB_TRANSCEIVER_ALL_CHANNELS_MASK   0x07FFF800UL
+#endif
 #define ZB_EXTPANID_IS_ZERO             ZB_IS_64BIT_ADDR_ZERO
 #define ZB_EXTPANID_COPY                ZB_64BIT_ADDR_COPY
 #define ZB_EXTPANID_CMP                 ZB_64BIT_ADDR_CMP
