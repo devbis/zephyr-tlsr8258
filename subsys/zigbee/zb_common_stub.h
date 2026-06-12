@@ -27,6 +27,31 @@ typedef void (*tl_zb_callback_t)(void *arg);
 u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg);
 #define TL_SCHEDULE_TASK tl_zbTaskPost
 
+/* Layer-queue identifiers used by the SDK macros wrapping
+ * tl_zbPrimitivePost(layerQ, primitive, arg). Matches
+ * tl_zigbee_sdk/zigbee/common/includes/zb_task_queue.h.
+ */
+enum {
+	TL_Q_EV_TASK = 0,
+	TL_Q_MAC2NWK,
+	TL_Q_NWK2MAC,
+	TL_Q_HIGH2NWK,
+	TL_Q_NWK2HIGH,
+	TL_Q_TYPE_MAX,
+};
+
+u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg);
+
+/* NWK protocol version (mirrors tl_zigbee_sdk
+ * zigbee/common/includes/zb_config.h).
+ */
+#ifndef ZB_PROTOCOL_VERSION
+#define ZB_PROTOCOL_VERSION    2
+#endif
+
+extern const u8 g_zero_addr[8];
+extern u32 g_secondCnt;
+
 /* Generic return codes used broadly across SDK sources. */
 enum {
 	RET_OK = 0,

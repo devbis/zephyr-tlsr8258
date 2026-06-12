@@ -27,7 +27,9 @@
  */
 
 #include "zb_common_stub.h"
+#include "mac/includes/mac_phy.h"
 #include "nwk/includes/nwk.h"
+#include "nwk/includes/nwk_addr_map.h"
 #include "nwk/includes/nwk_neighbor.h"
 
 #include <stdbool.h>
@@ -265,6 +267,45 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborEntryGetFromIdx(u8 idx)
 	}
 
 	return NULL;
+}
+
+tl_zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(u16 shortAddr)
+{
+	u16 idx;
+
+	if (tl_idxByShortAddr(&idx, shortAddr) != RET_OK) {
+		return NULL;
+	}
+
+	return tl_zbNeighborTableSearchFromAddrmapIdx(idx);
+}
+
+tl_zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(u16 shortAddr)
+{
+	tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
+	u8 outgoingCost;
+	u8 cost;
+
+	if (entry == NULL) {
+		return NULL;
+	}
+
+	if ((entry->deviceType == NWK_DEVICE_TYPE_ED) &&
+	    (entry->relationship == NEIGHBOR_IS_CHILD)) {
+		return entry;
+	}
+
+	outgoingCost = entry->outgoingCost;
+	if (outgoingCost == 0U) {
+		return NULL;
+	}
+
+	cost = rf_lqi2cost(entry->lqi);
+	if (cost < outgoingCost) {
+		cost = outgoingCost;
+	}
+
+	return (cost < NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD) ? entry : NULL;
 }
 
 /* ------------------------------------------------------------------ */
