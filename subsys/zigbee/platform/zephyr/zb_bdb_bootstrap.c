@@ -11,11 +11,19 @@ LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 
+#if ZB_ED_ROLE
+#define ZB_PLATFORM_BDB_ED_RESTORE 1
+#else
+#define ZB_PLATFORM_BDB_ED_RESTORE 0
+#endif
+
 #if defined(CONFIG_ZIGBEE_BDB)
+#if ZB_PLATFORM_BDB_ED_RESTORE
 extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
 						 const u8 *extPanId, const u8 *nwkKey,
 						 const u8 *tcAddr);
 extern void tl_zbNwkEdMinimalOperationAbort(void);
+#endif
 extern void bdb_outgoingFrameCountUpdate(u8 repower);
 extern void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
@@ -94,6 +102,7 @@ static af_simple_descriptor_t zb_shell_simple_desc = {
 static struct zb_platform_bdb_fixed_target zb_bootstrap_target;
 static struct zb_platform_bdb_join_profile zb_bootstrap_profile;
 
+#if ZB_PLATFORM_BDB_ED_RESTORE
 static bool zb_platform_bdb_key_is_set(const u8 *key)
 {
 	if (key == NULL) {
@@ -238,10 +247,13 @@ static bool zb_platform_bdb_restore_joined_target(void)
 	 */
 	return true;
 }
+#endif
 
 bool zb_platform_bdb_service_persistent_rejoin(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
+	return false;
+#elif !ZB_PLATFORM_BDB_ED_RESTORE
 	return false;
 #else
 	if (!zb_bdb_restore_joined_target_pending) {
@@ -267,6 +279,8 @@ bool zb_platform_bdb_service_persistent_rejoin(void)
 void zb_platform_bdb_abandon_persistent_rejoin(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
+	return;
+#elif !ZB_PLATFORM_BDB_ED_RESTORE
 	return;
 #else
 	LOG_WRN("zb bdb restore: abandoning persistent rejoin, falling back to fresh commissioning");
@@ -295,6 +309,9 @@ void zb_platform_bdb_abandon_persistent_rejoin(void)
 
 static void zb_platform_bdb_apply_fixed_target(void)
 {
+#if !ZB_PLATFORM_BDB_ED_RESTORE
+	return;
+#else
 	const u8 *tc_addr = NULL;
 
 	if (g_zbNwkCtx.joined) {
@@ -325,6 +342,7 @@ static void zb_platform_bdb_apply_fixed_target(void)
 	}
 	g_bdbAttrs.primaryChannelSet = ((u32)1U << zb_bootstrap_target.channel);
 	g_bdbAttrs.secondaryChannelSet = 0U;
+#endif
 }
 
 static void zb_platform_bdb_apply_join_profile(void)
@@ -348,8 +366,10 @@ static void zb_platform_bdb_apply_join_profile(void)
 	}
 
 	if (zb_bootstrap_profile.tc_addr_valid) {
+#if ZB_PLATFORM_BDB_ED_RESTORE
 		ss_securityModeSet(SS_SEMODE_CENTRALIZED);
 		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, zb_bootstrap_profile.tc_addr);
+#endif
 	}
 }
 
@@ -383,10 +403,14 @@ int zb_platform_bdb_init_default(void)
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
 
+#if ZB_PLATFORM_BDB_ED_RESTORE
 	zb_platform_bdb_drop_stale_joined_state_if_needed();
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_bdb_restore_joined_target_pending =
 		g_zbNwkCtx.joined && zb_platform_bdb_has_valid_join_context();
+#else
+	zb_bdb_restore_joined_target_pending = false;
+#endif
 
 	/* Let the application register its endpoint and initialize ZCL.
 	 * This must run before BDB attribute init so g_bdbCtx.simpleDesc

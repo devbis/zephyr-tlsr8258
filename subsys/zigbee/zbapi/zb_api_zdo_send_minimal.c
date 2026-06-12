@@ -1077,5 +1077,9 @@ u16 zb_getParentShortAddr(void)
 
 device_type_t zb_getDeviceType(void)
 {
+#if ZB_ROUTER_ROLE
+	return DEVICE_TYPE_ROUTER;
+#else
 	return DEVICE_TYPE_END_DEVICE;
+#endif
 }
