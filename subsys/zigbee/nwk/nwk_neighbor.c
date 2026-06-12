@@ -280,6 +280,17 @@ tl_zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(u16 shortAddr)
 	return tl_zbNeighborTableSearchFromAddrmapIdx(idx);
 }
 
+tl_zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr)
+{
+	u16 idx;
+
+	if (tl_idxByExtAddr(&idx, extAddr) != RET_OK) {
+		return NULL;
+	}
+
+	return tl_zbNeighborTableSearchFromAddrmapIdx(idx);
+}
+
 tl_zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(u16 shortAddr)
 {
 	tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);

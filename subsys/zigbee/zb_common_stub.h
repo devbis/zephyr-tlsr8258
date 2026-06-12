@@ -9,12 +9,37 @@
 #include <string.h>
 #include <zephyr/random/random.h>
 
-/* Forward declare zb_buf_t - full definition is in SDK zb_buffer.h (closed source) */
-typedef struct zb_buf_s zb_buf_t;
-
 #ifndef ZB_BUF_SIZE
 #define ZB_BUF_SIZE 164
 #endif
+
+/* zb_buf_t / zb_buf_hdr_t mirror the SDK layout (tl_zigbee_sdk
+ * zigbee/common/includes/zb_buffer.h). The struct stays binary
+ * compatible with libzigbee's zb_buffer.c so router NWK sources can
+ * reach into buf->hdr.handle / buf->hdr.used the way the vendor code
+ * expects.
+ */
+typedef struct {
+	u8 id;              /* primitive id */
+	u8 handle;
+	s8 rssi;
+	u8 used:1;
+	u8 macTxFifo:1;
+	u8 leaveRejoin:1;
+	u8 active:1;        /* only for mac command buffer */
+	u8 pending:1;       /* only for endDev: parent has pending data */
+	u8 rejoinStartAgain:1;
+	u8 resvHdr:2;
+} zb_buf_hdr_t;
+
+typedef struct zb_buf_s {
+	u8  buf[ZB_BUF_SIZE];
+	zb_buf_hdr_t hdr;
+	struct zb_buf_s *next;
+	u32 allocCnt;
+	u32 freeCnt;
+} zb_buf_t;
+
 #ifndef ZB_BUF_POOL_NUM
 #define ZB_BUF_POOL_NUM 18
 #endif

@@ -141,6 +141,10 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk_address_assign.c
     nwk/nwk_formation.c
     nwk/nwk_pend.c
+    nwk/nwk_addr_conflict.c
+    nwk/nwk_panid_conflict.c
+    nwk/nwk_endDev_timeout.c
+    nwk/nwk_leave.c
     zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
