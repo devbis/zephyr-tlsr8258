@@ -67,6 +67,17 @@ enum {
 
 u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg);
 
+/* Task queue entry mirroring the SDK's tl_zb_task_t. Stays
+ * binary-compatible with libzigbee's zb_task_queue.c so ported NWK
+ * sources can pop entries from the queue the way the vendor expects.
+ */
+typedef struct tl_zb_task_s {
+	tl_zb_callback_t tlCb;
+	void *data;
+} tl_zb_task_t;
+
+tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo);
+
 /* NWK protocol version (mirrors tl_zigbee_sdk
  * zigbee/common/includes/zb_config.h).
  */
