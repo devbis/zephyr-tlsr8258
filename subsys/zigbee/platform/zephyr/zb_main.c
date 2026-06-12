@@ -144,6 +144,20 @@ static void zb_core_bootstrap_once(void)
 		zb_nwk_ed_trace[15] = 0xA5A00107U;
 		(void)zb_platform_restore_persistent_state();
 		zb_nwk_ed_trace[15] = 0xA5A00108U;
+		/*
+		 * Boot-time snapshot of NVS-restored Zigbee state. Lets us tell
+		 * from the very first RTT lines whether the chip thinks it's
+		 * already in a network (rejoin path) or starting fresh (steering
+		 * from scratch). Without this we have to read trace counters
+		 * post-mortem to disambiguate.
+		 */
+		LOG_INF("zb nvs restore: joined=%u short=0x%04x pan=0x%04x "
+			"coord=0x%04x nwk_addr=0x%04x",
+			(unsigned)g_zbNwkCtx.joined,
+			(unsigned)g_zbMacPib.shortAddress,
+			(unsigned)g_zbMacPib.panId,
+			(unsigned)g_zbMacPib.coordShortAddress,
+			(unsigned)g_zbNIB.nwkAddr);
 		zb_platform_apply_runtime_ieee_addr();
 		zb_nwk_ed_trace[15] = 0xA5A00109U;
 		rf_init();
