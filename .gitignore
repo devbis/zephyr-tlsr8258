@@ -29,6 +29,7 @@ build*/
 
 # Host-compiled test binaries
 tests/subsys/zigbee/host_shell_bootstrap/host_bootstrap_test
+tests/subsys/zigbee/host_shell_router_bootstrap/host_router_bootstrap_test
 !tests/drivers/build_all
 !scripts/pylib/build_helpers
 cscope.*
