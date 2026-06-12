@@ -79,6 +79,28 @@ volatile u32 zb_thread_heartbeat[5] = {0x48425452U};
  */
 #define ZB_PERSISTENT_REJOIN_GIVEUP_MS 12000U
 
+/*
+ * Link watchdog: if the device thinks it is joined but TX activity stops
+ * succeeding for an extended period (a parent that no longer accepts our
+ * frames, MAC/security state desync after a debugger halt, etc.), trigger
+ * an NWK Rejoin. Rejoin preserves the network key and joined credentials,
+ * just refreshes the parent link — exactly what we want after probe-rs
+ * disconnect leaves the chip in a "zombie joined" state.
+ */
+#define ZB_LINK_BAD_TX_FAIL_WINDOW_MS  30000U   /* 30 s of no progress */
+#define ZB_LINK_BAD_TX_FAIL_DELTA      8U       /* and at least N new failures */
+#define ZB_LINK_REJOIN_BACKOFF_MS      60000U   /* don't re-fire within 60 s */
+#define ZB_LINK_REJOIN_SCAN_DURATION   3U       /* short scan: 60ms × 16 ch */
+
+extern bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff);
+extern bool zb_isDeviceJoinedNwk(void);
+
+static uint32_t zb_link_last_tx_success_count;
+static uint32_t zb_link_last_tx_success_ms;
+static uint32_t zb_link_last_tx_fail_snapshot;
+static uint32_t zb_link_last_rejoin_attempt_ms;
+static bool zb_link_baseline_set;
+
 void __weak zb_platform_app_bootstrap_ready(void)
 {
 }
@@ -291,6 +313,67 @@ static void zb_requeue_commissioning_if_needed(void)
 	zb_nwk_ed_trace[15] = 0xA5B0000CU;
 }
 
+static void zb_link_watchdog_tick(void)
+{
+	struct zb_platform_radio_diag_snapshot snap;
+	uint32_t now_ms;
+
+	if (!zb_bootstrap_done || !zb_isDeviceJoinedNwk()) {
+		return;
+	}
+	if (zb_platform_radio_diag_get(&snap) < 0) {
+		return;
+	}
+
+	now_ms = k_uptime_get_32();
+
+	/* First call after join → seed the baseline, no decision yet. */
+	if (!zb_link_baseline_set) {
+		zb_link_last_tx_success_count = snap.tx_success;
+		zb_link_last_tx_success_ms = now_ms;
+		zb_link_last_tx_fail_snapshot = snap.tx_failures;
+		zb_link_baseline_set = true;
+		return;
+	}
+
+	/* Successful TX since last tick → bookmark and reset window. */
+	if (snap.tx_success != zb_link_last_tx_success_count) {
+		zb_link_last_tx_success_count = snap.tx_success;
+		zb_link_last_tx_success_ms = now_ms;
+		zb_link_last_tx_fail_snapshot = snap.tx_failures;
+		return;
+	}
+
+	uint32_t since_last_success_ms = now_ms - zb_link_last_tx_success_ms;
+	uint32_t fail_delta = snap.tx_failures - zb_link_last_tx_fail_snapshot;
+
+	if (fail_delta < ZB_LINK_BAD_TX_FAIL_DELTA) {
+		return;
+	}
+	if (since_last_success_ms < ZB_LINK_BAD_TX_FAIL_WINDOW_MS) {
+		return;
+	}
+	if ((zb_link_last_rejoin_attempt_ms != 0U) &&
+	    ((now_ms - zb_link_last_rejoin_attempt_ms) < ZB_LINK_REJOIN_BACKOFF_MS)) {
+		return;
+	}
+
+	LOG_WRN("zb link watchdog: joined but no TX success in %u ms "
+		"(failures+=%u) — triggering NWK rejoin",
+		(unsigned)since_last_success_ms, (unsigned)fail_delta);
+
+	zb_link_last_rejoin_attempt_ms = now_ms;
+	/* Reset baseline so the next window is measured from now. */
+	zb_link_last_tx_fail_snapshot = snap.tx_failures;
+	zb_nwk_ed_trace[11] = 0xA1B0FF00U | (fail_delta & 0xFFU);
+
+	uint32_t scan_mask = (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) -
+			      ((u32)1U << TL_ZB_MAC_CHANNEL_START));
+	if (!tl_zbNwkEdMinimalRejoinStart(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION, false)) {
+		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
+	}
+}
+
 static void zb_thread_fn(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -331,6 +414,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		zb_process_deferred_persistent_rejoin();
 		zb_process_deferred_commissioning();
 		zb_requeue_commissioning_if_needed();
+		zb_link_watchdog_tick();
 		zb_thread_heartbeat[4]++;
 		if (zb_commissioning_pending) {
 			zb_nwk_ed_trace[15] = 0xA5B0000BU;
