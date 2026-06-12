@@ -17,6 +17,9 @@ extern void nwkReportCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u
 extern u32 getPassiveAckTimeout(void);
 
 extern nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(u16 dstAddr);
+extern nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(u16 dstAddr);
+extern nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr);
+extern void nwkRoutingTabEntryClear(nwk_routingTabEntry_t *entry);
 extern void nwkRoutingTabEntryDstDel(u16 dstAddr);
 extern u16 nwkRoutingTabGetNextHop(nwk_routingTabEntry_t *entry);
 extern tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForChildEndDev(void *entry);
