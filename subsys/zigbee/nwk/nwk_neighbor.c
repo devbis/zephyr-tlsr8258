@@ -1,0 +1,389 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Neighbor / addition-neighbor table maintenance for the router build.
+ *
+ * Adapted from libzigbee/src/nwk_neighbor.c. The vendor file is ~670
+ * LOC and tightly coupled to the rest of the libzigbee runtime — most
+ * notably to nwk_addr_map.c (tl_zbshortAddrByIdx, tl_idxByShortAddr,
+ * …), aps_bindingTblExist, rf_lqi2cost, nwk_endDev_timeout, and the
+ * vendor NV index/itemIfno_t persistence layout.
+ *
+ * This port intentionally keeps the SUBSET that other already-ported
+ * TUs reference (nwk_brc.c, the upcoming nwk_formation.c):
+ *
+ *   * table reset / free-list management
+ *   * row counters (normalNeighborNum, childrenNum, router-valid count)
+ *   * forward iterators used by broadcast retransmit / formation
+ *   * addition-neighbor table API consumed by formation channel/PAN
+ *     selection
+ *
+ * Symbols that depend on the address map (tl_zbNeighborTableSearchFromExtAddr,
+ * tl_zbNeighborTableUpdate full path, tl_zbNeighborTableDelete, the
+ * NV-restore tl_zbNeighborTableInit, ZBHCI-shaped tl_childNodesListGet)
+ * are deferred to the address-map port that lands separately. Their
+ * absence is fine — the static-formation router does not yet touch
+ * them, and --gc-sections drops the unused entry points from the
+ * binary.
+ */
+
+#include "zb_common_stub.h"
+#include "nwk/includes/nwk.h"
+#include "nwk/includes/nwk_neighbor.h"
+
+#include <stdbool.h>
+#include <string.h>
+
+#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+
+static inline bool neighbor_entry_used(const tl_zb_normal_neighbor_entry_t *entry)
+{
+	return (entry != NULL) && (entry->used != 0);
+}
+
+static inline bool neighbor_is_child_rel(u8 relationship)
+{
+	return (relationship == NEIGHBOR_IS_CHILD) ||
+	       (relationship == NEIGHBOR_IS_UNAUTH_CHILD);
+}
+
+static u8 neighbor_active_count_update(void)
+{
+	u8 count = 0;
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+
+	while (neighbor_entry_used(entry)) {
+		count++;
+		entry = entry->activeNext;
+	}
+
+	g_zb_neighborTbl.normalNeighborNum = count;
+	return count;
+}
+
+void tl_nebListAdd(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
+{
+	if (freeList) {
+		entry->freeNext = g_zb_neighborTbl.freeHead;
+		g_zb_neighborTbl.freeHead = entry;
+	} else {
+		entry->activeNext = g_zb_neighborTbl.activeHead;
+		g_zb_neighborTbl.activeHead = entry;
+	}
+}
+
+void tl_nebListDelete(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
+{
+	tl_zb_normal_neighbor_entry_t **head;
+	tl_zb_normal_neighbor_entry_t *prev = NULL;
+	tl_zb_normal_neighbor_entry_t *cur;
+
+	if (entry == NULL) {
+		return;
+	}
+
+	head = freeList ? &g_zb_neighborTbl.freeHead : &g_zb_neighborTbl.activeHead;
+	cur = *head;
+
+	while (cur != NULL) {
+		tl_zb_normal_neighbor_entry_t *next =
+			freeList ? cur->freeNext : cur->activeNext;
+
+		if (cur == entry) {
+			if (prev == NULL) {
+				*head = next;
+			} else if (freeList) {
+				prev->freeNext = next;
+			} else {
+				prev->activeNext = next;
+			}
+			return;
+		}
+
+		prev = cur;
+		cur = next;
+	}
+}
+
+void tl_zbNeighborTableRst(void)
+{
+	memset(&g_zb_neighborTbl, 0, sizeof(g_zb_neighborTbl));
+	g_zb_neighborTbl.activeHead = NULL;
+
+	if (TL_ZB_NEIGHBOR_TABLE_SIZE != 0U) {
+		g_zb_neighborTbl.freeHead = &g_zb_neighborTbl.neighborTbl[0];
+
+		for (u8 i = 0; i < TL_ZB_NEIGHBOR_TABLE_SIZE; i++) {
+			tl_zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[i];
+
+			entry->relationship = NEIGHBOR_IS_NONE_OF_ABOVE;
+			entry->used = 0;
+			entry->activeNext = NULL;
+			entry->freeNext =
+				(i + 1U < TL_ZB_NEIGHBOR_TABLE_SIZE)
+					? &g_zb_neighborTbl.neighborTbl[i + 1U]
+					: NULL;
+		}
+	}
+
+	for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+		g_zb_neighborTbl.additionNeighborTbl[i].shortAddr = 0xffffU;
+		memset(g_zb_neighborTbl.additionNeighborTbl[i].extAddr, 0xff, EXT_ADDR_LEN);
+	}
+
+	g_zb_neighborTbl.additionNeighborNum = 0;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborFreeEntryGet(void)
+{
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.freeHead;
+
+	if (entry == NULL) {
+		return NULL;
+	}
+
+	if (entry->used) {
+		return NULL;
+	}
+
+	entry->relationship = NEIGHBOR_IS_NONE_OF_ABOVE;
+	return entry;
+}
+
+u8 tl_zbNeighborTableNumGet(void)
+{
+	return neighbor_active_count_update();
+}
+
+u8 tl_zbNeighborTableChildEDNumGet(void)
+{
+	u8 count = 0;
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+
+	while (neighbor_entry_used(entry)) {
+		if ((entry->deviceType == NWK_DEVICE_TYPE_ED) &&
+		    neighbor_is_child_rel(entry->relationship)) {
+			count++;
+		}
+		entry = entry->activeNext;
+	}
+
+	g_zb_neighborTbl.childrenNum = count;
+	return count;
+}
+
+u8 tl_zbNeighborTableRouterValidNumGet(void)
+{
+	u8 count = 0;
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+
+	while (neighbor_entry_used(entry)) {
+		if (((entry->deviceType == NWK_DEVICE_TYPE_COORDINATOR) ||
+		     (entry->deviceType == NWK_DEVICE_TYPE_ROUTER)) &&
+		    (entry->outgoingCost != 0U)) {
+			count++;
+		}
+		entry = entry->activeNext;
+	}
+
+	return count;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchForParent(void)
+{
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+
+	while (neighbor_entry_used(entry)) {
+		if (entry->relationship == NEIGHBOR_IS_PARENT) {
+			return entry;
+		}
+		entry = entry->activeNext;
+	}
+
+	return NULL;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForChildEndDev(void *entry)
+{
+	tl_zb_normal_neighbor_entry_t *cur =
+		(entry == NULL)
+			? g_zb_neighborTbl.activeHead
+			: ((tl_zb_normal_neighbor_entry_t *)entry)->activeNext;
+
+	while (neighbor_entry_used(cur)) {
+		if ((cur->deviceType == NWK_DEVICE_TYPE_ED) &&
+		    neighbor_is_child_rel(cur->relationship)) {
+			return cur;
+		}
+		cur = cur->activeNext;
+	}
+
+	return NULL;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForRouter(void *entry)
+{
+	tl_zb_normal_neighbor_entry_t *cur =
+		(entry == NULL)
+			? g_zb_neighborTbl.activeHead
+			: ((tl_zb_normal_neighbor_entry_t *)entry)->activeNext;
+
+	while (neighbor_entry_used(cur)) {
+		if (cur->deviceType == NWK_DEVICE_TYPE_ROUTER) {
+			return cur;
+		}
+		cur = cur->activeNext;
+	}
+
+	return NULL;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromAddrmapIdx(u16 idx)
+{
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+
+	while (neighbor_entry_used(entry)) {
+		if (entry->addrmapIdx == idx) {
+			return entry;
+		}
+		entry = entry->activeNext;
+	}
+
+	return NULL;
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborEntryGetFromIdx(u8 idx)
+{
+	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	u8 i = 0;
+
+	while (neighbor_entry_used(entry)) {
+		if (i == idx) {
+			return entry;
+		}
+		i++;
+		entry = entry->activeNext;
+	}
+
+	return NULL;
+}
+
+/* ------------------------------------------------------------------ */
+/* Addition-neighbor table (beacon-scan accumulator) — used by formation. */
+/* ------------------------------------------------------------------ */
+
+void tl_zbAdditionNeighborReset(void)
+{
+	for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+		g_zb_neighborTbl.additionNeighborTbl[i].shortAddr = 0xffffU;
+		memset(g_zb_neighborTbl.additionNeighborTbl[i].extAddr, 0xff, EXT_ADDR_LEN);
+	}
+
+	g_zb_neighborTbl.additionNeighborNum = 0;
+}
+
+tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtAddr(
+	const tl_zb_addition_neighbor_entry_t *key)
+{
+	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		tl_zb_addition_neighbor_entry_t *entry =
+			&g_zb_neighborTbl.additionNeighborTbl[i];
+
+		if ((memcmp(entry->extAddr, key->extAddr, EXT_ADDR_LEN) == 0) &&
+		    (memcmp(entry->extPanId, key->extPanId, EXT_ADDR_LEN) == 0)) {
+			return entry;
+		}
+	}
+
+	return NULL;
+}
+
+tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromShortAddr(
+	const tl_zb_addition_neighbor_entry_t *key)
+{
+	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		tl_zb_addition_neighbor_entry_t *entry =
+			&g_zb_neighborTbl.additionNeighborTbl[i];
+
+		if ((entry->shortAddr == key->shortAddr) &&
+		    (memcmp(entry->extPanId, key->extPanId, EXT_ADDR_LEN) == 0)) {
+			return entry;
+		}
+	}
+
+	return NULL;
+}
+
+u8 tl_zbAdditionNeighborTableUpdate(tl_zb_addition_neighbor_entry_t *entry)
+{
+	tl_zb_addition_neighbor_entry_t *dst = NULL;
+
+	if (entry->addrMode == ADDR_MODE_SHORT) {
+		dst = AdditionNeighborEntryGetFromShortAddr(entry);
+	} else if (entry->addrMode == ADDR_MODE_EXT) {
+		dst = AdditionNeighborEntryGetFromExtAddr(entry);
+	}
+
+	if (dst == NULL) {
+		if (g_zb_neighborTbl.additionNeighborNum <
+		    TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE) {
+			dst = &g_zb_neighborTbl.additionNeighborTbl
+				       [g_zb_neighborTbl.additionNeighborNum++];
+		} else {
+			u8 depth = entry->depth;
+
+			for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+				tl_zb_addition_neighbor_entry_t *cur =
+					&g_zb_neighborTbl.additionNeighborTbl[i];
+
+				if (cur->depth > depth) {
+					dst = cur;
+					break;
+				}
+			}
+
+			if (dst == NULL) {
+				return 0xc7;
+			}
+		}
+	}
+
+	memcpy(dst, entry, sizeof(*entry));
+	return RET_OK;
+}
+
+u8 tl_zbAdditionNeighborTableNumGet(void)
+{
+	return g_zb_neighborTbl.additionNeighborNum;
+}
+
+tl_zb_addition_neighbor_entry_t *tl_zbAdditionNeighborEntryGetFromIdx(u8 idx)
+{
+	return &g_zb_neighborTbl.additionNeighborTbl[idx];
+}
+
+tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtPanId(extPANId_t extPanId)
+{
+	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		tl_zb_addition_neighbor_entry_t *entry =
+			&g_zb_neighborTbl.additionNeighborTbl[i];
+
+		if ((memcmp(entry->extPanId, extPanId, EXT_ADDR_LEN) == 0) &&
+		    entry->permitJoining && entry->potentialParent &&
+		    (entry->lqi == 0U)) {
+			return entry;
+		}
+	}
+
+	return NULL;
+}
+
+u8 tl_neighborFrameCntReset(void)
+{
+	for (u8 i = 0; i < TL_ZB_NEIGHBOR_TABLE_SIZE; i++) {
+		g_zb_neighborTbl.neighborTbl[i].incomingFrameCnt = 0;
+	}
+
+	return 0;
+}
+
+#endif /* ZB_ROUTER_ROLE */
