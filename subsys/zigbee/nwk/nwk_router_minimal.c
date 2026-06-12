@@ -47,6 +47,13 @@ extern zdo_appIndCb_t *zdoAppIndCbLst;
 
 static bool nwk_router_minimal_started;
 
+static int nwk_router_minimal_deferred_save_timer(void *arg)
+{
+	ARG_UNUSED(arg);
+	zb_info_save(NULL);
+	return -1; /* one-shot */
+}
+
 static void nwk_router_minimal_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
 {
 	/* drv_u32Rand() is the vendor RNG hook wired through to
@@ -209,9 +216,14 @@ uint8_t zb_routerStart(void)
 	if (!restored) {
 		/* Persist the freshly-formed network so the next boot
 		 * comes back via the restore branch above instead of
-		 * re-forming with a new key.
+		 * re-forming with a new key. Defer ~15 s; on TLSR8258
+		 * the synchronous flash write races with the radio IRQ
+		 * window and can wedge the chip (see ED rejoin restore
+		 * fix: 47c59f7f6 "drop synchronous zb_info_save from
+		 * rejoin restore").
 		 */
-		zb_info_save(NULL);
+		(void)TL_ZB_TIMER_SCHEDULE(nwk_router_minimal_deferred_save_timer,
+					   NULL, 15000U);
 	}
 
 	/* Hand the synthesized confirm to BDB so the application sees a
