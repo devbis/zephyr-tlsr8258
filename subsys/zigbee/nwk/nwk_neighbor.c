@@ -438,4 +438,14 @@ u8 tl_neighborFrameCntReset(void)
 	return 0;
 }
 
+/* Stub for the vendor NV-restore entrypoint: the Zephyr port does
+ * its own NVS restore from zb_persistence_zephyr.c, so all this
+ * stub needs to do is clear the in-RAM table. The full vendor
+ * implementation will land when the address-map NV layout is ported.
+ */
+void tl_zbNeighborTableInit(void)
+{
+	tl_zbNeighborTableRst();
+}
+
 #endif /* ZB_ROUTER_ROLE */

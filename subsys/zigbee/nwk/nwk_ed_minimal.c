@@ -2074,10 +2074,16 @@ bool tl_zbNwkEdMinimalGetFixedJoinTarget(u8 *channel, u16 *panId, u16 *shortAddr
 	return TRUE;
 }
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build provides tl_zbNwkInit from the libzigbee-derived nwk.c
+ * port (which initializes every router table). ED keeps the
+ * lightweight version below.
+ */
 void tl_zbNwkInit(u8 coldReset)
 {
 	nwk_ed_minimal_reset(coldReset ? FALSE : TRUE);
 }
+#endif
 
 #if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
 /* Router build pulls tl_zbNwkNlmeResetRequestHandler from the
@@ -2097,9 +2103,15 @@ void tl_zbNwkNlmeResetRequestHandler(void *arg)
 }
 #endif
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build pulls tl_zbNwkTaskProc from the libzigbee-derived
+ * nwk.c port (drains the per-layer task queues). ED has no per-layer
+ * primitive queue so the function is a no-op here.
+ */
 void tl_zbNwkTaskProc(void)
 {
 }
+#endif
 
 static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *evt)
 {

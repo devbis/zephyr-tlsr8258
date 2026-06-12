@@ -16,6 +16,33 @@ extern void nwkReportCmdHandler(void *arg, nwkCmd_t *cmd);
 extern void nwkReportCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
 extern u32 getPassiveAckTimeout(void);
 
+/* Scan/start confirm handlers (defined in nwk_formation.c,
+ * nwk_discovery.c, nwk_join.c). Referenced by the central NWK
+ * dispatcher in nwk.c.
+ */
+extern void nwk_formationScanCnfHandler(void *arg);
+extern void nwk_formationStartCnfHandler(void *arg);
+extern void nwk_discoveryScanCnfHandler(void *arg);
+extern void nwk_rejoinScanCnfHandler(void *arg);
+extern void nwk_directJoinScanCnfHandler(void *arg);
+extern void nwk_edScanCnfHandler(void *arg);
+extern void nwk_startRouterCnfHandler(void *arg);
+extern void nwk_panIdConflictCnfHandler(void *arg);
+
+/* Table initializers used by tl_zbNwkInit. */
+extern void nwkBrcTransTabInit(void);
+extern void nwkRouteDiscTabInit(void);
+extern void nwkRoutingTabInit(void);
+extern void nwkTxDataPendTabInit(void);
+extern void tl_zbNeighborTableRst(void);
+extern void tl_zbNwkAddrMapInit(void);
+
+/* MAC/NWK initial constants defined in subsys/zigbee/common/zb_config.c. */
+struct tl_zb_mac_pib_t_; /* opaque fwd: real type in mac headers */
+struct nwk_nib_t_;
+extern const tl_zb_mac_pib_t macPibDefault;
+extern const nwk_nib_t nwkNibDefault;
+
 extern nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(u16 dstAddr);
 extern nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(u16 dstAddr);
 extern nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr);
