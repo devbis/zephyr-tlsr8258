@@ -87,7 +87,7 @@ volatile u32 zb_thread_heartbeat[5] = {0x48425452U};
  * just refreshes the parent link — exactly what we want after probe-rs
  * disconnect leaves the chip in a "zombie joined" state.
  */
-#define ZB_LINK_BAD_TX_FAIL_WINDOW_MS  30000U   /* 30 s of no progress */
+#define ZB_LINK_BAD_TX_FAIL_WINDOW_MS  10000U   /* 10 s of no progress */
 #define ZB_LINK_BAD_TX_FAIL_DELTA      8U       /* and at least N new failures */
 #define ZB_LINK_REJOIN_BACKOFF_MS      60000U   /* don't re-fire within 60 s */
 #define ZB_LINK_REJOIN_SCAN_DURATION   3U       /* short scan: 60ms × 16 ch */
