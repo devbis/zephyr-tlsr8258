@@ -2079,6 +2079,11 @@ void tl_zbNwkInit(u8 coldReset)
 	nwk_ed_minimal_reset(coldReset ? FALSE : TRUE);
 }
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build pulls tl_zbNwkNlmeResetRequestHandler from the
+ * libzigbee-derived nwk_nlme.c port (which dispatches MAC reset
+ * primitives). ED keeps the lightweight version below.
+ */
 void tl_zbNwkNlmeResetRequestHandler(void *arg)
 {
 	nlme_reset_req_t *pReq = (nlme_reset_req_t *)arg;
@@ -2090,6 +2095,7 @@ void tl_zbNwkNlmeResetRequestHandler(void *arg)
 		zdoAppIndCbLst->zdpResetCnfCb(&cnf);
 	}
 }
+#endif
 
 void tl_zbNwkTaskProc(void)
 {
