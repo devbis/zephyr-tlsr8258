@@ -16,13 +16,12 @@ if ZIGBEE
 choice ZIGBEE_ROLE
 	prompt "Zigbee device role"
 	default ZIGBEE_ED
-	help
-	  End Device is the only runtime currently wired in subsys/zigbee.
-	  Router/Coordinator role options will be re-enabled when their
-	  runtime implementation is available.
 
 config ZIGBEE_ED
-	bool "End Device (currently supported role)"
+	bool "End Device"
+
+config ZIGBEE_ROUTER
+	bool "Router"
 
 endchoice
 
