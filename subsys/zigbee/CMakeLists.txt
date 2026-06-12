@@ -132,6 +132,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk_schedule_fallback.c
     nwk/nwk_ed_minimal.c
     nwk/nwk_router_minimal.c
+    nwk/nwk_permit_joining.c
     zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
