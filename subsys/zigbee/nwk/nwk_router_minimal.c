@@ -1,42 +1,153 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Zephyr-native router-mode NWK runtime stub.
+ * Zephyr-native router-mode NWK runtime — minimal "static formation" path.
  *
- * Companion to nwk_ed_minimal.c. Provides the symbols invoked by the
- * Zephyr BDB layer when CONFIG_ZIGBEE_ROUTER=y. The actual router-side
- * commissioning state machine (NLME-NETWORK-FORMATION, permit-join,
- * link-status broadcasts, child management) is being ported in stages.
+ * Companion to nwk_ed_minimal.c. Provides the entry point that BDB calls
+ * when CONFIG_ZIGBEE_ROUTER=y. The current implementation performs a
+ * static, single-shot formation: pick (or take) a fixed PAN ID,
+ * extended PAN ID, NWK key and short address, push them into the MAC
+ * PIB / NWK NIB / security IB, configure the radio filter chain, and
+ * signal BDB success.
+ *
+ * This is intentionally NOT a full router runtime: it does not run a
+ * MAC ED/active scan, does not transmit beacons, does not respond to
+ * AssocRequest, and does not broadcast link-status. Those layers
+ * require MAC MLME support (MLME-START, beacon TX path, indirect
+ * pending tables) which is not wired in subsys/zigbee/mac/ yet.
  *
  * Reference (do not copy verbatim): vendor-derived libzigbee
- * src/nwk_formation.c, src/nwk_permit_joining.c, src/nwk_brc.c,
- * src/nwk_neighbor.c. Logic is adapted to drive Zephyr primitives:
- * ev_timer scheduling, zb_radio_port_* helpers, and the existing
- * ed-minimal MAC/IO scaffolding shared between roles.
+ * src/nwk_formation.c, src/nwk_permit_joining.c, src/nwk_brc.c. The
+ * symbol shape and the "set MAC PIB, then notify ZDO" sequence mirror
+ * the vendor's nwk_formationStartCnfHandler() success branch.
  */
 
 #include "zb_common_stub.h"
-#include "mac/includes/mac_phy.h"
-#include "os/ev_timer.h"
+#include "mac/includes/tl_zb_mac.h"
+#include "mac/includes/tl_zb_mac_pib.h"
 
 #include <errno.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_config.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_nwk_router_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 
-/*
- * Router commissioning entrypoint invoked by app_bdb when
- * CONFIG_ZIGBEE_ROUTER=y. Returns 0 to indicate the request was
- * accepted; non-zero defers retry via app_bdb's retry timer.
- *
- * TODO: implement NLME-NETWORK-FORMATION request, channel scan,
- * PAN-ID selection, NWK key generation, and post-formation
- * link-status broadcast scheduling.
+/* Defaults match the existing zigbee_shell fixed-target ED profile so a
+ * locally-formed router and an externally-driven ED can share a PAN for
+ * loopback testing on a single host.
  */
+#define NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID    0xc6c6U
+#define NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR  0x0000U  /* coordinator */
+#define NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL   DEFAULT_CHANNEL
+
+extern zdo_appIndCb_t *zdoAppIndCbLst;
+
+static bool nwk_router_minimal_started;
+
+static void nwk_router_minimal_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
+{
+	/* drv_u32Rand() is the vendor RNG hook wired through to
+	 * Zephyr's entropy source via drv_rand_zephyr.c (or to the
+	 * hardware RNG / xoshiro / timer source when one of the
+	 * Kconfig-selected generators is enabled).
+	 */
+	for (uint8_t i = 0; i < SEC_KEY_LEN; i += 4U) {
+		uint32_t w = drv_u32Rand();
+
+		memcpy(&key[i], &w, sizeof(w));
+	}
+}
+
+static void nwk_router_minimal_apply_pib(uint8_t channel, uint16_t pan_id,
+					 uint16_t short_addr,
+					 const uint8_t ext_pan_id[EXT_ADDR_LEN])
+{
+	g_zbMacPib.phyChannelCur = channel;
+	g_zbMacPib.panId = pan_id;
+	g_zbMacPib.shortAddress = short_addr;
+	g_zbMacPib.coordShortAddress = short_addr;
+	g_zbMacPib.rxOnWhenIdle = 1U;
+	g_zbMacPib.associationPermit = 0U;
+
+	g_zbNIB.panId = pan_id;
+	g_zbNIB.nwkAddr = short_addr;
+	memcpy(g_zbNIB.extPANId, ext_pan_id, EXT_ADDR_LEN);
+	memcpy(g_zbNIB.ieeeAddr, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+	g_zbNIB.updateId = 0U;
+}
+
 uint8_t zb_routerStart(void)
 {
-	LOG_WRN("zb_routerStart: router runtime not implemented yet");
-	return 1U; /* signal "busy/retry" so app_bdb keeps polling */
+	zdo_start_device_confirm_t cnf;
+	uint8_t ext_pan_id[EXT_ADDR_LEN];
+	uint8_t nwk_key[SEC_KEY_LEN];
+	int rc;
+
+	if (nwk_router_minimal_started) {
+		LOG_DBG("zb_routerStart: already started, ignoring");
+		return 0U;
+	}
+
+	/* Derive an ext-PAN-id from the device IEEE address so successive
+	 * cold-starts on the same chip yield the same network identity.
+	 * The MAC layer fills g_zbMacPib.extAddress at boot from HWINFO.
+	 */
+	memcpy(ext_pan_id, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+
+	nwk_router_minimal_apply_pib(NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL,
+				     NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
+				     NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR,
+				     ext_pan_id);
+
+	nwk_router_minimal_fill_nwk_key(nwk_key);
+	/* Store the freshly-generated NWK key into the security IB so the
+	 * APS encrypt/decrypt path can find it. Slot 0 / seqNum 0 mirrors
+	 * the vendor stack's freshly-formed-network convention.
+	 */
+	memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwk_key, SEC_KEY_LEN);
+	ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0U;
+	ss_ib.activeKeySeqNum = 0U;
+	memset(nwk_key, 0, sizeof(nwk_key));
+
+	rc = zb_radio_port_set_channel(NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL);
+	if (rc != 0) {
+		LOG_ERR("zb_routerStart: set_channel failed (%d)", rc);
+		return 1U;
+	}
+	zb_radio_port_update_filters(NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
+				     NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR,
+				     g_zbMacPib.extAddress);
+	(void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX,
+					  NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL);
+
+	g_zbNwkCtx.joined = 1U;
+	g_zbNwkCtx.is_factory_new = 0U;
+	g_zbNwkCtx.user_state = NLME_IDLE;
+
+	nwk_router_minimal_started = true;
+
+	LOG_INF("zb router formed (static): pan 0x%04x ch %u short 0x%04x",
+		NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
+		NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL,
+		NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR);
+
+	/* Hand the synthesized confirm to BDB so the application sees a
+	 * successful commissioning event and registers its endpoint.
+	 */
+	memset(&cnf, 0, sizeof(cnf));
+	cnf.status = 0; /* ZDO_SUCCESS */
+	cnf.channel_num = NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL;
+	cnf.pan_id = NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID;
+	cnf.short_addr = NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR;
+
+	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
+		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
+	} else {
+		LOG_WRN("zb router: no zdpStartDevCnfCb registered");
+	}
+
+	return 0U;
 }
