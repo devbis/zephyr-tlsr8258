@@ -133,8 +133,13 @@ __attribute__((weak)) zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_de
 
 __attribute__((weak)) u8 zb_nlmePermitJoiningRequest(u8 permitDuration)
 {
+#if ZB_ROUTER_ROLE
+	g_zbMacPib.associationPermit = (permitDuration != 0U) ? 1U : 0U;
+	return ZDO_SUCCESS;
+#else
 	ARG_UNUSED(permitDuration);
 	return ZDO_NOT_SUPPORTED;
+#endif
 }
 
 __attribute__((weak)) void ss_securityModeSet(ss_securityMode_e m)

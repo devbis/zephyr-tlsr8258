@@ -11,11 +11,22 @@ zephyr_include_directories(
 
 zephyr_library_named(subsys__zigbee)
 
+if(CONFIG_ZIGBEE_ROUTER)
+    set(ZIGBEE_ROLE_DEFS
+        ZB_ROUTER_ROLE=1
+        ROUTER=1
+        END_DEVICE=0
+        COORDINATOR=0)
+else()
+    set(ZIGBEE_ROLE_DEFS
+        ZB_ED_ROLE=1
+        END_DEVICE=1
+        ROUTER=0
+        COORDINATOR=0)
+endif()
+
 zephyr_library_compile_definitions(
-    ZB_ED_ROLE=1
-    END_DEVICE=1
-    ROUTER=0
-    COORDINATOR=0
+    ${ZIGBEE_ROLE_DEFS}
     NV_ENABLE=1
     SECURITY_ENABLE=1
     DEFAULT_CHANNEL=${CONFIG_ZIGBEE_CHANNEL}
@@ -99,8 +110,10 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_WWAH wwah/wwah.c wwah/wwahEpCfg.c)
 # ZCL
 add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 
-# End Device runtime is the only role currently wired.
-# Router/Coordinator runtime sources are intentionally not added yet.
+# Role-specific runtime sources.
+# ED runtime is the fully wired path. Router runtime is being added
+# incrementally and currently shares the ED minimal infrastructure
+# (steering/join helpers) plus a router-specific bootstrap stub.
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     zbapi/zb_api_ed_compat.c
     zbapi/zb_api_zdo_send_minimal.c
@@ -109,6 +122,19 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     zdo/zdo_ed_minimal.c
 )
 if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
+    zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
+endif()
+
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
+    zbapi/zb_api_ed_compat.c
+    zbapi/zb_api_zdo_send_minimal.c
+    nwk/nwk_schedule_fallback.c
+    nwk/nwk_ed_minimal.c
+    nwk/nwk_router_minimal.c
+    zdo/zdo_ed_minimal.c
+    zdo/zdo_router_minimal.c
+)
+if(CONFIG_ZIGBEE_ROUTER AND CONFIG_ZIGBEE_BDB)
     zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
 endif()
 

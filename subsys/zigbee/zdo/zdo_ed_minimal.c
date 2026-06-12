@@ -416,7 +416,13 @@ zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
 
 zdo_status_t zdo_nwkRouterStart(void)
 {
+#if ZB_ROUTER_ROLE
+	g_zbNwkCtx.router_started = 1U;
+	g_zbNwkCtx.state = NLME_STATE_IDLE;
+	return ZDO_SUCCESS;
+#else
 	return ZDO_NOT_SUPPORTED;
+#endif
 }
 
 zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_t cb)

@@ -26,6 +26,14 @@
 
 LOG_MODULE_REGISTER(app_bdb);
 
+#if defined(CONFIG_ZIGBEE_ROUTER)
+#define APP_BDB_ROLE_ROUTER 1
+#define APP_BDB_ROLE_ED 0
+#else
+#define APP_BDB_ROLE_ROUTER 0
+#define APP_BDB_ROLE_ED 1
+#endif
+
 typedef int (*app_bdb_timer_callback_t)(void *data);
 
 struct ev_timer_event_t;
@@ -33,6 +41,7 @@ struct ev_timer_event_t;
 extern struct ev_timer_event_t *ev_timer_taskPost(app_bdb_timer_callback_t func, void *arg,
 						   uint32_t t_ms);
 extern uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt);
+extern uint8_t zb_routerStart(void);
 
 #define APP_BDB_COMMISSIONING_RETRY_MS 5000U
 
@@ -105,6 +114,7 @@ extern uint32_t zb_getPollRate(void);
 
 static void app_bdb_activate_poll_rate(void)
 {
+#if APP_BDB_ROLE_ED
 	uint32_t poll_rate = zb_getPollRate();
 
 	app_bdb_rejoin_callback_trace_put((0x11U << 24) | (poll_rate & 0xffffU));
@@ -114,6 +124,7 @@ static void app_bdb_activate_poll_rate(void)
 
 	(void)zb_setPollRate(poll_rate);
 	app_bdb_rejoin_callback_trace_put((0x12U << 24) | (poll_rate & 0xffffU));
+#endif
 }
 
 static void app_bdb_commissioning_retry_schedule(void);
@@ -203,6 +214,10 @@ bool app_bdb_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 		return false;
 	}
 
+	if (APP_BDB_ROLE_ROUTER) {
+		return false;
+	}
+
 	memset(target, 0, sizeof(*target));
 	target->channel = APP_BDB_FIXED_CHANNEL;
 	target->pan_id = APP_BDB_FIXED_PAN_ID;
@@ -234,9 +249,11 @@ bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 		 * here: it short-circuits interview and breaks live-network joins.
 		 */
 		profile->network_key_valid = false;
-		memcpy(profile->tc_addr, app_bdb_fixed_tc_addr,
-		       sizeof(app_bdb_fixed_tc_addr));
-		profile->tc_addr_valid = true;
+		if (APP_BDB_ROLE_ED) {
+			memcpy(profile->tc_addr, app_bdb_fixed_tc_addr,
+			       sizeof(app_bdb_fixed_tc_addr));
+			profile->tc_addr_valid = true;
+		}
 
 	return true;
 #endif
@@ -259,7 +276,7 @@ void app_bdb_bootstrap_ready(void)
 				       ((uint32_t)(idle ? 1U : 0U) << 9);
 		if (err == 0) {
 			bdb_runtime_ready = true;
-			if (joined && idle) {
+			if (joined && idle && APP_BDB_ROLE_ED) {
 				app_bdb_activate_poll_rate();
 			}
 			zb_nwk_ed_trace[11] = 0xA1B00001U |
@@ -322,8 +339,23 @@ void app_bdb_start_commissioning(void)
 	if (zb_isDeviceJoinedNwk()) {
 		zb_nwk_ed_trace[13] = 0xA3B00003U;
 		commissioning_start_requested = true;
-		app_bdb_activate_poll_rate();
+		if (APP_BDB_ROLE_ED) {
+			app_bdb_activate_poll_rate();
+		}
 		app_bdb_commissioning_retry_cancel();
+		return;
+	}
+
+	if (APP_BDB_ROLE_ROUTER) {
+		status = zb_routerStart();
+		app_bdb_retry_trace_put((0x27U << 24) | status);
+		zb_nwk_ed_trace[14] = 0xA4B10000U | status;
+		if (status == 0U) {
+			commissioning_start_requested = true;
+			app_bdb_commissioning_retry_cancel();
+		} else {
+			commissioning_start_requested = false;
+		}
 		return;
 	}
 
@@ -421,11 +453,13 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 					  ((uint32_t)(joinedNetwork ? 1U : 0U) << 8) |
 					  ((uint32_t)(zb_isDeviceJoinedNwk() ? 1U : 0U) << 9));
 	if (joinedNetwork) {
-		app_bdb_activate_poll_rate();
+		if (APP_BDB_ROLE_ED) {
+			app_bdb_activate_poll_rate();
+		}
 		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		app_bdb_commissioning_retry_cancel();
-		if (status == 0x00U) {
+		if (APP_BDB_ROLE_ED && status == 0x00U) {
 			/* Post-join ZDO/ZCL interview: discover coordinator endpoints.
 			 * The response callback app_bdb_active_ep_rsp_cb will issue
 			 * SimpleDesc + Basic-cluster read for each discovered endpoint,
@@ -443,7 +477,9 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 	}
 
 	if (zb_isDeviceJoinedNwk()) {
-		app_bdb_activate_poll_rate();
+		if (APP_BDB_ROLE_ED) {
+			app_bdb_activate_poll_rate();
+		}
 		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		app_bdb_commissioning_retry_cancel();
@@ -456,6 +492,10 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 
 	commissioning_start_requested = false;
 	app_bdb_rejoin_callback_trace_put((0x17U << 24) | status);
+	if (APP_BDB_ROLE_ROUTER) {
+		LOG_INF("zigbee_shell router commissioning pending (bdb status: 0x%02x)", status);
+		return;
+	}
 	LOG_INF("zigbee_shell not joined yet (bdb status: 0x%02x), retry scheduled", status);
 	app_bdb_commissioning_retry_schedule();
 #else
