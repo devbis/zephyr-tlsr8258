@@ -22,7 +22,7 @@ static int zb_mac_trx_stub_warn_init(void)
 
 SYS_INIT(zb_mac_trx_stub_warn_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 
-sys_diagnostics_t g_sysDiags __attribute__((weak));
+/* g_sysDiags now lives in subsys/zigbee/common/zb_config.c. */
 zb_info_t g_zbInfo __attribute__((weak));
 
 u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt) __attribute__((weak));

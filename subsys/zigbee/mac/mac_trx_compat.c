@@ -30,7 +30,9 @@ static void zb_minimal_debug_join_drop(const char *reason, u32 value0, u32 value
 	ARG_UNUSED(value1);
 }
 
-sys_diagnostics_t g_sysDiags;
+/* g_sysDiags now lives in subsys/zigbee/common/zb_config.c
+ * (copied from tl_zigbee_sdk/zigbee/common/zb_config.c).
+ */
 zb_info_t g_zbInfo;
 
 extern const u8 tcLinkKeyCentralDefault[];

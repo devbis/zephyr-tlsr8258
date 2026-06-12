@@ -10,25 +10,12 @@
  * it still expects Telink's config symbols and init ordering to exist.
  */
 
-u8 APS_INTERFRAME_DELAY = 100U;
-u8 APS_MAX_WINDOW_SIZE = 1U;
-u8 APS_FRAGMEMT_PAYLOAD_SIZE = 64U;
-u8 APS_MAX_FRAME_RETRIES = 3U;
-u8 APS_ACK_EXPIRY = 2U;
-
-u8 ZB_MAC_PENDING_TRANS_QUEUE_SIZE = ZB_MAC_PENDING_TRANS_QUEUE_NUM;
-u8 ZB_MAC_EXT_EXPEIRY_CNT = ZB_MAC_INTERNAL_EXPIRY_CNT;
-
-u8 APS_BINDING_TABLE_SIZE = APS_BINDING_TABLE_NUM;
-aps_binding_entry_t g_apsBindingTbl[APS_BINDING_TABLE_NUM];
-
-u8 APS_GROUP_TABLE_SIZE = APS_GROUP_TABLE_NUM;
-aps_group_tbl_ent_t aps_group_tbl[APS_GROUP_TABLE_NUM];
-u16 GROUP_MESSAGE_SEND_ADDRESS = NWK_BROADCAST_RX_ON_WHEN_IDLE;
-
-u8 APS_TX_CACHE_TABLE_SIZE = APS_TX_CACHE_TABLE_NUM;
-aps_tx_cache_list_t aps_txCache_tbl[APS_TX_CACHE_TABLE_NUM];
-
+/* APS / NWK / MAC table sizes and arrays now live in
+ * subsys/zigbee/common/zb_config.c (copied from
+ * tl_zigbee_sdk/zigbee/common/zb_config.c). MAC_TX_QUEUE_SIZE /
+ * g_txQueue stay here because zb_config.c gates them behind
+ * ZB_ZEPHYR_TX_QUEUE_IN_VENDOR_COMPAT.
+ */
 u8 MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
 tx_data_queue g_txQueue[TX_QUEUE_BN];
 
@@ -162,12 +149,19 @@ void ss_mmoHash(u8 *data, u8 len, u8 *result)
 
 static void zb_binding_table_reset(void)
 {
-	memset(g_apsBindingTbl, 0, sizeof(g_apsBindingTbl));
+	/* Sized via APS_BINDING_TABLE_NUM rather than sizeof(table) because
+	 * the array storage moved to common/zb_config.c (the array is
+	 * declared extern aps_binding_entry_t g_apsBindingTbl[] in
+	 * aps_api.h, which is an incomplete type at this TU).
+	 */
+	memset(g_apsBindingTbl, 0,
+	       APS_BINDING_TABLE_NUM * sizeof(aps_binding_entry_t));
 }
 
 static void zb_tx_cache_reset(void)
 {
-	memset(aps_txCache_tbl, 0, sizeof(aps_txCache_tbl));
+	memset(aps_txCache_tbl, 0,
+	       APS_TX_CACHE_TABLE_NUM * sizeof(aps_tx_cache_list_t));
 }
 
 static void zb_nwk_capability_apply_runtime_defaults(void)
