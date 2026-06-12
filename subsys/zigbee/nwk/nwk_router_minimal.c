@@ -79,11 +79,58 @@ static void nwk_router_minimal_apply_pib(uint8_t channel, uint16_t pan_id,
 	g_zbNIB.updateId = 0U;
 }
 
+static bool nwk_router_minimal_resolve_profile(uint8_t *channel,
+					       uint16_t *pan_id,
+					       uint16_t *short_addr,
+					       uint8_t ext_pan_id[EXT_ADDR_LEN],
+					       uint8_t nwk_key[SEC_KEY_LEN],
+					       bool *key_provided)
+{
+	struct zb_platform_bdb_fixed_target target;
+	const uint8_t zero_ext[EXT_ADDR_LEN] = {0};
+	const uint8_t zero_key[SEC_KEY_LEN] = {0};
+
+	*channel = NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL;
+	*pan_id = NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID;
+	*short_addr = NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR;
+	memcpy(ext_pan_id, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+	*key_provided = false;
+
+	if (!zb_platform_app_get_fixed_join_target(&target)) {
+		return false;
+	}
+
+	if (target.channel != 0U) {
+		*channel = target.channel;
+	}
+	if (target.pan_id != 0U && target.pan_id != MAC_INVALID_PANID) {
+		*pan_id = target.pan_id;
+	}
+	if (target.short_addr != 0U &&
+	    target.short_addr != MAC_SHORT_ADDR_NONE) {
+		*short_addr = target.short_addr;
+	}
+	if (memcmp(target.ext_pan_id, zero_ext, EXT_ADDR_LEN) != 0) {
+		memcpy(ext_pan_id, target.ext_pan_id, EXT_ADDR_LEN);
+	}
+	if (memcmp(target.network_key, zero_key, SEC_KEY_LEN) != 0) {
+		memcpy(nwk_key, target.network_key, SEC_KEY_LEN);
+		*key_provided = true;
+	}
+
+	return true;
+}
+
 uint8_t zb_routerStart(void)
 {
 	zdo_start_device_confirm_t cnf;
 	uint8_t ext_pan_id[EXT_ADDR_LEN];
-	uint8_t nwk_key[SEC_KEY_LEN];
+	uint8_t nwk_key[SEC_KEY_LEN] = {0};
+	uint8_t channel;
+	uint16_t pan_id;
+	uint16_t short_addr;
+	bool key_provided;
+	bool from_app;
 	int rc;
 
 	if (nwk_router_minimal_started) {
@@ -91,37 +138,32 @@ uint8_t zb_routerStart(void)
 		return 0U;
 	}
 
-	/* Derive an ext-PAN-id from the device IEEE address so successive
-	 * cold-starts on the same chip yield the same network identity.
-	 * The MAC layer fills g_zbMacPib.extAddress at boot from HWINFO.
-	 */
-	memcpy(ext_pan_id, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+	from_app = nwk_router_minimal_resolve_profile(&channel, &pan_id,
+						      &short_addr, ext_pan_id,
+						      nwk_key, &key_provided);
 
-	nwk_router_minimal_apply_pib(NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL,
-				     NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
-				     NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR,
-				     ext_pan_id);
+	if (!key_provided) {
+		nwk_router_minimal_fill_nwk_key(nwk_key);
+	}
 
-	nwk_router_minimal_fill_nwk_key(nwk_key);
-	/* Store the freshly-generated NWK key into the security IB so the
-	 * APS encrypt/decrypt path can find it. Slot 0 / seqNum 0 mirrors
-	 * the vendor stack's freshly-formed-network convention.
+	nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
+
+	/* Store the network key into the security IB so the APS
+	 * encrypt/decrypt path can find it. Slot 0 / seqNum 0 mirrors the
+	 * vendor stack's freshly-formed-network convention.
 	 */
 	memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwk_key, SEC_KEY_LEN);
 	ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0U;
 	ss_ib.activeKeySeqNum = 0U;
 	memset(nwk_key, 0, sizeof(nwk_key));
 
-	rc = zb_radio_port_set_channel(NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL);
+	rc = zb_radio_port_set_channel(channel);
 	if (rc != 0) {
 		LOG_ERR("zb_routerStart: set_channel failed (%d)", rc);
 		return 1U;
 	}
-	zb_radio_port_update_filters(NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
-				     NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR,
-				     g_zbMacPib.extAddress);
-	(void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX,
-					  NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL);
+	zb_radio_port_update_filters(pan_id, short_addr, g_zbMacPib.extAddress);
+	(void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, channel);
 
 	g_zbNwkCtx.joined = 1U;
 	g_zbNwkCtx.is_factory_new = 0U;
@@ -129,19 +171,19 @@ uint8_t zb_routerStart(void)
 
 	nwk_router_minimal_started = true;
 
-	LOG_INF("zb router formed (static): pan 0x%04x ch %u short 0x%04x",
-		NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID,
-		NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL,
-		NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR);
+	LOG_INF("zb router formed (%s): pan 0x%04x ch %u short 0x%04x key %s",
+		from_app ? "app-profile" : "default",
+		pan_id, channel, short_addr,
+		key_provided ? "from-app" : "generated");
 
 	/* Hand the synthesized confirm to BDB so the application sees a
 	 * successful commissioning event and registers its endpoint.
 	 */
 	memset(&cnf, 0, sizeof(cnf));
 	cnf.status = 0; /* ZDO_SUCCESS */
-	cnf.channel_num = NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL;
-	cnf.pan_id = NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID;
-	cnf.short_addr = NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR;
+	cnf.channel_num = channel;
+	cnf.pan_id = pan_id;
+	cnf.short_addr = short_addr;
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
 		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);

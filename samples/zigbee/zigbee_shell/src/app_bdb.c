@@ -214,16 +214,23 @@ bool app_bdb_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 		return false;
 	}
 
-	if (APP_BDB_ROLE_ROUTER) {
-		return false;
-	}
-
 	memset(target, 0, sizeof(*target));
 	target->channel = APP_BDB_FIXED_CHANNEL;
 	target->pan_id = APP_BDB_FIXED_PAN_ID;
-	target->short_addr = APP_BDB_FIXED_PARENT;
 	memcpy(target->ext_pan_id, app_bdb_fixed_ext_pan_id,
 	       sizeof(app_bdb_fixed_ext_pan_id));
+
+	if (APP_BDB_ROLE_ROUTER) {
+		/* Router reuses this hook to publish its static-formation
+		 * parameters. short_addr is the address the router will
+		 * assume on the formed PAN; TC is left invalid (the router
+		 * is the trust center in a distributed network).
+		 */
+		target->short_addr = 0x0000U;
+		return true;
+	}
+
+	target->short_addr = APP_BDB_FIXED_PARENT;
 	memcpy(target->tc_addr, app_bdb_fixed_tc_addr, sizeof(app_bdb_fixed_tc_addr));
 	target->tc_addr_valid = true;
 
