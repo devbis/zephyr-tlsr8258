@@ -146,6 +146,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk_endDev_timeout.c
     nwk/nwk_leave.c
     nwk/nwk_discovery.c
+    nwk/nwk_route_disc.c
     zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
