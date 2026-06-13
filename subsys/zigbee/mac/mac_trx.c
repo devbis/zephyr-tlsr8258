@@ -36,6 +36,7 @@ typedef struct _attribute_packed_ {
 
 static mac_trx_vars_t mac_trx_vars;
 
+#if 0 /* vendor-pinned 32-bit offsets disabled in Zephyr port */
 STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, curTx) == 0);
 STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, state) == 4);
 STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, reserved5) == 5);
@@ -46,6 +47,7 @@ STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, ackRequired) == 9);
 STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, skipFreeTxBuf) == 10);
 STATIC_ASSERT(OFFSETOF(mac_trx_vars_t, ackSeqNum) == 11);
 STATIC_ASSERT(sizeof(mac_trx_vars_t) == 12);
+#endif
 
 int mac_pendingWaitTimerCb(void *arg);
 
