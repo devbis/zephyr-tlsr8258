@@ -108,6 +108,9 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     aps/aps.c
     aps/aps_data.c
     aps/aps_me.c
+    zdo/zdo.c
+    zdo/zdo_nwk_manager.c
+    zdo/zdp_services.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
@@ -140,9 +143,11 @@ endif()
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     zbapi/zb_api_ed_compat.c
-    zbapi/zb_api_zdo_send_minimal.c
+    # zb_api_zdo_send_minimal.c and zdo_ed_minimal.c are superseded by the
+    # libzigbee zdo/zdp_services.c + zdo.c ports for the router build.
     nwk/nwk_schedule_fallback.c
-    nwk/nwk_ed_minimal.c
+    # nwk_ed_minimal.c is superseded by the libzigbee nwk_join /
+    # nwk_data / nwk_discovery ports for the router build.
     nwk/nwk_router_minimal.c
     nwk/nwk_permit_joining.c
     nwk/nwk_routing.c
@@ -173,7 +178,6 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     mac/mac_scan.c
     mac/mac_test.c
     mac/mac_trx.c
-    zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
 if(CONFIG_ZIGBEE_ROUTER AND CONFIG_ZIGBEE_BDB)

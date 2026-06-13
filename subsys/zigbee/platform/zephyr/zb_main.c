@@ -367,11 +367,13 @@ static void zb_link_watchdog_tick(void)
 	zb_link_last_tx_fail_snapshot = snap.tx_failures;
 	zb_nwk_ed_trace[11] = 0xA1B0FF00U | (fail_delta & 0xFFU);
 
+#if !defined(CONFIG_ZIGBEE_ROUTER)
 	uint32_t scan_mask = (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) -
 			      ((u32)1U << TL_ZB_MAC_CHANNEL_START));
 	if (!tl_zbNwkEdMinimalRejoinStart(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION, false)) {
 		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
 	}
+#endif
 }
 
 static void zb_thread_fn(void *a, void *b, void *c)
