@@ -89,8 +89,13 @@ zephyr_library_sources(
     mac/mac_phy.c
     mac/mac_pib.c
 )
-zephyr_library_sources_ifndef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_compat.c)
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_stub.c)
+if(NOT CONFIG_ZIGBEE_ROUTER)
+    # Router build uses the libzigbee-derived MAC layer in mac/mac.c,
+    # mac/mac_trx.c, etc.; mac_trx_compat / mac_trx_stub provide the
+    # ED-side simplified MAC.
+    zephyr_library_sources_ifndef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_compat.c)
+    zephyr_library_sources_ifdef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_stub.c)
+endif()
 
 # Upper layers (open-source SDK files)
 zephyr_library_sources(
@@ -151,6 +156,17 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk.c
     nwk/nwk_data.c
     nwk/nwk_join.c
+    common/zb_initialize.c
+    mac/mac.c
+    mac/mac_associate.c
+    mac/mac_common.c
+    mac/mac_cr_coordinator.c
+    mac/mac_data.c
+    mac/mac_indirect_data.c
+    mac/mac_mlme.c
+    mac/mac_scan.c
+    mac/mac_test.c
+    mac/mac_trx.c
     zdo/zdo_ed_minimal.c
     zdo/zdo_router_minimal.c
 )
