@@ -124,3 +124,25 @@ u8 ZB_TASKQ_USERUSE_SIZE __attribute__((weak));
  * forces the symbol to be present.
  */
 zb_buf_t g_zb_buf_ref_dummy __attribute__((weak));
+
+/* Application/ZDP entrypoints that the dispatcher tables reach but
+ * the Zephyr port hasn't bound yet. Weak so a real implementation
+ * can override at link time.
+ */
+__attribute__((weak)) void zdp_init(void)
+{
+}
+
+__attribute__((weak)) u8 zb_zdoSendDevAnnance(void)
+{
+	return 0U;
+}
+
+/* ED-only helper invoked from shared bdb.c — gated out of the
+ * libzigbee build path; provide a weak no-op for the router build.
+ */
+__attribute__((weak)) void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
+{
+	ARG_UNUSED(count);
+	ARG_UNUSED(intervalMs);
+}
