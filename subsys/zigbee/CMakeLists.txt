@@ -111,6 +111,11 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     zdo/zdo.c
     zdo/zdo_nwk_manager.c
     zdo/zdp_services.c
+    ss/ss_apsEnDecrypt.c
+    ss/ss_apsSecurityME.c
+    ss/ss_nwkEnDecrypt.c
+    ss/ss_tlCCM.c
+    ss/ss_zdoSecurityME.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
