@@ -117,3 +117,10 @@ __attribute__((weak)) int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, voi
 u32 g_u32MacFlashAddr __attribute__((weak));
 volatile u32 zb_post_tk_trace[16] __attribute__((weak));
 u8 ZB_TASKQ_USERUSE_SIZE __attribute__((weak));
+
+/* Dummy anchor for the ZB_BUF_FROM_REF / ZB_REF_FROM_BUF macros in
+ * aps_internal.h. The runtime never enters the aps group queue path
+ * that consumes the ref index — but the dispatcher table reachability
+ * forces the symbol to be present.
+ */
+zb_buf_t g_zb_buf_ref_dummy __attribute__((weak));
