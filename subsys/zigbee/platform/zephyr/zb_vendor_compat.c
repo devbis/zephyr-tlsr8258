@@ -213,6 +213,10 @@ void tl_zbMacInit(u8 coldReset)
 }
 #endif
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build pulls aps_get_counter_value / aps_init from the
+ * libzigbee aps.c port. ED keeps the lightweight versions below.
+ */
 u8 aps_get_current_counter_value(void)
 {
 	return aps_counter_value;
@@ -262,3 +266,4 @@ void aps_init(void)
 	zb_tx_cache_reset();
 	zb_nwk_ed_trace[14] = 0xA6A00007U;
 }
+#endif /* !ZB_ROUTER_ROLE */
