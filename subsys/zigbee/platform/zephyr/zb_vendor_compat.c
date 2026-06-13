@@ -19,7 +19,10 @@
 u8 MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
 tx_data_queue g_txQueue[TX_QUEUE_BN];
 
-tl_zb_mac_ctx_t g_zbMacCtx;
+/* g_zbMacCtx is defined by the libzigbee-derived mac.c port when
+ * present, else here as a weak fallback for the ED build.
+ */
+tl_zb_mac_ctx_t g_zbMacCtx __attribute__((weak));
 extern volatile u32 zb_nwk_ed_trace[];
 
 static u8 aps_counter_value;
@@ -200,10 +203,15 @@ static void zb_mac_pib_apply_runtime_defaults(bool cold_reset)
 	tl_zbMacChannelSet(g_zbMacPib.phyChannelCur);
 }
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build uses the libzigbee-derived mac.c::tl_zbMacInit which
+ * resets every MAC primitive table. ED keeps the lightweight version.
+ */
 void tl_zbMacInit(u8 coldReset)
 {
 	zb_mac_pib_apply_runtime_defaults(coldReset ? true : false);
 }
+#endif
 
 u8 aps_get_current_counter_value(void)
 {
