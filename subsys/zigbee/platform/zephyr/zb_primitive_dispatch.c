@@ -146,3 +146,80 @@ __attribute__((weak)) void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 int
 	ARG_UNUSED(count);
 	ARG_UNUSED(intervalMs);
 }
+
+/* Neighbor-table operations that depend on the address-map NV layout
+ * we haven't ported yet. Weak so the router build links; the static-
+ * formation path doesn't use them.
+ */
+#include "nwk/includes/nwk_neighbor.h"
+
+__attribute__((weak)) tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(
+	tl_zb_normal_neighbor_entry_t *entry, u8 delete_flag)
+{
+	ARG_UNUSED(entry);
+	ARG_UNUSED(delete_flag);
+	return NULL;
+}
+
+__attribute__((weak)) void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry)
+{
+	ARG_UNUSED(entry);
+}
+
+__attribute__((weak)) tl_zb_normal_neighbor_entry_t *
+tl_zbNeighborTableSearchFromExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx)
+{
+	ARG_UNUSED(shortAddr);
+	ARG_UNUSED(extAddr);
+	ARG_UNUSED(idx);
+	return NULL;
+}
+
+__attribute__((weak)) tl_zb_normal_neighbor_entry_t *
+tl_zbNeighborTableSearchFromShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx)
+{
+	ARG_UNUSED(shortAddr);
+	ARG_UNUSED(extAddr);
+	ARG_UNUSED(idx);
+	return NULL;
+}
+
+__attribute__((weak)) void zb_buf_clear(zb_buf_t *p)
+{
+	ARG_UNUSED(p);
+}
+
+/* af / aps_data confirm + interpan entry-points from libzigbee
+ * zb_af_data.c (not ported — Zephyr af/zb_af.c handles AF on its own
+ * path). Weak stubs let dispatcher tables link.
+ */
+__attribute__((weak)) void af_dataCnfHandler(void *arg)
+{
+	ARG_UNUSED(arg);
+}
+
+__attribute__((weak)) void af_aps_data_entry(void *arg)
+{
+	ARG_UNUSED(arg);
+}
+
+__attribute__((weak)) void af_aps_data_fragment_entry(void *arg)
+{
+	ARG_UNUSED(arg);
+}
+
+/* zb_zdoNwkAddrReq is declared in zbapi/zb_api.h with the
+ * (dstNwkAddr, pReq, seqNo, indCb) shape; provide a weak stub here
+ * that returns 0 (ZDO_SUCCESS).
+ */
+#include "zbapi/zb_api.h"
+__attribute__((weak)) zdo_status_t zb_zdoNwkAddrReq(u16 dstNwkAddr,
+						    zdo_nwk_addr_req_t *pReq,
+						    u8 *seqNo, zdo_callback indCb)
+{
+	ARG_UNUSED(dstNwkAddr);
+	ARG_UNUSED(pReq);
+	ARG_UNUSED(seqNo);
+	ARG_UNUSED(indCb);
+	return 0;
+}

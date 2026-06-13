@@ -193,11 +193,13 @@ u32 NWK_BRC_JITTER = NWK_MAX_BROADCAST_JITTER;
 nwk_brcTransRecordEntry_t g_brcTransTab[NWK_BRC_TRANSTBL_NUM];
 #endif
 
-#if ZB_ED_ROLE
+/* Zephyr port: define these unconditionally — the libzigbee router
+ * build also references them from nwk_data.c (ED rejoin polling
+ * shared with the router-side endDev-timeout path).
+ */
 bool AUTO_QUICK_DATA_POLL_ENABLE = TRUE;
 u32 AUTO_QUICK_DATA_POLL_INTERVAL = POLL_RATE_QUARTERSECONDS;//ms
 u8 AUTO_QUICK_DATA_POLL_TIMES = 3;
-#endif
 
 /* choose the previous parent first when rejoin. */
 bool PRE_PARENT_FIRST_WHEN_REJOIN = TRUE;
