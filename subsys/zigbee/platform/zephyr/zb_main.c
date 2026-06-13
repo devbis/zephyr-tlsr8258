@@ -412,6 +412,17 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		ev_timer_process();
 		zb_thread_heartbeat[2]++;
 		ev_poll_process();
+#if defined(CONFIG_ZIGBEE_ROUTER)
+		/* Router build pulls in the libzigbee NWK / MAC primitive
+		 * dispatcher via tl_zbNwkTaskProc(); drain the per-layer
+		 * task queues on every tick so MAC→NWK and high→NWK
+		 * primitives (scan/start confirms, beacon-notify
+		 * indications, NLDE data confirms) are delivered to their
+		 * handlers. ED keeps its lightweight nwk_ed_minimal poll
+		 * path and doesn't need this drain.
+		 */
+		tl_zbNwkTaskProc();
+#endif
 		zb_thread_heartbeat[3]++;
 		zb_process_deferred_persistent_rejoin();
 		zb_process_deferred_commissioning();
