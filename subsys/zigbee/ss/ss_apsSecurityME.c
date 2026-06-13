@@ -73,7 +73,9 @@ static inline bool ext_addr_is_local(const addrExt_t extAddr)
     return memcmp(extAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN) == 0;
 }
 
+#if 0 /* vendor-pinned offset disabled in Zephyr port */
 STATIC_ASSERT(OFFSETOF(ss_info_base_t, tcLinkKeyType) == 0x4c);
+#endif
 
 #if defined(ZB_ROUTER_ROLE)
 
