@@ -104,6 +104,12 @@ zephyr_library_sources(
     ss/ss_nv.c
 )
 
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
+    aps/aps.c
+    aps/aps_data.c
+    aps/aps_me.c
+)
+
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
