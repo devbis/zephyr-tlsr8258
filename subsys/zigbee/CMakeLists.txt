@@ -147,6 +147,9 @@ if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
 endif()
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
+    platform/zephyr/zb_buffer_zephyr.c
+    platform/zephyr/zb_task_queue_router.c
+    platform/zephyr/zb_second_clock.c
     zbapi/zb_api_ed_compat.c
     # zb_api_zdo_send_minimal.c and zdo_ed_minimal.c are superseded by the
     # libzigbee zdo/zdp_services.c + zdo.c ports for the router build.
