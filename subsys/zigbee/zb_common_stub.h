@@ -186,6 +186,21 @@ extern sys_diagnostics_t g_sysDiags;
 #ifndef ZB_TRANSCEIVER_ALL_CHANNELS_MASK
 #define ZB_TRANSCEIVER_ALL_CHANNELS_MASK   0x07FFF800UL
 #endif
+
+#ifndef ZB_CCM_M
+#define ZB_CCM_M                          4
+#endif
+
+#ifndef TL_RETURN_INVALID
+#define TL_RETURN_INVALID                 0xff
+#endif
+
+extern const u8 g_null_securityKey[];
+
+#ifndef ZB_IS_16BYTE_SECURITY_KEY_ZERO
+#define ZB_IS_16BYTE_SECURITY_KEY_ZERO(key) \
+	(!memcmp((key), g_null_securityKey, SEC_KEY_LEN))
+#endif
 #define ZB_EXTPANID_IS_ZERO             ZB_IS_64BIT_ADDR_ZERO
 #define ZB_EXTPANID_COPY                ZB_64BIT_ADDR_COPY
 #define ZB_EXTPANID_CMP                 ZB_64BIT_ADDR_CMP
