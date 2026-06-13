@@ -63,8 +63,8 @@ extern u8 aps_bindingTblExist(addrExt_t extAddr);
  * verbatim, accepting opaque void* args where the vendor passes
  * implementation-specific pointers.
  */
-extern u8 ss_apsEnAuxHdrFill(u8 *outBuf, u8 *adu, u8 frameType);
-extern u8 ss_apsSecureFrame(zb_buf_t *buf, u8 plainLen, u8 baseLen, addrExt_t srcExt);
+extern u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt);
+extern u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t extAddr);
 extern u8 ss_apsDecryptFrame(void *arg);
 extern void ss_apsTransportKeyCmdHandle(void *arg);
 extern void ss_apsRemoveDeviceCmdHandle(void *arg);

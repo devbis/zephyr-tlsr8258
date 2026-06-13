@@ -79,6 +79,11 @@ static void zb_vendor_aes_block_xor(u8 *dst, const u8 *src)
 	}
 }
 
+#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+/* Router build uses the libzigbee ss_tlCCM.c / ss_apsSecurityME.c
+ * versions of the SS hash helpers. The lightweight ED versions
+ * below stay for the ED build.
+ */
 void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
 {
 	u8 block[ZB_VENDOR_AES_BLOCK_SIZE] = {0};
@@ -149,6 +154,7 @@ void ss_mmoHash(u8 *data, u8 len, u8 *result)
 {
 	tl_cryHashFunction(data, len, result);
 }
+#endif /* !ZB_ROUTER_ROLE */
 
 static void zb_binding_table_reset(void)
 {
