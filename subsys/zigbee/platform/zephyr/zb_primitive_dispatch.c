@@ -39,62 +39,22 @@ LOG_MODULE_REGISTER(zigbee_primitive_dispatch, CONFIG_ZIGBEE_LOG_LEVEL);
 const u8 g_zero_addr[8] __attribute__((weak)) = {0};
 u32 g_secondCnt __attribute__((weak));
 
-u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
-{
-	LOG_WRN("tl_zbPrimitivePost(layerQ=%u, primitive=0x%02x, arg=%p) unhandled",
-		layerQ, primitive, arg);
-	ARG_UNUSED(layerQ);
-	ARG_UNUSED(primitive);
-	ARG_UNUSED(arg);
-	return 0U;
-}
-
 /*
- * Weak stubs for the libzigbee infrastructure layer (zb_buffer.c,
- * zb_task_queue.c, second_clock.c, drv_timer.c). The router-build
- * dispatcher tables in mac.c / nwk.c reference these names so they
- * survive --gc-sections, but the runtime never enters any chain that
- * actually invokes the MAC/NWK handlers (the static-formation router
- * in nwk_router_minimal.c drives the radio directly). Real
- * implementations land later from the vendor SDK or Zephyr-native
- * shims; until then the stubs trap with a warning and a benign
- * return value.
+ * tl_zbPrimitivePost / tl_zbTaskQPop / tl_zbUserTaskQNum live in
+ * platform/zephyr/zb_task_queue_router.c (router build) backed by
+ * a per-layer k_msgq.
+ *
+ * zb_buf_allocate / zb_buf_free / tl_bufInitalloc / zb_buf_clear /
+ * is_zb_buf / tl_phyRxBufTozbBuf live in
+ * platform/zephyr/zb_buffer_zephyr.c (router build) backed by a
+ * K_MEM_SLAB_DEFINE_STATIC pool of zb_buf_t.
+ *
+ * The weak stubs below remain because they fill in symbols that the
+ * dispatcher chain reaches but the Zephyr port hasn't bound to a
+ * real implementation yet (ED-only helpers reachable from shared
+ * code, exception posting, hardware timer driver, vendor flash
+ * address constant).
  */
-__attribute__((weak)) zb_buf_t *zb_buf_allocate(void)
-{
-	LOG_WRN("zb_buf_allocate stub invoked");
-	return NULL;
-}
-
-__attribute__((weak)) void zb_buf_free(zb_buf_t *buf)
-{
-	ARG_UNUSED(buf);
-}
-
-__attribute__((weak)) void *tl_bufInitalloc(zb_buf_t *p, u8 size)
-{
-	ARG_UNUSED(p);
-	ARG_UNUSED(size);
-	return NULL;
-}
-
-__attribute__((weak)) void *tl_phyRxBufTozbBuf(u8 *rxBuf)
-{
-	ARG_UNUSED(rxBuf);
-	return NULL;
-}
-
-__attribute__((weak)) u8 tl_zbUserTaskQNum(void)
-{
-	return 0U;
-}
-
-__attribute__((weak)) tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
-{
-	ARG_UNUSED(idx);
-	ARG_UNUSED(taskInfo);
-	return NULL;
-}
 
 __attribute__((weak)) u8 sys_exceptionPost(u16 line, u8 evt)
 {
