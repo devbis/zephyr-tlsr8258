@@ -65,7 +65,19 @@ void nwk_nlmeJoinCnf(void *arg, u16 nwkAddr, u8 status, u8 channel)
         memcpy(cnf->extPANId, g_zbInfo.nwkNib.extPANId, EXT_ADDR_LEN);
     }
 
-    g_zbNwkCtx.user_state = NLME_IDLE;
+    /*
+     * Vendor flips user_state to NLME_IDLE here, but on the Zephyr
+     * port the host_socket_coordinator pushes the unsolicited
+     * TRANSPORT_KEY back-to-back with ASSOC_RSP. If we go IDLE
+     * before transport-key processing completes, the
+     * tl_zbMacMcpsDataIndicationHandler `!joined && state != JOINING`
+     * guard drops the incoming DATA frame and the auth-wait timer
+     * eventually expires. Keep JOINING on success; ZDO's
+     * zdo_startup_complete clears it once joined=1.
+     */
+    if (status != NWK_STATUS_SUCCESS) {
+        g_zbNwkCtx.user_state = NLME_IDLE;
+    }
     tl_zbTaskPost(zdo_nlme_join_confirm, arg);
 }
 
@@ -322,10 +334,18 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
                                   cnf->shortAddress,
                                   g_zbInfo.macPib.extAddress);
 
-    if (tl_zbNwkAddrMapAdd(g_zbInfo.nwkNib.nwkAddr, g_zbInfo.nwkNib.ieeeAddr, &selfRef) != NWK_STATUS_SUCCESS ||
-        tl_zbNwkAddrMapAdd(g_zbInfo.macPib.coordShortAddress, g_zbInfo.macPib.coordExtAddress, &parentRef) != NWK_STATUS_SUCCESS) {
-        nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
-        return;
+    {
+        zb_nwk_status_t self_rc = tl_zbNwkAddrMapAdd(g_zbInfo.nwkNib.nwkAddr,
+                                                     g_zbInfo.nwkNib.ieeeAddr,
+                                                     &selfRef);
+        zb_nwk_status_t parent_rc = tl_zbNwkAddrMapAdd(g_zbInfo.macPib.coordShortAddress,
+                                                       g_zbInfo.macPib.coordExtAddress,
+                                                       &parentRef);
+        printk("zb dbg assocCnf: addrMapAdd self_rc=%u parent_rc=%u\n", self_rc, parent_rc);
+        if (self_rc != NWK_STATUS_SUCCESS || parent_rc != NWK_STATUS_SUCCESS) {
+            nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
+            return;
+        }
     }
 
     {

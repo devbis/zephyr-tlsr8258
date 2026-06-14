@@ -805,9 +805,12 @@ void zdo_nlme_join_confirm(void *arg)
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
 
+    printk("zb dbg join_confirm: state=%u status=%u aps_auth=%u secLvl=%u\n",
+           state, status, aps_ib.aps_authenticated, ss_ib.securityLevel);
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
         state != ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
+        printk("zb dbg join_confirm: drop bad state\n");
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
