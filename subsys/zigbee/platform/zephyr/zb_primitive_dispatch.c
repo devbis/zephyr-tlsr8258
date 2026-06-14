@@ -113,12 +113,37 @@ __attribute__((weak)) void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 int
  */
 #include "nwk/includes/nwk_neighbor.h"
 
+/*
+ * The full libzigbee `tl_zbNeighborTableUpdate` (~75 LOC, calls
+ * tl_zbNeighborTableChildEDNumGet / tl_zbNeighborTableDeleteAuto /
+ * tl_nebListAdd / neighbor_active_count_update, plus diagnostic
+ * counters) hasn't landed in the Zephyr port yet. The vendor returns
+ * NULL on table-full / low-LQI, otherwise a pointer to the stored
+ * entry. The Zephyr stub used to always return NULL, which made
+ * `tl_zbMacMlmeAssociateConfirmHandler` short-circuit with
+ * NWK_STATUS_NEIGHBOR_TABLE_FULL right after a successful AssocResp
+ * — the joiner never enters NLME_JOINING, the TRANSPORT_KEY frame is
+ * dropped by `tl_zbMacMcpsDataIndicationHandler`'s
+ * `!joined && state != NLME_JOINING` guard, and BDB cycles forever.
+ *
+ * As a pragmatic stop-gap until the real table lands, stash a single
+ * "parent neighbor" entry locally and return it. Multiple neighbors
+ * collapse into one slot (the most recent caller wins) — adequate
+ * for the router-as-joiner path which only needs the coord parent
+ * present so the join state machine reaches "joined".
+ */
+static tl_zb_normal_neighbor_entry_t zb_neighbor_stub_slot;
+
 __attribute__((weak)) tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(
 	tl_zb_normal_neighbor_entry_t *entry, u8 delete_flag)
 {
-	ARG_UNUSED(entry);
 	ARG_UNUSED(delete_flag);
-	return NULL;
+	if (entry == NULL) {
+		return NULL;
+	}
+	zb_neighbor_stub_slot = *entry;
+	zb_neighbor_stub_slot.used = 1U;
+	return &zb_neighbor_stub_slot;
 }
 
 __attribute__((weak)) void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry)

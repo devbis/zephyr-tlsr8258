@@ -154,6 +154,7 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
 
 void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
 {
+    printk("zb dbg phyMlde: len=%u rxOnWhenIdle=%u\n", len, g_zbMacPib.rxOnWhenIdle);
     /*
      * Vendor libzigbee wrote into buf via 32-bit-pinned byte offsets
      * (`((u8 *)buf)[8..32]`) that assumed `u8 *msdu` is 4 bytes wide
