@@ -151,6 +151,11 @@ void tl_zbMacAssociateRequestHandler(void *arg)
     u8 *req = (u8 *)arg;
     zb_buf_t *txBuf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
 
+    printk("zb dbg assocReqHdlr: req[0..15]=%02x %02x %02x %02x %02x %02x %02x %02x "
+           "%02x %02x %02x %02x %02x %02x %02x %02x\n",
+           req[0], req[1], req[2], req[3], req[4], req[5], req[6], req[7],
+           req[8], req[9], req[10], req[11], req[12], req[13], req[14], req[15]);
+
     if (txBuf == NULL ||
         ((((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] & 0x08U) != 0U) ||
         associationReqOrigBuffer != NULL) {
@@ -177,16 +182,39 @@ void tl_zbMacAssociateRequestHandler(void *arg)
         mhr.srcPanId = 0xffffU;
         memcpy(&mhr.dstAddr, req + 4, sizeof(mhr.dstAddr));
         memcpy(&mhr.srcAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
-        mhr.frameCtrl = (u16)(0xc023U | ((u16)req[12] << 10));
+        {
+            /*
+             * Vendor formula `0xc023 | (req[12] << 10)` shifts two
+             * unrelated capability_info bits into the FCF dst addr
+             * mode slot. For a router/ED joining via the parent's
+             * short address, dstAddrMode is always SHORT (2). Read
+             * the addr_t.addrMode out of the primitive buffer at the
+             * correct offset (offset 4 + 8-byte ext-addr union slot
+             * = 12 for non-packed addr_t; this matches the vendor
+             * layout where coordAddress sits at offset 4).
+             */
+            u8 dstMode = req[12];
+
+            if (dstMode != ADDR_MODE_SHORT && dstMode != ADDR_MODE_EXT) {
+                dstMode = ADDR_MODE_SHORT;
+            }
+            mhr.frameCtrl = (u16)(0xc023U | ((u16)dstMode << 10));
+            mhr.dstAddrMode = dstMode;
+        }
+        printk("zb dbg assocReqHdlr: frameCtrl=0x%04x dstPanId=0x%04x dstAddr.mode=%u\n",
+               mhr.frameCtrl, mhr.dstPanId, mhr.dstAddrMode);
 
         hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 2U);
-        payload = tl_bufInitalloc(txBuf, hdrSize);
-        txBuf->hdr.handle = 0xe0U;
-        payload = tl_zbMacHdrBuilder(payload, &mhr);
-        payload[0] = MAC_CMD_ASSOCIATION_REQUEST;
-        payload[1] = req[13];
+        {
+            u8 *psdu = tl_bufInitalloc(txBuf, hdrSize);
 
-        txStatus = tl_zbMacTx(txBuf, payload, hdrSize, 1, NULL);
+            txBuf->hdr.handle = 0xe0U;
+            payload = tl_zbMacHdrBuilder(psdu, &mhr);
+            payload[0] = MAC_CMD_ASSOCIATION_REQUEST;
+            payload[1] = req[13];
+
+            txStatus = tl_zbMacTx(txBuf, psdu, hdrSize, 1, NULL);
+        }
         if (txStatus != MAC_SUCCESS) {
             memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
             req[10] = MAC_STA_TX_ACTIVE;
