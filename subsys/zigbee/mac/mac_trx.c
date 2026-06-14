@@ -18,7 +18,7 @@
 
 static ev_timer_event_t *macPendingWaitTimerEvt;
 tx_data_queue *g_pTxQueue = NULL;
-u8 g_macTimerEvt[0x0c];
+mac_timer_evt_t g_macTimerEvt;
 static u8 tx_fifo_rptr = 0;
 static u8 tx_fifo_wptr = 0;
 
@@ -51,33 +51,34 @@ STATIC_ASSERT(sizeof(mac_trx_vars_t) == 12);
 
 int mac_pendingWaitTimerCb(void *arg);
 
-static inline void timer_evt_cb_set(void *cb)
+static inline void timer_evt_cb_set(ev_timer_callback_t cb)
 {
-    memcpy(g_macTimerEvt + 0, &cb, sizeof(cb));
+    g_macTimerEvt.cb = cb;
 }
 
-static inline void *timer_evt_cb_get(void)
+static inline ev_timer_callback_t timer_evt_cb_get(void)
 {
-    void *cb = NULL;
-
-    memcpy(&cb, g_macTimerEvt + 0, sizeof(cb));
-    return cb;
+    return g_macTimerEvt.cb;
 }
 
 static inline void timer_evt_deadline_set(u32 tick)
 {
-    g_macTimerEvt[4] = (u8)tick;
-    g_macTimerEvt[5] = (u8)(tick >> 8);
-    g_macTimerEvt[6] = (u8)(tick >> 16);
-    g_macTimerEvt[7] = (u8)(tick >> 24);
+    g_macTimerEvt.deadline = tick;
 }
 
 static inline u32 timer_evt_deadline_get(void)
 {
-    return (u32)g_macTimerEvt[4] |
-           ((u32)g_macTimerEvt[5] << 8) |
-           ((u32)g_macTimerEvt[6] << 16) |
-           ((u32)g_macTimerEvt[7] << 24);
+    return g_macTimerEvt.deadline;
+}
+
+static inline u8 timer_evt_state_get(void)
+{
+    return g_macTimerEvt.state;
+}
+
+static inline void timer_evt_state_set(u8 state)
+{
+    g_macTimerEvt.state = state;
 }
 
 static inline void *mac_trx_cur_get(void)
@@ -104,7 +105,7 @@ int mac_waitTxIrqCb(void *arg)
 {
     (void)arg;
 
-    if (g_macTimerEvt[8] != 0U) {
+    if (timer_evt_state_get() != 0U) {
         rf_busyFlag &= (u8)~TX_BUSY;
         rf_setTrxState(RF_STATE_RX);
         tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_SEND_FAIL);
@@ -117,7 +118,7 @@ int mac_ackWaitingTimerCb(void *arg)
 {
     (void)arg;
 
-    if (g_macTimerEvt[8] != 0U) {
+    if (timer_evt_state_get() != 0U) {
         tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_ACK_RETRY);
     }
 
@@ -127,18 +128,12 @@ int mac_ackWaitingTimerCb(void *arg)
 void mac_rxDataParse(void *arg)
 {
     zb_buf_t *buf = (zb_buf_t *)arg;
-    u8 *meta = (u8 *)arg;
-    u32 rawAddr = (u32)meta[0] |
-                  ((u32)meta[1] << 8) |
-                  ((u32)meta[2] << 16) |
-                  ((u32)meta[3] << 24);
-    u8 *raw = (u8 *)(u32)rawAddr;
-    u32 timestamp = (u32)meta[4] |
-                    ((u32)meta[5] << 8) |
-                    ((u32)meta[6] << 16) |
-                    ((u32)meta[7] << 24);
-    s8 rssi = (s8)meta[8];
-    u8 len = meta[9];
+    zb_mac_rx_pending_meta_t *pending = (zb_mac_rx_pending_meta_t *)arg;
+    zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)arg;
+    u8 *raw = pending->payload;
+    u32 timestamp = pending->timestamp;
+    s8 rssi = pending->rssi;
+    u8 len = pending->payloadLen;
     u8 frameType;
     u8 hdrSize;
     tl_zb_mac_mhr_t mhr;
@@ -147,14 +142,26 @@ void mac_rxDataParse(void *arg)
     frameType = raw[0] & 0x07U;
     hdrSize = tl_zbMacHdrParse(&mhr, raw);
 
+    printk("zb dbg rxParse: frameType=%u len=%u hdrSize=%u mac_status=%u\n",
+           frameType, len, hdrSize, g_zbMacCtx.status);
     if (len <= hdrSize || g_zbMacCtx.status == 1U) {
+        printk("zb dbg rxParse: drop (len<=hdr or ED_SCAN)\n");
         zb_buf_free(buf);
         return;
     }
 
+    /*
+     * Vendor libzigbee drops beacons here during ACTIVE_SCAN because
+     * a separate IRQ-context path captures them earlier on real
+     * hardware (Telink RF). On the Zephyr socket-medium and on
+     * TLSR8258 alike, the only beacon RX path is the queued one, so
+     * we MUST forward the beacon to tl_zbPhyIndication →
+     * phy_ind_beacon_notify_post so the NWK layer can populate the
+     * addition_neighbor_table during discovery. Without this, the
+     * scan completes with NO_BEACON and BDB cycles indefinitely.
+     */
     if (g_zbMacCtx.status == 2U && frameType == 0U) {
-        zb_buf_free(buf);
-        return;
+        /* fall through to tl_zbPhyIndication */
     }
 
     if (g_zbMacCtx.status == 3U && frameType == 3U && raw[hdrSize] == 8U) {
@@ -162,26 +169,20 @@ void mac_rxDataParse(void *arg)
         return;
     }
 
-    meta[0] = (u8)timestamp;
-    meta[1] = (u8)(timestamp >> 8);
-    meta[2] = (u8)(timestamp >> 16);
-    meta[3] = (u8)(timestamp >> 24);
-    meta[4] = (u8)rawAddr;
-    meta[5] = (u8)(rawAddr >> 8);
-    meta[6] = (u8)(rawAddr >> 16);
-    meta[7] = (u8)(rawAddr >> 24);
-    meta[8] = mhr.dstAddrMode;
-    meta[9] = mhr.srcAddrMode;
-    meta[18] = frameType;
-    meta[19] = len;
-    meta[20] = rf_getLqi(rssi);
-    meta[21] = rf_getChannel();
+    meta->timestamp = timestamp;
+    meta->payload = raw;
+    meta->dstAddrMode = mhr.dstAddrMode;
+    meta->srcAddrMode = mhr.srcAddrMode;
+    meta->frameType = frameType;
+    meta->payloadLen = len;
+    meta->linkQuality = rf_getLqi(rssi);
+    meta->curChannel = rf_getChannel();
 
     if (mhr.srcAddrMode == ADDR_MODE_EXT) {
-        memcpy(meta + 10, mhr.srcAddr.extAddr, EXT_ADDR_LEN);
+        memcpy(meta->srcAddr, mhr.srcAddr.extAddr, EXT_ADDR_LEN);
     } else {
-        meta[10] = (u8)mhr.srcAddr.shortAddr;
-        meta[11] = (u8)(mhr.srcAddr.shortAddr >> 8);
+        meta->srcAddr[0] = (u8)mhr.srcAddr.shortAddr;
+        meta->srcAddr[1] = (u8)(mhr.srcAddr.shortAddr >> 8);
     }
 
     tl_zbPhyIndication(buf, (u8 *)&mhr, hdrSize);
@@ -203,7 +204,7 @@ void mac_csmaStart(void *arg)
         drv_restore_irq(r);
 
         r = drv_disable_irq();
-        if (g_macTimerEvt[8] != 0U) {
+        if (timer_evt_state_get() != 0U) {
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
             drv_restore_irq(r);
             return;
@@ -211,7 +212,7 @@ void mac_csmaStart(void *arg)
 
         timer_evt_cb_set(mac_waitTxIrqCb);
         timer_evt_deadline_set(mac_currentTickGet() + sysTimerPerUs * 10000U);
-        g_macTimerEvt[8] = 1;
+        timer_evt_state_set(1);
         drv_restore_irq(r);
         return;
     }
@@ -227,7 +228,7 @@ void mac_csmaStart(void *arg)
         drv_restore_irq(r);
 
         r = drv_disable_irq();
-        if (g_macTimerEvt[8] != 0U) {
+        if (timer_evt_state_get() != 0U) {
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
             drv_restore_irq(r);
             return;
@@ -235,7 +236,7 @@ void mac_csmaStart(void *arg)
 
         timer_evt_cb_set(mac_waitTxIrqCb);
         timer_evt_deadline_set(mac_currentTickGet() + sysTimerPerUs * 10000U);
-        g_macTimerEvt[8] = 1;
+        timer_evt_state_set(1);
         drv_restore_irq(r);
         return;
     }
@@ -248,7 +249,7 @@ void zb_macTimerEventProc(void *arg)
 {
     (void)arg;
 
-    if (g_macTimerEvt[8] == 0U) {
+    if (timer_evt_state_get() == 0U) {
         return;
     }
 
@@ -258,12 +259,12 @@ void zb_macTimerEventProc(void *arg)
 
     {
         u32 r = drv_disable_irq();
-        void (*cb)(void *) = timer_evt_cb_get();
+        ev_timer_callback_t cb = timer_evt_cb_get();
 
         if (cb != NULL) {
-            cb(NULL);
+            (void)cb(NULL);
         }
-        g_macTimerEvt[8] = 0;
+        timer_evt_state_set(0);
         drv_restore_irq(r);
     }
 }
@@ -302,7 +303,7 @@ void mac_resetTx_info(void)
         free_tx_buff(NULL);
     }
 
-    g_macTimerEvt[8] = 0;
+    timer_evt_state_set(0);
     memset(&mac_trx_vars, 0, sizeof(mac_trx_vars));
 }
 
@@ -346,7 +347,7 @@ void mac_sendTxCnf(tx_data_queue *entry)
         g_zbMacCtx.indirectData = 1;
 
         r = drv_disable_irq();
-        if (g_macTimerEvt[8] != 0U) {
+        if (timer_evt_state_get() != 0U) {
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
             drv_restore_irq(r);
             return;
@@ -355,7 +356,7 @@ void mac_sendTxCnf(tx_data_queue *entry)
         timer_evt_cb_set(mac_pendingWaitTimerCb);
         timer_evt_deadline_set(mac_currentTickGet() +
                                sysTimerPerUs * ((u32)g_zbInfo.macPib.frameTotalWaitTime << 4));
-        g_macTimerEvt[8] = 3;
+        timer_evt_state_set(3);
         drv_restore_irq(r);
         return;
     }
@@ -459,10 +460,10 @@ void mac_trxTask(void *arg)
             entry->cnfStatus = MAC_TX_ABORTED;
             g_sysDiags.macTxIrqTimeoutCnt++;
             mac_sendTxCnf(entry);
-        } else if (event == MAC_TX_EV_SEND_SUCC && g_macTimerEvt[8] == 1U) {
+        } else if (event == MAC_TX_EV_SEND_SUCC && timer_evt_state_get() == 1U) {
             u32 r;
 
-            g_macTimerEvt[8] = 0;
+            timer_evt_state_set(0);
             if (mac_trx_vars.ackRequired == 0U) {
                 mac_trx_vars.state = MAC_TX_DONE;
                 entry->cnfStatus = MAC_SUCCESS;
@@ -472,7 +473,7 @@ void mac_trxTask(void *arg)
 
             mac_trx_vars.state = MAC_TX_WAIT_ACK;
             r = drv_disable_irq();
-            if (g_macTimerEvt[8] != 0U) {
+            if (timer_evt_state_get() != 0U) {
                 ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
                 drv_restore_irq(r);
                 return;
@@ -480,7 +481,7 @@ void mac_trxTask(void *arg)
 
             timer_evt_cb_set(mac_ackWaitingTimerCb);
             timer_evt_deadline_set(mac_currentTickGet() + sysTimerPerUs * 2000U);
-            g_macTimerEvt[8] = 2;
+            timer_evt_state_set(2);
             drv_restore_irq(r);
         }
         return;
@@ -503,10 +504,10 @@ void mac_trxTask(void *arg)
             return;
         }
 
-        if (event == MAC_TX_EV_ACK_RECV && g_macTimerEvt[8] == 2U) {
+        if (event == MAC_TX_EV_ACK_RECV && timer_evt_state_get() == 2U) {
             u8 flags = (u8)(txq_flags_get(entry) & 0x0fU);
 
-            g_macTimerEvt[8] = 0;
+            timer_evt_state_set(0);
             if (extra != 0U) {
                 flags |= 0x10U;
             }
@@ -527,7 +528,15 @@ void mac_trigger_tx(void *arg)
 {
     (void)arg;
 
-    if (mac_trx_vars.state != 0U || tx_fifo_wptr == tx_fifo_rptr || g_zbMacCtx.status != 0U) {
+    if (mac_trx_vars.state != 0U || tx_fifo_wptr == tx_fifo_rptr) {
+        return;
+    }
+
+    /* Active scan queues a BeaconReq via tl_zbMacTx(); allow that one
+     * scan-time transmit to run even though the MAC status is not NORMAL.
+     */
+    if (g_zbMacCtx.status != 0U &&
+        g_zbMacCtx.status != ZB_MAC_STATE_ACTIVE_SCAN) {
         return;
     }
 
@@ -546,7 +555,7 @@ void tl_zbSwitchOffRx(void)
         rf_setTrxState(RF_STATE_OFF);
     }
 
-    g_macTimerEvt[8] = 0;
+    timer_evt_state_set(0);
     tl_zbTaskPost(mac_trigger_tx, NULL);
 }
 
@@ -554,7 +563,7 @@ int mac_pendingWaitTimerCb(void *arg)
 {
     (void)arg;
 
-    if (g_macTimerEvt[8] != 0U) {
+    if (timer_evt_state_get() != 0U) {
         tl_zbSwitchOffRx();
     }
 
@@ -563,8 +572,8 @@ int mac_pendingWaitTimerCb(void *arg)
 
 void mac_pendingWaitTimerCancel(void)
 {
-    if (g_macTimerEvt[8] == 3U) {
-        g_macTimerEvt[8] = 0;
+    if (timer_evt_state_get() == 3U) {
+        timer_evt_state_set(0);
         tl_zbSwitchOffRx();
     }
 }
@@ -622,7 +631,7 @@ bool tl_zbMacStateBusy(void)
         return 1;
     }
 
-    if (g_macTimerEvt[8] != 0U || mac_trx_vars.state != 0U) {
+    if (timer_evt_state_get() != 0U || mac_trx_vars.state != 0U) {
         return 1;
     }
 
@@ -648,7 +657,10 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
 {
     zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+    zb_mac_rx_pending_meta_t *meta;
 
+    printk("zb dbg macRecv: ackPkt=%u len=%u data=%p buf=%p first=%02x\n",
+           ackPkt, len, data, buf, data ? data[0] : 0);
     if (ackPkt != 0U) {
         u8 frameCtrl = data[0];
         u8 seqNum = data[2];
@@ -666,16 +678,11 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
         return;
     }
 
-    ((u8 *)buf)[0] = (u8)(uintptr_t)data;
-    ((u8 *)buf)[1] = (u8)((uintptr_t)data >> 8);
-    ((u8 *)buf)[2] = (u8)((uintptr_t)data >> 16);
-    ((u8 *)buf)[3] = (u8)((uintptr_t)data >> 24);
-    ((u8 *)buf)[9] = (u8)(len - 2U);
-    ((u8 *)buf)[4] = (u8)timestamp;
-    ((u8 *)buf)[5] = (u8)(timestamp >> 8);
-    ((u8 *)buf)[6] = (u8)(timestamp >> 16);
-    ((u8 *)buf)[7] = (u8)(timestamp >> 24);
-    ((u8 *)buf)[8] = (u8)rssi;
+    meta = (zb_mac_rx_pending_meta_t *)buf;
+    meta->payload = data;
+    meta->payloadLen = (u8)(len - 2U);
+    meta->timestamp = timestamp;
+    meta->rssi = rssi;
 
     rf_busyFlag &= (u8)~RX_BUSY;
     if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {

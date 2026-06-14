@@ -208,4 +208,9 @@ void zdo_init(void)
 {
     zdp_init();
     memcpy(&zdo_cfg_attributes, &zdoCfgAttrDefault, sizeof(zdo_cfg_attributes));
+    /* Single-shot scan so bdb_nwkDiscCnfCb fires after the first scan
+     * round and we proceed to AssocReq instead of looping inside
+     * zdo_nlme_network_discovery_confirm_cb's attempt counter.
+     */
+    zdo_cfg_attributes.config_nwk_scan_attempts = 1U;
 }
