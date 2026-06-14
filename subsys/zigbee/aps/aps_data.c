@@ -31,6 +31,7 @@ void aps_nwk_data_confirm_cb(void *arg);
 int aps_data_fragment_delay(void *arg);
 void aps_data_fragment(void *arg);
 void aps_data_request(void *arg);
+u8 aps_hdr_parse(u8 *data, void *parsed);
 u8 aps_get_handle(void);
 u8 ss_apsDecryptFrame(void *arg);
 void aps_command_handle(void *arg);
@@ -107,7 +108,67 @@ typedef struct _attribute_packed_ {
     u16 profileId;
     u8 extHdr;
     u8 blockNum;
+    u8 reserved14;
 } aps_rx_hdr_t;
+
+typedef struct _attribute_packed_ {
+    u8 apsHdrLen;
+    u8 flags;
+    u8 frameCounter;
+    u8 srcEp;
+    u16 asduLen;
+    u8 dstEp;
+    u8 apsCounter;
+    u16 clusterId;
+    u16 profileId;
+} aps_ind_prim_src_hdr_t;
+
+typedef struct _attribute_packed_ {
+    u8 dstAddrMode;
+    u8 dstEp;
+    u16 dstAddr;
+    u8 srcAddrMode;
+    u8 srcEp;
+    u16 profileId;
+    u16 clusterId;
+    u16 asduLength;
+    /* vendor stores a pointer into a u32 byte slot here; promote to
+     * uintptr_t so it works on 64-bit native_sim too. */
+    uintptr_t asdu;
+    u8 reserved16[4];
+    u16 srcShortAddr;
+    u8 reserved22[6];
+    u16 srcMacAddr;
+    u8 status;
+    u8 securityStatus;
+    u8 lqi;
+    u8 rssi;
+    u8 apsCounter;
+} aps_ind_prim_out_t;
+
+typedef struct _attribute_packed_ {
+    union {
+        u16 addr_short;
+        addrExt_t addr_long;
+    } dstAddr;
+    union {
+        struct _attribute_packed_ {
+            u8 dstAddrMode;
+            u8 dstEndpoint;
+            u8 srcEndpoint;
+        } af;
+        struct _attribute_packed_ {
+            u8 dstEndpoint;
+            u8 srcEndpoint;
+            u8 dstAddrMode;
+        } extConfirm;
+    } ep;
+    u8 status;
+    u8 reserved12[4];
+    u8 handle;
+    u8 apsCnt;
+    u16 clusterId;
+} aps_confirm_buf_t;
 
 /* Local packed overlay for fragment reassembly. */
 typedef struct _attribute_packed_ {
@@ -210,81 +271,66 @@ static inline void aps_cache_state_set(aps_tx_cache_list_t *cache, u8 state)
     cache->state = (u8)(state >> 4);
 }
 
+static inline aps_rx_hdr_t *aps_rx_hdr(void *arg)
+{
+    return (aps_rx_hdr_t *)((u8 *)arg + 20);
+}
+
 void aps_indPrimBuild(void *arg)
 {
     u8 hdrA[18];
-    u8 hdrB[15];
     u8 *buf = (u8 *)arg;
-    u8 apsHdrLen = buf[20];
-    u8 flags = buf[21];
-    u8 frameCounter = buf[22];
-    u8 srcEp = buf[23];
-    u8 asduLenLo = buf[24];
-    u8 asduLenHi = buf[25];
-    u8 dstEp = buf[26];
-    u8 apsCounter = buf[27];
-    u8 clusterIdLo = buf[28];
-    u8 clusterIdHi = buf[29];
-    u8 profileIdLo = buf[30];
-    u8 profileIdHi = buf[31];
+    aps_ind_prim_src_hdr_t srcHdr;
+    aps_ind_prim_out_t *out = (aps_ind_prim_out_t *)arg;
 
     memcpy(hdrA, buf, sizeof(hdrA));
-    memcpy(hdrB, buf + 20, sizeof(hdrB));
-    memset(buf, 0, 35);
+    memcpy(&srcHdr, buf + 20, sizeof(srcHdr));
+    memset(out, 0, sizeof(*out));
 
-    buf[8] = clusterIdLo;
-    buf[9] = clusterIdHi;
-    buf[6] = profileIdLo;
-    buf[7] = profileIdHi;
-    buf[5] = srcEp;
-    buf[1] = dstEp;
-    buf[20] = asduLenLo;
-    buf[21] = asduLenHi;
-    buf[4] = APS_SHORT_SRCADDR_WITHEP;
-    buf[28] = hdrA[16];
-    buf[29] = hdrA[17];
-    buf[34] = frameCounter;
-    buf[32] = apsCounter;
-    buf[33] = buf[194];
+    out->clusterId = srcHdr.clusterId;
+    out->profileId = srcHdr.profileId;
+    out->srcEp = srcHdr.srcEp;
+    out->dstEp = srcHdr.dstEp;
+    out->asduLength = srcHdr.asduLen;
+    out->srcAddrMode = APS_SHORT_SRCADDR_WITHEP;
+    out->srcMacAddr = (u16)hdrA[16] | ((u16)hdrA[17] << 8);
+    out->apsCounter = srcHdr.frameCounter;
+    out->lqi = srcHdr.apsCounter;
+    out->rssi = buf[194];
 
-    if ((flags & 0x0cU) == 0x0cU) {
-        buf[0] = APS_SHORT_GROUPADDR_NOEP;
-        buf[2] = dstEp;
-        buf[3] = apsCounter;
+    if ((srcHdr.flags & 0x0cU) == 0x0cU) {
+        out->dstAddrMode = APS_SHORT_GROUPADDR_NOEP;
+        out->dstAddr = srcHdr.dstEp;
+        out->srcShortAddr = srcHdr.asduLen;
     } else {
-        buf[0] = APS_SHORT_DSTADDR_WITHEP;
-        buf[2] = hdrA[8];
-        buf[3] = hdrA[9];
+        out->dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+        out->dstAddr = (u16)hdrA[8] | ((u16)hdrA[9] << 8);
     }
 
     {
-        u32 asduPtr = ((u32)hdrA[0] |
-                       ((u32)hdrA[1] << 8) |
-                       ((u32)hdrA[2] << 16) |
-                       ((u32)hdrA[3] << 24)) + apsHdrLen;
-        u16 asduLen = (u16)(((u16)hdrA[4] | ((u16)hdrA[5] << 8)) - apsHdrLen);
+        uintptr_t asduPtr = ((uintptr_t)hdrA[0] |
+                             ((uintptr_t)hdrA[1] << 8) |
+                             ((uintptr_t)hdrA[2] << 16) |
+                             ((uintptr_t)hdrA[3] << 24)) + srcHdr.apsHdrLen;
+        u16 asduLen = (u16)(((u16)hdrA[4] | ((u16)hdrA[5] << 8)) - srcHdr.apsHdrLen);
 
-        buf[12] = (u8)asduPtr;
-        buf[13] = (u8)(asduPtr >> 8);
-        buf[14] = (u8)(asduPtr >> 16);
-        buf[15] = (u8)(asduPtr >> 24);
-        buf[10] = LO_UINT16(asduLen);
-        buf[11] = HI_UINT16(asduLen);
+        out->asdu = asduPtr;
+        out->asduLength = asduLen;
     }
 
-    if ((flags & 0x20U) != 0U) {
-        buf[31] |= SECURITY_IN_APSLAYER;
+    if ((srcHdr.flags & 0x20U) != 0U) {
+        out->securityStatus |= SECURITY_IN_APSLAYER;
     }
     if (hdrA[6] != 0U) {
-        buf[31] |= SECURITY_IN_NWKLAYER;
+        out->securityStatus |= SECURITY_IN_NWKLAYER;
     }
 }
 
 void aps_conf(void *arg)
 {
-    u8 *buf = (u8 *)arg;
+    aps_confirm_buf_t *buf = (aps_confirm_buf_t *)arg;
 
-    if (buf[16] <= 63U) {
+    if (buf->handle <= 63U) {
         u8 *cnf = ev_buf_allocate(20);
 
         if (cnf == NULL) {
@@ -297,7 +343,7 @@ void aps_conf(void *arg)
         return;
     }
 
-    if (buf[11] != 0U || buf[16] != 73U) {
+    if (buf->status != 0U || buf->handle != 73U) {
         return;
     }
 
@@ -570,19 +616,20 @@ u8 aps_ack_send(void *arg, u8 blockAck)
 void aps_txCacheConfirm(void *arg, u8 status)
 {
     aps_tx_cache_list_t *cache = (aps_tx_cache_list_t *)arg;
-    u8 cnf[APS_DATA_CONFIRM_LEN] = {0};
+    aps_confirm_buf_t cnf;
+
+    memset(&cnf, 0, sizeof(cnf));
 
     if (!aps_cache_used(cache)) {
-        cnf[16] = cache->handler;
-        cnf[17] = cache->apsCount;
-        cnf[11] = status;
-        cnf[10] = cache->ep;
-        cnf[8] = cache->dstAddrMode;
-        memcpy(cnf, &cache->dstAddr, EXT_ADDR_LEN);
-        cnf[9] = cache->dstEndpoint;
-        cnf[18] = LO_UINT16(cache->clusterId);
-        cnf[19] = HI_UINT16(cache->clusterId);
-        aps_conf(cnf);
+        cnf.handle = cache->handler;
+        cnf.apsCnt = cache->apsCount;
+        cnf.status = status;
+        cnf.ep.af.srcEndpoint = cache->ep;
+        cnf.ep.af.dstAddrMode = cache->dstAddrMode;
+        memcpy(&cnf.dstAddr, &cache->dstAddr, EXT_ADDR_LEN);
+        cnf.ep.af.dstEndpoint = cache->dstEndpoint;
+        cnf.clusterId = cache->clusterId;
+        aps_conf(&cnf);
 
         if (cache->payload != NULL) {
             zb_buf_free((zb_buf_t *)cache->payload);
@@ -626,15 +673,15 @@ void aps_txCacheConfirm(void *arg, u8 status)
     }
 
 fragment_done:
-    cnf[16] = cache->apsCount;
-    cnf[17] = cache->zdpSeqnoAddrReq;
-    cnf[11] = status;
-    cnf[10] = cache->dstAddrMode;
-    cnf[8] = cache->dstEndpoint;
-    memcpy(cnf, cache->dstAddr.addr_long, EXT_ADDR_LEN);
-    cnf[9] = cache->ep;
-    COPY_U16TOBUFFER(cnf + 18, cache->clusterId);
-    aps_conf(cnf);
+    cnf.handle = cache->apsCount;
+    cnf.apsCnt = cache->zdpSeqnoAddrReq;
+    cnf.status = status;
+    cnf.ep.extConfirm.dstAddrMode = cache->dstAddrMode;
+    cnf.ep.extConfirm.dstEndpoint = cache->dstEndpoint;
+    memcpy(cnf.dstAddr.addr_long, cache->dstAddr.addr_long, EXT_ADDR_LEN);
+    cnf.ep.extConfirm.srcEndpoint = cache->ep;
+    cnf.clusterId = cache->clusterId;
+    aps_conf(&cnf);
 
     if (cache->payload != NULL) {
         zb_buf_free((zb_buf_t *)cache->payload);
@@ -905,7 +952,60 @@ void aps_data_indication_process(void *arg)
 
     tl_zbTaskPost(af_aps_data_entry, arg);
 }
-void aps_interPanDataIndCb(void *arg) { aps_data_indication_process(arg); }
+void aps_interPanDataIndCb(void *arg)
+{
+    zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
+    aps_data_ind_t localInd;
+    aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
+    u8 *apsPayload = macInd->msdu + 2;
+    u8 apsPayloadLen = (u8)(macInd->msduLength - 2U);
+    u8 hdrLen;
+    af_endpoint_descriptor_t *epList;
+    u8 epNum;
+
+    dstPanID = macInd->srcPanId;
+
+    memset(&localInd, 0, sizeof(localInd));
+    localInd.lqi = macInd->mpduLinkQuality;
+    localInd.src_addr_mode = macInd->srcAddr.addrMode;
+
+    if (macInd->srcAddr.addrMode == ADDR_MODE_EXT) {
+        memcpy(localInd.src_ext_addr, macInd->srcAddr.addr.extAddr, EXT_ADDR_LEN);
+    } else {
+        localInd.src_short_addr = macInd->srcAddr.addr.shortAddr;
+    }
+
+    if (macInd->dstAddr.addrMode == ADDR_MODE_SHORT) {
+        localInd.dst_addr = macInd->dstAddr.addr.shortAddr;
+    }
+
+    hdrLen = aps_hdr_parse(apsPayload, hdr);
+    hdr->hdrLen = hdrLen;
+    if (apsPayloadLen < hdrLen) {
+        zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
+
+    localInd.cluster_id = hdr->clusterId;
+    localInd.profile_id = hdr->profileId;
+    localInd.asdu = apsPayload + hdrLen;
+    localInd.asduLength = (u16)(apsPayloadLen - hdrLen);
+
+    epList = af_epDescriptorGet();
+    epNum = af_availableEpNumGet();
+    for (u8 i = 0; i < epNum; i++) {
+        if (!af_clsuterIdMatched(localInd.cluster_id, epList[i].correspond_simple_desc)) {
+            continue;
+        }
+
+        localInd.dst_ep = epList[i].ep;
+        memcpy(arg, &localInd, sizeof(localInd));
+        tl_zbTaskPost(af_aps_data_entry, arg);
+        return;
+    }
+
+    zb_buf_free((zb_buf_t *)arg);
+}
 void apsTxEventPost(aps_tx_cache_list_t *cache, u8 event, u8 status)
 {
     (void)status;
@@ -1075,7 +1175,34 @@ void aps_nwk_data_confirm_cb(void *arg)
 
     zb_buf_free((zb_buf_t *)arg);
 }
-void aps_nwk_data_indication_cb(void *arg) { aps_data_indication_process(arg); }
+void aps_nwk_data_indication_cb(void *arg)
+{
+    nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
+    aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
+    u8 hdrLen = aps_hdr_parse(ind->nsdu, hdr);
+
+    hdr->hdrLen = hdrLen;
+    hdr->srcShortAddr = ind->srcAddr;
+
+    if (ind->dstAddrMode == 1U) {
+        hdr->frameCtrl = (u8)((hdr->frameCtrl & (u8)~0x0cU) | 0x0cU);
+        COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
+    } else {
+        if (ind->nsduLen <= hdrLen) {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+
+        if ((hdr->frameCtrl & 0x03U) == 0U &&
+            (hdr->frameCtrl & 0x0cU) != 0x0cU &&
+            !af_profileMatchedLocal(hdr->profileId, hdr->dstEp)) {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+    }
+
+    tl_zbTaskPost(aps_data_indication_process, arg);
+}
 u8 apsHandleIsExit(u8 handle)
 {
     for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
@@ -1091,6 +1218,7 @@ u8 apsHandleIsExit(u8 handle)
 
 aps_tx_cache_list_t *apsTxDataPost(u8 ackNeed, u8 addrReqNeed, u8 interPan, void *payload, u8 *cnf)
 {
+    aps_confirm_buf_t *confirm = (aps_confirm_buf_t *)cnf;
     aps_tx_cache_list_t *freeEntry = NULL;
 
     for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
@@ -1099,12 +1227,12 @@ aps_tx_cache_list_t *apsTxDataPost(u8 ackNeed, u8 addrReqNeed, u8 interPan, void
         if (cache->used) {
             if (memcmp(cache->dstAddr.addr_long, cnf, EXT_ADDR_LEN) == 0 &&
                 aps_cache_state(cache) == APS_CACHE_STATE_ADDR_REQ) {
-                cnf[11] = APS_STATUS_SHORT_ADDR_REQUESTING;
+                confirm->status = APS_STATUS_SHORT_ADDR_REQUESTING;
                 return NULL;
             }
 
-            if (cache->handler == cnf[16]) {
-                cnf[11] = APS_STATUS_HANDLE_BACKING;
+            if (cache->handler == confirm->handle) {
+                confirm->status = APS_STATUS_HANDLE_BACKING;
                 return NULL;
             }
         } else if (freeEntry == NULL) {
@@ -1113,20 +1241,20 @@ aps_tx_cache_list_t *apsTxDataPost(u8 ackNeed, u8 addrReqNeed, u8 interPan, void
     }
 
     if (freeEntry == NULL) {
-        cnf[11] = APS_STATUS_INTERNAL_BUF_FULL;
+        confirm->status = APS_STATUS_INTERNAL_BUF_FULL;
         return NULL;
     }
 
     memset(freeEntry, 0, sizeof(*freeEntry));
     freeEntry->used = 1;
     freeEntry->payload = payload;
-    freeEntry->dstEndpoint = cnf[8];
+    freeEntry->dstEndpoint = confirm->ep.af.dstEndpoint;
     memcpy(freeEntry->dstAddr.addr_long, cnf, EXT_ADDR_LEN);
-    freeEntry->ep = cnf[9];
-    freeEntry->dstAddrMode = cnf[10];
-    freeEntry->handler = cnf[16];
-    freeEntry->apsCount = cnf[17];
-    freeEntry->clusterId = (u16)cnf[18] | ((u16)cnf[19] << 8);
+    freeEntry->ep = confirm->ep.af.srcEndpoint;
+    freeEntry->dstAddrMode = confirm->ep.af.dstAddrMode;
+    freeEntry->handler = confirm->handle;
+    freeEntry->apsCount = confirm->apsCnt;
+    freeEntry->clusterId = confirm->clusterId;
     freeEntry->payload = payload;
     freeEntry->addrReqNeed = addrReqNeed ? 1U : 0U;
     freeEntry->ackNeed = ackNeed ? 1U : 0U;
@@ -1244,7 +1372,7 @@ int apsAckPeriodic(void *arg)
 void aps_cmd_send(void *arg, u8 handle)
 {
     aps_cmd_send_req_t *req = (aps_cmd_send_req_t *)arg;
-    u8 cnf[APS_DATA_CONFIRM_LEN] = {0};
+    aps_confirm_buf_t cnf;
     nlde_data_req_t *nldereq;
     aps_tx_cache_list_t *cache;
     u8 apsCounter;
@@ -1255,26 +1383,28 @@ void aps_cmd_send(void *arg, u8 handle)
     u16 dstShortAddr = 0;
     u16 idx = 0;
 
+    memset(&cnf, 0, sizeof(cnf));
+
     if (req == NULL || req->txBuf == NULL || req->adu == NULL) {
         return;
     }
 
     apsCounter = aps_get_counter_value();
-    cnf[16] = handle;
-    cnf[17] = apsCounter;
-    cnf[8] = req->addrMode;
+    cnf.handle = handle;
+    cnf.apsCnt = apsCounter;
+    cnf.ep.af.dstAddrMode = req->addrMode;
 
     if (req->addrMode == APS_SHORT_DSTADDR_WITHEP) {
-        COPY_U16TOBUFFER(cnf, req->dstAddr.shortAddr);
+        cnf.dstAddr.addr_short = req->dstAddr.shortAddr;
         dstShortAddr = req->dstAddr.shortAddr;
     } else if (req->addrMode == APS_LONG_DSTADDR_WITHEP) {
-        memcpy(cnf, req->dstAddr.extAddr, EXT_ADDR_LEN);
+        memcpy(cnf.dstAddr.addr_long, req->dstAddr.extAddr, EXT_ADDR_LEN);
         if (tl_zbShortAddrByExtAddr(&dstShortAddr, req->dstAddr.extAddr, &idx) != RET_OK) {
             addrReqNeed = 1;
         }
     } else {
-        cnf[11] = APS_STATUS_INVALID_PARAMETER;
-        aps_conf(cnf);
+        cnf.status = APS_STATUS_INVALID_PARAMETER;
+        aps_conf(&cnf);
         zb_buf_free(req->txBuf);
         return;
     }
@@ -1307,8 +1437,8 @@ void aps_cmd_send(void *arg, u8 handle)
         if (req->addrMode == APS_SHORT_DSTADDR_WITHEP) {
             extAddrPtr = tl_zbExtAddrPtrByShortAddr(req->dstAddr.shortAddr);
             if (extAddrPtr == NULL) {
-                cnf[11] = APS_STATUS_SECURITY_FAIL;
-                aps_conf(cnf);
+                cnf.status = APS_STATUS_SECURITY_FAIL;
+                aps_conf(&cnf);
                 zb_buf_free(req->txBuf);
                 return;
             }
@@ -1317,16 +1447,16 @@ void aps_cmd_send(void *arg, u8 handle)
         }
 
         if (ss_apsSecureFrame((zb_buf_t *)nldereq, (u8)(2 + auxLen), 2, *extAddrPtr) != RET_OK) {
-            cnf[11] = APS_STATUS_SECURITY_FAIL;
-            aps_conf(cnf);
+            cnf.status = APS_STATUS_SECURITY_FAIL;
+            aps_conf(&cnf);
             zb_buf_free(req->txBuf);
             return;
         }
     }
 
-    cache = apsTxDataPost((nsdu[0] & 0x40U) ? 1U : 0U, addrReqNeed, 0, req->txBuf, cnf);
+    cache = apsTxDataPost((nsdu[0] & 0x40U) ? 1U : 0U, addrReqNeed, 0, req->txBuf, (u8 *)&cnf);
     if (cache == NULL) {
-        aps_conf(cnf);
+        aps_conf(&cnf);
         zb_buf_free(req->txBuf);
         return;
     }
