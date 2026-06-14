@@ -21,25 +21,28 @@ tl_zb_mac_ctx_t g_zbMacCtx;
 
 static inline u8 *phy_ind_payload_ptr_get(void *arg)
 {
+    zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)arg;
     u8 *ptr = NULL;
 
-    memcpy(&ptr, (u8 *)arg + 4, sizeof(ptr));
+    memcpy(&ptr, &meta->payload, sizeof(ptr));
     return ptr;
 }
 
 static inline void phy_ind_payload_ptr_set(void *arg, u8 *ptr)
 {
-    memcpy((u8 *)arg + 4, &ptr, sizeof(ptr));
+    zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)arg;
+
+    memcpy(&meta->payload, &ptr, sizeof(ptr));
 }
 
 static inline u8 phy_ind_payload_len_get(void *arg)
 {
-    return ((u8 *)arg)[19];
+    return ((zb_mac_rx_meta_t *)arg)->payloadLen;
 }
 
 static inline void phy_ind_payload_len_set(void *arg, u8 len)
 {
-    ((u8 *)arg)[19] = len;
+    ((zb_mac_rx_meta_t *)arg)->payloadLen = len;
 }
 
 static inline u8 *phy_ind_payload_advance(void *arg, u8 hdrLen)
@@ -57,6 +60,7 @@ typedef struct {
 
 static bool phy_ind_beacon_notify_post(zb_buf_t *buf, tl_zb_mac_mhr_t *mhr, u8 *payload, u8 payloadLen)
 {
+    zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)buf;
     enum {
         BEACON_NOTIFY_SIZE = sizeof(zb_mlme_beacon_notify_ind_t),
         BEACON_FIXED_OVERHEAD = 4,
@@ -90,7 +94,7 @@ static bool phy_ind_beacon_notify_post(zb_buf_t *buf, tl_zb_mac_mhr_t *mhr, u8 *
     memmove(safe, payload, payloadLen);
 
     memset(&ind, 0, sizeof(ind));
-    memcpy(&ind.panDesc.timestamp, buf, sizeof(ind.panDesc.timestamp));
+    ind.panDesc.timestamp = meta->timestamp;
     ind.panDesc.coordPanId = mhr->srcPanId;
     ind.panDesc.superframeSpec = (u16)safe[0] | ((u16)safe[1] << 8);
     ind.panDesc.coordAddr.addrMode = mhr->srcAddrMode;
@@ -99,9 +103,9 @@ static bool phy_ind_beacon_notify_post(zb_buf_t *buf, tl_zb_mac_mhr_t *mhr, u8 *
     } else {
         ind.panDesc.coordAddr.addr.shortAddr = mhr->srcAddr.shortAddr;
     }
-    ind.panDesc.logicalChannel = ((u8 *)buf)[21];
+    ind.panDesc.logicalChannel = meta->curChannel;
     ind.panDesc.gtsPermit = safe[2];
-    ind.panDesc.linkQuality = ((u8 *)buf)[20];
+    ind.panDesc.linkQuality = meta->linkQuality;
     ind.pAddrList = (addrListLen != 0U) ? (safe + BEACON_FIXED_OVERHEAD) : NULL;
     ind.psdu = safe + beaconPayloadOffset;
     ind.bsn = mhr->seqNum;
@@ -164,6 +168,9 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
     macPld = phy_ind_payload_ptr_get(arg);
     frameType = macPld[0] & 0x07U;
 
+    printk("zb dbg phy_ind: frameType=%u autoReq=%u mac_status=%u\n",
+           frameType, g_zbMacPib.autoReq, g_zbMacCtx.status);
+
     if (mhr->dstAddrMode == ADDR_MODE_SHORT &&
         mhr->dstAddr.shortAddr == MAC_SHORT_ADDR_BROADCAST) {
         g_sysDiags.macRxBcast++;
@@ -211,8 +218,12 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
         return;
     }
 
+    printk("zb dbg phy_ind: calling phy_ind_beacon_notify_post\n");
     if (!phy_ind_beacon_notify_post(buf, mhr, macPld, phy_ind_payload_len_get(arg))) {
+        printk("zb dbg phy_ind: beacon_notify_post returned false, freeing buf\n");
         zb_buf_free(buf);
+    } else {
+        printk("zb dbg phy_ind: beacon_notify_post returned true\n");
     }
 }
 
@@ -320,6 +331,8 @@ void tl_zbMacTaskProc(void)
 
     if (task != NULL && taskInfo.data != NULL) {
         u8 primitive = ((zb_buf_t *)taskInfo.data)->hdr.id;
+
+        printk("zb dbg mac_task: primitive=0x%02x\n", primitive);
 
 #if defined(ZB_ROUTER_ROLE)
         for (u8 i = 0; i < ARRAY_SIZE(g_zbMacEventFromNwkTbl); i++) {

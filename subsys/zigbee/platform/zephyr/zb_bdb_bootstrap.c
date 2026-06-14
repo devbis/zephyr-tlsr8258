@@ -461,7 +461,21 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 		return 0xFFU;
 	}
 
+#if defined(CONFIG_ZIGBEE_ROUTER)
+	{
+		uint8_t scan_channel = (g_zbMacPib.phyChannelCur != 0U)
+			? g_zbMacPib.phyChannelCur
+			: (uint8_t)CONFIG_ZIGBEE_CHANNEL;
+		int rc = zb_platform_radio_start_on_channel(scan_channel);
+
+		printk("zb bdb steer: radio start ch=%u rc=%d\n",
+		       scan_channel, rc);
+	}
+#endif
+
+	printk("zb bdb steer: calling bdb_networkSteerStart\n");
 	status = bdb_networkSteerStart();
+	printk("zb bdb steer: bdb_networkSteerStart status=%u\n", status);
 	return status;
 #endif
 }

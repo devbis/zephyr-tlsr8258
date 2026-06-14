@@ -353,19 +353,6 @@ void app_bdb_start_commissioning(void)
 		return;
 	}
 
-	if (APP_BDB_ROLE_ROUTER) {
-		status = zb_routerStart();
-		app_bdb_retry_trace_put((0x27U << 24) | status);
-		zb_nwk_ed_trace[14] = 0xA4B10000U | status;
-		if (status == 0U) {
-			commissioning_start_requested = true;
-			app_bdb_commissioning_retry_cancel();
-		} else {
-			commissioning_start_requested = false;
-		}
-		return;
-	}
-
 	status = zb_platform_bdb_network_steer_start();
 	app_bdb_retry_trace_put((0x07U << 24) | status);
 	zb_nwk_ed_trace[14] = 0xA4B00000U | status;
