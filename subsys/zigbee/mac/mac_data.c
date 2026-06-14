@@ -21,18 +21,6 @@ enum {
     BUF_SAVED_LQI_OFFSET = 0xc2,
 };
 
-typedef struct _attribute_packed_ {
-    u32 timestamp;
-    u8 *payload;
-    u8 dstAddrMode;
-    u8 srcAddrMode;
-    u8 srcAddr[8];
-    u8 frameType;
-    u8 payloadLen;
-    u8 linkQuality;
-    u8 curChannel;
-} mac_data_meta_t;
-
 /* Vendor build pinned these offsets to the wire-packed layout. The
  * Zephyr build leaves the shared types naturally aligned so the
  * assertions do not hold; see the matching note in nwk_data.c.
@@ -68,9 +56,9 @@ static inline zb_mscp_data_req_t *mac_data_req(zb_buf_t *buf)
     return (zb_mscp_data_req_t *)buf;
 }
 
-static inline mac_data_meta_t *mac_data_meta(zb_buf_t *buf)
+static inline zb_mac_rx_meta_t *mac_data_meta(zb_buf_t *buf)
 {
-    return (mac_data_meta_t *)buf;
+    return (zb_mac_rx_meta_t *)buf;
 }
 
 void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status)
@@ -166,26 +154,47 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
 
 void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
 {
-    u8 linkQuality = ((u8 *)buf)[20];
-    u32 payload = *(u32 *)(void *)((u8 *)buf + 4);
+    /*
+     * Vendor libzigbee wrote into buf via 32-bit-pinned byte offsets
+     * (`((u8 *)buf)[8..32]`) that assumed `u8 *msdu` is 4 bytes wide
+     * and that addr_t is packed to 9 bytes. On native_sim/native/64
+     * the pointer is 8 bytes and addr_t aligns to 10, so those byte
+     * writes clobber the upper half of `ind->msdu` and land the
+     * src/dst addr fields at the wrong offsets. Use the struct
+     * fields directly so the layout follows whatever sizeof()
+     * decides on each target.
+     */
+    zb_mac_rx_meta_t *meta = mac_data_meta(buf);
+    tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
+    u8 *msdu;
+    u8 msduLen = (u8)(meta->payloadLen - len);
+    u8 linkQuality = meta->linkQuality;
+    bool frame_pending_set =
+        (g_zbMacPib.rxOnWhenIdle == 0U) && ((raw[0] & MAC_FCF_FRAME_PENDING_MASK) != 0U);
+    zb_mscp_data_ind_t *ind;
 
-    *(u32 *)(void *)((u8 *)buf + 4) = payload;
-    ((u8 *)buf)[30] = (u8)(((u8 *)buf)[19] - len);
-    ((u8 *)buf)[29] = raw[2];
-    memcpy((u8 *)buf + 21, raw + 8, EXT_ADDR_LEN);
-    ((u8 *)buf)[10] = raw[6];
-    ((u8 *)buf)[11] = raw[7];
-    ((u8 *)buf)[20] = raw[3];
-    memcpy((u8 *)buf + 12, raw + 18, EXT_ADDR_LEN);
-    if (raw[4] != 0U) {
-        ((u8 *)buf)[8] = raw[16];
-        ((u8 *)buf)[9] = raw[17];
+    /* meta and ind alias the same buf; preserve meta->payload (== msdu)
+     * before we start clobbering by writing ind fields. */
+    memcpy(&msdu, &meta->payload, sizeof(msdu));
+
+    ind = (zb_mscp_data_ind_t *)buf;
+    memset(ind, 0, sizeof(*ind));
+    ind->msdu = msdu;
+    ind->msduLength = msduLen;
+    ind->mpduLinkQuality = linkQuality;
+    ind->dsn = mhr->seqNum;
+
+    ind->dstPanId = mhr->dstPanId;
+    ind->dstAddr.addrMode = mhr->dstAddrMode;
+    memcpy(&ind->dstAddr.addr, &mhr->dstAddr, sizeof(mhr->dstAddr));
+
+    if (mhr->panIdMode != 0U) {
+        ind->srcPanId = mhr->srcPanId;
     }
-    ((u8 *)buf)[32] = raw[5];
-    ((u8 *)buf)[31] = linkQuality;
+    ind->srcAddr.addrMode = mhr->srcAddrMode;
+    memcpy(&ind->srcAddr.addr, &mhr->srcAddr, sizeof(mhr->srcAddr));
 
-    if (g_zbMacPib.rxOnWhenIdle == 0U &&
-        (raw[0] & MAC_FCF_FRAME_PENDING_MASK) != 0U) {
+    if (frame_pending_set) {
         buf->hdr.pending = 1;
     }
 
