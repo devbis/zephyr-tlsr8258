@@ -9,6 +9,8 @@
 #include <zephyr/zigbee/native_sim_socket_medium.h>
 
 enum zb_host_socket_frame_type {
+	ZB_HOST_SOCKET_FRAME_BEACON_REQ,
+	ZB_HOST_SOCKET_FRAME_BEACON,
 	ZB_HOST_SOCKET_FRAME_ASSOC_REQ,
 	ZB_HOST_SOCKET_FRAME_ASSOC_RSP,
 	ZB_HOST_SOCKET_FRAME_DATA_REQ,
@@ -29,6 +31,15 @@ struct zb_host_socket_coord {
 	bool got_timeout_req;
 	bool got_device_announce;
 	bool interview_complete;
+	/*
+	 * Set when the last joiner's AssocReq advertised
+	 * MAC_CAP_RX_ON_WHEN_IDLE (cap byte bit 3). For such joiners
+	 * (routers / FFDs) the coord pushes queued frames like
+	 * TRANSPORT_KEY immediately after AssocResp instead of waiting
+	 * for an indirect-data DataRequest poll — the daemon drains them
+	 * via zb_host_socket_coord_drain_unsolicited().
+	 */
+	bool deliver_queued_unsolicited;
 	uint8_t last_assoc_status;
 	uint16_t pan_id;
 	uint16_t next_child_short;
@@ -53,5 +64,15 @@ struct zb_native_sim_socket_medium_msg zb_host_socket_coord_make_tx(
 void zb_host_socket_coord_observed_model_id(const struct zb_host_socket_coord *coord,
 					    char *buffer, size_t buffer_len);
 uint8_t zb_host_socket_coord_last_assoc_status(const struct zb_host_socket_coord *coord);
+
+/*
+ * Pop the next queued frame onto `output` if the joiner advertised
+ * rx-on-when-idle in its last AssocReq. Returns 1 if `output` was
+ * filled in, 0 otherwise. The daemon calls this in a loop after the
+ * normal coord_process reply so router-class joiners receive
+ * TRANSPORT_KEY etc. without having to send a DataRequest poll.
+ */
+int zb_host_socket_coord_drain_unsolicited(struct zb_host_socket_coord *coord,
+					    struct zb_native_sim_socket_medium_msg *output);
 
 #endif /* TESTS_SUBSYS_ZIGBEE_HOST_SOCKET_COORDINATOR_COORD_LOGIC_H_ */
