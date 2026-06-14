@@ -211,7 +211,18 @@ void tl_zbMacAssociateRequestHandler(void *arg)
             txBuf->hdr.handle = 0xe0U;
             payload = tl_zbMacHdrBuilder(psdu, &mhr);
             payload[0] = MAC_CMD_ASSOCIATION_REQUEST;
-            payload[1] = req[13];
+            /*
+             * Vendor reads req[13], but in the Zephyr-port layout of
+             * zb_mlme_associate_req_t the capability_info_t byte sits
+             * at offset 14: addr_t.addrMode is at offset 12 and offset
+             * 13 is the implicit u8 padding to align addr_t to 2 bytes
+             * (sizeof(addr_t) == 10 here). req[13] reads padding (0)
+             * and the parent silently rejects the AssocReq because the
+             * cap byte advertises rx-off-when-idle / RFD-no-mains, so
+             * the coord treats the joiner as a non-FFD ED instead of a
+             * router. Use req[14] to pick up the real cap byte.
+             */
+            payload[1] = req[14];
 
             txStatus = tl_zbMacTx(txBuf, psdu, hdrSize, 1, NULL);
         }
