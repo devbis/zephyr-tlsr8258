@@ -16,6 +16,41 @@
 #include "mac/includes/mac_internal.h"
 
 #if defined(ZB_ROUTER_ROLE)
+typedef struct _attribute_packed_ {
+    /* Holds a pointer; vendor used u32, promoted to uintptr_t so the
+     * struct works on 64-bit native_sim too. */
+    uintptr_t payloadAddr;
+    u8 len;
+} mac_packet_delay_ctx_t;
+
+typedef struct _attribute_packed_ {
+    u8 bytes0_7[8];
+    u16 shortAddr;
+    u8 reserved10;
+} mac_orphan_saved_t;
+
+typedef struct _attribute_packed_ {
+    u8 reserved0[2];
+    u8 srcAddrBytes[8];
+    u8 srcAddrMode;
+    u16 dstShortAddr;
+    u8 reserved13[6];
+    u8 dstAddrMode;
+    u8 status;
+    u8 isAssoc;
+} mac_orphan_comm_status_buf_t;
+
+/* Vendor STATIC_ASSERTs pinned to -fpack-struct sizes:
+ *   mac_packet_delay_ctx_t == 5, mac_orphan_saved_t == 11,
+ *   mac_orphan_comm_status_buf_t == 22.
+ * On 64-bit native_sim payloadAddr is 8 bytes so the assert would
+ * fire; gate it like the other vendor-pinned offsets in this tree. */
+#if 0
+STATIC_ASSERT(sizeof(mac_packet_delay_ctx_t) == 5);
+STATIC_ASSERT(sizeof(mac_orphan_saved_t) == 11);
+STATIC_ASSERT(sizeof(mac_orphan_comm_status_buf_t) == 22);
+#endif
+
 static inline void store_le16(u8 *dst, u16 value)
 {
     dst[0] = (u8)value;
@@ -54,8 +89,13 @@ u8 tl_zbMacMlmeBeaconCmdSend(tl_zbBeaconFrame_t *beacon)
     ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 3] |= 0x08U;
 
     payload = tl_bufInitalloc(buf, len);
-    memcpy(buf->buf, &payload, sizeof(payload));
-    buf->buf[4] = len;
+    {
+        mac_packet_delay_ctx_t ctx;
+
+        ctx.payloadAddr = (uintptr_t)payload;
+        ctx.len = len;
+        memcpy(buf->buf, &ctx, sizeof(ctx));
+    }
     memset(payload, 0, len);
 
     payload = tl_zbMacHdrBuilder(payload, &mhr);
@@ -144,20 +184,17 @@ void tl_zbMacBeaconRequestCb(void)
 int tl_zbMacPacketDelaySend(void *arg)
 {
     zb_buf_t *buf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
+    mac_packet_delay_ctx_t ctx;
     u8 *payload;
     u8 len;
     u8 status;
-    u32 payloadAddr;
 
     (void)arg;
 
     buf->hdr.handle = 0xe3U;
-    payloadAddr = (u32)buf->buf[0] |
-                  ((u32)buf->buf[1] << 8) |
-                  ((u32)buf->buf[2] << 16) |
-                  ((u32)buf->buf[3] << 24);
-    payload = (u8 *)payloadAddr;
-    len = buf->buf[4];
+    memcpy(&ctx, buf->buf, sizeof(ctx));
+    payload = (u8 *)ctx.payloadAddr;
+    len = ctx.len;
     status = tl_zbMacTx(buf, payload, len, 0, NULL);
 
     return (status == MAC_SUCCESS) ? -1 : 0;
@@ -165,19 +202,18 @@ int tl_zbMacPacketDelaySend(void *arg)
 
 void tl_zbMacOrphanResponseHandler(void *arg)
 {
-    u8 saved[11];
-    u16 shortAddr;
+    mac_orphan_saved_t saved;
+    mac_orphan_saved_t *req = (mac_orphan_saved_t *)arg;
     u8 status;
 
-    memset(saved, 0, sizeof(saved));
-    memcpy(saved, arg, sizeof(saved));
+    memset(&saved, 0, sizeof(saved));
+    memcpy(&saved, arg, sizeof(saved));
     memcpy((u8 *)arg + 4, &g_zbInfo.macPib.panId, sizeof(g_zbInfo.macPib.panId));
     ((u8 *)arg)[6] = g_zbMacCtx.curChannel;
     ((u8 *)arg)[7] = 0;
     ((zb_buf_t *)arg)->hdr.handle = 0xe5U;
-    memcpy(&shortAddr, saved + 8, sizeof(shortAddr));
 
-    status = tl_zbMacMlmeCoordRealignmentCmdSend(0, saved, shortAddr, arg);
+    status = tl_zbMacMlmeCoordRealignmentCmdSend(0, saved.bytes0_7, req->shortAddr, arg);
     if (status != MAC_SUCCESS) {
         tl_zbMacOrphanResponseStatusCheck(arg, MAC_STA_TRANSACTION_OVERFLOW);
     }
@@ -185,21 +221,20 @@ void tl_zbMacOrphanResponseHandler(void *arg)
 
 void tl_zbMacOrphanResponseStatusCheck(void *arg, u8 status)
 {
-    u8 saved[11];
-    u8 *buf = (u8 *)arg;
+    mac_orphan_saved_t saved;
+    mac_orphan_comm_status_buf_t *ind = (mac_orphan_comm_status_buf_t *)arg;
 
-    memcpy(saved, buf, sizeof(saved));
+    memcpy(&saved, arg, sizeof(saved));
     if (status != MAC_SUCCESS) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
 
-    buf[20] = 0;
-    buf[21] = 0;
-    memcpy(buf + 2, saved, 8);
-    buf[10] = ADDR_MODE_EXT;
-    memcpy(buf + 11, saved + 8, 2);
-    buf[19] = ADDR_MODE_SHORT;
+    memset(ind, 0, sizeof(*ind));
+    memcpy(ind->srcAddrBytes, saved.bytes0_7, sizeof(ind->srcAddrBytes));
+    ind->srcAddrMode = ADDR_MODE_EXT;
+    ind->dstShortAddr = saved.shortAddr;
+    ind->dstAddrMode = ADDR_MODE_SHORT;
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_COMM_STATUS_IND, arg);
 }
 

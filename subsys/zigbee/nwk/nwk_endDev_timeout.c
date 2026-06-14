@@ -37,8 +37,6 @@ extern void zb_buf_clear(zb_buf_t *buf);
 
 enum {
 	NWK_CTX_FLAGS0_OFFSET = 45,
-	NWK_HDR_FRAME_CTRL_LOW_OFFSET = 4,
-	NWK_HDR_FRAME_CTRL_HIGH_OFFSET = 5,
 };
 
 typedef struct {
@@ -46,7 +44,36 @@ typedef struct {
 	addrExt_t extAddr;
 } nwk_endDevTimeout_nv_t;
 
+typedef struct _attribute_packed_ {
+	u16 dstAddr;
+	u16 srcAddr;
+	u8 frameCtrlLow;
+	u8 frameCtrlHigh;
+} nwk_hdr_frame_ctrl_bytes_t;
+
+typedef struct _attribute_packed_ {
+	u8 cmdId;
+	nwkCmd_endDevTimeoutReq_t req;
+} nwk_endDevTimeout_req_payload_t;
+
+typedef struct _attribute_packed_ {
+	u8 cmdId;
+	nwkCmd_endDevTimeoutResp_t rsp;
+} nwk_endDevTimeout_rsp_payload_t;
+
+typedef struct _attribute_packed_ {
+	u8 reserved0[9];
+	u8 status;
+	u16 srcAddr;
+} nwk_endDevTimeout_req_cnf_t;
+
 STATIC_ASSERT(sizeof(nwk_endDevTimeout_nv_t) == 12);
+/* Vendor layout asserts — naturally aligned in the Zephyr build matches
+ * the packed sizes here (all small u8/u16 fields), keep them on. */
+STATIC_ASSERT(sizeof(nwk_hdr_frame_ctrl_bytes_t) == 6);
+STATIC_ASSERT(sizeof(nwk_endDevTimeout_req_payload_t) == 3);
+STATIC_ASSERT(sizeof(nwk_endDevTimeout_rsp_payload_t) == 3);
+STATIC_ASSERT(sizeof(nwk_endDevTimeout_req_cnf_t) == 12);
 
 
 ev_timer_event_t *keepaliveMsgSendEvt = NULL;
@@ -62,16 +89,17 @@ int nwkEndDevWaitForTimeoutRspCb(void *arg)
 
 void nwkEndDevTimeoutReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 handle)
 {
-	u8 *payload = tl_bufInitalloc(buf, 3);
+	nwkCmd_t *nwkCmd = (nwkCmd_t *)cmd;
+	nwk_endDevTimeout_req_payload_t *payload =
+		(nwk_endDevTimeout_req_payload_t *)tl_bufInitalloc(buf, 3);
 	u16 nextHop = pNwkHdr->dstAddr;
 
-	payload[0] = cmd[0];
-	payload[1] = cmd[4];
-	payload[2] = cmd[5];
+	payload->cmdId = nwkCmd->cmdId;
+	payload->req = nwkCmd->endDevTimeoutReq;
 
 	buf->hdr.handle = handle;
 
-	nwk_tx(buf, pNwkHdr, nextHop, 0, payload, 3);
+	nwk_tx(buf, pNwkHdr, nextHop, 0, (u8 *)payload, 3);
 }
 
 void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
@@ -90,7 +118,7 @@ void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
 
 	nwk_hdr_t nwkHdr;
 	nwkCmd_t cmd;
-	u8 *hdr = (u8 *)&nwkHdr;
+	nwk_hdr_frame_ctrl_bytes_t *hdr = (nwk_hdr_frame_ctrl_bytes_t *)&nwkHdr;
 	u8 parentInfo = g_zbNIB.parentInfo;
 	u8 security = 0;
 	memset(&nwkHdr, 0, sizeof(nwkHdr));
@@ -109,16 +137,16 @@ void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
 		parentInfo--;
 	}
 
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] & (u8)~0x20U) | (u8)(parentInfo << 5));
-	hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] & (u8)~0x3cU) | 0x08U);
-	hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] & (u8)~0x03U) | 0x01U);
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] & (u8)~0x02U) | (u8)(security << 1));
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] |= 0x10U;
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] |= 0x3cU;
+	hdr->frameCtrlHigh =
+		(u8)((hdr->frameCtrlHigh & (u8)~0x20U) | (u8)(parentInfo << 5));
+	hdr->frameCtrlLow =
+		(u8)((hdr->frameCtrlLow & (u8)~0x3cU) | 0x08U);
+	hdr->frameCtrlLow =
+		(u8)((hdr->frameCtrlLow & (u8)~0x03U) | 0x01U);
+	hdr->frameCtrlHigh =
+		(u8)((hdr->frameCtrlHigh & (u8)~0x02U) | (u8)(security << 1));
+	hdr->frameCtrlHigh |= 0x10U;
+	hdr->frameCtrlHigh |= 0x3cU;
 
 	memcpy(nwkHdr.srcIeeeAddr, g_zbMacPib.extAddress, EXT_ADDR_LEN);
 	tl_zbExtAddrByIdx(parent->addrmapIdx, nwkHdr.dstIeeeAddr);
@@ -212,9 +240,9 @@ void nwkEndDevTimeoutRspCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
 void nwkEndDevTimeoutReqCnfHandler(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	nwk_endDevTimeout_req_cnf_t *buf = (nwk_endDevTimeout_req_cnf_t *)arg;
 
-	if (buf[9] == 0U) {
+	if (buf->status == 0U) {
 		zb_buf_free((zb_buf_t *)arg);
 
 		if (g_zbInfo.macPib.rxOnWhenIdle != 0U) {
@@ -229,7 +257,7 @@ void nwkEndDevTimeoutReqCnfHandler(void *arg)
 	}
 
 	tl_zbNwkNlmeNwkStatusInd(arg,
-				 (u16)buf[10] | ((u16)buf[11] << 8),
+				 buf->srcAddr,
 				 NWK_COMMAND_STATUS_PARENT_LINK_FAILURE);
 }
 
@@ -282,15 +310,16 @@ void nwkEndDevKeepaliveSupport(u8 keepaliveSupport)
 
 void nwkEndDevTimeoutRspCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 handle)
 {
-	u8 *payload = tl_bufInitalloc(buf, 3);
+	nwkCmd_t *nwkCmd = (nwkCmd_t *)cmd;
+	nwk_endDevTimeout_rsp_payload_t *payload =
+		(nwk_endDevTimeout_rsp_payload_t *)tl_bufInitalloc(buf, 3);
 
-	payload[0] = cmd[0];
-	payload[1] = cmd[4];
-	payload[2] = cmd[5];
+	payload->cmdId = nwkCmd->cmdId;
+	payload->rsp = nwkCmd->endDevTimeoutRsp;
 
 	buf->hdr.handle = handle;
 
-	nwk_fwdPacket(buf, pNwkHdr, payload, 3);
+	nwk_fwdPacket(buf, pNwkHdr, (u8 *)payload, 3);
 }
 
 void nwkEndDevTimeoutInfoStore(tl_zb_normal_neighbor_entry_t *entry)
@@ -313,7 +342,7 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	nwkCmd_t rsp;
 	nwk_hdr_t nwkHdr;
-	u8 *hdr = (u8 *)&nwkHdr;
+	nwk_hdr_frame_ctrl_bytes_t *hdr = (nwk_hdr_frame_ctrl_bytes_t *)&nwkHdr;
 	u8 security = 0;
 
 	memset(&rsp, 0, sizeof(rsp));
@@ -359,14 +388,14 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		}
 	}
 
-	hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] & (u8)~0x3cU) | 0x08U);
-	hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_LOW_OFFSET] & (u8)~0x03U) | 0x01U);
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] =
-		(u8)((hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] & (u8)~0x02U) | (u8)(security << 1));
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] |= 0x10U;
-	hdr[NWK_HDR_FRAME_CTRL_HIGH_OFFSET] |= 0x08U;
+	hdr->frameCtrlLow =
+		(u8)((hdr->frameCtrlLow & (u8)~0x3cU) | 0x08U);
+	hdr->frameCtrlLow =
+		(u8)((hdr->frameCtrlLow & (u8)~0x03U) | 0x01U);
+	hdr->frameCtrlHigh =
+		(u8)((hdr->frameCtrlHigh & (u8)~0x02U) | (u8)(security << 1));
+	hdr->frameCtrlHigh |= 0x10U;
+	hdr->frameCtrlHigh |= 0x08U;
 
 	memcpy(nwkHdr.srcIeeeAddr, g_zbMacPib.extAddress, EXT_ADDR_LEN);
 	memcpy(nwkHdr.dstIeeeAddr, pNwkHdr->srcIeeeAddr, EXT_ADDR_LEN);

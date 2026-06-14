@@ -1288,7 +1288,9 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
         printf("lqi = %x\n", g_zb_neighborTbl.additionNeighborTbl[i].lqi);
     }
 #endif
+    printk("zb dbg bdb_nwkDiscCnfCb: calling zb_assocJoinReq\n");
     status = zb_assocJoinReq();
+    printk("zb dbg bdb_nwkDiscCnfCb: zb_assocJoinReq status=%u\n", status);
     if (status != SUCCESS) {
         BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
         TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
@@ -1312,6 +1314,10 @@ _CODE_BDB_ static void bdb_networkSteerFactoryNew(void)
                        aps_ib.aps_channel_mask;
     u8 scanDuration = g_bdbAttrs.scanDuration;
 
+    printk("zb dbg bdb_factory_new: channels=0x%08x duration=%u joined=%u\n",
+           (unsigned int)scanChannels, scanDuration,
+           (unsigned int)(g_bdbAttrs.nodeIsOnANetwork ? 1U : 0U));
+
     /* perform join work flow */
     zb_nwkDiscovery(scanChannels, scanDuration, bdb_nwkDiscCnfCb);
 }
@@ -1328,6 +1334,10 @@ _CODE_BDB_ static void bdb_networkSteerFactoryNew(void)
 _CODE_BDB_ static u8 bdb_commissioningNetworkSteer(void)
 {
     u8 status = BDB_STATE_IDLE;
+
+    printk("zb dbg bdb_commissioning: networkSteer=%u joined=%u\n",
+           (unsigned int)(g_bdbAttrs.commissioningMode.networkSteer ? 1U : 0U),
+           (unsigned int)(g_bdbAttrs.nodeIsOnANetwork ? 1U : 0U));
     if (!g_bdbAttrs.commissioningMode.networkSteer) {
         status = bdb_commissioningNetworkFormation();
     } else {

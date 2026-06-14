@@ -466,6 +466,8 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNldeDataRequestHandler(task->data);
             break;
         case NWK_NLME_NWK_DISCOVERY_REQ:
+            printk("zb dbg nwk_task: primitive=NWK_DISC state=%u\n",
+                   (unsigned int)g_zbNwkCtx.state);
             tl_zbNwkNlmeNwkDiscRequestHandler(task->data);
             break;
         case NWK_NLME_NWK_FORMATION_REQ:
@@ -517,6 +519,9 @@ void tl_zbNwkTaskProc(void)
         break;
     case MAC_MLME_SCAN_CNF:
         tl_zbMacMlmeScanConfirmHandler(task->data);
+        break;
+    case MAC_MLME_BEACON_NOTIFY_IND:
+        tl_zbMacMlmeBeaconNotifyIndicationHandler(task->data);
         break;
     case MAC_MLME_START_CNF:
         tl_zbMacMlmeStartConfirmHandler(task->data);
