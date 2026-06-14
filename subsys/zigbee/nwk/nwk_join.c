@@ -211,11 +211,18 @@ void nwk_associateJoin(void *arg)
     macReq->capbilityInfo = g_zbInfo.nwkNib.capabilityInfo;
 
     if (parent->addrMode == ZB_ADDR_16BIT_DEV_OR_BROADCAST) {
-        memcpy(&macReq->coordAddress, &parent->shortAddr, sizeof(parent->shortAddr));
+        memcpy(&macReq->coordAddress.addr.shortAddr, &parent->shortAddr,
+               sizeof(parent->shortAddr));
+        macReq->coordAddress.addrMode = ADDR_MODE_SHORT;
     } else if (parent->addrMode == ZB_ADDR_64BIT_DEV) {
-        memcpy(&macReq->coordAddress, parent->extAddr, EXT_ADDR_LEN);
+        memcpy(macReq->coordAddress.addr.extAddr, parent->extAddr, EXT_ADDR_LEN);
+        macReq->coordAddress.addrMode = ADDR_MODE_EXT;
     }
 
+    printk("zb dbg nwk_assocJoin: parent addrMode=%u short=0x%04x ch=%u pan=0x%04x\n",
+           parent->addrMode, parent->shortAddr, parent->logicChannel, parent->panId);
+    printk("zb dbg nwk_assocJoin: macReq logCh=%u coordPan=0x%04x size_addr_t=%zu\n",
+           macReq->logicalChannel, macReq->coordPanId, sizeof(macReq->coordAddress));
     tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_ASSOCIATE_REQ, arg);
 }
 
