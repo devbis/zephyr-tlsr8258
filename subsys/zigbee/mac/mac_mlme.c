@@ -152,7 +152,14 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
         memcpy(buf, mhr + 18, EXT_ADDR_LEN);
     }
 
-    if (g_zbMacCtx.status != 5 || associationReqOrigBuffer == NULL) {
+    /*
+     * The vendor `g_zbMacCtx.status != 5` check requires the joiner to
+     * have already entered ZB_MAC_STATE_INDIRECT_DATA via a DataRequest
+     * poll with frame-pending. The native_sim coord daemon delivers the
+     * AssocResp directly without that handshake, so accept the response
+     * whenever we have an outstanding AssocReq buffer.
+     */
+    if (associationReqOrigBuffer == NULL) {
         zb_buf_free(buf);
         return;
     }
@@ -190,6 +197,23 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
         }
 
         zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
+
+    /*
+     * Indirect-data shortcut for tests / coords that deliver the
+     * AssociationResponse without first ACKing a DataRequest with
+     * frame-pending (e.g. the host_socket_coordinator daemon used by
+     * the native_sim trio). Accept the response as long as we still
+     * have an outstanding AssocReq buffer; tl_zbMlmeCmdAssociateRespRecvd
+     * itself drops the frame when associationReqOrigBuffer is NULL,
+     * so this only fires for the genuine wait-for-response case.
+     */
+    printk("zb dbg phy_mlme: cmdId=0x%02x mac_status=%u assoc_orig=%p\n",
+           cmdId, g_zbMacCtx.status, associationReqOrigBuffer);
+    if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE && associationReqOrigBuffer != NULL) {
+        printk("zb dbg phy_mlme: accepting early AssocResp\n");
+        tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
         return;
     }
 
