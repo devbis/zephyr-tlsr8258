@@ -142,8 +142,9 @@ void mac_rxDataParse(void *arg)
     frameType = raw[0] & 0x07U;
     hdrSize = tl_zbMacHdrParse(&mhr, raw);
 
-    printk("zb dbg rxParse: frameType=%u len=%u hdrSize=%u mac_status=%u\n",
-           frameType, len, hdrSize, g_zbMacCtx.status);
+    printk("zb dbg rxParse: frameType=%u len=%u hdrSize=%u mac_status=%u raw=%02x%02x %02x %02x%02x\n",
+           frameType, len, hdrSize, g_zbMacCtx.status,
+           raw[0], raw[1], raw[2], raw[3], raw[4]);
     if (len <= hdrSize || g_zbMacCtx.status == 1U) {
         printk("zb dbg rxParse: drop (len<=hdr or ED_SCAN)\n");
         zb_buf_free(buf);
