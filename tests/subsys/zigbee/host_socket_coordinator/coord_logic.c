@@ -14,8 +14,10 @@
 #define ZB_ADDR_MODE_EXT    0x03u
 #define ZB_STANDARD_NWK_KEY 0x01u
 
+#define ZB_MAC_FCF_BEACON_SHORT  0x8000u
 #define ZB_MAC_FCF_COMMAND_SHORT 0x8863u
 #define ZB_MAC_FCF_DATA_EXT_SHORT 0x8c61u
+#define ZB_MAC_CMD_BEACON_REQ    0x07u
 #define ZB_MAC_CMD_ASSOC_REQ     0x01u
 #define ZB_MAC_CMD_ASSOC_RSP     0x02u
 #define ZB_MAC_CMD_DATA_REQ      0x04u
@@ -220,6 +222,34 @@ static size_t encode_mac_command(uint8_t *wire, uint8_t seq, uint16_t dst, uint1
 	return 10U;
 }
 
+static size_t encode_beacon_frame(uint8_t *wire, uint8_t seq, uint16_t src)
+{
+	put_le16(&wire[0], ZB_MAC_FCF_BEACON_SHORT);
+	wire[2] = seq;
+	put_le16(&wire[3], ZB_PAN_ID);
+	put_le16(&wire[5], src);
+	wire[7] = 0xffU;
+	wire[8] = 0xcfU;
+	wire[9] = 0x00U;
+	wire[10] = 0x00U;
+	wire[11] = 0x00U;
+	wire[12] = 0x22U;
+	wire[13] = 0x84U;
+	wire[14] = 0x70U;
+	wire[15] = 0xeeU;
+	wire[16] = 0x8fU;
+	wire[17] = 0x4fU;
+	wire[18] = 0x06U;
+	wire[19] = 0x9dU;
+	wire[20] = 0x09U;
+	wire[21] = 0x3bU;
+	wire[22] = 0xffU;
+	wire[23] = 0xffU;
+	wire[24] = 0xffU;
+	wire[25] = 0x00U;
+	return 26U;
+}
+
 static size_t encode_data_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_t src,
 				uint16_t cluster, uint8_t command,
 				const uint8_t *payload, size_t payload_len)
@@ -280,8 +310,14 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 	size_t cmd_idx;
 	size_t payload_len;
 
+	if (psdu_len >= 3U && (get_le16(&psdu[0]) & 0x0007U) == 0x0000U) {
+		return ZB_HOST_SOCKET_FRAME_BEACON;
+	}
+
 	if (parse_mac_command(psdu, psdu_len, &fcf, &cmd_idx)) {
 		switch (psdu[cmd_idx]) {
+		case ZB_MAC_CMD_BEACON_REQ:
+			return ZB_HOST_SOCKET_FRAME_BEACON_REQ;
 		case ZB_MAC_CMD_ASSOC_REQ:
 			return ZB_HOST_SOCKET_FRAME_ASSOC_REQ;
 		case ZB_MAC_CMD_ASSOC_RSP:
@@ -339,6 +375,8 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 	size_t len = 0U;
 
 	switch (type) {
+	case ZB_HOST_SOCKET_FRAME_BEACON:
+		return encode_beacon_frame(wire, 1U, src);
 	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
 		len = encode_mac_command(wire, 1U, ZB_NO_SHORT_ADDR, src, ZB_MAC_CMD_ASSOC_RSP);
 		put_le16(&wire[10], dst);
@@ -501,8 +539,23 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 	type = zb_host_socket_coord_identify_frame(input->psdu, input->psdu_len);
 
 	switch (type) {
+	case ZB_HOST_SOCKET_FRAME_BEACON_REQ:
+		if (output != NULL) {
+			set_output(coord, output, ZB_HOST_SOCKET_FRAME_BEACON);
+			return 1;
+		}
+		return 0;
 	case ZB_HOST_SOCKET_FRAME_ASSOC_REQ:
 		coord->last_assoc_status = coord->permit_join ? 0U : 1U;
+		/*
+		 * Cap byte is the very last byte of the AssocReq command
+		 * payload. Bit 3 (0x08) = rx-on-when-idle. Routers / FFDs
+		 * set it so the coord can push frames unsolicited; EDs
+		 * clear it and rely on DataRequest polling instead.
+		 */
+		coord->deliver_queued_unsolicited =
+			(input->psdu_len > 0U) &&
+			((input->psdu[input->psdu_len - 1U] & 0x08U) != 0U);
 		if (coord->permit_join) {
 			coord->child_short = coord->next_child_short++;
 			queue_frame(coord, ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
@@ -567,4 +620,25 @@ void zb_host_socket_coord_observed_model_id(const struct zb_host_socket_coord *c
 uint8_t zb_host_socket_coord_last_assoc_status(const struct zb_host_socket_coord *coord)
 {
 	return coord->last_assoc_status;
+}
+
+int zb_host_socket_coord_drain_unsolicited(struct zb_host_socket_coord *coord,
+					    struct zb_native_sim_socket_medium_msg *output)
+{
+	enum zb_host_socket_frame_type queued;
+
+	if (coord == NULL || output == NULL) {
+		return 0;
+	}
+
+	if (!coord->deliver_queued_unsolicited) {
+		return 0;
+	}
+
+	if (!pop_frame(coord, &queued)) {
+		return 0;
+	}
+
+	set_output(coord, output, queued);
+	return 1;
 }

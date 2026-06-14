@@ -81,6 +81,10 @@ static const char *medium_msg_type_str(enum zb_native_sim_socket_medium_msg_type
 static const char *frame_type_str(enum zb_host_socket_frame_type type)
 {
 	switch (type) {
+	case ZB_HOST_SOCKET_FRAME_BEACON_REQ:
+		return "BEACON_REQ";
+	case ZB_HOST_SOCKET_FRAME_BEACON:
+		return "BEACON";
 	case ZB_HOST_SOCKET_FRAME_ASSOC_REQ:
 		return "ASSOC_REQ";
 	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
@@ -818,6 +822,8 @@ int main(int argc, char **argv)
 
 			rc = zb_host_socket_coord_process(&coord, &input, &output);
 			if (rc > 0) {
+				uint64_t last_reply_end_us;
+
 				rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
 						    &medium, &peer_addr, &output,
 						    input_end_us);
@@ -825,6 +831,33 @@ int main(int argc, char **argv)
 					fprintf(stderr,
 						"socket coordinator: reply scheduling failed (%d)\n",
 						-rc);
+					break;
+				}
+
+				/*
+				 * Drain any frames the coord queued for
+				 * unsolicited delivery (router joiners with
+				 * rx-on-when-idle). Chain each follow-up reply
+				 * after the previous one's airtime so the
+				 * medium model's collision window is respected.
+				 */
+				last_reply_end_us = input_end_us +
+					ZB_COORD_RX_TX_TURNAROUND_US +
+					zb_native_sim_socket_medium_airtime_us(output.psdu_len);
+				while (zb_host_socket_coord_drain_unsolicited(&coord, &output) > 0) {
+					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
+							    &medium, &peer_addr, &output,
+							    last_reply_end_us);
+					if (rc < 0) {
+						fprintf(stderr,
+							"socket coordinator: unsolicited reply scheduling failed (%d)\n",
+							-rc);
+						break;
+					}
+					last_reply_end_us += ZB_COORD_RX_TX_TURNAROUND_US +
+						zb_native_sim_socket_medium_airtime_us(output.psdu_len);
+				}
+				if (rc < 0) {
 					break;
 				}
 			}
