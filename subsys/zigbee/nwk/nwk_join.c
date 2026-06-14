@@ -13,6 +13,7 @@
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_internal.h"
 #include "nwk/includes/nwk_neighbor.h"
+#include <zephyr/zigbee/zb_radio_port.h>
 
 extern void zdo_nlme_join_confirm(void *arg);
 extern void zdo_nlme_join_indication(void *arg);
@@ -279,6 +280,8 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     u16 selfRef = 0;
     u16 parentRef = 0;
 
+    printk("zb dbg assocCnf: status=%u shortAddr=0x%04x parent=%p\n",
+           cnf->status, cnf->shortAddress, parent);
     if (cnf->status != MAC_SUCCESS) {
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
 
@@ -304,7 +307,20 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
 
     g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
+    g_zbInfo.macPib.panId = parent->panId;
     memcpy(g_zbInfo.macPib.coordExtAddress, cnf->parentAddress, EXT_ADDR_LEN);
+
+    /*
+     * The vendor stack pushes shortAddress/panId straight into RF
+     * registers; the Zephyr radio_port abstraction needs an explicit
+     * filter update for the IEEE 802.15.4 driver to start ACKing
+     * frames addressed to our new short addr.
+     */
+    printk("zb dbg assocCnf: updating filters pan=0x%04x short=0x%04x\n",
+           parent->panId, cnf->shortAddress);
+    zb_radio_port_update_filters(parent->panId,
+                                  cnf->shortAddress,
+                                  g_zbInfo.macPib.extAddress);
 
     if (tl_zbNwkAddrMapAdd(g_zbInfo.nwkNib.nwkAddr, g_zbInfo.nwkNib.ieeeAddr, &selfRef) != NWK_STATUS_SUCCESS ||
         tl_zbNwkAddrMapAdd(g_zbInfo.macPib.coordShortAddress, g_zbInfo.macPib.coordExtAddress, &parentRef) != NWK_STATUS_SUCCESS) {
