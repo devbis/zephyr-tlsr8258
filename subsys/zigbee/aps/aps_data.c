@@ -271,58 +271,80 @@ static inline void aps_cache_state_set(aps_tx_cache_list_t *cache, u8 state)
     cache->state = (u8)(state >> 4);
 }
 
+/*
+ * Vendor stashed the aps_rx_hdr_t right after nlde_data_ind_t at a
+ * 32-bit-pinned offset of 20 bytes. On native_sim/native/64 the
+ * nlde_data_ind_t grows because u8 *nsdu is 8 bytes, so a hard-coded
+ * offset of 20 would land inside its srcMacAddr field. Use the
+ * struct size (rounded up to 4-byte alignment) so producers and
+ * consumers agree across architectures.
+ */
+#define APS_RX_HDR_OFFSET ((sizeof(nlde_data_ind_t) + 3U) & ~((size_t)3U))
+
 static inline aps_rx_hdr_t *aps_rx_hdr(void *arg)
 {
-    return (aps_rx_hdr_t *)((u8 *)arg + 20);
+    return (aps_rx_hdr_t *)((u8 *)arg + APS_RX_HDR_OFFSET);
 }
 
 void aps_indPrimBuild(void *arg)
 {
-    u8 hdrA[18];
+    /*
+     * Vendor reads / writes via 32-bit-pinned byte offsets that alias
+     * a packed aps_ind_prim_out_t against a non-packed
+     * aps_data_ind_t. On native_sim/native/64 the consumer reads
+     * ind->asdu at the (8-byte-aligned) offset 16 while the packed
+     * producer writes at offset 12 — the consumer then dereferences
+     * an upper-half-zero pointer and SEGVs.
+     *
+     * Drive both producer and consumer through aps_data_ind_t struct
+     * fields directly so the layout matches whatever the compiler
+     * chose for the public type. The intermediate aps_ind_prim_out_t
+     * is no longer needed for the local rebuild path.
+     */
     u8 *buf = (u8 *)arg;
     aps_ind_prim_src_hdr_t srcHdr;
-    aps_ind_prim_out_t *out = (aps_ind_prim_out_t *)arg;
+    aps_data_ind_t *out = (aps_data_ind_t *)arg;
+    nlde_data_ind_t src;
+    u8 *nsduPtr;
+    u16 nsduLen;
+    u8 srcHdrFlags;
 
-    memcpy(hdrA, buf, sizeof(hdrA));
-    memcpy(&srcHdr, buf + 20, sizeof(srcHdr));
+    memcpy(&src, buf, sizeof(src));
+    memcpy(&srcHdr, buf + APS_RX_HDR_OFFSET, sizeof(srcHdr));
+
+    nsduPtr = src.nsdu;
+    nsduLen = src.nsduLen;
+    srcHdrFlags = srcHdr.flags;
+
     memset(out, 0, sizeof(*out));
 
-    out->clusterId = srcHdr.clusterId;
-    out->profileId = srcHdr.profileId;
-    out->srcEp = srcHdr.srcEp;
-    out->dstEp = srcHdr.dstEp;
-    out->asduLength = srcHdr.asduLen;
-    out->srcAddrMode = APS_SHORT_SRCADDR_WITHEP;
-    out->srcMacAddr = (u16)hdrA[16] | ((u16)hdrA[17] << 8);
-    out->apsCounter = srcHdr.frameCounter;
+    out->cluster_id = srcHdr.clusterId;
+    out->profile_id = srcHdr.profileId;
+    out->src_ep = srcHdr.srcEp;
+    out->dst_ep = srcHdr.dstEp;
+    out->src_addr_mode = APS_SHORT_SRCADDR_WITHEP;
+    out->src_short_addr = src.srcAddr;
+    out->srcMacAddr = src.srcMacAddr;
+    out->aps_counter = srcHdr.frameCounter;
     out->lqi = srcHdr.apsCounter;
-    out->rssi = buf[194];
+    out->rssi = (s8)buf[194];
 
-    if ((srcHdr.flags & 0x0cU) == 0x0cU) {
-        out->dstAddrMode = APS_SHORT_GROUPADDR_NOEP;
-        out->dstAddr = srcHdr.dstEp;
-        out->srcShortAddr = srcHdr.asduLen;
+    if ((srcHdrFlags & 0x0cU) == 0x0cU) {
+        out->dst_addr_mode = APS_SHORT_GROUPADDR_NOEP;
+        out->dst_addr = srcHdr.dstEp;
     } else {
-        out->dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-        out->dstAddr = (u16)hdrA[8] | ((u16)hdrA[9] << 8);
+        out->dst_addr_mode = APS_SHORT_DSTADDR_WITHEP;
+        out->dst_addr = src.dstAddr;
     }
 
-    {
-        uintptr_t asduPtr = ((uintptr_t)hdrA[0] |
-                             ((uintptr_t)hdrA[1] << 8) |
-                             ((uintptr_t)hdrA[2] << 16) |
-                             ((uintptr_t)hdrA[3] << 24)) + srcHdr.apsHdrLen;
-        u16 asduLen = (u16)(((u16)hdrA[4] | ((u16)hdrA[5] << 8)) - srcHdr.apsHdrLen);
+    out->asdu = nsduPtr + srcHdr.apsHdrLen;
+    out->asduLength = (u16)(nsduLen - srcHdr.apsHdrLen);
 
-        out->asdu = asduPtr;
-        out->asduLength = asduLen;
+    if ((srcHdrFlags & 0x20U) != 0U) {
+        out->security_status |= SECURITY_IN_APSLAYER;
     }
-
-    if ((srcHdr.flags & 0x20U) != 0U) {
-        out->securityStatus |= SECURITY_IN_APSLAYER;
-    }
-    if (hdrA[6] != 0U) {
-        out->securityStatus |= SECURITY_IN_NWKLAYER;
+    if (src.securityUse) {
+        out->security_status |= SECURITY_IN_NWKLAYER;
     }
 }
 
@@ -526,7 +548,7 @@ u8 aps_ack_send(void *arg, u8 blockAck)
 {
     zb_buf_t *buf = zb_buf_allocate();
     nlde_data_req_t *req;
-    aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)((u8 *)arg + 20);
+    aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)((u8 *)arg + APS_RX_HDR_OFFSET);
     u8 auxHdr[8] = {0};
     u8 *payload;
     u8 payloadLen;
@@ -818,7 +840,7 @@ u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
 void aps_data_indication_process(void *arg)
 {
     u8 *buf = (u8 *)arg;
-    aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)(buf + 20);
+    aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
     u8 frameType;
 
     if ((hdr->frameCtrl & 0x20U) != 0U) {
@@ -826,7 +848,7 @@ void aps_data_indication_process(void *arg)
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
-        hdr = (aps_rx_hdr_t *)(buf + 20);
+        hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
     }
 
     if ((hdr->frameCtrl & 0x40U) != 0U) {
@@ -851,7 +873,7 @@ void aps_data_indication_process(void *arg)
 
         aps_indPrimBuild(arg);
         ind = (aps_data_ind_t *)arg;
-        hdr = (aps_rx_hdr_t *)(buf + 20);
+        hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
         T_DBG_fgmt++;
 
         if (hdr->extHdr == 1U) {
