@@ -595,14 +595,23 @@ void ss_apsmeVerifyKeyReq(void *arg)
 
 void ss_apsTransportKeyCmdHandle(void *arg)
 {
-    u8 *buf = (u8 *)arg;
-    u8 *payload = (u8 *)(uintptr_t)rd_le32(buf + 12);
+    /*
+     * Vendor reads payload (asdu) as a 4-byte LE int at buf+12 and
+     * security_status as buf[31] — both 32-bit-pinned offsets that
+     * shift on native_sim/native/64 (asdu is at offset 16 there,
+     * security_status at 39). Drive through aps_data_ind_t struct
+     * fields so the layout matches the producer's struct writes.
+     */
+    aps_data_ind_t *ind = (aps_data_ind_t *)arg;
+    u8 *payload = ind->asdu;
     u8 keyType = payload[1];
     const u8 *key = payload + 2;
     const u8 *dstExtAddr;
     const u8 *srcExtAddr;
+    u8 *buf = (u8 *)arg;
+    u8 secStatus = ind->security_status;
 
-    if (aps_ib.aps_authenticated && buf[31] == 0U) {
+    if (aps_ib.aps_authenticated && secStatus == 0U) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -617,7 +626,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
         if (zdo_af_get_use_tc_sec_on_nwk_key_rotation() &&
             ZB_IS_64BIT_ADDR_ZERO(dstExtAddr) &&
             aps_ib.aps_authenticated &&
-            (buf[31] & SECURITY_IN_APSLAYER) == 0U) {
+            (secStatus & SECURITY_IN_APSLAYER) == 0U) {
             zdo_mgmt_nwk_flag |= 0x04U;
         }
 
