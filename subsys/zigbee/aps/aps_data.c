@@ -1203,11 +1203,7 @@ void aps_nwk_data_indication_cb(void *arg)
     aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
     u8 hdrLen;
 
-    printk("zb dbg aps_nwk_ind: arg=%p nsdu=%p nsduLen=%u dstMode=%u dstAddr=0x%04x srcAddr=0x%04x\n",
-           arg, ind->nsdu, ind->nsduLen, ind->dstAddrMode, ind->dstAddr, ind->srcAddr);
     hdrLen = aps_hdr_parse(ind->nsdu, hdr);
-    printk("zb dbg aps_nwk_ind: hdrLen=%u frameCtrl=0x%02x dstEp=%u profileId=0x%04x clusterId=0x%04x\n",
-           hdrLen, hdr->frameCtrl, hdr->dstEp, hdr->profileId, hdr->clusterId);
 
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;

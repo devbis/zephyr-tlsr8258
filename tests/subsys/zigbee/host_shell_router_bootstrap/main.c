@@ -223,7 +223,7 @@ static void test_router_join_target_publishes_static_formation(void)
 	EXPECT_FALSE(target.tc_addr_valid);
 }
 
-static void test_router_commissioning_uses_router_start(void)
+static void test_router_commissioning_uses_network_steer(void)
 {
 	reset_state();
 	app_bdb_bootstrap_ready();
@@ -231,16 +231,16 @@ static void test_router_commissioning_uses_router_start(void)
 
 	app_bdb_start_commissioning();
 
-	EXPECT_EQ(router_start_calls, 1);
-	EXPECT_EQ(network_steer_calls, 0);
-	EXPECT_EQ(ev_timer_task_post_calls, 0);
+	EXPECT_EQ(router_start_calls, 0);
+	EXPECT_EQ(network_steer_calls, 1);
+	EXPECT_EQ(ev_timer_task_post_calls, 1);
 	EXPECT_EQ(poll_rate_set_calls, 0);
 }
 
 int main(void)
 {
 	test_router_join_target_publishes_static_formation();
-	test_router_commissioning_uses_router_start();
+	test_router_commissioning_uses_network_steer();
 
 	if (failures != 0) {
 		printf("host_shell_router_bootstrap: %d failure(s)\n", failures);

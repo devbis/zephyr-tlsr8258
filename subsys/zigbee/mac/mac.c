@@ -149,6 +149,8 @@ const tl_zb_callback_t g_zbMacEventFromNwkTbl[] = {
 };
 #endif
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
 {
     zb_buf_t *buf = (zb_buf_t *)arg;
@@ -168,8 +170,11 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
     macPld = phy_ind_payload_ptr_get(arg);
     frameType = macPld[0] & 0x07U;
 
-    printk("zb dbg phy_ind: frameType=%u autoReq=%u mac_status=%u\n",
-           frameType, g_zbMacPib.autoReq, g_zbMacCtx.status);
+    /* [10]: low 16 = phy_ind RX count; bits 16..18 = frameType (last). */
+    zb_nwk_ed_trace[10] = (zb_nwk_ed_trace[10] & 0xfff80000U) |
+			   (((u32)frameType & 0x7U) << 16) |
+			   ((zb_nwk_ed_trace[10] + 1U) & 0xffffU);
+
 
     if (mhr->dstAddrMode == ADDR_MODE_SHORT &&
         mhr->dstAddr.shortAddr == MAC_SHORT_ADDR_BROADCAST) {
@@ -218,12 +223,9 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
         return;
     }
 
-    printk("zb dbg phy_ind: calling phy_ind_beacon_notify_post\n");
     if (!phy_ind_beacon_notify_post(buf, mhr, macPld, phy_ind_payload_len_get(arg))) {
-        printk("zb dbg phy_ind: beacon_notify_post returned false, freeing buf\n");
         zb_buf_free(buf);
     } else {
-        printk("zb dbg phy_ind: beacon_notify_post returned true\n");
     }
 }
 
@@ -332,7 +334,6 @@ void tl_zbMacTaskProc(void)
     if (task != NULL && taskInfo.data != NULL) {
         u8 primitive = ((zb_buf_t *)taskInfo.data)->hdr.id;
 
-        printk("zb dbg mac_task: primitive=0x%02x\n", primitive);
 
 #if defined(ZB_ROUTER_ROLE)
         for (u8 i = 0; i < ARRAY_SIZE(g_zbMacEventFromNwkTbl); i++) {
