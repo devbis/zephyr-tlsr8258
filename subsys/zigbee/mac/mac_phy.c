@@ -510,7 +510,8 @@ void rf802154_tx_ready(u8 *buf, u8 len)
 
 void rf802154_tx(void)
 {
-#if defined(CONFIG_IEEE802154_TELINK_TLSR8258)
+#if defined(CONFIG_IEEE802154_TELINK_TLSR8258) || \
+	defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
     uint8_t psdu_len = (rf_tx_buf[4] >= 2U) ? (uint8_t)(rf_tx_buf[4] - 2U) : 0U;
 
     if (psdu_len != 0U) {

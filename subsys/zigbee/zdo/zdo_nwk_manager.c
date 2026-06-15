@@ -805,12 +805,9 @@ void zdo_nlme_join_confirm(void *arg)
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
 
-    printk("zb dbg join_confirm: state=%u status=%u aps_auth=%u secLvl=%u\n",
-           state, status, aps_ib.aps_authenticated, ss_ib.securityLevel);
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
         state != ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
-        printk("zb dbg join_confirm: drop bad state\n");
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -849,9 +846,6 @@ void zdo_nlme_join_confirm(void *arg)
 }
 zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_t cb)
 {
-    printk("zb dbg zdo_nwkDiscoveryStart: channels=0x%08x duration=%u state=%u discEvt=%p cb=%p\n",
-           (unsigned int)pReq->scanChannels, pReq->scanDuration,
-           (unsigned int)zdo_nwk_mngr()->state, zdo_nwk_mngr()->discEvt, cb);
     if (zdo_af_get_scan_attempts() == 0U ||
         zdo_af_get_nwk_time_btwn_scans() == 0U ||
         cb == NULL) {
@@ -886,13 +880,9 @@ void zdo_nlme_network_discovery_confirm_cb(void *arg)
     nwkDiscoveryUserCb_t cb;
     u8 attempt;
 
-    printk("zb dbg nlme_disc_confirm: state=%u attempt=%u max=%u cb=%p\n",
-           (unsigned)zdo_nwk_mngr()->state, zdo_nwk_mngr()->nwkDiscAttempt,
-           zdo_af_get_scan_attempts(), zdo_nwk_mngr()->nwkDiscCb);
     zb_buf_free((zb_buf_t *)arg);
 
     if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_NWK_DISC) {
-        printk("zb dbg nlme_disc_confirm: drop (state != NWK_DISC)\n");
         return;
     }
 

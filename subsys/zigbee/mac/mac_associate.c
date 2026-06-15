@@ -146,19 +146,21 @@ void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
     ev_timer_taskPost(tl_zbReadyToPullParentForAssoRsp, NULL, assoc_timeout_ms());
 }
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 void tl_zbMacAssociateRequestHandler(void *arg)
 {
     u8 *req = (u8 *)arg;
     zb_buf_t *txBuf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
 
-    printk("zb dbg assocReqHdlr: req[0..15]=%02x %02x %02x %02x %02x %02x %02x %02x "
-           "%02x %02x %02x %02x %02x %02x %02x %02x\n",
-           req[0], req[1], req[2], req[3], req[4], req[5], req[6], req[7],
-           req[8], req[9], req[10], req[11], req[12], req[13], req[14], req[15]);
+    /* [5]: low 16 = AssocReqHandler hit count; bit 16 = TX_ACTIVE early exit. */
+    zb_nwk_ed_trace[5] = (zb_nwk_ed_trace[5] & 0xffff0000U) |
+			  ((zb_nwk_ed_trace[5] + 1U) & 0xffffU);
 
     if (txBuf == NULL ||
         ((((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] & 0x08U) != 0U) ||
         associationReqOrigBuffer != NULL) {
+        zb_nwk_ed_trace[5] |= 1U << 16;
         memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
         req[10] = MAC_STA_TX_ACTIVE;
         tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
@@ -201,8 +203,6 @@ void tl_zbMacAssociateRequestHandler(void *arg)
             mhr.frameCtrl = (u16)(0xc023U | ((u16)dstMode << 10));
             mhr.dstAddrMode = dstMode;
         }
-        printk("zb dbg assocReqHdlr: frameCtrl=0x%04x dstPanId=0x%04x dstAddr.mode=%u\n",
-               mhr.frameCtrl, mhr.dstPanId, mhr.dstAddrMode);
 
         hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 2U);
         {

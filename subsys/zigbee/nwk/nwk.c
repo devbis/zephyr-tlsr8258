@@ -56,8 +56,14 @@ const tl_zb_callback_t g_zbNwkEventFromHighTbl[] = {
     tl_zbNwkNlmeRouteDiscRequestHandler,
 };
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 void tl_zbMacMlmeScanConfirmHandler(void *arg)
 {
+    /* [7]: low 16 = scan-cnf-dispatcher hit count; bits 16..23 = state. */
+    zb_nwk_ed_trace[7] = (zb_nwk_ed_trace[7] & 0xff000000U) |
+			  (((u32)g_zbNwkCtx.state & 0xffU) << 16) |
+			  ((zb_nwk_ed_trace[7] + 1U) & 0xffffU);
     switch (g_zbNwkCtx.state) {
 #if defined(ZB_ROUTER_ROLE)
     case NLME_STATE_FORMATION:
@@ -466,8 +472,6 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNldeDataRequestHandler(task->data);
             break;
         case NWK_NLME_NWK_DISCOVERY_REQ:
-            printk("zb dbg nwk_task: primitive=NWK_DISC state=%u\n",
-                   (unsigned int)g_zbNwkCtx.state);
             tl_zbNwkNlmeNwkDiscRequestHandler(task->data);
             break;
         case NWK_NLME_NWK_FORMATION_REQ:
