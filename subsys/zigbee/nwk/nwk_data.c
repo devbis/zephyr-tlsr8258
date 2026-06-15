@@ -233,9 +233,6 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
     zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
     nlde_data_ind_t ind;
 
-    printk("zb dbg nwkNldeDataInd: msduLen=%u frameHdrLen=%u dstAddr=0x%04x srcAddr=0x%04x sec=%u\n",
-           macInd->msduLength, pNwkHdr->frameHdrLen, pNwkHdr->dstAddr, pNwkHdr->srcAddr,
-           pNwkHdr->frameControl.security);
     memset(&ind, 0, sizeof(ind));
     ind.dstAddrMode = pNwkHdr->frameControl.multicastFlg ? 2U : 1U;
     ind.dstAddr = pNwkHdr->dstAddr;
@@ -257,8 +254,6 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
      */
     memcpy(arg, &ind, sizeof(ind));
 
-    printk("zb dbg nwkNldeDataInd: posting aps_nwk_data_indication_cb (cb=%p) ind_size=%zu\n",
-           g_nwkDataIndCb, sizeof(ind));
     if (g_nwkDataIndCb != NULL) {
         g_nwkDataIndCb(arg);
         return;
@@ -534,7 +529,6 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     u8 *payload;
 
     if (nwk_user_state() == NLME_LEAVING) {
-        printk("zb dbg mcpsDataInd: drop NLME_LEAVING\n");
         zb_buf_free(buf);
         return;
     }
@@ -542,23 +536,15 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     memset(&nwkHdr, 0, sizeof(nwkHdr));
     nwkHdrParse(&nwkHdr, ind->msdu);
 
-    printk("zb dbg mcpsDataInd: msduLen=%u hdrLen=%u frType=%u proto=%u src=0x%04x dst=0x%04x nwkAddr=0x%04x\n",
-           ind->msduLength, nwkHdr.frameHdrLen, nwkHdr.frameControl.frameType,
-           nwkHdr.frameControl.protocolVer, nwkHdr.srcAddr, nwkHdr.dstAddr,
-           g_zbInfo.nwkNib.nwkAddr);
 
     if (ind->msduLength <= nwkHdr.frameHdrLen) {
-        printk("zb dbg mcpsDataInd: drop msduLen<=hdrLen\n");
         zb_buf_free(buf);
         return;
     }
 
     frameType = nwkHdr.frameControl.frameType;
-    printk("zb dbg mcpsDataInd: joined=%u user_state=%u frameType=%u\n",
-           g_zbNwkCtx.joined, nwk_user_state(), frameType);
     if (!nwk_joined() && nwk_user_state() != NLME_JOINING) {
         if (frameType != FRAME_TYPE_INTERPAN) {
-            printk("zb dbg mcpsDataInd: drop !joined && !JOINING && !INTERPAN\n");
             zb_buf_free(buf);
             return;
         }
@@ -608,9 +594,6 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         if (nwkHdr.srcAddr == g_zbInfo.nwkNib.nwkAddr ||
             nwkHdr.dstAddr != g_zbInfo.nwkNib.nwkAddr ||
             nwk_hdr_end_device_initiator(&nwkHdr)) {
-            printk("zb dbg mcpsDataInd: drop unicast nwk check src=0x%04x dst=0x%04x me=0x%04x ed_init=%u\n",
-                   nwkHdr.srcAddr, nwkHdr.dstAddr, g_zbInfo.nwkNib.nwkAddr,
-                   nwk_hdr_end_device_initiator(&nwkHdr));
             g_sysDiags.packetValidateDropCount++;
             zb_buf_free(buf);
             return;
@@ -697,20 +680,16 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         }
     }
 
-    printk("zb dbg mcpsDataInd: pre-sec joined=%u secLvl=%u sec=%u\n",
-           g_zbNwkCtx.joined, ss_ib.securityLevel, nwkHdr.frameControl.security);
     if (nwk_joined() &&
         ss_ib.securityLevel != 0U &&
         !nwkHdr.frameControl.security) {
         if (frameType == FRAME_TYPE_DATA) {
-            printk("zb dbg mcpsDataInd: drop unsecured DATA (joined+secLvl)\n");
             zb_buf_free(buf);
             return;
         }
 
         if (frameType == FRAME_TYPE_COMMAND &&
             cmd.cmdId != NWK_CMD_REJOIN_REQUEST) {
-            printk("zb dbg mcpsDataInd: drop unsecured CMD (joined+secLvl)\n");
             zb_buf_free(buf);
             return;
         }
@@ -733,11 +712,8 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         (void)tl_zbNwkAddrMapAdd(nwkHdr.srcAddr, nwkHdr.srcIeeeAddr, &addrRef);
     }
 
-    printk("zb dbg mcpsDataInd: post-checks, frameType=%u joined=%u bcast=%u\n",
-           frameType, g_zbNwkCtx.joined, nwk_is_broadcast(nwkHdr.dstAddr));
     if (frameType == FRAME_TYPE_DATA) {
         if (nwk_is_broadcast(nwkHdr.dstAddr) || nwkHdr.dstAddr == g_zbInfo.nwkNib.nwkAddr) {
-            printk("zb dbg mcpsDataInd: calling nwkNldeDataInd\n");
             nwkNldeDataInd(arg, &nwkHdr);
             return;
         }

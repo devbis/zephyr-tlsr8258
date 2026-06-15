@@ -209,10 +209,7 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
      * itself drops the frame when associationReqOrigBuffer is NULL,
      * so this only fires for the genuine wait-for-response case.
      */
-    printk("zb dbg phy_mlme: cmdId=0x%02x mac_status=%u assoc_orig=%p\n",
-           cmdId, g_zbMacCtx.status, associationReqOrigBuffer);
     if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE && associationReqOrigBuffer != NULL) {
-        printk("zb dbg phy_mlme: accepting early AssocResp\n");
         tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
         return;
     }

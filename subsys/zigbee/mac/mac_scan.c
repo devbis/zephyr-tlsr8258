@@ -44,18 +44,26 @@ static inline u32 mac_scan_timeout_ms(u8 value)
     return ((((u32)value << 4) - value) << 10) / 1000U;
 }
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 u8 tl_zbMacMlmeBeaconRequestCmdSend(void)
 {
     tl_zb_mac_mhr_t mhr;
     zb_buf_t *buf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
+    u8 *psdu;
     u8 *payload;
     u8 status = MAC_SUCCESS;
+
+    /* [8]: low 16 = BeaconReq TX attempts; bit 16 = txBuf busy abort. */
+    zb_nwk_ed_trace[8] = (zb_nwk_ed_trace[8] & 0xffff0000U) |
+			  ((zb_nwk_ed_trace[8] + 1U) & 0xffffU);
 
     if (buf == NULL) {
         return status;
     }
 
     if ((((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 3] & 0x08U) != 0U) {
+        zb_nwk_ed_trace[8] |= 1U << 16;
         return status;
     }
 
@@ -64,15 +72,16 @@ u8 tl_zbMacMlmeBeaconRequestCmdSend(void)
     memset(&mhr, 0, sizeof(mhr));
     mhr.dstPanId = MAC_PAN_ID_BROADCAST;
     mhr.srcPanId = MAC_PAN_ID_BROADCAST;
+    mhr.dstAddr.shortAddr = MAC_SHORT_ADDR_BROADCAST;
     mhr.frameCtrl = 0x0803U;
 
     ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = MAC_STA_SECURITY_ERROR;
 
-    payload = tl_bufInitalloc(buf, 8);
-    payload = tl_zbMacHdrBuilder(payload, &mhr);
+    psdu = tl_bufInitalloc(buf, 8);
+    payload = tl_zbMacHdrBuilder(psdu, &mhr);
     payload[0] = MAC_CMD_BEACON_REQUEST;
 
-    status = tl_zbMacTx(buf, payload, 8, 0, NULL);
+    status = tl_zbMacTx(buf, psdu, 8, 0, NULL);
 
     return status;
 }

@@ -45,20 +45,15 @@ static bool nwk_beacon_payload_is_valid(const zb_mac_beacon_payload_t *payload)
 
 void nwk_nlmeNwkDiscCnf(void *arg, u8 status)
 {
-	printk("zb dbg nwk_nlmeNwkDiscCnf: status=0x%02x posting confirm_cb\n", status);
 	((u8 *)arg)[0x80] = status;
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
-	u8 rc = tl_zbTaskPost(zdo_nlme_network_discovery_confirm_cb, arg);
-	printk("zb dbg nwk_nlmeNwkDiscCnf: tl_zbTaskPost rc=%u\n", rc);
+	(void)tl_zbTaskPost(zdo_nlme_network_discovery_confirm_cb, arg);
 }
 
 void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
 {
 	nlme_nwkDisc_req_t *req = (nlme_nwkDisc_req_t *)arg;
 
-	printk("zb dbg nwk_disc_handler: channels=0x%08x duration=%u state=%u\n",
-	       (unsigned int)req->scanChannels, req->scanDuration,
-	       (unsigned int)g_zbNwkCtx.state);
 
 	if (g_zbNwkCtx.state != NLME_STATE_IDLE) {
 		nwk_nlmeNwkDiscCnf(arg, 0xc2);
@@ -73,14 +68,19 @@ void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
 	g_zbNwkCtx.state = NLME_STATE_DISC;
 	((u8 *)arg)[4] = 1;
 	((u8 *)arg)[5] = req->scanDuration;
-	printk("zb dbg nwk_disc_handler: posting MAC_MLME_SCAN_REQ\n");
 	tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_SCAN_REQ, arg);
 }
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 void nwk_discoveryScanCnfHandler(void *arg)
 {
-	printk("zb dbg scan_cnf: arg[0]=0x%02x arg[1]=0x%02x\n",
-	       ((u8 *)arg)[0], ((u8 *)arg)[1]);
+	/* [2]: low 16 = scan_cnf hit count; bits 16..23 = arg[0] (status). */
+	u32 status = ((u8 *)arg)[0];
+
+	zb_nwk_ed_trace[2] = (zb_nwk_ed_trace[2] & 0xff000000U) |
+			      ((status & 0xffU) << 16) |
+			      ((zb_nwk_ed_trace[2] + 1U) & 0xffffU);
 	if (((u8 *)arg)[1] != 1U) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
@@ -95,15 +95,13 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 	zb_mac_beacon_payload_t *payload = (zb_mac_beacon_payload_t *)ind->psdu;
 	nlme_state_t state = g_zbNwkCtx.state;
 
-	printk("zb dbg beacon_ind: state=%u proto_id=%u proto_ver=%u "
-	       "stack_prof=%u rtr_cap=%u ed_cap=%u depth=%u txoff=%02x%02x%02x\n",
-	       (unsigned)state, payload->protocol_id, payload->protocol_version,
-	       payload->stack_profile, payload->router_capacity,
-	       payload->end_device_capacity, payload->device_depth,
-	       payload->txoffset[0], payload->txoffset[1], payload->txoffset[2]);
+	/* [1]: low 16 = beacon-notify hit count; bits 16..23 = state. */
+	zb_nwk_ed_trace[1] = (zb_nwk_ed_trace[1] & 0xff000000U) |
+			      (((u32)state & 0xffU) << 16) |
+			      ((zb_nwk_ed_trace[1] + 1U) & 0xffffU);
+
 
 	if (!nwk_beacon_payload_is_valid(payload)) {
-		printk("zb dbg beacon_ind: REJECTED (invalid)\n");
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
