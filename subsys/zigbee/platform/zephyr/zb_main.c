@@ -20,6 +20,9 @@ extern void rf_init(void);
 extern void aps_init(void);
 extern void tl_zbMacInit(u8 coldReset);
 extern void tl_zbNwkInit(u8 coldReset);
+#if defined(CONFIG_ZIGBEE_ROUTER)
+extern void tl_zbMacTaskProc(void);
+#endif
 
 static const addrExt_t zb_fixed_ieee_addr = {
 	/*
@@ -31,7 +34,7 @@ static const addrExt_t zb_fixed_ieee_addr = {
 	 * not clear that state, suggesting it lives in the Ember adapter NVRAM
 	 * and only a brand-new IEEE will look like a fresh joiner.
 	 */
-	0x05, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	0x06, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 };
 
 void zb_platform_apply_runtime_ieee_addr(void)
@@ -415,13 +418,14 @@ static void zb_thread_fn(void *a, void *b, void *c)
 #if defined(CONFIG_ZIGBEE_ROUTER)
 		/* Router build pulls in the libzigbee NWK / MAC primitive
 		 * dispatcher via tl_zbNwkTaskProc(); drain the per-layer
-		 * task queues on every tick so MAC→NWK and high→NWK
-		 * primitives (scan/start confirms, beacon-notify
-		 * indications, NLDE data confirms) are delivered to their
-		 * handlers. ED keeps its lightweight nwk_ed_minimal poll
-		 * path and doesn't need this drain.
+		 * task queues on every tick so high→NWK, MAC→NWK, and
+		 * NWK→MAC primitives (active scan requests, beacon-notify
+		 * indications, association requests, NLDE confirms) are
+		 * delivered to their handlers. ED keeps its lightweight
+		 * nwk_ed_minimal poll path and doesn't need this drain.
 		 */
 		tl_zbNwkTaskProc();
+		tl_zbMacTaskProc();
 #endif
 		zb_thread_heartbeat[3]++;
 		zb_process_deferred_persistent_rejoin();

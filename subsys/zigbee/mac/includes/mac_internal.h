@@ -28,6 +28,32 @@ extern const nwk_nib_t nwkNibDefault;
 #define SHORT_ADDR_LEN 2
 #endif
 
+typedef struct _attribute_packed_ {
+	u32 timestamp;
+	u8 *payload;
+	s8 rssi;
+	u8 payloadLen;
+} zb_mac_rx_pending_meta_t;
+
+typedef struct _attribute_packed_ {
+	u32 timestamp;
+	u8 *payload;
+	u8 dstAddrMode;
+	u8 srcAddrMode;
+	u8 srcAddr[8];
+	u8 frameType;
+	u8 payloadLen;
+	u8 linkQuality;
+	u8 curChannel;
+} zb_mac_rx_meta_t;
+
+typedef struct {
+	int (*cb)(void *arg);
+	u32 deadline;
+	u8 state;
+	u8 reserved[3];
+} mac_timer_evt_t;
+
 /* MAC layer entry points and helpers defined in mac.c / mac_trx.c /
  * mac_data.c / mac_indirect_data.c. Cross-TU references shared
  * across all the libzigbee-derived MAC files.
@@ -52,7 +78,7 @@ typedef int (*timerCb_t)(void *arg);
 extern int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg);
 
 extern mac_appIndCb_t *macAppIndCb;
-extern u8 g_macTimerEvt[0x0c];
+extern mac_timer_evt_t g_macTimerEvt;
 extern void *associationReqOrigBuffer;
 
 extern void mac_trxTask(void *arg);

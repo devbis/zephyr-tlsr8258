@@ -15,6 +15,8 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include <zephyr/zigbee/zb_radio_port.h>
 
+extern volatile u32 zb_nwk_ed_trace[];
+
 extern void zdo_nlme_join_confirm(void *arg);
 extern void zdo_nlme_join_indication(void *arg);
 extern void zdo_nlme_direct_join_confirm(void *arg);
@@ -199,13 +201,21 @@ void nwk_associateJoin(void *arg)
     tl_zb_addition_neighbor_entry_t *parent;
     zb_mlme_associate_req_t *macReq;
 
+    /* [4]: low 16 = nwk_associateJoin hit count; bit 16 = state-busy
+     * exit; bit 17 = parent-not-found exit; bit 18 = posted ASSOC_REQ.
+     */
+    zb_nwk_ed_trace[4] = (zb_nwk_ed_trace[4] & 0xffff0000U) |
+			  ((zb_nwk_ed_trace[4] + 1U) & 0xffffU);
+
     if (g_zbNwkCtx.state != NLME_STATE_IDLE) {
+        zb_nwk_ed_trace[4] |= 1U << 16;
         nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_INVALID_REQUEST, 0);
         return;
     }
 
     parent = tl_zbNwkParentChoose(req->extPANId, FALSE);
     if (parent == NULL) {
+        zb_nwk_ed_trace[4] |= 1U << 17;
         nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NOT_PERMITTED, 0);
         return;
     }
@@ -232,10 +242,7 @@ void nwk_associateJoin(void *arg)
         macReq->coordAddress.addrMode = ADDR_MODE_EXT;
     }
 
-    printk("zb dbg nwk_assocJoin: parent addrMode=%u short=0x%04x ch=%u pan=0x%04x\n",
-           parent->addrMode, parent->shortAddr, parent->logicChannel, parent->panId);
-    printk("zb dbg nwk_assocJoin: macReq logCh=%u coordPan=0x%04x size_addr_t=%zu\n",
-           macReq->logicalChannel, macReq->coordPanId, sizeof(macReq->coordAddress));
+    zb_nwk_ed_trace[4] |= 1U << 18;
     tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_ASSOCIATE_REQ, arg);
 }
 
@@ -292,8 +299,11 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     u16 selfRef = 0;
     u16 parentRef = 0;
 
-    printk("zb dbg assocCnf: status=%u shortAddr=0x%04x parent=%p\n",
-           cnf->status, cnf->shortAddress, parent);
+    /* [6]: low 16 = AssocConfirmHandler hit count; bits 16..23 = cnf->status. */
+    zb_nwk_ed_trace[6] = (zb_nwk_ed_trace[6] & 0xff000000U) |
+			  (((u32)cnf->status & 0xffU) << 16) |
+			  ((zb_nwk_ed_trace[6] + 1U) & 0xffffU);
+
     if (cnf->status != MAC_SUCCESS) {
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
 
@@ -328,8 +338,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
      * filter update for the IEEE 802.15.4 driver to start ACKing
      * frames addressed to our new short addr.
      */
-    printk("zb dbg assocCnf: updating filters pan=0x%04x short=0x%04x\n",
-           parent->panId, cnf->shortAddress);
     zb_radio_port_update_filters(parent->panId,
                                   cnf->shortAddress,
                                   g_zbInfo.macPib.extAddress);
@@ -341,7 +349,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
         zb_nwk_status_t parent_rc = tl_zbNwkAddrMapAdd(g_zbInfo.macPib.coordShortAddress,
                                                        g_zbInfo.macPib.coordExtAddress,
                                                        &parentRef);
-        printk("zb dbg assocCnf: addrMapAdd self_rc=%u parent_rc=%u\n", self_rc, parent_rc);
         if (self_rc != NWK_STATUS_SUCCESS || parent_rc != NWK_STATUS_SUCCESS) {
             nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
             return;
