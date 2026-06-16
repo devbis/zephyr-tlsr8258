@@ -40,6 +40,15 @@ const u8 g_zero_addr[8] __attribute__((weak)) = {0};
 u32 g_secondCnt __attribute__((weak));
 
 /*
+ * GreenPower hook — zdp_services.c::zdo_deviceAnnounceIndicate consults
+ * this callback to suppress dev_annce for proxy-table entries that GP
+ * has already claimed. Our router build doesn't include the GP subsystem,
+ * so provide a NULL fallback (zdp_services already null-checks it).
+ */
+typedef bool (*gpDeviceAnnounceCheckCb_t)(u16 nwkAddr, const u8 *ieeeAddr);
+gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb __attribute__((weak)) = NULL;
+
+/*
  * tl_zbPrimitivePost / tl_zbTaskQPop / tl_zbUserTaskQNum live in
  * platform/zephyr/zb_task_queue_router.c (router build) backed by
  * a per-layer k_msgq.
@@ -183,9 +192,106 @@ __attribute__((weak)) void af_dataCnfHandler(void *arg)
 	ARG_UNUSED(arg);
 }
 
+/*
+ * APS data indication dispatcher. The vendor af_aps_data_entry weak stub
+ * (left below for callers that prefer to override) drops every frame on
+ * the floor, which means Z2M's ZDP-interview queries (Node Descriptor,
+ * Active Endpoint, Simple Descriptor, etc.) addressed to ZDO endpoint 0
+ * are silently discarded by the joined router. Replace it with a routing
+ * function:
+ *
+ *   profile_id == ZDO_PROFILE_ID  → dispatch by cluster_id to the
+ *                                   zdp_services.c indicate handlers
+ *   else                          → invoke the endpoint's cb_rx
+ *                                   (zcl_rx_handler for app endpoints)
+ *
+ * Each indicate handler frees the buf when it's done; if no handler
+ * matches we free the buf ourselves so the slab pool doesn't leak.
+ *
+ * Cluster IDs are from subsys/zigbee/zdo/zdp.h. Responses (bit 15 set)
+ * are not dispatched — we're the responder, not the client.
+ */
+#include "zdo/zdp.h"
+
+extern af_endpoint_descriptor_t *af_epDescriptorGet(void);
+extern u8 af_availableEpNumGet(void);
+extern af_endpoint_descriptor_t *af_zdoEpDescriptorGet(void);
+
 __attribute__((weak)) void af_aps_data_entry(void *arg)
 {
-	ARG_UNUSED(arg);
+	zb_buf_t *buf = (zb_buf_t *)arg;
+	aps_data_ind_t *ad = (aps_data_ind_t *)arg;
+
+	if (arg == NULL) {
+		return;
+	}
+
+	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
+		/* ZDP request — only handle non-response cluster IDs (bit 15 clear). */
+		if ((ad->cluster_id & 0x8000U) != 0U) {
+			zb_buf_free(buf);
+			return;
+		}
+		switch (ad->cluster_id) {
+		case NODE_DESC_REQ_CLID:
+		case POWER_DESC_REQ_CLID:
+		case SIMPLE_DESC_REQ_CLID:
+			zdo_descriptorsIndicate(arg);
+			return;
+		case ACTIVE_EP_REQ_CLID:
+			zdo_activeEpIndicate(arg);
+			return;
+		case MATCH_DESC_REQ_CLID:
+			zdo_matchDescriptorIndicate(arg);
+			return;
+		case NWK_ADDR_REQ_CLID:
+			zdo_nwkAddrIndicate(arg);
+			return;
+		case IEEE_ADDR_REQ_CLID:
+			zdo_ieeeAddrIndicate(arg);
+			return;
+		case DEVICE_ANNCE_CLID:
+			zdo_deviceAnnounceIndicate(arg);
+			return;
+		case MGMT_PERMIT_JOINING_REQ_CLID:
+			zdo_mgmtPermitJoinIndicate(arg);
+			return;
+		case MGMT_LQI_REQ_CLID:
+			zdo_mgmtLqiIndicate(arg);
+			return;
+		case MGMT_BIND_REQ_CLID:
+			zdo_mgmtBindIndicate(arg);
+			return;
+		case MGMT_NWK_UPDATE_REQ_CLID:
+			zdo_mgmtNwkUpdateIndicate(arg);
+			return;
+		case BIND_REQ_CLID:
+		case UNBIND_REQ_CLID:
+			zdo_bindOrUnbindIndicate(arg);
+			return;
+		case SYSTEM_SERVER_DISCOVERY_REQ_CLID:
+			zdo_SysServerDiscoveryIndicate(arg);
+			return;
+		case PARENT_ANNCE_CLID:
+			zdo_parentAnnounceIndicate(arg);
+			return;
+		default:
+			break;
+		}
+	} else {
+		/* Application endpoint — find descriptor by ep, invoke cb_rx. */
+		af_endpoint_descriptor_t *epList = af_epDescriptorGet();
+		u8 epNum = af_availableEpNumGet();
+
+		for (u8 i = 0; i < epNum; i++) {
+			if (epList[i].ep == ad->dst_ep && epList[i].cb_rx != NULL) {
+				epList[i].cb_rx(arg);
+				return;
+			}
+		}
+	}
+
+	zb_buf_free(buf);
 }
 
 __attribute__((weak)) void af_aps_data_fragment_entry(void *arg)

@@ -184,6 +184,23 @@ static void zb_core_bootstrap_once(void)
 			(unsigned)g_zbMacPib.coordShortAddress,
 			(unsigned)g_zbNIB.nwkAddr);
 		zb_platform_apply_runtime_ieee_addr();
+		/*
+		 * Push the runtime IEEE address into the TLSR8258 radio's HW
+		 * filter immediately. Otherwise filter_ieee_addr stays all-
+		 * zero until either the factory-reset path or the join-success
+		 * path runs zb_radio_port_update_filters, and the radio's
+		 * auto-ACK for ASSOCIATION-RESPONSE (sent to our extaddr by
+		 * the coordinator before we've been assigned a short addr)
+		 * fails its filter_ieee_addr memcmp — coordinator retries 4×
+		 * and we miss the short address allocation.
+		 * tlsr8258_iface_init() does this too via net_if_set_link_addr,
+		 * but our shell sample doesn't bring up a Zephyr net iface, so
+		 * iface_init never runs. Filter PAN stays 0xFFFF (wildcard)
+		 * which is correct for the joining phase.
+		 */
+		zb_radio_port_update_filters(MAC_INVALID_PANID,
+					     MAC_SHORT_ADDR_BROADCAST,
+					     g_zbMacPib.extAddress);
 		zb_nwk_ed_trace[15] = 0xA5A00109U;
 		rf_init();
 		zb_nwk_ed_trace[15] = 0xA5A0010AU;

@@ -72,7 +72,41 @@ static void ev_timer_execute_cb(void)
 			timer_evt->isBusy = 1U;
 			next_timeout = timer_evt->cb(timer_evt->data);
 			if (next_timeout < 0) {
+				/*
+				 * One-shot timer: callback returned -1, meaning it
+				 * does not want to be rescheduled. `ev_unon_timer`
+				 * removes the node from the list but does NOT free
+				 * the ev_buf slab block — only `ev_timer_taskCancel`
+				 * does that. With only 4 group-0 buffer slabs, a
+				 * handful of one-shot timer expiries (ACK-wait,
+				 * post-assoc DATA_REQ poll, mac_csmaStart backoff,
+				 * etc.) exhaust the pool and every subsequent
+				 * `ev_timer_taskPost` returns NULL — silently
+				 * dropping the DATA_REQ poll, retry timers, and so
+				 * on. Free the slab block here so one-shot timers
+				 * don't leak. Capture the next pointer before
+				 * freeing so the iteration can continue past the
+				 * removed node.
+				 */
+				ev_timer_event_t *next_evt = timer_evt->next;
+
 				ev_unon_timer(timer_evt);
+				timer_evt->used = 0U;
+				if (is_ev_buf(timer_evt)) {
+					ev_buf_free((u8 *)timer_evt);
+				}
+				/* prev_head was timer_head when we started; both
+				 * may have shifted if the callback posted/canceled
+				 * other timers. Recover by restarting from head
+				 * when our local copy went stale.
+				 */
+				if (prev_head != ev_timer_ctrl.timer_head) {
+					timer_evt = ev_timer_ctrl.timer_head;
+					prev_head = timer_evt;
+				} else {
+					timer_evt = next_evt;
+				}
+				continue;
 			} else if (next_timeout == 0) {
 				timer_evt->timeout = timer_evt->period;
 			} else {

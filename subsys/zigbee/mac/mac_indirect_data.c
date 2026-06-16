@@ -282,13 +282,25 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
                     ((u16)req->srcAddrMode << 14);
 
     hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 1U);
-    payload = tl_bufInitalloc(buf, hdrSize);
-    payload = tl_zbMacHdrBuilder(payload, &mhr);
-    payload[0] = MAC_CMD_DATA_REQUEST;
+    /*
+     * Vendor port bug: tl_zbMacHdrBuilder returns the position AFTER
+     * the MAC header (so the caller can write the command byte at
+     * payload[0]). The original code reassigned `payload` to that
+     * return value and then passed it to tl_zbMacTx as the frame
+     * start — which made the radio TX 16 bytes of garbage past the
+     * header (sniffer shows FCF=0x0004 = Reserved). The ASSOC_REQ
+     * sibling in mac_associate.c gets this right by keeping the
+     * original psdu pointer. Preserve the frame-start here too.
+     */
+    {
+        u8 *psdu = tl_bufInitalloc(buf, hdrSize);
+        payload = tl_zbMacHdrBuilder(psdu, &mhr);
+        payload[0] = MAC_CMD_DATA_REQUEST;
 
-    ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
+        ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
 
-    txStatus = tl_zbMacTx(buf, payload, hdrSize, 1, NULL);
+        txStatus = tl_zbMacTx(buf, psdu, hdrSize, 1, NULL);
+    }
     if (txStatus != MAC_SUCCESS) {
         tl_zbMacDataRequestStatusCheck(buf, txStatus);
     }
