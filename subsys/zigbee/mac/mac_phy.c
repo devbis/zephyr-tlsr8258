@@ -461,42 +461,24 @@ u8 rf_stopEDScan(void)
 }
 
 volatile s8 T_rssiPeak = 0;
-_attribute_ram_code_ u8 rf_performCCA(void)
+u8 rf_performCCA(void)
 {
-    if (isWLANActive()) {
+    /*
+     * Zephyr port: the IEEE 802.15.4 driver performs CSMA-CA internally
+     * inside api->tx, so the vendor 128 us register-poll CCA loop is
+     * both redundant and unsafe here. mac_csmaStart() invokes this with
+     * interrupts disabled, but ZB_RADIO_RSSI_GET() now routes through
+     * the Zephyr radio API (g_radio.api->cca) which expects IRQs to
+     * remain enabled. Spinning here therefore wedges the ZB thread on
+     * the first beacon-request TX. Always report IDLE and let Zephyr's
+     * driver gate the transmission.
+     */
+    if ((rf_busyFlag & TX_BUSY) != 0U) {
         return PHY_CCA_BUSY;
     }
 
-    u32 t1 = clock_time();
-    s8 rssi_peak = -110;
-    s8 rssi_cur = -110;
-    s32 rssiSum = 0;
-    s32 cnt = 1;
-
-    rssi_cur = ZB_RADIO_RSSI_GET();
-    rssiSum += rssi_cur;
-    while (!clock_time_exceed(t1, 128)) {
-        rssi_cur = ZB_RADIO_RSSI_GET();
-        rssiSum += rssi_cur;
-        cnt++;
-
-#if RF_SRX_MODE
-        if (ZB_RADIO_RX_DONE) {
-            ZB_RADIO_RX_DONE_CLR;
-            if (ZB_RADIO_TRX_STA_GET() == RF_MODE_AUTO) {
-                ZB_RADIO_SRX_START(clock_time());
-            }
-        }
-#endif
-    }
-    rssi_peak = rssiSum / cnt;
-    T_rssiPeak = rssi_peak;
-
-    if (rssi_peak > CCA_THRESHOLD || (rf_busyFlag & TX_BUSY)) {//Return if currently in TX state
-        return PHY_CCA_BUSY;
-    } else {
-        return PHY_CCA_IDLE;
-    }
+    T_rssiPeak = -110;
+    return PHY_CCA_IDLE;
 }
 
 void rf802154_tx_ready(u8 *buf, u8 len)
