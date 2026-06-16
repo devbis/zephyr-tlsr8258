@@ -58,6 +58,42 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 				      const uint8_t **psdu, uint8_t *psdu_len);
 static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t rssi_dbm);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
+extern void zb_macDataSendHandler(void);
+extern void mac_trxTask(void *arg);
+#include "mac/includes/mac_trx_api.h"
+#include "zb_common_stub.h"
+
+/*
+ * Deferred TX completion: posted from the user task queue so it
+ * runs AFTER mac_csmaStart has finished arming its TX-IRQ wait
+ * timer (timer_evt_state=1). Calling zb_macDataSendHandler()
+ * synchronously inside zb_radio_submit_tx() — which itself runs
+ * inside mac_csmaStart's drv_disable_irq() critical section, before
+ * the timer is armed — caused the SEND_SUCC handler's
+ * `timer_evt_state_get() == 1` guard to fail, leaving the state
+ * machine stranded in MAC_TX_UNDERWAY. mac_waitTxIrqCb then timed
+ * out as SEND_FAIL → MAC_TX_ABORTED (0x1d).
+ *
+ * Also clears TX_BUSY here — the vendor radio IRQ that normally does
+ * this (rf_tx_irq_handler) never runs in the Zephyr port. Leaving the
+ * flag set causes the next rf_performCCA() to return PHY_CCA_BUSY
+ * and pushes the second TX into the CSMA-retry path, where it never
+ * confirms.
+ *
+ * When the libzigbee MAC has transitioned to MAC_TX_WAIT_ACK (ack-
+ * required frame), also synthesize MAC_TX_EV_ACK_RECV — Zephyr's
+ * api->tx consumed the radio's ACK itself, so the vendor MAC would
+ * otherwise sit waiting for the ACK and time out as MAC_TX_ABORTED.
+ */
+static void zb_radio_tx_complete_deferred(void *arg)
+{
+	(void)arg;
+	rf_busyFlag &= (u8)~TX_BUSY;
+	zb_macDataSendHandler();
+	if (mac_getTrxState() == MAC_TX_WAIT_ACK) {
+		mac_trxTask((void *)(uintptr_t)MAC_TX_EV_ACK_RECV);
+	}
+}
 
 static void zb_radio_set_promiscuous(bool enable)
 {
@@ -540,6 +576,14 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 
 	atomic_inc(&g_radio.tx_success);
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	/*
+	 * api->tx is synchronous, but the libzigbee MAC arms its TX-IRQ
+	 * wait timer AFTER our submit returns. Defer the completion (which
+	 * also synthesizes ACK_RECV when ack was required) until the next
+	 * task-queue drain so the state machine has set timer_evt_state=1
+	 * before SEND_SUCC fires.
+	 */
+	(void)tl_zbTaskPost(zb_radio_tx_complete_deferred, NULL);
 	return 0;
 }
 

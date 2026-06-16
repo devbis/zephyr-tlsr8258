@@ -197,10 +197,26 @@ void mac_csmaStart(void *arg)
 
         mac_trx_vars.state = MAC_TX_UNDERWAY;
         rf_busyFlag |= TX_BUSY;
-        rf802154_tx();
+        /*
+         * Restore IRQs around rf802154_tx() — the Zephyr 802.15.4 driver
+         * (tlsr8258_tx) does k_sem_take on a TX-wait semaphore that's
+         * signaled from the RF ISR. With all IRQs globally disabled here,
+         * the ISR cannot run, the semaphore times out (10 ms), the
+         * driver falls back to polling 0x0f20 and bounces rf_off → RX —
+         * a "soft TX recovery" that succeeds maybe 1 in 5 attempts and
+         * wedges the rest. Symptom: csma success counter increments but
+         * sniffer captures only the first 1-2 frames; the rest silently
+         * drop. Telink's own driver comments call out this failure
+         * pattern ("5 of 46 TXes succeed"). The libzigbee MAC TRX state
+         * machine has already transitioned (mac_trx_vars.state and
+         * rf_busyFlag are updated above) so dropping the IRQ guard
+         * around api->tx is safe — there's no concurrent writer to
+         * mac_trx_vars from the RF ISR path.
+         */
         drv_restore_irq(r);
-
+        rf802154_tx();
         r = drv_disable_irq();
+
         if (timer_evt_state_get() != 0U) {
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
             drv_restore_irq(r);
@@ -221,10 +237,11 @@ void mac_csmaStart(void *arg)
 
         mac_trx_vars.state = MAC_TX_UNDERWAY;
         rf_busyFlag |= TX_BUSY;
-        rf802154_tx();
+        /* Same IRQ-restore reasoning as the CCA-success branch above. */
         drv_restore_irq(r);
-
+        rf802154_tx();
         r = drv_disable_irq();
+
         if (timer_evt_state_get() != 0U) {
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TRX_TASK);
             drv_restore_irq(r);

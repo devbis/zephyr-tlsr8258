@@ -69,13 +69,39 @@ static int tl_zbReadyToPullParentForAssoRsp(void *arg)
 
         {
             zb_mlme_data_req_cmd_t dataReq;
+            const u8 *origReq = (const u8 *)associationReqOrigBuffer;
+            u8 coordAddrMode = origReq[12];
 
+            /*
+             * IEEE 802.15.4 MAC DATA-REQUEST sent by the joining device
+             * to poll the parent for the pending ASSOCIATION-RESPONSE:
+             *   src = us (joiner) — we don't have a short address yet
+             *   dst = coordinator (parent we just sent ASSOC_REQ to)
+             *
+             * The vendor port had src/dst swapped (src=coord, dst=us),
+             * which produced a self-loop frame the coordinator would
+             * discard. It also miscoerced the coordinator's short
+             * address into an 8-byte ext-addr field. Build the request
+             * from the right side of the association-request buffer:
+             *   origReq[12]   = coordAddrMode  (ADDR_MODE_SHORT/EXT)
+             *   origReq[4..]  = coordAddress.addr (2 or 8 bytes)
+             */
             memset(&dataReq, 0, sizeof(dataReq));
             dataReq.srcAddrMode = ZB_ADDR_64BIT_DEV;
-            dataReq.dstAddrMode = ZB_ADDR_64BIT_DEV;
-            memcpy(&dataReq.dstAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
-            dataReq.cbType = ((u8 *)buf)[12];
-            memcpy(&dataReq.srcAddr, (u8 *)buf + 4, EXT_ADDR_LEN);
+            memcpy(dataReq.srcAddr.extAddr,
+                   g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
+
+            if (coordAddrMode == ADDR_MODE_SHORT) {
+                dataReq.dstAddrMode = ADDR_MODE_SHORT;
+                dataReq.dstAddr.shortAddr =
+                    (u16)origReq[4] | ((u16)origReq[5] << 8);
+            } else {
+                dataReq.dstAddrMode = ADDR_MODE_EXT;
+                memcpy(dataReq.dstAddr.extAddr,
+                       origReq + 4, EXT_ADDR_LEN);
+            }
+
+            dataReq.cbType = 0;
 
             tl_zbMacMlmeDataRequestCmdSend(&dataReq, buf, MAC_STA_NO_ACK);
         }
