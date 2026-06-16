@@ -801,11 +801,24 @@ static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
 
 static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *payload)
 {
+	uint16_t filter_pan;
+
 	if (tlsr8258_radio_promiscuous_get(radio)) {
 		return true;
 	}
 
-	if (memcmp(&payload[TLSR8258_PAN_ID_OFFSET], radio->filter_pan_id,
+	/*
+	 * Mirror the auto-ACK filter's PAN logic: when our filter PAN is
+	 * still the wildcard 0xFFFF (pre-association / pre-rejoin), accept
+	 * frames addressed to our IEEE on ANY PAN. Otherwise the IEEE
+	 * 802.15.4 ASSOCIATION-RESPONSE — sent by the coordinator with its
+	 * own PAN ID and our extaddr as dst — is dropped by the receive
+	 * filter even though the auto-ACK fires for it, and the joining
+	 * device sits in tl_zbWaitForAssociationRespTimeout forever.
+	 */
+	filter_pan = sys_get_le16(radio->filter_pan_id);
+	if ((filter_pan != 0xffffu) &&
+	    memcmp(&payload[TLSR8258_PAN_ID_OFFSET], radio->filter_pan_id,
 		   TLSR8258_PAN_ID_SIZE) != 0 &&
 	    sys_get_le16(&payload[TLSR8258_PAN_ID_OFFSET]) != 0xffffu) {
 		return false;

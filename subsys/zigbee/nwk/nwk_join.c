@@ -222,6 +222,16 @@ void nwk_associateJoin(void *arg)
 
     nwk_store_parent_neighbor_ptr(&g_zbNwkCtx.join.pAssocJoinParent, parent);
     g_zbInfo.nwkNib.panId = parent->panId;
+    /*
+     * Set macPib.panId here too — the IEEE 802.15.4 DATA-REQUEST that
+     * polls the coordinator for the pending ASSOCIATION-RESPONSE uses
+     * `g_zbMacPib.panId` as the frame's destination PAN ID. Vendor
+     * defers this to tl_zbMacMlmeAssociateConfirmHandler (post-RESP),
+     * which is too late: without it set here, the post-ASSOC_REQ poll
+     * goes out with dstPanId=0xFFFF and the coordinator never delivers
+     * the response.
+     */
+    g_zbInfo.macPib.panId = parent->panId;
     g_zbInfo.nwkNib.parentInfo = 0;
     memcpy(g_zbInfo.nwkNib.extPANId, req->extPANId, EXT_ADDR_LEN);
     g_zbInfo.nwkNib.capabilityInfo = req->capabilityInfo;
