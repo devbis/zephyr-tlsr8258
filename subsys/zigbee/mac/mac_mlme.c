@@ -4,6 +4,8 @@
  * one-for-one; vendor zb_local.h / mac_trx_api.h / ev_timer.h / mac_phy.h
  * are replaced by the Zephyr include set.
  */
+#include <zephyr/zigbee/zb_radio_port.h>
+
 #include "zb_common_stub.h"
 #include "common/static_assert.h"
 #include "os/ev_timer.h"
@@ -15,6 +17,8 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
 
+
+extern volatile u32 zb_nwk_ed_trace[];
 
 static inline u8 *phy_ind_raw_get(void *arg)
 {
@@ -145,6 +149,19 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     zb_buf_t *buf = (zb_buf_t *)arg;
     u8 *mhr = (u8 *)raw;
     u8 *payload = phy_ind_raw_get(arg);
+    u16 assignedShort = (u16)payload[1] | ((u16)payload[2] << 8);
+    const u8 *origReq = (const u8 *)associationReqOrigBuffer;
+
+    {
+        u32 prev = zb_nwk_ed_trace[40];
+        u32 entries = ((prev & 0xffffU) + 1U) & 0xffffU;
+        u32 bails = (prev >> 16) & 0xffffU;
+
+        if (associationReqOrigBuffer == NULL) {
+            bails = (bails + 1U) & 0xffffU;
+        }
+        zb_nwk_ed_trace[40] = (bails << 16) | entries;
+    }
 
     memset(buf, 0, 22);
 
@@ -152,25 +169,67 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
         memcpy(buf, mhr + 18, EXT_ADDR_LEN);
     }
 
-    /*
-     * The vendor `g_zbMacCtx.status != 5` check requires the joiner to
-     * have already entered ZB_MAC_STATE_INDIRECT_DATA via a DataRequest
-     * poll with frame-pending. The native_sim coord daemon delivers the
-     * AssocResp directly without that handshake, so accept the response
-     * whenever we have an outstanding AssocReq buffer.
-     */
     if (associationReqOrigBuffer == NULL) {
-        zb_buf_free(buf);
-        return;
+        /*
+         * Late-success path: the wait-timer won the race, posting NO_DATA
+         * and clearing associationReqOrigBuffer before this deferred task
+         * ran.  If the coordinator returned success the fast-handoff path
+         * already set macPib.shortAddress and updated the radio filter;
+         * complete the success path using the response frame directly
+         * rather than discarding it.  Non-success responses have no
+         * recovery path without the original request buffer, so bail.
+         */
+        if (payload[3] != MAC_SUCCESS) {
+            zb_buf_free(buf);
+            return;
+        }
+        tl_zbMacAssociateRespReceived();
+        {
+            u32 prev = zb_nwk_ed_trace[38];
+            u32 count = (prev >> 8) + 1U;
+
+            zb_nwk_ed_trace[38] = (count << 8) | 8U;
+            zb_nwk_ed_trace[39] |= (1U << 8);
+        }
+    } else {
+        /*
+         * The vendor `g_zbMacCtx.status != 5` check requires the joiner
+         * to have already entered ZB_MAC_STATE_INDIRECT_DATA via a
+         * DataRequest poll with frame-pending.  The native_sim coord
+         * daemon delivers the AssocResp directly without that handshake,
+         * so accept the response whenever we have an outstanding AssocReq
+         * buffer.
+         */
+        tl_zbMacAssociateRespReceived();
+        zb_buf_free((zb_buf_t *)associationReqOrigBuffer);
+        {
+            u32 prev = zb_nwk_ed_trace[38];
+            u32 count = (prev >> 8) + 1U;
+
+            zb_nwk_ed_trace[38] = (count << 8) | 7U;
+            zb_nwk_ed_trace[39] |= (1U << 7);
+        }
+        associationReqOrigBuffer = NULL;
     }
 
-    tl_zbMacAssociateRespReceived();
-    zb_buf_free((zb_buf_t *)associationReqOrigBuffer);
-    associationReqOrigBuffer = NULL;
-
-    memcpy((u8 *)buf + 8, payload + 1, 2);
-    memcpy((u8 *)&g_zbInfo + OFFSETOF(zb_info_t, macPib) + OFFSETOF(tl_zb_mac_pib_t, shortAddress),
-           payload + 1, 2);
+    memcpy((u8 *)buf + 8, &assignedShort, sizeof(assignedShort));
+    g_zbInfo.macPib.shortAddress = assignedShort;
+    g_zbInfo.nwkNib.nwkAddr = assignedShort;
+    if (origReq != NULL && origReq[12] == ADDR_MODE_SHORT) {
+        g_zbInfo.macPib.coordShortAddress = (u16)origReq[4] | ((u16)origReq[5] << 8);
+    }
+    if (mhr[3] == ADDR_MODE_EXT) {
+        memcpy(g_zbInfo.macPib.coordExtAddress, mhr + 18, EXT_ADDR_LEN);
+    }
+    /*
+     * The coordinator can send TRANSPORT_KEY immediately after the
+     * ASSOCIATION_RESPONSE, before the NWK-side ASSOCIATE_CNF handler runs.
+     * Push the new short address into the radio filter here so those first
+     * unicast frames are ACKed and handed to the stack.
+     */
+    zb_radio_port_update_filters(g_zbInfo.macPib.panId,
+                                 assignedShort,
+                                 g_zbInfo.macPib.extAddress);
     ((u8 *)buf)[10] = payload[3];
 
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
@@ -190,7 +249,20 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
     payload = phy_ind_raw_get(arg);
     cmdId = payload[0];
 
+    /*
+     * slot[41]: low 16 = MlmeIndicate call count, bits 16-23 = last cmdId,
+     * bit 24 = status==5 path taken, bit 25 = shortcut path taken,
+     * bit 26 = table path taken. Tells us whether ASSOC_RESP reached this
+     * function and which dispatch path handled it.
+     */
+    {
+        u32 prev = zb_nwk_ed_trace[41];
+        u32 cnt = ((prev & 0xffffU) + 1U) & 0xffffU;
+        zb_nwk_ed_trace[41] = (prev & 0xff000000U) | ((u32)cmdId << 16) | cnt;
+    }
+
     if (g_zbMacCtx.status == 5U) {
+        zb_nwk_ed_trace[41] |= (1U << 24);
         if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE) {
             tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
             return;
@@ -210,13 +282,19 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
      * so this only fires for the genuine wait-for-response case.
      */
     if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE && associationReqOrigBuffer != NULL) {
+        zb_nwk_ed_trace[41] |= (1U << 25);
         tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
         return;
+    }
+
+    if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE) {
+        zb_nwk_ed_trace[41] |= (1U << 27);
     }
 
     for (u8 i = 0; i < ARRAY_SIZE(g_zbMacMlmeEventFromPhyTbl); i++) {
         if (g_zbMacMlmeEventFromPhyTbl[i].cmdId == cmdId &&
             g_zbMacMlmeEventFromPhyTbl[i].handler != NULL) {
+            zb_nwk_ed_trace[41] |= (1U << 26);
             g_zbMacMlmeEventFromPhyTbl[i].handler(arg, raw);
             return;
         }

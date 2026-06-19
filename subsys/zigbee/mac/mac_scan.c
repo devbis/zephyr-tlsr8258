@@ -154,6 +154,14 @@ int tl_zbMacScanRunning(void *arg)
     }
 
 scan_done:
+    /* [16]: low 16 = scan_done call count; bits 16..23 = MAC status at entry.
+     * If this stays zero after a steering attempt, the scan timer never fired.
+     * If this is non-zero but slot[2] is still zero, the MAC_MLME_SCAN_CNF
+     * was either dropped by a full TL_Q_MAC2NWK queue or never consumed.
+     */
+    zb_nwk_ed_trace[16] = (zb_nwk_ed_trace[16] & 0xff000000U) |
+                           (((u32)g_zbMacCtx.status & 0xffU) << 16) |
+                           ((zb_nwk_ed_trace[16] + 1U) & 0xffffU);
     chan_8352 = TL_ZB_MAC_CHANNEL_START;
     edChan_8354 = 0xffU;
 
@@ -228,10 +236,30 @@ void tl_zbMacScanRequestHandler(zb_mac_mlme_scan_req_t *req)
             g_macScanParam.timerEvt = ev_timer_taskPost(tl_zbMacScanRunning, NULL, timeout);
         }
 
+        /* [18]: bits 7..0 = timer-post call count; bits 15..8 = scanStep at
+         * the time of the post (allows timeout verification during decode);
+         * bit 16 = last ev_timer_taskPost returned NULL (timer pool full,
+         * scan will never complete).
+         */
+        zb_nwk_ed_trace[18] = (zb_nwk_ed_trace[18] & 0xff000000U) |
+                               (g_macScanParam.timerEvt == NULL ? (1U << 16) : 0U) |
+                               (((u32)g_macScanParam.scanStep & 0xffU) << 8) |
+                               ((zb_nwk_ed_trace[18] + 1U) & 0xffU);
+
         return;
     }
 
 post_invalid:
+    /* [17]: low 16 = scan-rejection count; bits 16..23 = g_zbMacCtx.status
+     * at the time of rejection.  Rejection occurs when any of the following
+     * conditions are true at scan-request time: scanDuration > 7 (invalid
+     * parameter), g_zbMacCtx.status != ZB_MAC_STATE_NORMAL (MAC already
+     * busy with another scan or operation), or an unrecognised scanType
+     * was specified (falls through the scanType dispatch to post_invalid).
+     */
+    zb_nwk_ed_trace[17] = (zb_nwk_ed_trace[17] & 0xff000000U) |
+                           (((u32)g_zbMacCtx.status & 0xffU) << 16) |
+                           ((zb_nwk_ed_trace[17] + 1U) & 0xffffU);
     req->scanType = scanType;
     req->scanChannels = req->scanChannels;
     ((u8 *)req)[0] = status;

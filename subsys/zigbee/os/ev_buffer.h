@@ -187,4 +187,3 @@ u8 *long_ev_buf_get(void);
 
 /**  @} end of group TELINK_COMMON_MODULE */
 
-

@@ -16,6 +16,7 @@
 extern zb_buf_t *zb_buf_allocate(void);
 extern void zb_buf_free(zb_buf_t *buf);
 extern void *tl_bufInitalloc(zb_buf_t *p, u8 size);
+extern u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len);
 
 /* MAC/NWK initial constants defined in subsys/zigbee/common/zb_config.c
  * (SDK copy).

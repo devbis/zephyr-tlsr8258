@@ -66,8 +66,20 @@ void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
 	}
 
 	g_zbNwkCtx.state = NLME_STATE_DISC;
-	((u8 *)arg)[4] = 1;
-	((u8 *)arg)[5] = req->scanDuration;
+	/*
+	 * Save scanDuration before overwriting byte 4 with the scan-type
+	 * constant.  Both fields live at the same offset in their respective
+	 * structs (nlme_nwkDisc_req_t.scanDuration @ offset 4;
+	 * zb_mac_mlme_scan_req_t.scanType @ offset 4), so reading
+	 * req->scanDuration after the store would yield 1 (ACTIVE_SCAN)
+	 * instead of the caller-supplied duration.
+	 */
+	{
+		u8 scan_dur = req->scanDuration;
+
+		((u8 *)arg)[4] = 1;
+		((u8 *)arg)[5] = scan_dur;
+	}
 	tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_SCAN_REQ, arg);
 }
 
