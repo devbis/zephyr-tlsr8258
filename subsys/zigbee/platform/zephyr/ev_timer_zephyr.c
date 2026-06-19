@@ -28,6 +28,7 @@ typedef struct {
 } ev_timer_ctrl_t;
 
 static ev_timer_ctrl_t ev_timer_ctrl;
+static ev_timer_event_pool_t ev_timer_pool;
 static u32 prev_sys_tick;
 static u32 rem_sys_tick_us;
 
@@ -58,6 +59,39 @@ static void ev_timer_runtime_clear(ev_timer_event_t *evt)
 
 	evt->isRunning = 0U;
 	evt->curSysTick = 0U;
+}
+
+static bool ev_timer_pool_contains(ev_timer_event_t *evt)
+{
+	return evt >= &ev_timer_pool.evt[0] &&
+	       evt < &ev_timer_pool.evt[ARRAY_SIZE(ev_timer_pool.evt)];
+}
+
+static ev_timer_event_t *ev_timer_pool_alloc(void)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(ev_timer_pool.evt); i++) {
+		ev_timer_event_t *evt = &ev_timer_pool.evt[i];
+
+		if (evt->used == 0U) {
+			memset(evt, 0, sizeof(*evt));
+			evt->used = 1U;
+			ev_timer_pool.used_num++;
+			return evt;
+		}
+	}
+
+	return NULL;
+}
+
+static void ev_timer_pool_free(ev_timer_event_t *evt)
+{
+	if (evt == NULL || !ev_timer_pool_contains(evt) || evt->used == 0U) {
+		return;
+	}
+
+	ev_timer_runtime_clear(evt);
+	memset(evt, 0, sizeof(*evt));
+	ev_timer_pool.used_num--;
 }
 
 static void ev_timer_execute_cb(void)
@@ -91,9 +125,8 @@ static void ev_timer_execute_cb(void)
 				ev_timer_event_t *next_evt = timer_evt->next;
 
 				ev_unon_timer(timer_evt);
-				timer_evt->used = 0U;
-				if (is_ev_buf(timer_evt)) {
-					ev_buf_free((u8 *)timer_evt);
+				if (ev_timer_pool_contains(timer_evt)) {
+					ev_timer_pool_free(timer_evt);
 				}
 				/* prev_head was timer_head when we started; both
 				 * may have shifted if the callback posted/canceled
@@ -132,6 +165,7 @@ static void ev_timer_execute_cb(void)
 void ev_timer_init(void)
 {
 	memset(&ev_timer_ctrl, 0, sizeof(ev_timer_ctrl));
+	memset(&ev_timer_pool, 0, sizeof(ev_timer_pool));
 	prev_sys_tick = clock_time();
 	rem_sys_tick_us = 0U;
 }
@@ -215,16 +249,14 @@ void ev_unon_timer(ev_timer_event_t *evt)
 
 ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_ms)
 {
-	ev_timer_event_t *timer_evt = (ev_timer_event_t *)ev_buf_allocate(sizeof(ev_timer_event_t));
+	ev_timer_event_t *timer_evt = ev_timer_pool_alloc();
 
 	if (timer_evt == NULL) {
 		return NULL;
 	}
 
-	memset(timer_evt, 0, sizeof(*timer_evt));
 	timer_evt->cb = func;
 	timer_evt->data = arg;
-	timer_evt->used = 1U;
 	ev_on_timer(timer_evt, t_ms);
 
 	return timer_evt;
@@ -244,9 +276,11 @@ u8 ev_timer_taskCancel(ev_timer_event_t **evt)
 	}
 
 	ev_unon_timer(timer_evt);
-	timer_evt->used = 0U;
-	if (is_ev_buf(timer_evt)) {
-		ev_buf_free((u8 *)timer_evt);
+	if (ev_timer_pool_contains(timer_evt)) {
+		ev_timer_pool_free(timer_evt);
+	} else {
+		ev_timer_runtime_clear(timer_evt);
+		timer_evt->used = 0U;
 	}
 	*evt = NULL;
 

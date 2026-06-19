@@ -22,11 +22,45 @@ enum {
 static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
 
+extern volatile u32 zb_nwk_ed_trace[];
+
+/*
+ * Trace which site clears associationReqOrigBuffer. slot[38] holds the
+ * most-recent site code in the low byte and a clear count in bits 8-31.
+ * slot[39] is a bitmap of sites that have ever fired (1U << code).
+ * Site codes: 1 wait-timer, 2 poll-alloc-fail, 3 poll-cnf-fail,
+ * 4 status-check-fail, 5 req-handler early-exit, 6 req-handler tx-fail,
+ * 7 resp-recvd success path.
+ */
+static inline void mac_trace_origbuf_clear(u8 site)
+{
+    u32 prev = zb_nwk_ed_trace[38];
+    u32 count = (prev >> 8) + 1U;
+
+    zb_nwk_ed_trace[38] = (count << 8) | (u32)site;
+    zb_nwk_ed_trace[39] |= (1U << site);
+}
+
 
 static inline u32 assoc_timeout_ms(void)
 {
     u32 base = g_zbInfo.macPib.respWaitTime;
     return ((((base << 4) - base) << 10) / 1000U);
+}
+
+static inline u32 assoc_rsp_timeout_ms(void)
+{
+    /*
+     * On the Zephyr/TLSR8258 port the ASSOCIATION_RESPONSE reaches the MAC
+     * parser via the deferred task queue, not the vendor's tight IRQ-driven
+     * path. Under channel traffic that queue can lag well past the spec PIB
+     * respWaitTime even though the coordinator answers on-air within a few
+     * milliseconds of our DataReq. Keep the poll cadence vendor-like, but
+     * allow a longer grace window for the deferred ASSOC_RESP delivery.
+     */
+    u32 timeout = assoc_timeout_ms();
+
+    return MAX(timeout, 2000U);
 }
 
 static int tl_zbWaitForAssociationRespTimeout(void *arg)
@@ -37,6 +71,7 @@ static int tl_zbWaitForAssociationRespTimeout(void *arg)
     req[10] = MAC_STA_NO_DATA;
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
 
+    mac_trace_origbuf_clear(1U);
     associationReqOrigBuffer = NULL;
     g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
     assocRspTimeoutEvt = NULL;
@@ -61,6 +96,7 @@ static int tl_zbReadyToPullParentForAssoRsp(void *arg)
             memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
             req[10] = MAC_STA_NO_RESOURCES;
             tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
+            mac_trace_origbuf_clear(2U);
             associationReqOrigBuffer = NULL;
             return -1;
         }
@@ -121,14 +157,16 @@ void tl_zbMacAssocPollConfirm(u8 status)
     if (status == MAC_STA_FRAME_PENDING) {
         g_zbMacCtx.status = 5;
         if (assocRspTimeoutEvt == NULL) {
-            assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout, req, assoc_timeout_ms());
+            assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout, req,
+                                                   assoc_rsp_timeout_ms());
         }
         return;
     }
 
     if (status == MAC_SUCCESS) {
         if (assocRspTimeoutEvt == NULL) {
-            assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout, req, assoc_timeout_ms());
+            assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout, req,
+                                                   assoc_rsp_timeout_ms());
         }
         return;
     }
@@ -136,6 +174,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
     memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
     req[10] = status;
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
+    mac_trace_origbuf_clear(3U);
     associationReqOrigBuffer = NULL;
     g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
 }
@@ -165,14 +204,13 @@ void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
         memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
         req[10] = status;
         tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
+        mac_trace_origbuf_clear(4U);
         associationReqOrigBuffer = NULL;
         return;
     }
 
     ev_timer_taskPost(tl_zbReadyToPullParentForAssoRsp, NULL, assoc_timeout_ms());
 }
-
-extern volatile u32 zb_nwk_ed_trace[];
 
 void tl_zbMacAssociateRequestHandler(void *arg)
 {
@@ -190,6 +228,7 @@ void tl_zbMacAssociateRequestHandler(void *arg)
         memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
         req[10] = MAC_STA_TX_ACTIVE;
         tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
+        mac_trace_origbuf_clear(5U);
         associationReqOrigBuffer = NULL;
         return;
     }
@@ -256,6 +295,7 @@ void tl_zbMacAssociateRequestHandler(void *arg)
             memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
             req[10] = MAC_STA_TX_ACTIVE;
             tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
+            mac_trace_origbuf_clear(6U);
             associationReqOrigBuffer = NULL;
         }
     }

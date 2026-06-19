@@ -232,6 +232,10 @@ void nwk_associateJoin(void *arg)
      * the response.
      */
     g_zbInfo.macPib.panId = parent->panId;
+    g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
+    if (parent->addrMode == ZB_ADDR_64BIT_DEV) {
+        memcpy(g_zbInfo.macPib.coordExtAddress, parent->extAddr, EXT_ADDR_LEN);
+    }
     g_zbInfo.nwkNib.parentInfo = 0;
     memcpy(g_zbInfo.nwkNib.extPANId, req->extPANId, EXT_ADDR_LEN);
     g_zbInfo.nwkNib.capabilityInfo = req->capabilityInfo;
