@@ -122,6 +122,13 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
         return;
     }
 
+    /*
+     * slot[26] = k_uptime_get_32() at fast handoff entry on the success
+     * branch. Compared against slot[27] (wait-timer entry) tells us
+     * which side wins the race per round.
+     */
+    zb_nwk_ed_trace[26] = (u32)k_uptime_get_32();
+
     assignedShort = (u16)psdu[hdrLen + 1U] | ((u16)psdu[hdrLen + 2U] << 8);
     /*
      * Mark that this round produced a successful AssocResp so the wait-timer
@@ -763,6 +770,28 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
     zb_mac_rx_pending_meta_t *meta;
     u8 *owned_payload;
+
+    /*
+     * slot[24]: low 16 = total zb_macDataRecvHandler calls,
+     *           high 16 = calls with ackPkt != 0 (ACK frames).
+     * slot[25]: low 16 = calls with len >= 5 and first byte's frame_type
+     *           bits == COMMAND (0x03). Captures every MAC command frame
+     *           the RX worker delivers — should ~match the AssocResp
+     *           count from sniffer when join is active.
+     */
+    {
+        u32 prev = zb_nwk_ed_trace[24];
+        u32 total = ((prev & 0xffffU) + 1U) & 0xffffU;
+        u32 acks = (prev >> 16) & 0xffffU;
+
+        if (ackPkt != 0U) {
+            acks = (acks + 1U) & 0xffffU;
+        }
+        zb_nwk_ed_trace[24] = (acks << 16) | total;
+    }
+    if (len >= 5U && (data[0] & 0x07U) == 0x03U) {
+        zb_nwk_ed_trace[25] = (zb_nwk_ed_trace[25] + 1U) & 0xffffffffU;
+    }
 
     if (buf == NULL) {
         return;
