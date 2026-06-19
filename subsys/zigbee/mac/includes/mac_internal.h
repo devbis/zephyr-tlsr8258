@@ -82,6 +82,7 @@ extern mac_appIndCb_t *macAppIndCb;
 extern mac_timer_evt_t g_macTimerEvt;
 extern void *associationReqOrigBuffer;
 extern volatile u8 mac_assoc_resp_success_seen;
+extern void mac_assoc_cancel_wait_timer_from_rx(void);
 
 extern void mac_trxTask(void *arg);
 extern void mac_trxInit(void);
