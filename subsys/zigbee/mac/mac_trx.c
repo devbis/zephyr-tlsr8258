@@ -127,8 +127,13 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
      * Mark that this round produced a successful AssocResp so the wait-timer
      * suppresses its NO_DATA confirm and lets the deferred SUCCESS confirm
      * reach NWK. See tl_zbWaitForAssociationRespTimeout() in mac_associate.c.
+     * Also cancel the wait timer outright from this RX-worker context — if
+     * the timer hasn't fired yet, killing it here removes the race entirely
+     * (the flag is only a backstop for the case where the timer has already
+     * been dispatched and is about to enter its callback).
      */
     mac_assoc_resp_success_seen = 1U;
+    mac_assoc_cancel_wait_timer_from_rx();
     g_zbInfo.macPib.shortAddress = assignedShort;
     g_zbInfo.nwkNib.nwkAddr = assignedShort;
 

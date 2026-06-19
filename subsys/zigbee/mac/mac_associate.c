@@ -23,6 +23,20 @@ static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
 volatile u8 mac_assoc_resp_success_seen = 0U;
 
+/*
+ * Minimal helper safe to call from the RX worker thread when fast handoff
+ * sees a successful AssocResp. Cancels the wait-timer only; does NOT touch
+ * g_zbMacCtx.status or the pendingWaitTimer (those live in MAC-thread
+ * state and have caused scan-stall regressions when poked from RX
+ * context).
+ */
+void mac_assoc_cancel_wait_timer_from_rx(void)
+{
+    if (assocRspTimeoutEvt != NULL) {
+        ev_timer_taskCancel(&assocRspTimeoutEvt);
+    }
+}
+
 extern volatile u32 zb_nwk_ed_trace[];
 
 /*
