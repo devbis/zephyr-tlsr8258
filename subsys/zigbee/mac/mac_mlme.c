@@ -183,6 +183,7 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
             zb_buf_free(buf);
             return;
         }
+        mac_assoc_resp_success_seen = 1U;
         tl_zbMacAssociateRespReceived();
         {
             u32 prev = zb_nwk_ed_trace[38];
@@ -200,6 +201,9 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
          * so accept the response whenever we have an outstanding AssocReq
          * buffer.
          */
+        if (payload[3] == MAC_SUCCESS) {
+            mac_assoc_resp_success_seen = 1U;
+        }
         tl_zbMacAssociateRespReceived();
         zb_buf_free((zb_buf_t *)associationReqOrigBuffer);
         {

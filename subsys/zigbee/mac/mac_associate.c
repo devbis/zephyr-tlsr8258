@@ -21,6 +21,7 @@ enum {
 
 static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
+volatile u8 mac_assoc_resp_success_seen = 0U;
 
 extern volatile u32 zb_nwk_ed_trace[];
 
@@ -66,6 +67,33 @@ static inline u32 assoc_rsp_timeout_ms(void)
 static int tl_zbWaitForAssociationRespTimeout(void *arg)
 {
     u8 *req = (u8 *)arg;
+
+    /*
+     * Double-CNF race: the deferred AssocResp parser may have already seen a
+     * successful response (fast handoff has stamped macPib.shortAddress and
+     * pushed the new filter), but the deferred MAC_MLME_ASSOCIATE_CNF success
+     * has not yet been posted. If we post NO_DATA here, NWK will treat the
+     * join as failed and immediately restart the discovery loop, never
+     * consuming the late SUCCESS CNF that the late-success path in
+     * mac_mlme.c is about to enqueue. Suppress the NO_DATA confirm when the
+     * fast handoff has already seen success this round and let the late
+     * success path drive the CNF.
+     */
+    /*
+     * Mark unconditional timer entry in slot[39] bit 10; bit 11 if the
+     * success flag was already set at entry. Lets us tell "timer never
+     * fired" from "timer fired but flag was still 0".
+     */
+    zb_nwk_ed_trace[39] |= (1U << 10);
+    if (mac_assoc_resp_success_seen) {
+        zb_nwk_ed_trace[39] |= (1U << 11);
+        mac_trace_origbuf_clear(9U);
+        associationReqOrigBuffer = NULL;
+        g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
+        assocRspTimeoutEvt = NULL;
+        zb_buf_free((zb_buf_t *)req);
+        return -1;
+    }
 
     memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
     req[10] = MAC_STA_NO_DATA;
@@ -234,6 +262,7 @@ void tl_zbMacAssociateRequestHandler(void *arg)
     }
 
     ((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] |= 0x08U;
+    mac_assoc_resp_success_seen = 0U;
     associationReqOrigBuffer = arg;
     g_zbMacCtx.curChannel = req[0];
     rf_setChannel(req[0]);
