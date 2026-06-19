@@ -16,7 +16,14 @@
 
 #include "zb_common_stub.h"
 
-K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_t), ZB_BUF_POOL_NUM,
+#define ZB_BUF_RX_SNAPSHOT_SIZE 200U
+
+typedef struct {
+	zb_buf_t zb;
+	u8 rx_snapshot[ZB_BUF_RX_SNAPSHOT_SIZE];
+} zb_buf_block_t;
+
+K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
 			 __alignof__(zb_buf_t));
 
 zb_buf_t *zb_buf_allocate(void)
@@ -81,6 +88,20 @@ void *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
 	ARG_UNUSED(rxBuf);
 	return zb_buf_allocate();
+}
+
+u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
+{
+	zb_buf_block_t *block = (zb_buf_block_t *)buf;
+
+	if (block == NULL || data == NULL || len > ARRAY_SIZE(block->rx_snapshot)) {
+		return NULL;
+	}
+
+	memset(block->rx_snapshot, 0, sizeof(block->rx_snapshot));
+	memcpy(block->rx_snapshot, data, len);
+
+	return block->rx_snapshot;
 }
 
 /*

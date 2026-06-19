@@ -10,6 +10,7 @@
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
+extern volatile u32 zb_nwk_ed_trace[];
 
 #if ZB_ED_ROLE
 #define ZB_PLATFORM_BDB_ED_RESTORE 1
@@ -456,8 +457,12 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 #else
 	u8 status;
 
+	/* [21]: entry canary — written unconditionally on every call. */
+	zb_nwk_ed_trace[21] = 0xBDB00001U;
+
 	if (zb_platform_bdb_init_default() != 0) {
 		LOG_ERR("zb bdb steer: init failed");
+		zb_nwk_ed_trace[21] = 0xBDB00002U;
 		return 0xFFU;
 	}
 
@@ -468,14 +473,25 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 			: (uint8_t)CONFIG_ZIGBEE_CHANNEL;
 		int rc = zb_platform_radio_start_on_channel(scan_channel);
 
-		printk("zb bdb steer: radio start ch=%u rc=%d\n",
-		       scan_channel, rc);
+		/*
+		 * [19]: bits 31..16 = 0xBDB1 (steer radio-start);
+		 *       bits 15..8  = channel used;
+		 *       bits  7..0  = 0 on success, 0x80|(abs(rc)&0x7f) on error.
+		 */
+		zb_nwk_ed_trace[19] = 0xBDB10000U |
+				      ((u32)scan_channel << 8) |
+				      (u32)(u8)((rc < 0)
+					? ((u8)((-rc) & 0x7fU) | 0x80U)
+					: 0U);
 	}
 #endif
 
-	printk("zb bdb steer: calling bdb_networkSteerStart\n");
 	status = bdb_networkSteerStart();
-	printk("zb bdb steer: bdb_networkSteerStart status=%u\n", status);
+	/*
+	 * [20]: bits 31..16 = 0xBDB2 (steer result);
+	 *       bits  7..0  = BDB status (0 = started OK, non-zero = error).
+	 */
+	zb_nwk_ed_trace[20] = 0xBDB20000U | ((u32)status & 0xffU);
 	return status;
 #endif
 }

@@ -802,8 +802,22 @@ static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
 static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *payload)
 {
 	uint16_t filter_pan;
+	uint8_t frame_type;
 
 	if (tlsr8258_radio_promiscuous_get(radio)) {
+		return true;
+	}
+
+	frame_type = payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u;
+	if (frame_type == IEEE802154_FRAME_TYPE_BEACON) {
+		/*
+		 * Beacon frames carry no destination addressing, so the normal
+		 * short/IEEE destination filter below would reject every active
+		 * scan response once promiscuous mode is disabled. Router join
+		 * relies on receiving coordinator beacons after our beacon
+		 * request, and the higher MAC/NWK layers already validate PAN /
+		 * payload content before using them.
+		 */
 		return true;
 	}
 

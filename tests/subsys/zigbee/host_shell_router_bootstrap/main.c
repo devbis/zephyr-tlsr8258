@@ -237,10 +237,42 @@ static void test_router_commissioning_uses_network_steer(void)
 	EXPECT_EQ(poll_rate_set_calls, 0);
 }
 
+/*
+ * Regression: when BDB reports commissioning complete but not joined (e.g.
+ * coordinator had permitJoining=0), the router must reschedule the retry
+ * timer so it tries again once permit-join opens.  The old code returned
+ * early without rescheduling, leaving the router stuck after one scan.
+ */
+static void test_router_commissioning_status_not_joined_reschedules_retry(void)
+{
+	int post_calls_before_status;
+
+	reset_state();
+	app_bdb_bootstrap_ready();
+
+	/* First commissioning attempt: steer starts, retry timer armed. */
+	app_bdb_start_commissioning();
+	EXPECT_EQ(network_steer_calls, 1);
+	EXPECT_EQ(ev_timer_task_post_calls, 1);
+
+	post_calls_before_status = ev_timer_task_post_calls;
+
+	/* BDB reports back: scan finished, no joinable network found. */
+	app_bdb_commissioning_status(0x80U, false);
+
+	/* A new retry timer must be (re)scheduled so the router will try again. */
+	EXPECT_TRUE(ev_timer_task_post_calls > post_calls_before_status);
+	/* commissioning_start_requested must be cleared for the retry to fire. */
+	EXPECT_FALSE(commissioning_start_requested);
+	/* The retry timer must be actively pending. */
+	EXPECT_TRUE(ev_timer_task_stub.scheduled);
+}
+
 int main(void)
 {
 	test_router_join_target_publishes_static_formation();
 	test_router_commissioning_uses_network_steer();
+	test_router_commissioning_status_not_joined_reschedules_retry();
 
 	if (failures != 0) {
 		printf("host_shell_router_bootstrap: %d failure(s)\n", failures);

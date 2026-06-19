@@ -155,7 +155,14 @@ static int zb_radio_start_impl(u8 channel)
 		return ret;
 	}
 
-	zb_radio_set_promiscuous(true);
+	/*
+	 * Keep hardware destination filtering enabled. During join we still
+	 * receive broadcast beacons and IEEE-addressed ASSOC_RESP frames, but
+	 * we stop queueing unrelated unicast traffic from other nodes on the
+	 * channel, which otherwise starves the MAC task queue long enough for
+	 * the association-response wait timer to expire first.
+	 */
+	zb_radio_set_promiscuous(false);
 
 	g_radio.current_channel = channel;
 	g_radio.trx_state = RF_MODE_RX;
@@ -449,7 +456,7 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 		return;
 	}
 
-	zb_radio_set_promiscuous(true);
+	zb_radio_set_promiscuous(false);
 	g_radio.current_channel = logical_chn;
 	atomic_set(&g_radio.started, 1);
 	g_radio.trx_state = mode;
