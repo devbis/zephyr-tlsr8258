@@ -1186,6 +1186,8 @@ static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 #endif
 }
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 {
 	struct tlsr8258_radio_data *radio = arg1;
@@ -1202,6 +1204,25 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 	while (true) {
 		if (!tlsr8258_rx_queue_wait_dequeue(&radio->rx_queue, &frame, K_FOREVER)) {
 			continue;
+		}
+		/*
+		 * slot[29] = k_uptime_get_32() at every successful RX worker
+		 * dequeue. slot[30] low 16 = dequeue counter, high 16 = current
+		 * rx_queue drop_count (capped). Lets us tell whether dequeues
+		 * are stalling (slot[29] not advancing while sniffer sees air
+		 * traffic) versus the queue being full and dropping (slot[30]
+		 * high 16 climbing).
+		 */
+		zb_nwk_ed_trace[29] = (uint32_t)k_uptime_get_32();
+		{
+			uint32_t prev = zb_nwk_ed_trace[30];
+			uint32_t cnt = ((prev & 0xffffU) + 1U) & 0xffffU;
+			uint32_t drops = tlsr8258_rx_queue_drop_count(&radio->rx_queue);
+
+			if (drops > 0xffffU) {
+				drops = 0xffffU;
+			}
+			zb_nwk_ed_trace[30] = (drops << 16) | cnt;
 		}
 
 		psdu = NULL;
@@ -1235,6 +1256,13 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 				k_sem_give(&radio->tx_wait);
 			}
 		}
+		/*
+		 * slot[31] = k_uptime_get_32() at end of worker iteration.
+		 * Paired with slot[29] (start) shows whether iteration spans
+		 * an ms tick. In practice both timestamps land in the same
+		 * ms bucket — the dispatch+dequeue chain is sub-millisecond.
+		 */
+		zb_nwk_ed_trace[31] = (uint32_t)k_uptime_get_32();
 	}
 }
 

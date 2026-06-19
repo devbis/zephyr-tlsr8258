@@ -96,9 +96,12 @@ static int tl_zbWaitForAssociationRespTimeout(void *arg)
     /*
      * Mark unconditional timer entry in slot[39] bit 10; bit 11 if the
      * success flag was already set at entry. Lets us tell "timer never
-     * fired" from "timer fired but flag was still 0".
+     * fired" from "timer fired but flag was still 0".  slot[27] also
+     * captures the k_uptime_get_32() at entry, paired with slot[26]
+     * (fast handoff entry) to measure the actual race margin per round.
      */
     zb_nwk_ed_trace[39] |= (1U << 10);
+    zb_nwk_ed_trace[27] = (u32)k_uptime_get_32();
     if (mac_assoc_resp_success_seen) {
         zb_nwk_ed_trace[39] |= (1U << 11);
         mac_trace_origbuf_clear(9U);
@@ -277,6 +280,12 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 
     ((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] |= 0x08U;
     mac_assoc_resp_success_seen = 0U;
+    /*
+     * slot[28] = k_uptime_get_32() at AssocReq tx start. Together with
+     * slot[26] (fast handoff) and slot[27] (wait-timer) this localises
+     * where the delivery delay falls within a join round.
+     */
+    zb_nwk_ed_trace[28] = (u32)k_uptime_get_32();
     associationReqOrigBuffer = arg;
     g_zbMacCtx.curChannel = req[0];
     rf_setChannel(req[0]);
