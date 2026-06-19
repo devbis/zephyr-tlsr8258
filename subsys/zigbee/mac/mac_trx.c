@@ -123,6 +123,12 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
     }
 
     assignedShort = (u16)psdu[hdrLen + 1U] | ((u16)psdu[hdrLen + 2U] << 8);
+    /*
+     * Mark that this round produced a successful AssocResp so the wait-timer
+     * suppresses its NO_DATA confirm and lets the deferred SUCCESS confirm
+     * reach NWK. See tl_zbWaitForAssociationRespTimeout() in mac_associate.c.
+     */
+    mac_assoc_resp_success_seen = 1U;
     g_zbInfo.macPib.shortAddress = assignedShort;
     g_zbInfo.nwkNib.nwkAddr = assignedShort;
 
