@@ -50,7 +50,7 @@ extern uint8_t zb_routerStart(void);
 	static bool bdb_runtime_ready;
 	static bool leave_recommission_pending;
 	static struct ev_timer_event_t *commissioning_retry_timer;
-	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[16];
+	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[42];
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 	volatile uint32_t zb_app_bdb_retry_trace[16] = {0xa4bd0000U};
 	volatile uint32_t zb_rejoin_callback_trace[16] = {0xa5c10000U};
@@ -353,7 +353,11 @@ void app_bdb_start_commissioning(void)
 		return;
 	}
 
+	/* [22]: pre-call canary: written right before invoking steer_start. */
+	zb_nwk_ed_trace[22] = 0xBDB00022U;
 	status = zb_platform_bdb_network_steer_start();
+	/* [23]: post-call canary: written right after steer_start returns. */
+	zb_nwk_ed_trace[23] = 0xBDB00023U | ((uint32_t)status & 0xffU);
 	app_bdb_retry_trace_put((0x07U << 24) | status);
 	zb_nwk_ed_trace[14] = 0xA4B00000U | status;
 	if (status == 0U) {
@@ -487,10 +491,11 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 	commissioning_start_requested = false;
 	app_bdb_rejoin_callback_trace_put((0x17U << 24) | status);
 	if (APP_BDB_ROLE_ROUTER) {
-		LOG_INF("zigbee_shell router commissioning pending (bdb status: 0x%02x)", status);
-		return;
+		LOG_INF("zigbee_shell router commissioning pending (bdb status: 0x%02x), retry scheduled",
+			status);
+	} else {
+		LOG_INF("zigbee_shell not joined yet (bdb status: 0x%02x), retry scheduled", status);
 	}
-	LOG_INF("zigbee_shell not joined yet (bdb status: 0x%02x), retry scheduled", status);
 	app_bdb_commissioning_retry_schedule();
 #else
 	ARG_UNUSED(status);

@@ -14,6 +14,7 @@
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
+#include <zephyr/zigbee/zb_radio_port.h>
 #include <stdint.h>
 
 static ev_timer_event_t *macPendingWaitTimerEvt;
@@ -21,6 +22,7 @@ tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
 static u8 tx_fifo_rptr = 0;
 static u8 tx_fifo_wptr = 0;
+extern volatile u32 zb_nwk_ed_trace[];
 
 typedef struct _attribute_packed_ {
     void *curTx;
@@ -89,6 +91,83 @@ static inline void *mac_trx_cur_get(void)
 static inline void mac_trx_cur_set(void *cur)
 {
     mac_trx_vars.curTx = cur;
+}
+
+static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
+{
+    const u8 *origReq = (const u8 *)associationReqOrigBuffer;
+    tl_zb_addition_neighbor_entry_t *parent = g_zbNwkCtx.join.pAssocJoinParent;
+    u16 frameCtrl;
+    u8 hdrLen;
+    u8 dstMode;
+    u8 srcMode;
+    u8 srcOff;
+    u16 assignedShort;
+
+    if (psdu == NULL || len < 4U || (origReq == NULL && parent == NULL)) {
+        return;
+    }
+
+    frameCtrl = (u16)psdu[0] | ((u16)psdu[1] << 8);
+    if ((frameCtrl & 0x0007U) != MAC_FRAME_TYPE_COMMAND) {
+        return;
+    }
+
+    hdrLen = tl_zbMacHdrSize(frameCtrl);
+    if ((u16)(hdrLen + 4U) > len) {
+        return;
+    }
+
+    if (psdu[hdrLen] != MAC_CMD_ASSOCIATION_RESPONSE || psdu[hdrLen + 3U] != MAC_SUCCESS) {
+        return;
+    }
+
+    assignedShort = (u16)psdu[hdrLen + 1U] | ((u16)psdu[hdrLen + 2U] << 8);
+    g_zbInfo.macPib.shortAddress = assignedShort;
+    g_zbInfo.nwkNib.nwkAddr = assignedShort;
+
+    dstMode = (u8)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
+    srcMode = (u8)((frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
+    srcOff = MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN;
+
+    if (dstMode != ZB_ADDR_NO_ADDR) {
+        srcOff += MAC_PAN_ID_FIELD_LEN;
+        srcOff += (dstMode == ZB_ADDR_64BIT_DEV) ? MAC_EXT_ADDR_FIELD_LEN : MAC_SHORT_ADDR_FIELD_LEN;
+    }
+    if ((frameCtrl & MAC_FCF_INTRA_PAN_MASK) == 0U) {
+        srcOff += MAC_PAN_ID_FIELD_LEN;
+    }
+
+    if (srcMode == ZB_ADDR_16BIT_DEV_OR_BROADCAST &&
+        (u16)(srcOff + SHORT_ADDR_LEN) <= len) {
+        g_zbInfo.macPib.coordShortAddress = (u16)psdu[srcOff] | ((u16)psdu[srcOff + 1U] << 8);
+    } else if (parent != NULL) {
+        g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
+    } else if (origReq[12] == ADDR_MODE_SHORT) {
+        g_zbInfo.macPib.coordShortAddress = (u16)origReq[4] | ((u16)origReq[5] << 8);
+    }
+
+    if (srcMode == ZB_ADDR_64BIT_DEV &&
+        (u16)(srcOff + EXT_ADDR_LEN) <= len) {
+        memcpy(g_zbInfo.macPib.coordExtAddress, &psdu[srcOff], EXT_ADDR_LEN);
+    } else if (parent != NULL && parent->addrMode == ZB_ADDR_64BIT_DEV) {
+        memcpy(g_zbInfo.macPib.coordExtAddress, parent->extAddr, EXT_ADDR_LEN);
+    }
+
+    zb_nwk_ed_trace[34] = (zb_nwk_ed_trace[34] + 1U) & 0xffffU;
+    zb_nwk_ed_trace[34] |= ((u32)hdrLen << 16);
+    zb_nwk_ed_trace[35] = ((u32)g_zbInfo.macPib.coordShortAddress << 16) | assignedShort;
+    zb_nwk_ed_trace[36] = ((u32)g_zbInfo.nwkNib.nwkAddr << 16) | g_zbInfo.macPib.shortAddress;
+    zb_nwk_ed_trace[37] = ((u32)g_zbInfo.macPib.panId << 16) | g_zbInfo.macPib.coordShortAddress;
+
+    /*
+     * The coordinator can queue TRANSPORT_KEY within a few milliseconds of
+     * the ASSOC_RESP. Update the 802.15.4 driver filter here on the RX worker
+     * path rather than waiting for the deferred MAC/NWK confirm chain.
+     */
+    zb_radio_port_update_filters(g_zbInfo.macPib.panId,
+                                 assignedShort,
+                                 g_zbInfo.macPib.extAddress);
 }
 
 static inline u8 txq_flags_get(const tx_data_queue *entry)
@@ -672,6 +751,11 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 {
     zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
     zb_mac_rx_pending_meta_t *meta;
+    u8 *owned_payload;
+
+    if (buf == NULL) {
+        return;
+    }
 
     if (ackPkt != 0U) {
         u8 frameCtrl = data[0];
@@ -690,8 +774,16 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
         return;
     }
 
+    zb_mac_try_assoc_resp_fast_handoff(data, len);
+
+    owned_payload = zb_buf_rx_payload_capture(buf, data, len);
+    if (owned_payload == NULL) {
+        zb_buf_free(buf);
+        return;
+    }
+
     meta = (zb_mac_rx_pending_meta_t *)buf;
-    meta->payload = data;
+    meta->payload = owned_payload;
     meta->payloadLen = (u8)(len - 2U);
     meta->timestamp = timestamp;
     meta->rssi = rssi;
