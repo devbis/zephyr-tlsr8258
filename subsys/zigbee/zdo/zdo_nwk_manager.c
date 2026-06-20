@@ -804,6 +804,37 @@ void zdo_nlme_join_confirm(void *arg)
 {
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
+    extern volatile u32 zb_nwk_ed_trace[];
+
+    /*
+     * slot[43] layout, decoded byte-by-byte:
+     *   byte0 (low 8)   = total invocations & 0xff
+     *   byte1 (bits 8-15) = invocations dropped because state was not
+     *                       ASSOC_JOIN / REJOIN / DIRECT_JOIN
+     *   byte2 (bits 16-23) = LAST observed `state` value
+     *   byte3 (bits 24-31) = LAST observed `status` value
+     *
+     * Lets the SWS reader correlate "we got the SUCCESS CNF from MAC"
+     * (slot[6]) with "but ZDO refused it because state was IDLE
+     * already" — the actual gate that prevents zdo_nwkAuthTimeoutStart
+     * from arming the authEvt that ss_zdoTransportKeyIndHandle needs.
+     */
+    {
+        u32 prev = zb_nwk_ed_trace[43];
+        u32 count = (prev & 0xffU) + 1U;
+        u32 drops = (prev >> 8) & 0xffU;
+        bool wrong_state = (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
+                            state != ZDO_NWK_MGR_STATE_REJOIN &&
+                            state != ZDO_NWK_MGR_STATE_DIRECT_JOIN);
+
+        if (wrong_state) {
+            drops = (drops + 1U) & 0xffU;
+        }
+        zb_nwk_ed_trace[43] = (count & 0xffU) |
+                              ((drops & 0xffU) << 8) |
+                              (((u32)state & 0xffU) << 16) |
+                              (((u32)status & 0xffU) << 24);
+    }
 
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
