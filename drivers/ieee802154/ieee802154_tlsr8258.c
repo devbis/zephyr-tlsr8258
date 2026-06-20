@@ -119,7 +119,7 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
  * `next->prev` with `next == NULL`. Caught via dlist trap on RA=unready_thread+0x22.
  */
 #define TLSR8258_RX_WORKER_STACK_SIZE 2048
-#define TLSR8258_RX_SLOT_COUNT 4u
+#define TLSR8258_RX_SLOT_COUNT 16u
 struct tblcmdset {
 	uint16_t adr;
 	uint8_t dat;
