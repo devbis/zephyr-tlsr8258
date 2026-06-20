@@ -8,7 +8,7 @@
  */
 #include "zb_common_stub.h"
 
-volatile u32 zb_nwk_ed_trace[42] = {
+volatile u32 zb_nwk_ed_trace[44] = {
 	[0] = 0x4e574b45U,
 	/* slots beyond the 32-word boundary need explicit zero initializers
 	 * to ride along in the .data LMA copy that runs at boot — without
@@ -22,4 +22,8 @@ volatile u32 zb_nwk_ed_trace[42] = {
 	[39] = 0U,
 	[40] = 0U,
 	[41] = 0U,
+	/* slot[42] = mac_rxDataParse call count (Layer 3 diag)
+	 * slot[43] = tl_zbPhyIndication call count (Layer 3 diag) */
+	[42] = 0U,
+	[43] = 0U,
 };

@@ -235,6 +235,16 @@ void mac_rxDataParse(void *arg)
     u8 hdrSize;
     tl_zb_mac_mhr_t mhr;
 
+    /*
+     * slot[42] = mac_rxDataParse invocation count (Layer 3 diag).
+     * Should match the rate at which the RX worker dequeues frames
+     * (slot[30] low 16). If much lower, the user task queue
+     * (zb_task_queue_zephyr.c task_queue[32], drained by
+     * zb_taskq_drain from zb_thread's ev_poll_process) is the
+     * bottleneck.
+     */
+    zb_nwk_ed_trace[42] = (zb_nwk_ed_trace[42] + 1U) & 0xffffffffU;
+
     raw[194] = (u8)rssi;
     frameType = raw[0] & 0x07U;
     hdrSize = tl_zbMacHdrParse(&mhr, raw);
