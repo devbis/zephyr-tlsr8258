@@ -1208,12 +1208,20 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 		/*
 		 * slot[29] = k_uptime_get_32() at every successful RX worker
 		 * dequeue. slot[30] low 16 = dequeue counter, high 16 = current
-		 * rx_queue drop_count (capped). Lets us tell whether dequeues
-		 * are stalling (slot[29] not advancing while sniffer sees air
-		 * traffic) versus the queue being full and dropping (slot[30]
-		 * high 16 climbing).
+		 * rx_queue drop_count (capped).
 		 */
-		zb_nwk_ed_trace[29] = (uint32_t)k_uptime_get_32();
+		{
+			uint32_t prev_start = zb_nwk_ed_trace[29];
+			uint32_t now_ms = (uint32_t)k_uptime_get_32();
+			uint32_t gap = now_ms - prev_start;
+			uint32_t prev_max = (zb_nwk_ed_trace[31] >> 16) & 0xffffU;
+
+			zb_nwk_ed_trace[29] = now_ms;
+			if (prev_start != 0U && gap > prev_max && gap <= 0xffffU) {
+				zb_nwk_ed_trace[31] =
+					(gap << 16) | (zb_nwk_ed_trace[31] & 0xffffU);
+			}
+		}
 		{
 			uint32_t prev = zb_nwk_ed_trace[30];
 			uint32_t cnt = ((prev & 0xffffU) + 1U) & 0xffffU;
@@ -1257,12 +1265,15 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 			}
 		}
 		/*
-		 * slot[31] = k_uptime_get_32() at end of worker iteration.
-		 * Paired with slot[29] (start) shows whether iteration spans
-		 * an ms tick. In practice both timestamps land in the same
-		 * ms bucket — the dispatch+dequeue chain is sub-millisecond.
+		 * slot[31]: low 16 = end timestamp ms (capped), high 16 = max
+		 * inter-iteration gap (ms). The gap is the time the worker
+		 * spent blocked in k_fifo_get between successive frames; if
+		 * that gap is hundreds of ms while individual iters are <1
+		 * ms, the worker IS being blocked for that long, not
+		 * working slowly.
 		 */
-		zb_nwk_ed_trace[31] = (uint32_t)k_uptime_get_32();
+		zb_nwk_ed_trace[31] = (zb_nwk_ed_trace[31] & 0xffff0000U) |
+				       ((uint32_t)k_uptime_get_32() & 0xffffU);
 	}
 }
 
