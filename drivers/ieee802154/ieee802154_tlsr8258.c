@@ -1197,7 +1197,6 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 	bool is_ack;
 	bool ack_pending;
 	bool is_pending_response;
-
 	ARG_UNUSED(arg2);
 	ARG_UNUSED(arg3);
 
@@ -1274,6 +1273,25 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 		 */
 		zb_nwk_ed_trace[31] = (zb_nwk_ed_trace[31] & 0xffff0000U) |
 				       ((uint32_t)k_uptime_get_32() & 0xffffU);
+		/*
+		 * slot[17] = low 32 bits of execution_cycles for the RX worker.
+		 * slot[18] = low 32 bits of total_cycles for the RX worker.
+		 * Both are accumulated by CONFIG_SCHED_THREAD_USAGE. Ratio of
+		 * execution / total over a known wall-clock window tells us
+		 * whether the worker is actually getting CPU. If
+		 * execution_cycles barely grows while slot[31] (uptime) ticks
+		 * forward, the worker is genuinely blocked off-CPU — not slow.
+		 */
+		{
+			k_thread_runtime_stats_t stats;
+
+			if (k_thread_runtime_stats_get(_current, &stats) == 0) {
+				zb_nwk_ed_trace[17] =
+					(uint32_t)(stats.execution_cycles & 0xffffffffU);
+				zb_nwk_ed_trace[18] =
+					(uint32_t)(stats.total_cycles & 0xffffffffU);
+			}
+		}
 	}
 }
 
