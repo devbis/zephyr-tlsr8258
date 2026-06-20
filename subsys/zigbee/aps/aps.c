@@ -177,8 +177,33 @@ void aps_command_handle(void *arg)
     u16 dst = ind->dst_addr;
     u16 local = g_zbInfo.nwkNib.nwkAddr;
     u8 cmdId = ind->asdu[0];
+    extern volatile u32 zb_nwk_ed_trace[];
 
-    if (dst == local) {
+    /*
+     * slot[44]: low 16 = aps_command_handle call count, bits 16-23 =
+     * last cmdId seen, bits 24-31 = bit set per processed cmdId branch.
+     */
+    {
+        u32 prev = zb_nwk_ed_trace[44];
+        u32 count = ((prev & 0xffffU) + 1U) & 0xffffU;
+
+        zb_nwk_ed_trace[44] = (prev & 0xff000000U) | ((u32)cmdId << 16) | count;
+    }
+
+    /*
+     * Vendor libzigbee check looked like `if (dst == local) drop;`
+     * which inverts the intended semantics: APS commands addressed
+     * to us (TC → router Transport-Key, Switch-Key, etc.) MUST be
+     * processed locally, not dropped. The original Zephyr port
+     * carried the inverted comparison through, which silently
+     * dropped every inbound Transport-Key frame and left the
+     * device stuck in auth-wait forever (see ZDO trace in
+     * zephyr-docs/router-rx-fix-step0-1-2-progress-2026-06-20.md).
+     * Flip the test: drop if NOT for us (we don't relay APS
+     * commands here — there's a separate relay path in
+     * ss_apsTransportKeyCmdHandle for the parent-router case).
+     */
+    if (dst != local) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
