@@ -50,7 +50,7 @@ extern uint8_t zb_routerStart(void);
 	static bool bdb_runtime_ready;
 	static bool leave_recommission_pending;
 	static struct ev_timer_event_t *commissioning_retry_timer;
-	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[44];
+	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[45];
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 	volatile uint32_t zb_app_bdb_retry_trace[16] = {0xa4bd0000U};
 	volatile uint32_t zb_rejoin_callback_trace[16] = {0xa5c10000U};
