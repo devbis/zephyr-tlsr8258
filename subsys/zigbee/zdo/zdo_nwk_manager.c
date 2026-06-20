@@ -839,8 +839,29 @@ void zdo_nlme_join_confirm(void *arg)
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
         state != ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
-        zb_buf_free((zb_buf_t *)arg);
-        return;
+        /*
+         * Late-success CNF arrived after the NWK-side NO_DATA retry
+         * already aborted the cycle to IDLE. On TLSR8258 this is the
+         * common case — the wait timer beats the deferred AssocResp
+         * dispatch by 5-8 s (zephyr-docs/router-rx-fix-step0-1-2-
+         * progress-2026-06-20.md). If we drop the late SUCCESS at
+         * the state gate, zdo_nwkAuthTimeoutStart never arms authEvt
+         * and ss_zdoTransportKeyIndHandle silently drops every
+         * inbound Transport-Key frame.
+         *
+         * Adopt the late SUCCESS: snap the state back to ASSOC_JOIN
+         * so the rest of this function runs and arms the auth timer.
+         * Non-SUCCESS late confirms keep the original "drop at gate"
+         * behaviour — replaying a failure into a finished cycle has
+         * no upside.
+         */
+        if (status == 0U) {
+            zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_ASSOC_JOIN;
+            state = ZDO_NWK_MGR_STATE_ASSOC_JOIN;
+        } else {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
     }
 
     if (state == ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
