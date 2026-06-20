@@ -143,7 +143,7 @@ static nwk_ed_minimal_rx_evt_t g_nwkEdRxEvtQ[NWK_ED_MINIMAL_RX_EVT_Q_LEN];
 static u8 g_nwkEdRxEvtHead;
 static u8 g_nwkEdRxEvtTail;
 static u8 g_nwkEdRxEvtCount;
-volatile u32 zb_nwk_ed_trace[44] = {0x4e574b45U};
+volatile u32 zb_nwk_ed_trace[45] = {0x4e574b45U};
 extern volatile u32 zb_post_tk_trace[16];
 volatile u32 zb_nwk_beacon_frame_count;
 volatile u32 zb_nwk_beacon_parse_fail_count;
