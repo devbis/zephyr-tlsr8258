@@ -26,12 +26,17 @@ extern void zb_buf_free(zb_buf_t *buf);
 
 /*
  * One queue per layer-id from the TL_Q_* enum in zb_common_stub.h.
- * Depth was 8 in vendor builds (TL_Q_DEPTH not exposed publicly);
- * the router-side dispatcher drains each tick so a single-digit
- * depth is enough as long as the producer doesn't outrun the
- * consumer.
+ * Depth was 8 in vendor builds (TL_Q_DEPTH not exposed publicly).
+ * The router-side dispatcher drains each tick, but on the TLSR8258
+ * port the producer (tl_zbPhyIndication, fed from the RX worker
+ * COOP thread) outruns the consumer (zb_thread at preemptible
+ * prio 5) under permit-join load: 5-of-7 AssocResp frames were
+ * dropped at this layer in tracing
+ * (zephyr-docs/router-rx-fix-step0-1-2-progress-2026-06-20.md
+ * follow-up). Bump depth so the 12-slot k_msgq absorbs the burst
+ * window while zb_thread catches up.
  */
-#define ZB_TASKQ_DEPTH 12
+#define ZB_TASKQ_DEPTH 32
 
 K_MSGQ_DEFINE(zb_taskq_ev_task,  sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
 K_MSGQ_DEFINE(zb_taskq_mac2nwk,  sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
