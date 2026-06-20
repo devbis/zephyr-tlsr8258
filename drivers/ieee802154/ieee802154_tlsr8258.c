@@ -983,38 +983,23 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
 
-	while (waited < 300u) {
-		uint16_t irq = TLSR_REG16(0x0f20);
-
-		if ((irq & (RF_IRQ_TX | RF_IRQ_TX_DS | RF_IRQ_CMD_DONE)) != 0u) {
-			TLSR_REG16(0x0f20) = irq;
-			break;
-		}
-
-		k_busy_wait(1);
-		waited++;
-	}
-
-	uint32_t tx_done_cyc = k_cycle_get_32();
-	tlsr8258_rf_set_rxmode(radio);
-	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-
 	/*
-	 * Post-ACK diagnostics. Moved here from the timing-critical section so
-	 * the busy_wait and tx kick run with no extra MMIO stores.
+	 * Step 2 — defer the post-ACK busy-wait out of the ISR. The
+	 * aTurnaroundTime spin above is real-time-mandatory (IEEE 802.15.4
+	 * forbids missing the turnaround window) and stays in ISR context.
+	 * The original 300 × k_busy_wait(1) poll for RF_IRQ_TX_DS used to
+	 * live here too; it added up to 300 µs of ISR occupancy per ACK
+	 * and was the second-largest source of RX-worker starvation
+	 * (zephyr-docs/router-rx-queue-starvation-2026-06-20.md).
+	 *
+	 * Instead: set radio->op.ack_tx_pending, return from ISR
+	 * immediately. The next RF ISR (which fires on RF_IRQ_TX_DS /
+	 * CMD_DONE) sees the flag and switches the radio back to RX
+	 * via tlsr8258_rf_set_rxmode in its normal `has_tx` branch
+	 * (already wired at the top of tlsr8258_rf_isr).
 	 */
-	if (radio->debug != NULL) {
-		radio->debug->tx_done_cyc = tx_done_cyc;
-		uint32_t elapsed_us = elapsed_cyc /
-				       (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-		uint32_t tx_us =
-			(tx_done_cyc - tx_kick_cyc) /
-			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-		radio->debug->tx_send_duration_us =
-			(uint16_t)((tx_us > 0xffffu) ? 0xffffu : tx_us);
-		radio->debug->rf_branch_debug = (uint8_t)(elapsed_us & 0xffu);
-		radio->debug->rf_irq_ack_debug = (uint16_t)((waited > 0xffffu) ? 0xffffu : waited);
-	}
+	radio->op.ack_tx_pending = true;
+	(void)waited;
 }
 
 static int8_t tlsr8258_rx_rssi_dbm(const uint8_t *rx)
@@ -1377,6 +1362,7 @@ static void tlsr8258_rf_isr(const void *arg)
 	if (has_tx) {
 		bool tx_complete;
 		uint32_t key;
+		bool ack_tx_completion;
 
 		if (debug != NULL) {
 			debug->rf_branch_debug = has_rx ? 6u : 2u;
@@ -1388,7 +1374,18 @@ static void tlsr8258_rf_isr(const void *arg)
 			tlsr8258_rf_set_rxmode(radio);
 		}
 		key = irq_lock();
-		tx_complete = (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) &&
+		/*
+		 * Step 2 — if this TX completion is for the MAC ACK we kicked
+		 * inside the previous RF ISR, just clear the pending flag and
+		 * skip the stack-TX state machine (the op state is not
+		 * TX_PENDING for ACK transmissions, but we still want to make
+		 * absolutely sure tx_wait doesn't get a stray give and that
+		 * op_on_tx_success doesn't reset state on an ack-only TX).
+		 */
+		ack_tx_completion = radio->op.ack_tx_pending;
+		radio->op.ack_tx_pending = false;
+		tx_complete = !ack_tx_completion &&
+			      (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) &&
 			      tlsr8258_radio_op_on_tx_success(&radio->op);
 		irq_unlock(key);
 		if (tx_complete) {

@@ -22,6 +22,15 @@ struct tlsr8258_radio_op {
 	bool expect_post_tx_rx;
 	bool ack_seen;
 	bool ack_pending;
+	/*
+	 * Set by tlsr8258_send_ack_if_needed after kicking the MAC-ACK TX
+	 * from ISR context. Cleared by the same RF ISR when the next
+	 * TX_DS/TX/CMD_DONE event fires. Lets the ISR exit early after
+	 * kicking the ACK (the 300 µs busy-wait poll that used to live
+	 * in send_ack_if_needed is gone), and tells the main TX branch
+	 * to NOT treat this TX_DS as a stack-initiated TX completion.
+	 */
+	bool ack_tx_pending;
 	int result_errno;
 };
 
