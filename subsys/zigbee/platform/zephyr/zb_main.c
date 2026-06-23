@@ -16,6 +16,29 @@
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
+/*
+ * DEBUG: capture fatal-error PC/LR/reason so an SWS read can tell whether the
+ * post-join freeze is a CPU hard fault (and where) vs an ISR hang. Remove with
+ * the rest of the SESSION-10 diagnostics once the post-join wedge is resolved.
+ */
+extern volatile u32 zb_dbg_fault_cnt;
+extern volatile u32 zb_dbg_fault_reason;
+extern volatile u32 zb_dbg_fault_pc;
+extern volatile u32 zb_dbg_fault_lr;
+
+void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
+{
+	zb_dbg_fault_cnt++;
+	zb_dbg_fault_reason = reason;
+	if (esf != NULL) {
+		zb_dbg_fault_pc = esf->pc;
+		zb_dbg_fault_lr = esf->lr;
+	}
+	for (;;) {
+		/* spin so the globals stay readable over SWS */
+	}
+}
+
 extern void rf_init(void);
 extern void aps_init(void);
 extern void tl_zbMacInit(u8 coldReset);
