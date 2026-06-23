@@ -1353,6 +1353,23 @@ static void tlsr8258_rf_isr(const void *arg)
 	tlsr8258_radio_last_irq_set(radio, effective_irq);
 
 	/*
+	 * LEVEL-IRQ SAFETY: if the raw IRQ carried an RX-class bit but
+	 * tlsr8258_rf_irq_effective_status() dropped it (invalid/transient DMA
+	 * frame — !dma_valid && !dma_sane), then has_rx is false and none of the
+	 * branches below clear those raw RX bits. ZB_RT (the RF IRQ) is
+	 * level-triggered, so an uncleared RX bit keeps the interrupt asserted
+	 * and the ISR re-fires forever — starving the ZB thread (observed as the
+	 * post-join freeze: nested==1, reg_irq_src bit13 set, rf_irq 0xf20=RX).
+	 * Clear the dropped RX bits here so the level can deassert.
+	 */
+	if (!has_rx && (irq & RF_IRQ_RX_EVENTS) != 0u) {
+		TLSR_REG16(0x0f20) = RF_IRQ_RX_EVENTS;
+		if (debug != NULL) {
+			debug->rf_irq_ack_debug = RF_IRQ_RX_EVENTS;
+		}
+	}
+
+	/*
 	 * Handle TX completion before RX when both bits are asserted in the same
 	 * ISR.  Data Request polling can receive the ACK/pending frame quickly
 	 * enough that hardware reports a combined TX+RX event; if RX wins, the
