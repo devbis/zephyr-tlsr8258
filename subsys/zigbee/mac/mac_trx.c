@@ -104,7 +104,21 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
     u8 srcOff;
     u16 assignedShort;
 
-    if (psdu == NULL || len < 4U || (origReq == NULL && parent == NULL)) {
+    /*
+     * Originally bailed when both origReq and parent were NULL. That meant
+     * only the FIRST successful ASSOC_RESP per boot triggered fast-handoff
+     * (those pointers get cleared after the first join's join.confirm
+     * runs). Subsequent re-association attempts — common when TC auth
+     * times out — would receive a new ASSOC_RESP with a different
+     * assigned short, but the radio filter would stay locked on the
+     * earlier short and we'd silently miss every unicast TC frame
+     * (Transport-Key, etc.). Verified via sniffer: parent assigns 0x16ed
+     * on retry while macPib.shortAddress + radio filter stay at 0xa357
+     * from the first attempt. Drop the bail; only require psdu + len. The
+     * coord-short fallbacks below already test parent/origReq for NULL
+     * individually.
+     */
+    if (psdu == NULL || len < 4U) {
         return;
     }
 
@@ -161,7 +175,7 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
         g_zbInfo.macPib.coordShortAddress = (u16)psdu[srcOff] | ((u16)psdu[srcOff + 1U] << 8);
     } else if (parent != NULL) {
         g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
-    } else if (origReq[12] == ADDR_MODE_SHORT) {
+    } else if (origReq != NULL && origReq[12] == ADDR_MODE_SHORT) {
         g_zbInfo.macPib.coordShortAddress = (u16)origReq[4] | ((u16)origReq[5] << 8);
     }
 
