@@ -167,7 +167,17 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
     zb_mac_rx_meta_t *meta = mac_data_meta(buf);
     tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
     u8 *msdu;
-    u8 msduLen = (u8)(meta->payloadLen - len);
+    /*
+     * meta->payloadLen was already reduced by the MAC header length inside
+     * phy_ind_payload_advance() (mac.c) before this DATA indication runs, so
+     * it IS the MSDU length. The original `meta->payloadLen - len` subtracted
+     * the MAC header a SECOND time, truncating every inbound DATA frame's MSDU
+     * by the header size (9 bytes for a short-addr frame). That silently
+     * chopped the tail off APS transport-key frames (cipher 35->26 bytes), so
+     * CCM* authentication could never succeed and the router never obtained
+     * the network key. `len`/`raw` are still used for the MHR fields below.
+     */
+    u8 msduLen = meta->payloadLen;
     u8 linkQuality = meta->linkQuality;
     bool frame_pending_set =
         (g_zbMacPib.rxOnWhenIdle == 0U) && ((raw[0] & MAC_FCF_FRAME_PENDING_MASK) != 0U);
@@ -176,6 +186,18 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
     /* meta and ind alias the same buf; preserve meta->payload (== msdu)
      * before we start clobbering by writing ind fields. */
     memcpy(&msdu, &meta->payload, sizeof(msdu));
+
+    {
+        extern volatile u8 zb_dbg_mac_payloadlen;
+        extern volatile u8 zb_dbg_mac_hdrlen;
+        extern volatile u8 zb_dbg_mac_seq;
+
+        if (zb_dbg_mac_seq == 0U && meta->payloadLen > 50U) {
+            zb_dbg_mac_payloadlen = meta->payloadLen;
+            zb_dbg_mac_hdrlen = len;
+            zb_dbg_mac_seq = 1U;
+        }
+    }
 
     ind = (zb_mscp_data_ind_t *)buf;
     memset(ind, 0, sizeof(*ind));

@@ -124,6 +124,17 @@ static bool phy_ind_beacon_notify_post(zb_buf_t *buf, tl_zb_mac_mhr_t *mhr, u8 *
 
 #if defined(ZB_ROUTER_ROLE)
 const mac_nwk_evt_t g_zbMacEventFromNwkTbl[] = {
+    /*
+     * MAC_MCPS_DATA_REQ MUST be present: the NWK layer posts every outbound
+     * DATA frame (Device Announce, ZDO responses, NWK Link Status, all APS
+     * data) to TL_Q_NWK2MAC as MAC_MCPS_DATA_REQ. Without an entry here the
+     * dispatch loop in tl_zbMacTaskProc finds no match and silently drops the
+     * frame (buffer leaked), so a joined router transmits nothing at the NWK
+     * layer — it associates and polls (MLME paths below) but never radiates a
+     * single data frame, leaving the coordinator unable to interview it.
+     * The ED build's table (#else branch) has always had this as entry 0.
+     */
+    {MAC_MCPS_DATA_REQ, tl_zbMacMcpsDataRequestProc},
     {MAC_MLME_ASSOCIATE_REQ, tl_zbMacAssociateRequestHandler},
     {MAC_MLME_ASSOCIATE_RES, tl_zbMacAssociateResponseHandler},
     {MAC_MLME_ORPHAN_RES, tl_zbMacOrphanResponseHandler},
