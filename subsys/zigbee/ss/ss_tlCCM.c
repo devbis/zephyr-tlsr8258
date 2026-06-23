@@ -19,6 +19,7 @@
 #include "zdo/zdo_internal.h"
 #include "ss/security_service.h"
 #include "ss/ss_internal.h"
+#include "zb_minimal_ccm.h"
 
 enum {
     AES_BLOCK_SIZE_LOCAL = 16,
@@ -239,15 +240,24 @@ _CODE_SS_ u8 aes_ccmEncTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aS
     return aes_ccmBaseTran(M, key, iv, mStr, mStrLen, aStr, aStrLen, result, AES_CCM_OPT_ENCRYPT);
 }
 
+/*
+ * The CBC-MAC + CTR math here is byte-for-byte identical to the vendor
+ * aes_ccm* routines below, but those allocate the CBC-MAC auth scratch via
+ * ev_buf_allocate(). On the Zephyr port the group-1 slab has only 4 blocks
+ * (BUFFER_NUM_IN_GROUP1), so under RX pressure ev_buf_allocate() returns
+ * NULL and aes_ccmAuthTran() bails with RET_ERROR — indistinguishable from
+ * a genuine MIC mismatch and the exact failure that blocked every inbound
+ * Transport-Key during join. ss_ccmEncryption/ss_ccmDecryption now delegate
+ * to the stack-only zb_minimal_ccm_* implementation (the same code path the
+ * ED build runs and is proven on this hardware). The aes_ccm* functions are
+ * retained for ABI/linkage but are no longer on the hot path.
+ */
 _CODE_SS_ u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen, u8 *srcMsg)
 {
     u8 mic[AES_CCM_MIC_LEN];
 
-    if (aes_ccmAuthTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic) != RET_OK) {
-        return 0;
-    }
-
-    aes_ccmEncTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic);
+    (void)zb_minimal_ccm_encrypt_auth(key, nonce, AES_CCM_MIC_LEN,
+                                      nwkHdr, nwkHdrLen, srcMsg, srcMsgLen, mic);
     memcpy(srcMsg + srcMsgLen, mic, AES_CCM_MIC_LEN);
     return (u8)(srcMsgLen + AES_CCM_MIC_LEN);
 }
@@ -276,9 +286,11 @@ _CODE_SS_ u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLe
 
 _CODE_SS_ u8 ss_ccmDecryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen, u8 *srcMsg)
 {
-    u8 *mic = srcMsg + srcMsgLen - AES_CCM_MIC_LEN;
+    u8 cipherLen = (u8)(srcMsgLen - AES_CCM_MIC_LEN);
+    u8 *mic = srcMsg + cipherLen;
+    bool ok;
 
-    srcMsgLen -= AES_CCM_MIC_LEN;
-    aes_ccmDecTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic);
-    return aes_ccmDecAuthTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic);
+    ok = zb_minimal_ccm_decrypt_auth(key, nonce, AES_CCM_MIC_LEN, srcMsg,
+                                     cipherLen, nwkHdr, nwkHdrLen, mic);
+    return ok ? RET_OK : RET_ERROR;
 }

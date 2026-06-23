@@ -58,11 +58,19 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
 #else
     ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
 #endif
-#if defined(__APPLE__)
     /*
+     * Rebuild the canonical pointer defaults at runtime on every platform.
      * The Darwin native_sim image cannot encode relocations into the packed
-     * ss_ib default initializer, so rebuild the canonical pointer defaults
-     * here before higher layers repair any persisted key-selection flags.
+     * ss_ib default initializer (Mach-O ld64 limitation). But on TC32 with
+     * Zephyr-style linking the SAME hole exists for a different reason:
+     * ss_apsSecurityME.c:120 declares an uninitialized strong
+     * `ss_info_base_t ss_ib;`, which wins linker resolution against the
+     * weak-initialized definitions in zb_api_bdb_ed_compat.c:35/40. The
+     * pointers end up NULL at boot, ss_apsDecryptFrame later derives the
+     * Transport-Key encryption key from a NULL tcLinkKey, and every
+     * inbound TC Transport-Key fails CCM (slot[47] = 0x4000000N) — the
+     * device never gets the network key. Verified via SWS read:
+     * ss_ib.tcLinkKey ptr was 0x00000000 before this fix.
      */
     ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
     ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
@@ -70,7 +78,6 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     if (ret != NV_SUCC) {
         ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
     }
-#endif
     for (u8 i = 0; i < SEC_KEY_LEN; i++) {
         if (ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key[i] != 0U) {
             key_set = true;
