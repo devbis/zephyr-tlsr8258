@@ -467,6 +467,17 @@ void tl_zbNwkTaskProc(void)
     if (task != NULL && task->data != NULL) {
         u8 primitive = ((zb_buf_t *)task->data)->hdr.id;
 
+        {
+            extern volatile u16 zb_dbg_h2n_cnt;
+            extern volatile u8 zb_dbg_h2n_last;
+            extern volatile u8 zb_dbg_h2n_nlde;
+            zb_dbg_h2n_cnt++;
+            zb_dbg_h2n_last = primitive;
+            if (primitive == NWK_NLDE_DATA_REQ) {
+                zb_dbg_h2n_nlde++;
+            }
+        }
+
         switch (primitive) {
         case NWK_NLDE_DATA_REQ:
             tl_zbNwkNldeDataRequestHandler(task->data);

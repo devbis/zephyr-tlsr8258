@@ -340,6 +340,7 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
 
     g_zbInfo.macPib.shortAddress = cnf->shortAddress;
     g_zbInfo.nwkNib.nwkAddr = cnf->shortAddress;
+    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x01U; }
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
 
     g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
@@ -410,6 +411,7 @@ void nwk_rejoinScanCnfHandler(void *arg)
            (g_zbInfo.nwkNib.nwkAddr & 0xfff8U) == 0xfff8U) {
         g_zbInfo.nwkNib.nwkAddr = (u16)drv_u32Rand();
     }
+    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x02U; }
 
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
     nwk_rejoinReq(arg);
@@ -454,6 +456,7 @@ void tl_zbNwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
             g_zbInfo.macPib.shortAddress = cmd->rejoinRsp.nwkAddr;
             g_zbInfo.nwkNib.nwkAddr = cmd->rejoinRsp.nwkAddr;
+            { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x04U; }
             (void)tl_zbNwkAddrMapAdd(g_zbInfo.nwkNib.nwkAddr, g_zbInfo.nwkNib.ieeeAddr, &addrRef);
             zb_info_save(NULL);
             zdo_device_announce_send();
@@ -486,6 +489,7 @@ void tl_zbNwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
     g_zbInfo.macPib.shortAddress = cmd->rejoinRsp.nwkAddr;
     g_zbInfo.nwkNib.nwkAddr = cmd->rejoinRsp.nwkAddr;
+    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x08U; }
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
     g_zbInfo.macPib.coordShortAddress = pNwkHdr->srcAddr;
 
