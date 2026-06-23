@@ -8,7 +8,7 @@
  */
 #include "zb_common_stub.h"
 
-volatile u32 zb_nwk_ed_trace[45] = {
+volatile u32 zb_nwk_ed_trace[48] = {
 	[0] = 0x4e574b45U,
 	/* slots beyond the 32-word boundary need explicit zero initializers
 	 * to ride along in the .data LMA copy that runs at boot — without
@@ -26,6 +26,12 @@ volatile u32 zb_nwk_ed_trace[45] = {
 	 * slot[43] = zdo_nlme_join_confirm state/status (ZDO diag) */
 	[42] = 0U,
 	[43] = 0U,
-	/* slot[44] = aps_command_handle call count (APS layer diag) */
+	/* slot[44] = aps_command_handle call count (APS layer diag)
+	 * slot[45] = aps_data_indication_process entry+exit bitmap
+	 * slot[46] = aps_nwk_data_indication_cb entry+drop bitmap
+	 * slot[47] = reserved (ss_apsDecryptFrame fail bitmap) */
 	[44] = 0U,
+	[45] = 0U,
+	[46] = 0U,
+	[47] = 0U,
 };

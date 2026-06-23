@@ -403,6 +403,24 @@ int zb_platform_bdb_init_default(void)
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
+	/*
+	 * The vendor flow runs ss_zdoInit(TRUE) from bdb_init() to raise
+	 * securityLevel to 5, but the Zephyr platform bootstrap bypasses
+	 * bdb_init() entirely (only called from tl_bdbReset()). Without
+	 * securityLevel=5 the gate at zdo_nwk_manager.c:892 takes the
+	 * `securityLevel == 0` shortcut: after MAC-associate SUCCESS, the
+	 * join-confirm goes straight to zdo_startup_complete (which used
+	 * to set aps_authenticated=1 prematurely — fixed at :486) instead
+	 * of arming the TC auth-wait timer. With auth-wait disarmed,
+	 * ss_zdoTransportKeyIndHandle.c:144 early-returns on every
+	 * inbound Transport-Key, never installs the network key, and the
+	 * TC interview never completes. Set securityLevel=5 here so the
+	 * auth-wait branch fires. Avoid calling full ss_zdoInit(TRUE)
+	 * because its other side-effects (tl_neighborFrameCntReset +
+	 * ss_devKeyPairInfoGet) wedge MAC RX on TLSR8258.
+	 */
+	ss_ib.securityLevel = 5U;
+	ss_ib.secureAllFresh = 1U;
 
 #if ZB_PLATFORM_BDB_ED_RESTORE
 	zb_platform_bdb_drop_stale_joined_state_if_needed();

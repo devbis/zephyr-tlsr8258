@@ -12,8 +12,6 @@
 
 #include "drv_security.h"
 
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
-
 #define AES_BLOCK_SIZE 16U
 #define AES_ROUND_KEYS 176U
 
@@ -261,6 +259,8 @@ static void aes_decrypt_block_sw(const u8 key[16], const u8 in[16], u8 out[16])
 	memcpy(out, state, sizeof(state));
 }
 
+#if defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
+
 void drv_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 {
 	aes_encrypt_block_sw(key, plain, result);
@@ -287,6 +287,29 @@ void drv_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
 
 static void _aes_run(u8 mode, const u8 *key, const u8 *in, u8 *out)
 {
+	/*
+	 * AES-MMO usage in ss_tlCCM.c:tl_cryHashFunction calls drv_aes_encrypt
+	 * with `key` and `out` pointing to the SAME 16-byte buffer (Matyas-
+	 * Meyer-Oseas chains the previous hash state as the next round's
+	 * key). The TLSR8258 HW AES engine is supposed to copy the key into
+	 * its internal register file BEFORE the output write-back, so the
+	 * aliased call should be safe — but empirically the derived
+	 * Transport-Key encryption key for "ZigBeeAlliance09" pad=0 comes
+	 * back wrong (`b6 04 63 aa ...` instead of the spec-mandated
+	 * `4b ab 0f 17 ...`, verified by SWS read of keyTemp[0..3] after
+	 * ss_keyHash; the same C code with a SW AES in the standalone
+	 * tc32 repro produces the correct bytes). Stage the key into a
+	 * local buffer here so the HW load is unambiguously decoupled from
+	 * the output write-back, regardless of how the caller scheduled
+	 * the surrounding load/stores. NWK CCM never aliases key/out so
+	 * this is a no-op cost for the hot RX path.
+	 */
+	u8 key_local[16];
+
+	for (int i = 0; i < 16; i++) {
+		key_local[i] = key[i];
+	}
+
 	if (mode == AES_TRIG_ENCRYPT) {
 		REG_AES_CTRL &= ~AES_TRIG_DECRYPT;
 	} else {
@@ -294,7 +317,7 @@ static void _aes_run(u8 mode, const u8 *key, const u8 *in, u8 *out)
 	}
 
 	for (int i = 0; i < 16; i++) {
-		REG_AES_KEY(i) = key[i];
+		REG_AES_KEY(i) = key_local[i];
 	}
 
 	const u8 *p = in;
@@ -323,7 +346,17 @@ static void _aes_run(u8 mode, const u8 *key, const u8 *in, u8 *out)
 
 void drv_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 {
-	_aes_run(AES_TRIG_ENCRYPT, key, plain, result);
+	/*
+	 * DIAGNOSTIC: temporarily route through software AES instead of
+	 * TLSR8258 HW AES. The HW path returns a wrong derived TC link
+	 * key for the Transport-Key Encryption Key derivation (verified
+	 * via SWS read of keyTemp[0..3] after ss_keyHash). Confirm whether
+	 * HW AES is the culprit by replacing it with the validated SW
+	 * implementation. If slot[46] now shows 4b ab 0f 17 instead of
+	 * b6 04 63 aa, the bug is in _aes_run or the TLSR HW AES engine
+	 * for this specific call pattern.
+	 */
+	aes_encrypt_block_sw(key, plain, result);
 }
 
 void drv_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
