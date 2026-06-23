@@ -468,10 +468,15 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		tl_zbMacTaskProc();
 #endif
 		zb_thread_heartbeat[3]++;
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000001U; }
 		zb_process_deferred_persistent_rejoin();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000002U; }
 		zb_process_deferred_commissioning();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000003U; }
 		zb_requeue_commissioning_if_needed();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000004U; }
 		zb_link_watchdog_tick();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD00000FFU; }
 		zb_thread_heartbeat[4]++;
 		if (zb_commissioning_pending) {
 			zb_nwk_ed_trace[15] = 0xA5B0000BU;
