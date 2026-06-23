@@ -136,6 +136,18 @@ void ss_zdoTransportKeyIndHandle(void *arg)
             }
         }
 
+        {
+            extern volatile u8 zb_dbg_tk;
+            u8 v = 0x01U;
+            if (aps_ib.aps_authenticated) {
+                v |= 0x02U;
+            }
+            if (zdo_nwk_mngr()->authEvt == NULL) {
+                v |= 0x04U;
+            }
+            zb_dbg_tk = v;
+        }
+
         if (aps_ib.aps_authenticated) {
             zb_buf_free((zb_buf_t *)arg);
             return;
@@ -151,7 +163,18 @@ void ss_zdoTransportKeyIndHandle(void *arg)
             zdo_nwk_mngr()->savedBuf = NULL;
         }
 
-        ev_timer_taskCancel((ev_timer_event_t **)zdo_nwk_mngr()->authEvt);
+        /*
+         * Cancel the auth-timeout timer now that the Transport-Key has
+         * authenticated us. ev_timer_taskCancel takes the ADDRESS of the
+         * pointer field (it does `*evt = NULL` on success) — the previous
+         * `(ev_timer_event_t **)zdo_nwk_mngr()->authEvt` passed the timer
+         * pointer VALUE cast to **, so it dereferenced the timer struct as
+         * a pointer (garbage), never cancelled the real timer, and left
+         * authEvt non-NULL. The timer then fired TRANSPORT_NETWORK_KEY_WAIT
+         * later → zdo_auth_check_timer_cb(NULL) → zdo_startDeviceCnf(NULL)
+         * NULL-write → ZB thread wedged in ev_timer_process() post-join.
+         */
+        ev_timer_taskCancel(&zdo_nwk_mngr()->authEvt);
 
         if (ss_ib.preConfiguredKeyType != SS_PRECONFIGURED_NWKKEY &&
             !ZB_IS_16BYTE_SECURITY_KEY_ZERO(ind->key)) {
@@ -159,6 +182,10 @@ void ss_zdoTransportKeyIndHandle(void *arg)
                                   ((ss_ib.activeSecureMaterialIndex & 0x03U) << 4));
         }
 
+        {
+            extern volatile u8 zb_dbg_tk;
+            zb_dbg_tk |= 0x08U;
+        }
         aps_ib.aps_authenticated = 1;
         build_join_confirm(arg);
         tl_zbTaskPost(zdo_nlme_join_confirm, arg);
