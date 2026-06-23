@@ -203,6 +203,35 @@ void aps_command_handle(void *arg)
      * commands here — there's a separate relay path in
      * ss_apsTransportKeyCmdHandle for the parent-router case).
      */
+    {
+        extern volatile u8 zb_dbg_cmdh;
+        extern volatile u16 zb_dbg_dst;
+        extern volatile u16 zb_dbg_local;
+        extern volatile u16 zb_dbg_macshort;
+        if (cmdId == 5U) {
+            /* bit7 = a transport-key cmd reached aps_command_handle;
+             * bit6 = it was dropped here because dst != local;
+             * low6 = count that passed the dst filter into the switch. */
+            zb_dbg_cmdh |= 0x80U;
+            zb_dbg_dst = dst;
+            zb_dbg_local = local;
+            zb_dbg_macshort = g_zbInfo.macPib.shortAddress;
+            {
+                extern volatile u8 zb_dbg_apsind[16];
+                extern volatile u8 zb_dbg_apsind_seq;
+                if (zb_dbg_apsind_seq == 0U) {
+                    for (u8 i = 0; i < 16U; i++) {
+                        zb_dbg_apsind[i] = ((u8 *)arg)[i];
+                    }
+                    zb_dbg_apsind_seq = 1U;
+                }
+            }
+            if (dst != local) {
+                zb_dbg_cmdh |= 0x40U;
+            }
+        }
+    }
+
     if (dst != local) {
         zb_buf_free((zb_buf_t *)arg);
         return;
@@ -210,6 +239,10 @@ void aps_command_handle(void *arg)
 
     switch (cmdId) {
     case 5:
+        {
+            extern volatile u8 zb_dbg_cmdh;
+            zb_dbg_cmdh = (u8)((zb_dbg_cmdh & 0xc0U) | ((zb_dbg_cmdh + 1U) & 0x3fU));
+        }
         ss_apsTransportKeyCmdHandle(arg);
         break;
 #if defined(ZB_ROUTER_ROLE)

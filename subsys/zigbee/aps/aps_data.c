@@ -1208,7 +1208,21 @@ void aps_nwk_data_indication_cb(void *arg)
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;
 
-    if (ind->dstAddrMode == 1U) {
+    /*
+     * The NLDE-DATA.indication dstAddrMode is produced by nwk_data.c as
+     * `multicastFlg ? 2 : 1` — i.e. 2 == multicast/group, 1 == unicast
+     * (short addr). The group-addressed branch below sets the APS group
+     * delivery-mode bits and packs the 16-bit group address into the
+     * header where the endpoint normally sits, so it MUST fire only for
+     * multicast frames. The original `== 1U` test fired on UNICAST, which
+     * mis-tagged every inbound unicast APS frame as group: aps_indPrimBuild
+     * then took its group branch (out->dst_addr = srcHdr.dstEp, a u8),
+     * truncating the destination short address to its low byte. That made
+     * aps_command_handle's `dst != local` check reject the TC Transport-Key
+     * (e.g. dst read as 0x008c vs our 0xe58c), so the network key was never
+     * installed. Fire group handling on the multicast value instead.
+     */
+    if (ind->dstAddrMode == 2U) {
         hdr->frameCtrl = (u8)((hdr->frameCtrl & (u8)~0x0cU) | 0x0cU);
         COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
     } else {
