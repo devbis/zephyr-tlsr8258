@@ -221,9 +221,24 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	aps_data_ind_t *ad = (aps_data_ind_t *)arg;
+	extern volatile u32 zb_nwk_ed_trace[];
 
 	if (arg == NULL) {
 		return;
+	}
+
+	/*
+	 * slot[45]: low 16 = af_aps_data_entry call count,
+	 * bits 16-23 = last profile_id low byte,
+	 * bits 24-31 = last cluster_id low byte.
+	 * Single u32 write at entry — safe per the instrumentation
+	 * regression notes.
+	 */
+	{
+		u32 prev = zb_nwk_ed_trace[45];
+		zb_nwk_ed_trace[45] = ((u32)(ad->cluster_id & 0xffU) << 24) |
+				       ((u32)(ad->profile_id & 0xffU) << 16) |
+				       (((prev & 0xffffU) + 1U) & 0xffffU);
 	}
 
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
