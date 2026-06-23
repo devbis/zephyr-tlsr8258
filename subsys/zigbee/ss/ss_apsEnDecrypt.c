@@ -162,6 +162,9 @@ volatile u32 zb_dbg_fault_cnt = 0U;
 volatile u32 zb_dbg_fault_reason = 0xeeeeeeeeU;
 volatile u32 zb_dbg_fault_pc = 0U;
 volatile u32 zb_dbg_fault_lr = 0U;
+/* zb_main loop deferred-block phase marker (D0000001..4 = which of the four
+ * deferred/watchdog calls is in-flight; D00000FF = all four returned). */
+volatile u32 zb_dbg_loopphase = 0U;
 
 
 _CODE_SS_ u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt)
