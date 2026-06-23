@@ -323,9 +323,20 @@ int zdo_nwkRejoinBackOffCb(void *arg)
 }
 int zdo_auth_check_timer_cb(void *arg)
 {
+    /*
+     * The timer is armed with arg==NULL (ev_timer_taskPost(...,NULL,...));
+     * the real confirm buffer is stashed in savedBuf. The vendor code used
+     * `arg` here, so zdo_startDeviceCnf(NULL) dereferenced a NULL cnf. Use
+     * savedBuf and guard NULL so a legitimate auth timeout cannot wedge.
+     */
+    void *buf = zdo_nwk_mngr()->savedBuf;
+
+    (void)arg;
     tl_zbNwkAddrMapInit();
     tl_zbNeighborTableInit();
-    zdo_startDeviceCnf(arg, ZDO_NOT_AUTHORIZED);
+    if (buf != NULL) {
+        zdo_startDeviceCnf(buf, ZDO_NOT_AUTHORIZED);
+    }
     zdo_nwk_mngr()->savedBuf = NULL;
     zdo_nwk_mngr()->authEvt = NULL;
     return -1;
@@ -483,8 +494,28 @@ void zdo_startup_complete(void *arg)
     } else {
         g_zbNwkCtx.joined = 1;
         g_zbNwkCtx.is_tc = 0;
-        aps_ib.aps_authenticated = 1;
+        /*
+         * Do NOT mark aps_authenticated here. zdo_startup_complete fires
+         * after MAC association SUCCESS, but on a centralized-security
+         * network the device is NOT yet authenticated with the TC — that
+         * only happens after the TC Transport-Key exchange completes,
+         * which is signalled separately at ss_zdoSecurityME.c:162. Setting
+         * aps_authenticated=1 here pre-empts that handshake: the
+         * ss_apsDecryptFrame guard at ss_apsEnDecrypt.c:202-204 then short-
+         * circuits on every inbound TC frame whose ext-addr we don't yet
+         * have in the address map (`src-ext-unknown && aps_authenticated`),
+         * dropping every Transport-Key frame and leaving the router stuck
+         * in auth-wait forever (see zephyr-docs/router-aps-handoff-*).
+         *
+         * Keep the use_insecure_join clear: post-associate we don't want
+         * to admit further unsecured frames, but APS auth is still
+         * pending. The Transport-Key path will flip aps_authenticated=1.
+         */
         aps_ib.aps_use_insecure_join = 0;
+        {
+            extern volatile u8 zb_dbg_anns;
+            zb_dbg_anns++;
+        }
         zdo_device_announce_send();
         g_zbNwkCtx.is_factory_new = 0;
     }
@@ -889,6 +920,21 @@ void zdo_nlme_join_confirm(void *arg)
     }
 
     zdo_set_pollRate(500U);
+    {
+        extern volatile u8 zb_dbg_jc_cnt;
+        extern volatile u8 zb_dbg_jc_state;
+        extern volatile u8 zb_dbg_jc_status;
+        extern volatile u8 zb_dbg_jc_path;
+
+        zb_dbg_jc_cnt++;
+        zb_dbg_jc_state = state;
+        zb_dbg_jc_status = status;
+        if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
+            zb_dbg_jc_path |= 0x05U; /* bit0 shortcut + bit2 startDevCnf */
+        } else {
+            zb_dbg_jc_path |= 0x02U; /* bit1 armed authEvt */
+        }
+    }
     if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
         zdo_startDeviceCnf(arg, ZDO_SUCCESS);
         return;
