@@ -32,6 +32,15 @@ static ev_timer_event_pool_t ev_timer_pool;
 static u32 prev_sys_tick;
 static u32 rem_sys_tick_us;
 
+/*
+ * Upper bound on live timers (pool TIMER_EVENT_NUM=24 + runtime-registered
+ * timers). All ->next traversals are capped at this so a corrupted/cyclic
+ * list can never hard-wedge the ZB thread — the loop breaks instead of
+ * spinning forever. A cycle is a bug (see ev_unon_timer's evt->next clear);
+ * the cap is a belt-and-braces backstop.
+ */
+#define EV_TIMER_MAX_WALK 64U
+
 __attribute__((weak)) void ev_rtc_update(u32 update_time_ms)
 {
 	ARG_UNUSED(update_time_ms);
@@ -42,7 +51,7 @@ static void ev_timer_nearest_update(void)
 	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
 
 	ev_timer_ctrl.timer_nearest = ev_timer_ctrl.timer_head;
-	while (timer_evt != NULL) {
+	for (u32 walk = 0U; timer_evt != NULL && walk < EV_TIMER_MAX_WALK; walk++) {
 		if (ev_timer_ctrl.timer_nearest == NULL ||
 		    timer_evt->timeout < ev_timer_ctrl.timer_nearest->timeout) {
 			ev_timer_ctrl.timer_nearest = timer_evt;
@@ -98,13 +107,34 @@ static void ev_timer_execute_cb(void)
 {
 	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
 	ev_timer_event_t *prev_head = timer_evt;
+	u32 walk = 0U;
 
 	while (timer_evt != NULL) {
+		/*
+		 * Backstop against a corrupted/cyclic ->next chain (would
+		 * otherwise hard-wedge the ZB thread here). The legitimate
+		 * worst case is O(N^2) when many timers expire and the loop
+		 * restarts from head after each callback, so the cap is set
+		 * well above that (N<=24+runtime) but finite.
+		 */
+		if (++walk > 2048U) {
+			break;
+		}
 		if (timer_evt->timeout == 0U) {
 			s32 next_timeout;
 
 			timer_evt->isBusy = 1U;
+			{
+				extern volatile u32 zb_dbg_tmr_cb;
+				extern volatile u16 zb_dbg_tmr_cnt;
+				zb_dbg_tmr_cb = (u32)(void *)timer_evt->cb;
+				zb_dbg_tmr_cnt++;
+			}
 			next_timeout = timer_evt->cb(timer_evt->data);
+			{
+				extern volatile u32 zb_dbg_tmr_done;
+				zb_dbg_tmr_done = (u32)(void *)timer_evt->cb;
+			}
 			if (next_timeout < 0) {
 				/*
 				 * One-shot timer: callback returned -1, meaning it
@@ -243,6 +273,14 @@ void ev_unon_timer(ev_timer_event_t *evt)
 	irq_state = drv_disable_irq();
 	ev_timer_runtime_clear(evt);
 	LIST_DELETE(ev_timer_ctrl.timer_head, evt);
+	/*
+	 * LIST_DELETE only unlinks evt from the chain — it does NOT clear
+	 * evt->next. A removed (and possibly freed/reused) node retaining a
+	 * dangling ->next can re-enter the list later and form a cycle, which
+	 * hard-wedges the ZB thread in ev_timer_process()'s ->next traversal
+	 * (observed post-join). Clearing it keeps removed nodes terminal.
+	 */
+	evt->next = NULL;
 	ev_timer_nearest_update();
 	drv_restore_irq(irq_state);
 }
@@ -299,7 +337,7 @@ void ev_timer_update(u32 update_time_ms)
 	irq_state = drv_disable_irq();
 	ev_rtc_update(update_time_ms);
 	timer_evt = ev_timer_ctrl.timer_head;
-	while (timer_evt != NULL) {
+	for (u32 walk = 0U; timer_evt != NULL && walk < EV_TIMER_MAX_WALK; walk++) {
 		u32 elapsed_ms;
 
 		if (timer_evt->isRunning) {
