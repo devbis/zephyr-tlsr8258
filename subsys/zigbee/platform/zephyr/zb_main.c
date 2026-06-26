@@ -454,8 +454,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		zb_thread_heartbeat[1]++;
 		ev_timer_process();
 		zb_thread_heartbeat[2]++;
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000001U; }
 		ev_poll_process();
 #if defined(CONFIG_ZIGBEE_ROUTER)
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000002U; }
 		/* Router build pulls in the libzigbee NWK / MAC primitive
 		 * dispatcher via tl_zbNwkTaskProc(); drain the per-layer
 		 * task queues on every tick so high→NWK, MAC→NWK, and
@@ -465,7 +467,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 * nwk_ed_minimal poll path and doesn't need this drain.
 		 */
 		tl_zbNwkTaskProc();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000003U; }
 		tl_zbMacTaskProc();
+		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE00000FFU; }
 #endif
 		zb_thread_heartbeat[3]++;
 		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000001U; }
