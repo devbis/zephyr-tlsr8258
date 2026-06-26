@@ -498,7 +498,26 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_write_page_locked(void *ctx, uint32_t add
 	struct tlsr8258_flash_write_ctx *write_ctx = ctx;
 	int ret;
 
-	memcpy(write_ctx->page_buf, buf, len);
+	/*
+	 * Do NOT call memcpy() here: this function lives in .ram_code, which the
+	 * TC32 icache locks so the flash write can run without re-fetching code
+	 * from flash. memcpy() is in regular .text (far outside the icache-locked
+	 * window); fetching it from flash XIP while the flash controller is busy
+	 * with a program/erase bus-stalls the CPU and wedges the whole chip on
+	 * the first post-join NV save (observed: PC pinned in memcpy, all threads
+	 * + ISRs frozen, HW timer still running). Use an inline byte copy that
+	 * stays in .ram_code. See zephyr-docs/router-aps-join-fixes-handoff-*.
+	 */
+	{
+		/* volatile so LLVM's loop-idiom pass can't turn this back into a
+		 * memcpy() call into flash .text (the very thing we're avoiding). */
+		volatile uint8_t *d = write_ctx->page_buf;
+		const volatile uint8_t *s = buf;
+
+		for (size_t i = 0; i < len; i++) {
+			d[i] = s[i];
+		}
+	}
 	tlsr8258_flash_locked_key = tlsr8258_flash_irq_disable();
 	ret = tlsr8258_flash_write_page_ram(addr, write_ctx->page_buf, len);
 	tlsr8258_flash_irq_restore(tlsr8258_flash_locked_key);
