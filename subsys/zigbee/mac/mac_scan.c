@@ -233,6 +233,21 @@ void tl_zbMacScanRequestHandler(zb_mac_mlme_scan_req_t *req)
                                                        : g_macScanParam.scanStep;
             u32 timeout = mac_scan_timeout_ms(timeoutBase);
 
+            /*
+             * Active-scan dwell floor. The coordinator answers our beacon-
+             * request ~100ms later and that beacon is parsed on the deferred RX
+             * worker. With the vendor dwell (~138ms at scanStep 9) the LAST
+             * channel's beacon frequently arrives/defers after scan_done has
+             * flipped g_zbMacCtx.status to NORMAL, so phy_ind_beacon_notify_post
+             * drops it from the scan result (g_macScanParam.resultCount stays 0
+             * -> empty MAC_MLME_SCAN_CNF -> NWK finds no parent -> never sends an
+             * ASSOCIATION-REQUEST). Hold each active-scan channel long enough
+             * that a slow beacon is counted before the scan completes.
+             */
+            if (scanType == ACTIVE_SCAN) {
+                timeout = MAX(timeout, 300U);
+            }
+
             g_macScanParam.timerEvt = ev_timer_taskPost(tl_zbMacScanRunning, NULL, timeout);
         }
 
