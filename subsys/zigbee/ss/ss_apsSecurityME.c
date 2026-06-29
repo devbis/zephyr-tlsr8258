@@ -608,7 +608,6 @@ void ss_apsTransportKeyCmdHandle(void *arg)
     const u8 *key = payload + 2;
     const u8 *dstExtAddr;
     const u8 *srcExtAddr;
-    u8 *buf = (u8 *)arg;
     u8 secStatus = ind->security_status;
 
     if (aps_ib.aps_authenticated && secStatus == 0U) {
@@ -658,7 +657,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
         return;
     }
 
-    if (!aps_ib.aps_authenticated && (buf[31] & SECURITY_IN_APSLAYER) == 0U) {
+    if (!aps_ib.aps_authenticated && (ind->security_status & SECURITY_IN_APSLAYER) == 0U) {
         tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr((u8 *)dstExtAddr);
 
         if (entry != NULL &&
@@ -668,7 +667,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
             cmd_req_init(&cmdReq);
             cmdReq.txBuf = (zb_buf_t *)arg;
             cmdReq.adu = payload;
-            cmdReq.aduLen = buf[16];
+            cmdReq.aduLen = (u8)ind->asduLength;
             cmdReq.addrMode = ADDR_MODE_SHORT;
             cmdReq.dstAddr.shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
             aps_cmd_send(&cmdReq, APS_CMD_HANDLE_TXKEYCMD_RELAY);
@@ -684,13 +683,13 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 
 void ss_apsConfirmKeyCmdHandle(void *arg)
 {
-    u8 *buf = (u8 *)arg;
-    const ss_confirm_key_cmd_t *payload = (const ss_confirm_key_cmd_t *)(uintptr_t)rd_le32(buf + 12);
+    aps_data_ind_t *ind = (aps_data_ind_t *)arg;
+    const ss_confirm_key_cmd_t *payload = (const ss_confirm_key_cmd_t *)ind->asdu;
     ev_timer_event_t *timeoutEvt = g_ssDevKeyPair.pTimeoutEvt;
 
     if (g_zbNwkCtx.is_tc ||
         ss_securityModeIsDistributed() ||
-        ((buf[2] | ((u16)buf[3] << 8)) & 0xfff8U) == 0xfff8U ||
+        (ind->dst_addr & 0xfff8U) == 0xfff8U ||
         memcmp(payload->dstAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN) != 0 ||
         payload->keyType != SS_TC_LINK_KEY ||
         g_ssDevKeyPair.keyPair.used == 0U) {
@@ -716,8 +715,8 @@ void ss_apsConfirmKeyCmdHandle(void *arg)
 
 void ss_apsSwitchKeyCmdHandle(void *arg)
 {
-    u8 *buf = (u8 *)arg;
-    u8 *payload = (u8 *)(uintptr_t)rd_le32(buf + 12);
+    aps_data_ind_t *ind = (aps_data_ind_t *)arg;
+    u8 *payload = ind->asdu;
     u8 keySeqNum = payload[1];
 
     if (keySeqNum != ss_ib.activeKeySeqNum && ss_zdoGetNwkKeyBySeqNum(keySeqNum) == NULL) {
