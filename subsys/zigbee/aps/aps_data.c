@@ -14,7 +14,6 @@
 #include "aps/aps_api.h"
 #include "aps/aps_internal.h"
 
-u8 g_apsDataFragmentTransWin[64] = {0};
 u16 dstPanID = 0;
 u8 g_apsTxCacheNum = 0;
 static apsDataIndCb_t g_apsDataIndCb;
@@ -22,7 +21,6 @@ u8 T_DBG_fgmt = 0;
 u8 apsDuplicateCheckFlag = 0;
 u8 T_DBG_fgmtCnf = 0;
 u8 T_DBG_fgmtBlk = 0;
-u8 g_apsDataFragmentRcvWin[90] = {0};
 u8 T_DBG_fgmtTout = 0;
 
 int endDevTimeoutReq(void *arg);
@@ -216,14 +214,26 @@ STATIC_ASSERT(OFFSETOF(aps_fragment_rcv_win_t, active) == 89);
 STATIC_ASSERT(sizeof(aps_fragment_rcv_win_t) == 90);
 #endif
 
+/*
+ * Fragment TX/RX windows. These MUST be declared with their real struct type
+ * (not a u8[64]/u8[90] byte carrier): both structs contain pointer fields
+ * (cache[8], txBuf, fragmentBackup / timerEvt, reassemblyBuf, frags[8]), so the
+ * 32-bit byte sizes only match on TC32. A byte-array carrier cast to the struct
+ * overruns into adjacent globals on a 64-bit ABI (native_sim). Mirrors libzigbee
+ * src/aps_data.c, which declares these with the struct type directly. See
+ * "Pointers belong in structs, not u8 byte arrays".
+ */
+static aps_fragment_tx_win_t g_apsDataFragmentTransWin = {0};
+static aps_fragment_rcv_win_t g_apsDataFragmentRcvWin = {0};
+
 static inline aps_fragment_tx_win_t *aps_frag_tx_win(void)
 {
-    return (aps_fragment_tx_win_t *)g_apsDataFragmentTransWin;
+    return &g_apsDataFragmentTransWin;
 }
 
 static inline aps_fragment_rcv_win_t *aps_frag_rcv_win(void)
 {
-    return (aps_fragment_rcv_win_t *)g_apsDataFragmentRcvWin;
+    return &g_apsDataFragmentRcvWin;
 }
 
 static inline ev_timer_event_t **aps_frag_rcv_timer_evt(void)
@@ -435,7 +445,7 @@ void apsDataFragmentRcvWinClear(void)
         }
     }
 
-    memset(g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
+    memset(&g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
 }
 
 void apsRcvingWindowHandling(void *arg)
@@ -528,7 +538,7 @@ int aps_data_fragment_process_timeout(void *arg)
     }
 
     if (win->reassemblyBuf == NULL) {
-        memset(g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
+        memset(&g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
         return -1;
     }
 
@@ -943,7 +953,7 @@ void aps_data_indication_process(void *arg)
             }
             tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj);
             aps_frag_rcv_win()->reassemblyBuf = NULL;
-            memset(g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
+            memset(&g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
         }
 
         zb_buf_free((zb_buf_t *)arg);
@@ -1369,7 +1379,7 @@ void bindingTxBack(void *arg)
             localInd.asdu = dstReq->asdu;
             localInd.src_short_addr = dstReq->useAlias ? dstReq->aliasSrcAddr : localInd.dst_addr;
             localInd.aps_counter = dstReq->apsCnt;
-            memcpy(clone, &localInd, 35);
+            memcpy(clone, &localInd, sizeof(localInd));
             tl_zbTaskPost(af_aps_data_entry, clone);
         } else {
             aps_data_request(clone);
@@ -1512,14 +1522,24 @@ u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length)
     zb_buf_t *buf = zb_buf_allocate();
     aps_data_req_t *reqCopy;
     u8 *asduCopy;
+    uintptr_t reqOffset;
 
     if (buf == NULL) {
         return 0x39;
     }
 
-    memset(buf, 0, 31);
+    /* sizeof(*reqCopy), not a hardcoded 31: aps_data_req_t carries pointer
+     * fields, so its size is 31 only on TC32 and larger on a 64-bit ABI.
+     * Mirrors libzigbee src/aps_data.c apsDataRequest(). */
+    memset(buf, 0, sizeof(*reqCopy));
     asduCopy = tl_bufInitalloc(buf, length);
-    if (asduCopy < (u8 *)buf || (u32)(asduCopy - (u8 *)buf) <= 31U) {
+    if (asduCopy < (u8 *)buf) {
+        zb_buf_free(buf);
+        return 6;
+    }
+
+    reqOffset = (uintptr_t)(asduCopy - (u8 *)buf);
+    if (reqOffset <= sizeof(*reqCopy)) {
         zb_buf_free(buf);
         return 6;
     }
@@ -1533,7 +1553,7 @@ u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length)
     }
 
     memcpy(asduCopy, asdu, length);
-    memcpy(buf, dataReq, 31);
+    memcpy(buf, dataReq, sizeof(*reqCopy));
     reqCopy = (aps_data_req_t *)buf;
     reqCopy->asdu = asduCopy;
     reqCopy->asdu_length = length;
