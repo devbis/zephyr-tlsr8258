@@ -38,6 +38,13 @@ extern void nwk_routeReqCmdSendCnfHandler(void *arg);
 extern void nwk_linkStatusCmdSendCnfHandler(void *arg);
 extern void nwk_assocResponseCnfHandler(void *arg);
 
+/*
+ * NWK auxiliary security header length (matches ss_apsNwkAuxFrameHdr_t in
+ * ss_nwkEnDecrypt.c): securityControl(1) + frameCounter(4) + srcExtAddr(8) +
+ * keySeqNum(1). The device always sets extendedNonce, so srcExtAddr is present.
+ */
+#define NWK_SEC_AUX_HDR_LEN 14U
+
 /* APS / MAC / SS helpers and command handlers that the data path
  * dispatches into. All defined in libzigbee TUs not yet ported.
  */
@@ -402,10 +409,28 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     }
 
     savedHandle = ((u8 *)buf)[BUF_SAVED_HANDLE_OFFSET];
-    nwkHdrLen = getNwkHdrSize(pNwkHdr);
-    pNwkHdr->frameHdrLen = nwkHdrLen;
-    frameStart = payload - nwkHdrLen;
-    nwkHdrBuilder(frameStart, pNwkHdr);
+    /*
+     * Reserve the NWK auxiliary security header (NWK_SEC_AUX_HDR_LEN = 14:
+     * secCtrl + frameCnt(4) + srcExtAddr(8) + keySeqNum) BETWEEN the NWK header
+     * and the payload for secured frames. ss_nwkSecureFrame() treats its length
+     * argument as nwkHdr+aux and writes the aux at (len - 14); if only the bare
+     * NWK header is reserved that subtraction underflows (len < 14), the aux is
+     * written out of bounds, and the frame goes on air with NO aux header —
+     * undecryptable by the coordinator. That broke every outgoing secured frame
+     * (Device Announce, ZDO descriptor responses, ...): on Z2M the interview
+     * failed at "can not get node descriptor" because the device's reply could
+     * not be decrypted.
+     */
+    {
+        u8 baseHdrLen = getNwkHdrSize(pNwkHdr);
+        u8 secAuxLen = pNwkHdr->frameControl.security ? NWK_SEC_AUX_HDR_LEN : 0U;
+
+        nwkHdrLen = (u8)(baseHdrLen + secAuxLen);
+        frameStart = payload - nwkHdrLen;
+        nwkHdrBuilder(frameStart, pNwkHdr);
+        /* nwkHdrBuilder resets frameHdrLen to the bare header; restore +aux. */
+        pNwkHdr->frameHdrLen = nwkHdrLen;
+    }
 
     req = (zb_mscp_data_req_t *)buf;
     memset(req, 0, sizeof(*req));
@@ -551,7 +576,6 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 
     memset(&nwkHdr, 0, sizeof(nwkHdr));
     nwkHdrParse(&nwkHdr, ind->msdu);
-
 
     if (ind->msduLength <= nwkHdr.frameHdrLen) {
         zb_buf_free(buf);
