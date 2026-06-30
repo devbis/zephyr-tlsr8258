@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "coord_logic.h"
+#include "coord_ccm.h"
 
 #include <string.h>
 
@@ -23,6 +24,8 @@
 #define ZB_MAC_CMD_DATA_REQ      0x04u
 
 #define ZB_ZDO_DEVICE_ANNCE    0x0013u
+#define ZB_ZDO_NODE_DESC_REQ   0x0002u
+#define ZB_ZDO_NODE_DESC_RSP   0x8002u
 #define ZB_ZDO_ACTIVE_EP_REQ   0x0005u
 #define ZB_ZDO_ACTIVE_EP_RSP   0x8005u
 #define ZB_ZDO_SIMPLE_DESC_REQ 0x0004u
@@ -185,11 +188,215 @@ static bool identify_real_transport_key(const uint8_t *psdu, size_t psdu_len)
 	return payload[0] == 0x05U && payload[1] == ZB_STANDARD_NWK_KEY;
 }
 
+static enum zb_host_socket_frame_type identify_decrypted_aps_frame(const uint8_t *aps,
+								   size_t aps_len)
+{
+	uint16_t cluster;
+	uint16_t profile;
+	uint8_t command;
+	size_t payload_len;
+
+	if (aps == NULL || aps_len < 8U) {
+		return ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	}
+
+	cluster = get_le16(&aps[2]);
+	profile = get_le16(&aps[4]);
+	command = (aps_len > 8U) ? aps[8] : 0U;
+	payload_len = aps_len - 8U;
+
+	switch (cluster) {
+	case ZB_CLUSTER_NWK_MGMT:
+		return (command == ZB_NWK_TIMEOUT_REQ) ?
+			ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_REQ :
+			ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP;
+	case ZB_ZDO_DEVICE_ANNCE:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_NODE_DESC_REQ:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_NODE_DESC_RSP:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_ACTIVE_EP_REQ:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_ACTIVE_EP_RSP:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_SIMPLE_DESC_REQ:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_ZDO_SIMPLE_DESC_RSP:
+		return (profile == 0x0000U) ? ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_RSP :
+					      ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	case ZB_CLUSTER_BASIC:
+		if (command == ZB_ZCL_CMD_READ && payload_len >= 3U) {
+			return ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ;
+		}
+		return ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ_RSP;
+	default:
+		return ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	}
+}
+
 static void put_le64(uint8_t *buf, uint64_t value)
 {
 	for (size_t i = 0; i < 8; i++) {
 		buf[i] = (uint8_t)(value >> (8 * i));
 	}
+}
+
+/* NWK key the daemon ships in its Transport-Key (encode_transport_key_frame). */
+static const uint8_t ZB_NWK_KEY[16] = {
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+};
+#define ZB_NWK_AUX_LEN 14U
+
+/*
+ * Decrypt an inbound real NWK-secured DATA frame (MAC hdr + NWK hdr + NWK aux +
+ * ciphertext + 4-byte MIC). On success the recovered APS frame (APS hdr + ASDU)
+ * is written to `out` and *out_len set. The device clears the security level in
+ * the on-air aux secCtrl byte but uses level 5 for the nonce/AAD (see
+ * ss_nwkEnDecrypt.c), so we restore it. Returns true iff the MIC verifies.
+ */
+/*
+ * Attempt to NWK-decrypt the frame, treating `nwk_off` as the offset of the
+ * NWK header within the PSDU. Returns true (and fills out/out_len) only if the
+ * frame is a secured NWK DATA frame whose CCM* MIC verifies.
+ *
+ * The device puts its NWK *data* frames (Device Announce, Link Status, ...)
+ * on the native_sim medium NWK-only — no MAC header, NWK FCF at offset 0.
+ * Its MAC *commands* (assoc-req, ...) are MAC-wrapped. So we try offset 0
+ * first and fall back to the MAC-header offset; whichever MIC-verifies wins.
+ */
+static bool try_nwk_decrypt_best_effort_at(const uint8_t *psdu, size_t psdu_len, size_t nwk_off,
+					   uint8_t *out, size_t *out_len, bool *mic_ok)
+{
+	uint16_t nwk_fcf;
+	size_t nwk_hdr = 8U;
+
+	if (psdu_len < nwk_off + 8U) {
+		return false;
+	}
+
+	const uint8_t *nwk = &psdu[nwk_off];
+
+	nwk_fcf = get_le16(nwk);
+	if ((nwk_fcf & 0x0003U) != 0x0000U) {
+		return false; /* not a NWK DATA frame */
+	}
+	if ((nwk_fcf & 0x0200U) == 0U) {
+		return false; /* NWK security bit clear */
+	}
+	if (nwk_fcf & 0x0800U) { /* dst IEEE present */
+		nwk_hdr += 8U;
+	}
+	if (nwk_fcf & 0x1000U) { /* src IEEE present */
+		nwk_hdr += 8U;
+	}
+
+	if (psdu_len < nwk_off + nwk_hdr + ZB_NWK_AUX_LEN + 4U) {
+		return false;
+	}
+
+	const uint8_t *aux = &nwk[nwk_hdr];
+	uint8_t sec_ctrl = aux[0];
+	uint8_t sec_ctrl5 = (uint8_t)((sec_ctrl & 0xf8U) | 0x05U); /* restore level 5 */
+
+	uint8_t nonce[13];
+
+	memcpy(&nonce[0], &aux[5], 8U);  /* srcExtAddr */
+	memcpy(&nonce[8], &aux[1], 4U);  /* frameCounter (LE) */
+	nonce[12] = sec_ctrl5;
+
+	uint8_t aad[80];
+	size_t aad_len = nwk_hdr + ZB_NWK_AUX_LEN;
+
+	if (aad_len > sizeof(aad)) {
+		return false;
+	}
+	memcpy(aad, nwk, aad_len);
+	aad[nwk_hdr] = sec_ctrl5; /* secCtrl in AAD also uses level 5 */
+
+	const uint8_t *cipher = &aux[ZB_NWK_AUX_LEN];
+	size_t after = psdu_len - (nwk_off + nwk_hdr + ZB_NWK_AUX_LEN);
+	size_t cipher_len = after - 4U;
+	const uint8_t *mic = &cipher[cipher_len];
+
+	if (cipher_len > 100U) {
+		return false;
+	}
+	memcpy(out, cipher, cipher_len);
+	if (mic_ok != NULL) {
+		*mic_ok = coord_ccm_decrypt(ZB_NWK_KEY, nonce, out, (uint8_t)cipher_len,
+					    aad, (uint8_t)aad_len, mic);
+	} else {
+		(void)coord_ccm_decrypt(ZB_NWK_KEY, nonce, out, (uint8_t)cipher_len,
+					aad, (uint8_t)aad_len, mic);
+	}
+	*out_len = cipher_len;
+	return true;
+}
+
+bool zb_host_socket_coord_nwk_decrypt(const uint8_t *psdu, size_t psdu_len,
+				      uint8_t *out, size_t *out_len)
+{
+	bool mic_ok = false;
+
+	if (psdu == NULL || psdu_len < 8U) {
+		return false;
+	}
+
+	/* Device NWK data frames are NWK-only (no MAC header). */
+	if (try_nwk_decrypt_best_effort_at(psdu, psdu_len, 0U, out, out_len, &mic_ok)) {
+		return mic_ok;
+	}
+
+	/* Fall back: MAC-wrapped NWK data frame. */
+	uint16_t mac_fcf;
+	size_t mac_hdr = mac_header_len_from_fcf(psdu, psdu_len, &mac_fcf);
+
+	if (mac_hdr != 0U && (mac_fcf & 0x0007U) == 0x0001U) {
+		if (try_nwk_decrypt_best_effort_at(psdu, psdu_len, mac_hdr,
+						   out, out_len, &mic_ok)) {
+			return mic_ok;
+		}
+	}
+	return false;
+}
+
+static enum zb_host_socket_frame_type identify_best_effort_nwk_frame(const uint8_t *psdu,
+								     size_t psdu_len)
+{
+	uint8_t aps[128];
+	size_t aps_len = 0U;
+	bool mic_ok = false;
+	uint16_t mac_fcf = 0U;
+	size_t mac_hdr;
+	enum zb_host_socket_frame_type type;
+
+	if (try_nwk_decrypt_best_effort_at(psdu, psdu_len, 0U, aps, &aps_len, &mic_ok)) {
+		type = identify_decrypted_aps_frame(aps, aps_len);
+		if (type != ZB_HOST_SOCKET_FRAME_DATA_REQ) {
+			return type;
+		}
+	}
+
+	mac_hdr = mac_header_len_from_fcf(psdu, psdu_len, &mac_fcf);
+	if (mac_hdr == 0U || (mac_fcf & 0x0007U) != 0x0001U) {
+		return ZB_HOST_SOCKET_FRAME_DATA_REQ;
+	}
+
+	if (try_nwk_decrypt_best_effort_at(psdu, psdu_len, mac_hdr, aps, &aps_len, &mic_ok)) {
+		type = identify_decrypted_aps_frame(aps, aps_len);
+		if (type != ZB_HOST_SOCKET_FRAME_DATA_REQ) {
+			return type;
+		}
+	}
+
+	return ZB_HOST_SOCKET_FRAME_DATA_REQ;
 }
 
 static void queue_frame(struct zb_host_socket_coord *coord, enum zb_host_socket_frame_type type)
@@ -276,6 +483,26 @@ static size_t encode_data_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16
 	return idx;
 }
 
+/*
+ * ZDO request framing. Identical layout to encode_data_frame() but with the
+ * ZDO profile (0x0000) and ZDO endpoint (0) instead of the HA defaults — the
+ * device's af_aps_data_entry only routes a frame to the ZDP handlers when
+ * profile_id==ZDO_PROFILE_ID && dst_ep==ZDO_EP, so an HA-profiled/EP1 "ZDO"
+ * request is silently dropped and never answered. The `command` byte doubles
+ * as the ZDP transaction sequence number (payload[0] at the handler), so pass
+ * 0x00 and let the real ZDP params follow.
+ */
+static size_t encode_zdo_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_t src,
+			       uint16_t cluster, const uint8_t *payload, size_t payload_len)
+{
+	size_t len = encode_data_frame(wire, seq, dst, src, cluster, 0x00U, payload, payload_len);
+
+	put_le16(&wire[9], 0x0000u); /* ZDO_PROFILE_ID */
+	wire[13] = 0U;               /* dst endpoint = ZDO_EP */
+	wire[14] = 0U;               /* src endpoint = ZDO_EP */
+	return len;
+}
+
 static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t dst_short,
 					 uint16_t src_short)
 {
@@ -310,7 +537,7 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 	size_t cmd_idx;
 	size_t payload_len;
 
-	if (psdu_len >= 3U && (get_le16(&psdu[0]) & 0x0007U) == 0x0000U) {
+	if (psdu_len >= 3U && get_le16(&psdu[0]) == ZB_MAC_FCF_BEACON_SHORT) {
 		return ZB_HOST_SOCKET_FRAME_BEACON;
 	}
 
@@ -333,6 +560,14 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 		return ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY;
 	}
 
+	{
+		enum zb_host_socket_frame_type type = identify_best_effort_nwk_frame(psdu, psdu_len);
+
+		if (type != ZB_HOST_SOCKET_FRAME_DATA_REQ) {
+			return type;
+		}
+	}
+
 	if (psdu_len < 18U || get_le16(&psdu[0]) != 0x8861u) {
 		return ZB_HOST_SOCKET_FRAME_DATA_REQ;
 	}
@@ -350,6 +585,10 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 			ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP;
 	case ZB_ZDO_DEVICE_ANNCE:
 		return ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE;
+	case ZB_ZDO_NODE_DESC_REQ:
+		return ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ;
+	case ZB_ZDO_NODE_DESC_RSP:
+		return ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP;
 	case ZB_ZDO_ACTIVE_EP_REQ:
 		return ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ;
 	case ZB_ZDO_ACTIVE_EP_RSP:
@@ -390,15 +629,19 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 		payload[2] = 0x02U;
 		return encode_data_frame(wire, 3U, dst, src, ZB_CLUSTER_NWK_MGMT,
 					 ZB_NWK_TIMEOUT_RSP, payload, 3U);
+	case ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ:
+		put_le16(&payload[0], dst);
+		return encode_zdo_frame(wire, 4U, dst, src, ZB_ZDO_NODE_DESC_REQ,
+					payload, 2U);
 	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ:
 		put_le16(&payload[0], dst);
-		return encode_data_frame(wire, 4U, dst, src, ZB_ZDO_ACTIVE_EP_REQ, 0x00U,
-					 payload, 2U);
+		return encode_zdo_frame(wire, 4U, dst, src, ZB_ZDO_ACTIVE_EP_REQ,
+					payload, 2U);
 	case ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ:
 		put_le16(&payload[0], dst);
 		payload[2] = 1U;
-		return encode_data_frame(wire, 5U, dst, src, ZB_ZDO_SIMPLE_DESC_REQ, 0x00U,
-					 payload, 3U);
+		return encode_zdo_frame(wire, 5U, dst, src, ZB_ZDO_SIMPLE_DESC_REQ,
+					payload, 3U);
 	case ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ:
 		put_le16(&payload[0], ZB_ZCL_ATTR_MODEL_ID);
 		return encode_data_frame(wire, 6U, dst, src, ZB_CLUSTER_BASIC, ZB_ZCL_CMD_READ,
@@ -420,6 +663,15 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 		payload[10] = 0x80U;
 		return encode_data_frame(wire, 4U, dst, src, ZB_ZDO_DEVICE_ANNCE, 0x00U,
 					 payload, 11U);
+	case ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP:
+		/* Simulated device reply (used by the unit test's make_tx). The
+		 * daemon only keys identification on the cluster (0x8002); the
+		 * 13-byte node descriptor body is zero-filled for the test. */
+		payload[0] = 0x00U;          /* status: SUCCESS */
+		put_le16(&payload[1], src);  /* NWKAddrOfInterest */
+		memset(&payload[3], 0, 13U); /* node descriptor */
+		return encode_data_frame(wire, 4U, dst, src, ZB_ZDO_NODE_DESC_RSP, 0x00U,
+					 payload, 16U);
 	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP:
 		payload[0] = 0x00U;
 		put_le16(&payload[1], src);
@@ -590,6 +842,12 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 		return 0;
 	case ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE:
 		coord->got_device_announce = true;
+		/* Z2M interviews Node Descriptor first — mirror that order so we
+		 * reproduce the real failing step on native_sim. */
+		queue_frame(coord, ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ);
+		return 0;
+	case ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP:
+		coord->got_node_desc_rsp = true;
 		queue_frame(coord, ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ);
 		return 0;
 	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP:
