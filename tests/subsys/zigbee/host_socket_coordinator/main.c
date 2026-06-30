@@ -112,6 +112,11 @@ static void test_join_and_interview_flow(void)
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP);
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ);
 
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP, NULL);
@@ -208,6 +213,54 @@ static void test_transport_key_uses_extended_mac_destination(void)
 	EXPECT_EQ(output.psdu[12], 0xa4);
 	EXPECT_EQ(output.psdu[13], 0x00);
 	EXPECT_EQ(output.psdu[14], 0x00);
+}
+
+static void test_nwk_secured_post_join_frame_is_not_misidentified_as_beacon(void)
+{
+	static const uint8_t psdu[] = {
+		0x08, 0x02, 0xfd, 0xff, 0x00, 0x27, 0x1e, 0x00,
+		0x28, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02,
+		0x50, 0xe0, 0x38, 0xc1, 0xa4, 0x01, 0x63, 0x41,
+		0x9c, 0x3d, 0xf6, 0xb7, 0x6b, 0x26, 0x3a, 0x5e,
+		0x9b, 0x23, 0x42, 0xbc, 0x19, 0x88, 0xf6, 0xca,
+		0x44, 0x34, 0x2f, 0x66, 0x87, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	};
+	enum zb_host_socket_frame_type type;
+
+	type = zb_host_socket_coord_identify_frame(psdu, sizeof(psdu));
+	EXPECT_TRUE(type != ZB_HOST_SOCKET_FRAME_BEACON);
+}
+
+static void test_nwk_secured_post_join_device_announce_drives_interview(void)
+{
+	static const uint8_t psdu[] = {
+		0x08, 0x02, 0xfd, 0xff, 0x00, 0x27, 0x1e, 0x00,
+		0x28, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02,
+		0x50, 0xe0, 0x38, 0xc1, 0xa4, 0x01, 0x63, 0x41,
+		0x9c, 0x3d, 0xf6, 0xb7, 0x6b, 0x26, 0x3a, 0x5e,
+		0x9b, 0x23, 0x42, 0xbc, 0x19, 0x88, 0xf6, 0xca,
+		0x44, 0x34, 0x2f, 0x66, 0x87, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	};
+	struct zb_host_socket_coord coord;
+	struct zb_native_sim_socket_medium_msg input = {
+		.type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_TX,
+		.node_id = 0x2202U,
+		.channel = 11U,
+		.psdu = psdu,
+		.psdu_len = sizeof(psdu),
+	};
+	struct zb_native_sim_socket_medium_msg poll;
+
+	zb_host_socket_coord_init(&coord);
+	send_filter(&coord);
+
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	EXPECT_TRUE(coord.got_device_announce);
+
+	poll = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
+	expect_single_output(&coord, &poll, ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ);
 }
 
 static void test_medium_model_airtime_formula(void)
@@ -324,6 +377,8 @@ int main(void)
 	test_permit_join_disabled_rejects_association();
 	test_native_assoc_request_format_is_accepted();
 	test_transport_key_uses_extended_mac_destination();
+	test_nwk_secured_post_join_frame_is_not_misidentified_as_beacon();
+	test_nwk_secured_post_join_device_announce_drives_interview();
 	test_medium_model_airtime_formula();
 	test_medium_model_busy_window_and_collision();
 	test_medium_model_signal_rssi();

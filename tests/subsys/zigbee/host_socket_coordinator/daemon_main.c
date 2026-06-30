@@ -99,6 +99,10 @@ static const char *frame_type_str(enum zb_host_socket_frame_type type)
 		return "TIMEOUT_RSP";
 	case ZB_HOST_SOCKET_FRAME_DEVICE_ANNOUNCE:
 		return "DEVICE_ANNOUNCE";
+	case ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ:
+		return "NODE_DESC_REQ";
+	case ZB_HOST_SOCKET_FRAME_NODE_DESC_RSP:
+		return "NODE_DESC_RSP";
 	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ:
 		return "ACTIVE_EP_REQ";
 	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_RSP:
@@ -765,6 +769,18 @@ int main(int argc, char **argv)
 				frame_type_str(zb_host_socket_coord_identify_frame(input.psdu,
 									 input.psdu_len)));
 			dump_psdu_hex(input.psdu, input.psdu_len);
+			{
+				uint8_t aps[128];
+				size_t aps_len = 0;
+
+				if (zb_host_socket_coord_nwk_decrypt(input.psdu, input.psdu_len,
+								     aps, &aps_len)) {
+					fprintf(stderr, " DECRYPTED_APS[%zu]=", aps_len);
+					for (size_t i = 0; i < aps_len; i++) {
+						fprintf(stderr, "%02x", aps[i]);
+					}
+				}
+			}
 		}
 		fputc('\n', stderr);
 
@@ -821,29 +837,32 @@ int main(int argc, char **argv)
 			}
 
 			rc = zb_host_socket_coord_process(&coord, &input, &output);
-			if (rc > 0) {
-				uint64_t last_reply_end_us;
+			if (rc >= 0) {
+				uint64_t last_reply_end_us = input_end_us;
 
-				rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
-						    &medium, &peer_addr, &output,
-						    input_end_us);
-				if (rc < 0) {
-					fprintf(stderr,
-						"socket coordinator: reply scheduling failed (%d)\n",
-						-rc);
-					break;
+				if (rc > 0) {
+					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
+							    &medium, &peer_addr, &output,
+							    input_end_us);
+					if (rc < 0) {
+						fprintf(stderr,
+							"socket coordinator: reply scheduling failed (%d)\n",
+							-rc);
+						break;
+					}
+					last_reply_end_us = input_end_us +
+						ZB_COORD_RX_TX_TURNAROUND_US +
+						zb_native_sim_socket_medium_airtime_us(output.psdu_len);
 				}
 
 				/*
 				 * Drain any frames the coord queued for
 				 * unsolicited delivery (router joiners with
-				 * rx-on-when-idle). Chain each follow-up reply
-				 * after the previous one's airtime so the
-				 * medium model's collision window is respected.
+				 * rx-on-when-idle). This must also run when
+				 * coord_process() consumed an inbound frame
+				 * without an immediate reply (for example
+				 * Device_annce -> queued Node_Desc_req).
 				 */
-				last_reply_end_us = input_end_us +
-					ZB_COORD_RX_TX_TURNAROUND_US +
-					zb_native_sim_socket_medium_airtime_us(output.psdu_len);
 				while (zb_host_socket_coord_drain_unsolicited(&coord, &output) > 0) {
 					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
 							    &medium, &peer_addr, &output,
