@@ -641,11 +641,28 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     }
 
     if (nwk_hdr_security(&nwkHdr)) {
-        if (ss_nwkDecryptFrame(arg, nwkHdr.frameHdrLen, ind->msduLength, ind->msdu, &nwkHdr,
+        /*
+         * Incoming counterpart of the nwk_tx aux-header bug: ss_nwkDecryptFrame()
+         * treats its length arg as nwkHdr+aux and internally subtracts the
+         * 14-byte aux header (nwkHdrSize - auxLen). nwkHdrParse() set frameHdrLen
+         * to the bare NWK header (8), so passing it underflows (8-14 -> 250) and
+         * the aux offset / AAD length / ciphertext offset are all wrong -> CCM
+         * MIC check fails -> the frame is dropped. Every incoming NWK-secured
+         * frame (e.g. the Z2M interview's Node-Descriptor request, the first
+         * NWK-encrypted frame the device ever receives — the Transport-Key is
+         * NWK-unsecured) was silently discarded, so the device never answered the
+         * interview. Pass nwkHdr+aux for the decrypt, then advance frameHdrLen
+         * past the aux so `payload` / the NLDE nsdu point at the decrypted APS,
+         * and strip the 4-byte MIC from the length.
+         */
+        if (ss_nwkDecryptFrame(arg, (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN),
+                               ind->msduLength, ind->msdu, &nwkHdr,
                                ind->mpduLinkQuality) != RET_OK) {
             return;
         }
-        payloadTotalLen = (u8)(ind->msduLength - 4U);
+        nwkHdr.frameHdrLen = (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN);
+        ind->msduLength = (u8)(ind->msduLength - 4U);
+        payloadTotalLen = ind->msduLength;
     } else {
         payloadTotalLen = ind->msduLength;
     }
