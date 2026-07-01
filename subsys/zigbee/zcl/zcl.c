@@ -882,7 +882,11 @@ _CODE_ZCL_ void zcl_cmdHandler(void *pCmd)
  */
 _CODE_ZCL_ void zcl_rx_handler(void *pData)
 {
+#if defined(CONFIG_ARCH_POSIX)
+    zcl_cmdHandler(pData);
+#else
     TL_SCHEDULE_TASK(zcl_cmdHandler, pData);
+#endif
 }
 
 /***************************************************************************
