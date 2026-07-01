@@ -59,6 +59,12 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	u8 apsCounter;
 
 	{ extern volatile u8 zb_dbg_afds; zb_dbg_afds++; }
+	printk("zb_af_send: cluster=0x%04x src_ep=%u dst=0x%04x dst_ep=%u profile=0x%04x len=%u\n",
+	       clusterId, srcEp,
+	       pDstEpInfo != NULL ? pDstEpInfo->dstAddr.shortAddr : 0U,
+	       pDstEpInfo != NULL ? pDstEpInfo->dstEp : 0U,
+	       pDstEpInfo != NULL ? pDstEpInfo->profileId : 0U,
+	       cmdPldLen);
 
 	if (srcEp > 240U) {
 		return APS_STATUS_NOT_SUPPORTED;
@@ -121,7 +127,20 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	req->useAlias = pDstEpInfo->useAlias;
 	req->aliasSrcAddr = pDstEpInfo->aliasSrcAddr;
 	req->aliasSeqNum = pDstEpInfo->aliasSeqNum;
-	req->unicastSkipRouting = 0U;
+	req->unicastSkipRouting =
+		(!broadcast && dstShort == g_zbInfo.macPib.coordShortAddress) ? 1U : 0U;
+	if (req->unicastSkipRouting) {
+		req->discoverRoute = 0U;
+	}
+
+	/*
+	 * nwk_fwdPacket() (the unicast/broadcast NLDE-DATA route path) rejects
+	 * any buffer whose hdr.used flag is clear as a "stale buffer" guard.
+	 * zb_buf_allocate() zero-inits the whole buffer (used=0), so without
+	 * this every ZDO/announce frame routed via nwk_fwdPacket was silently
+	 * dropped (Device Announce never went on air). Mark the carrier active.
+	 */
+	((zb_buf_t *)buf)->hdr.used = 1U;
 
 	if (apsCnt != NULL) {
 		*apsCnt = apsCounter;

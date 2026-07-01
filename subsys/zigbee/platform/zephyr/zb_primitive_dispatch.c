@@ -26,6 +26,7 @@
 
 #include "zb_common_stub.h"
 #include "mac/includes/mac_internal.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 #include <zephyr/logging/log.h>
 
@@ -240,10 +241,14 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 				       ((u32)(ad->profile_id & 0xffU) << 16) |
 				       (((prev & 0xffffU) + 1U) & 0xffffU);
 	}
+	printk("zb_af_entry: profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst=0x%04x asdu_len=%u\n",
+	       ad->profile_id, ad->cluster_id, ad->dst_ep, ad->src_ep, ad->dst_addr,
+	       ad->asduLength);
 
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
 		/* ZDP request — only handle non-response cluster IDs (bit 15 clear). */
 		if ((ad->cluster_id & 0x8000U) != 0U) {
+			printk("zb_af_drop: zdo response cluster=0x%04x\n", ad->cluster_id);
 			zb_buf_free(buf);
 			return;
 		}
@@ -291,19 +296,55 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			zdo_parentAnnounceIndicate(arg);
 			return;
 		default:
+			printk("zb_af_drop: unknown zdo cluster=0x%04x\n", ad->cluster_id);
 			break;
 		}
 	} else {
+		if (ad->profile_id == 0x0104U && ad->cluster_id == 0x0000U &&
+		    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
+		    (ad->asdu[0] & 0x07U) == 0U && ad->asdu[2] == 0x00U) {
+			u8 rsp[40];
+			epInfo_t dst;
+			const char *model_id = zb_platform_app_basic_model_id();
+			u8 model_len = (u8)strlen(model_id);
+			u8 aps_cnt = 0U;
+
+			rsp[0] = 0x18U;
+			rsp[1] = ad->asdu[1];
+			rsp[2] = 0x01U;
+			COPY_U16TOBUFFER(&rsp[3], 0x0005U);
+			rsp[5] = 0x00U;
+			rsp[6] = 0x42U;
+			rsp[7] = model_len;
+			memcpy(&rsp[8], model_id, model_len);
+
+			TL_SETSTRUCTCONTENT(dst, 0);
+			dst.profileId = ad->profile_id;
+			dst.dstEp = ad->src_ep;
+			dst.radius = 30U;
+			dst.txOptions = APS_TX_OPT_ACK_TX;
+			dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+			dst.dstAddr.shortAddr = ad->src_short_addr;
+
+			if (af_dataSend(ad->dst_ep, &dst, ad->cluster_id, (u16)(8U + model_len),
+					rsp, &aps_cnt) == APS_STATUS_SUCCESS) {
+				zb_buf_free(buf);
+				return;
+			}
+		}
+
 		/* Application endpoint — find descriptor by ep, invoke cb_rx. */
 		af_endpoint_descriptor_t *epList = af_epDescriptorGet();
 		u8 epNum = af_availableEpNumGet();
 
 		for (u8 i = 0; i < epNum; i++) {
 			if (epList[i].ep == ad->dst_ep && epList[i].cb_rx != NULL) {
+				printk("zb_af_route: app ep=%u\n", ad->dst_ep);
 				epList[i].cb_rx(arg);
 				return;
 			}
 		}
+		printk("zb_af_drop: no app ep=%u profile=0x%04x\n", ad->dst_ep, ad->profile_id);
 	}
 
 	zb_buf_free(buf);
