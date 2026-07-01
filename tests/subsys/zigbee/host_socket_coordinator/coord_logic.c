@@ -483,24 +483,80 @@ static size_t encode_data_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16
 	return idx;
 }
 
-/*
- * ZDO request framing. Identical layout to encode_data_frame() but with the
- * ZDO profile (0x0000) and ZDO endpoint (0) instead of the HA defaults — the
- * device's af_aps_data_entry only routes a frame to the ZDP handlers when
- * profile_id==ZDO_PROFILE_ID && dst_ep==ZDO_EP, so an HA-profiled/EP1 "ZDO"
- * request is silently dropped and never answered. The `command` byte doubles
- * as the ZDP transaction sequence number (payload[0] at the handler), so pass
- * 0x00 and let the real ZDP params follow.
- */
+static size_t encode_secured_aps_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_t src,
+				       uint16_t profile, uint16_t cluster,
+				       uint8_t dst_ep, uint8_t src_ep,
+				       const uint8_t *payload, size_t payload_len)
+{
+	uint8_t *nwk;
+	uint8_t *aux;
+	uint8_t *aps;
+	uint8_t *cipher;
+	uint8_t nonce[13];
+	uint8_t mic[4];
+	uint8_t aad[32];
+	size_t idx = 0U;
+	size_t nwk_hdr_len = 8U;
+	size_t aps_len = 8U + payload_len;
+	size_t aad_len = nwk_hdr_len + ZB_NWK_AUX_LEN;
+	size_t total_len;
+
+	/* MAC DATA short->short */
+	put_le16(&wire[idx], 0x8861u);
+	wire[idx + 2U] = seq;
+	put_le16(&wire[idx + 3U], ZB_PAN_ID);
+	put_le16(&wire[idx + 5U], dst);
+	put_le16(&wire[idx + 7U], src);
+	idx += 9U;
+
+	/* NWK DATA, protocol version 2, security enabled. */
+	nwk = &wire[idx];
+	put_le16(&nwk[0], 0x0208u);
+	put_le16(&nwk[2], dst);
+	put_le16(&nwk[4], src);
+	nwk[6] = 30U;
+	nwk[7] = seq;
+
+	aux = &nwk[nwk_hdr_len];
+	aux[0] = 0x00U;
+	aux[1] = seq;
+	aux[2] = 0x00U;
+	aux[3] = 0x00U;
+	aux[4] = 0x00U;
+	put_le64(&aux[5], ZB_COORD_IEEE);
+	aux[13] = ZB_STANDARD_NWK_KEY;
+
+	memcpy(aad, nwk, aad_len);
+	aad[nwk_hdr_len] = 0x05U;
+	memcpy(&nonce[0], &aux[5], 8U);
+	memcpy(&nonce[8], &aux[1], 4U);
+	nonce[12] = 0x05U;
+
+	aps = &aux[ZB_NWK_AUX_LEN];
+	aps[0] = 0x40U;
+	aps[1] = dst_ep;
+	put_le16(&aps[2], cluster);
+	put_le16(&aps[4], profile);
+	aps[6] = src_ep;
+	aps[7] = seq;
+	if (payload_len != 0U) {
+		memcpy(&aps[8], payload, payload_len);
+	}
+
+	cipher = aps;
+	(void)coord_ccm_encrypt(ZB_NWK_KEY, nonce, aad, (uint8_t)aad_len,
+				cipher, (uint8_t)aps_len, mic);
+	memcpy(&cipher[aps_len], mic, sizeof(mic));
+
+	total_len = idx + nwk_hdr_len + ZB_NWK_AUX_LEN + aps_len + sizeof(mic);
+	return total_len;
+}
+
 static size_t encode_zdo_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_t src,
 			       uint16_t cluster, const uint8_t *payload, size_t payload_len)
 {
-	size_t len = encode_data_frame(wire, seq, dst, src, cluster, 0x00U, payload, payload_len);
-
-	put_le16(&wire[9], 0x0000u); /* ZDO_PROFILE_ID */
-	wire[13] = 0U;               /* dst endpoint = ZDO_EP */
-	wire[14] = 0U;               /* src endpoint = ZDO_EP */
-	return len;
+	return encode_secured_aps_frame(wire, seq, dst, src, 0x0000u, cluster, 0U, 0U,
+					payload, payload_len);
 }
 
 static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t dst_short,
@@ -630,22 +686,28 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 		return encode_data_frame(wire, 3U, dst, src, ZB_CLUSTER_NWK_MGMT,
 					 ZB_NWK_TIMEOUT_RSP, payload, 3U);
 	case ZB_HOST_SOCKET_FRAME_NODE_DESC_REQ:
-		put_le16(&payload[0], dst);
-		return encode_zdo_frame(wire, 4U, dst, src, ZB_ZDO_NODE_DESC_REQ,
-					payload, 2U);
-	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ:
-		put_le16(&payload[0], dst);
-		return encode_zdo_frame(wire, 4U, dst, src, ZB_ZDO_ACTIVE_EP_REQ,
-					payload, 2U);
-	case ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ:
-		put_le16(&payload[0], dst);
-		payload[2] = 1U;
-		return encode_zdo_frame(wire, 5U, dst, src, ZB_ZDO_SIMPLE_DESC_REQ,
+		payload[0] = 0x11U;
+		put_le16(&payload[1], dst);
+		return encode_zdo_frame(wire, 0x11U, dst, src, ZB_ZDO_NODE_DESC_REQ,
 					payload, 3U);
+	case ZB_HOST_SOCKET_FRAME_ACTIVE_EP_REQ:
+		payload[0] = 0x12U;
+		put_le16(&payload[1], dst);
+		return encode_zdo_frame(wire, 0x12U, dst, src, ZB_ZDO_ACTIVE_EP_REQ,
+					payload, 3U);
+	case ZB_HOST_SOCKET_FRAME_SIMPLE_DESC_REQ:
+		payload[0] = 0x13U;
+		put_le16(&payload[1], dst);
+		payload[3] = 1U;
+		return encode_zdo_frame(wire, 0x13U, dst, src, ZB_ZDO_SIMPLE_DESC_REQ,
+					payload, 4U);
 	case ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ:
-		put_le16(&payload[0], ZB_ZCL_ATTR_MODEL_ID);
-		return encode_data_frame(wire, 6U, dst, src, ZB_CLUSTER_BASIC, ZB_ZCL_CMD_READ,
-					 payload, 2U);
+		payload[0] = 0x00U; /* frame control: global, client->server */
+		payload[1] = 0x14U; /* ZCL transaction sequence */
+		payload[2] = ZB_ZCL_CMD_READ;
+		put_le16(&payload[3], ZB_ZCL_ATTR_MODEL_ID);
+		return encode_secured_aps_frame(wire, 0x14U, dst, src, ZB_PROFILE_HA,
+						ZB_CLUSTER_BASIC, 1U, 1U, payload, 5U);
 	case ZB_HOST_SOCKET_FRAME_ASSOC_REQ:
 		len = encode_mac_command(wire, 1U, dst, src, ZB_MAC_CMD_ASSOC_REQ);
 		put_le64(&wire[10], ZB_DEVICE_IEEE);

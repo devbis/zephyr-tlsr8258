@@ -356,6 +356,10 @@ void aps_indPrimBuild(void *arg)
     if (src.securityUse) {
         out->security_status |= SECURITY_IN_NWKLAYER;
     }
+
+    printk("zb_aps_ind_build: profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst_addr=0x%04x asdu_len=%u sec=0x%02x\n",
+           out->profile_id, out->cluster_id, out->dst_ep, out->src_ep,
+           out->dst_addr, out->asduLength, out->security_status);
 }
 
 void aps_conf(void *arg)
@@ -827,6 +831,7 @@ int apsDuplicatePeriodic(void *arg)
 u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
 {
     u16 idx;
+    u8 duplicate = 0U;
 
     if (tl_idxByShortAddr(&idx, src_addr) != RET_OK) {
         return 0;
@@ -834,17 +839,14 @@ u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
 
     {
         tl_zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[idx];
-        s16 delta = (s16)entry->aps_dup_cnt - (s16)aps_counter;
-        u8 diff = 0U;
-
-        if (entry->aps_dup_clock != 0U) {
-            diff = (u8)((delta < 0) ? -delta : delta);
+        if (entry->aps_dup_clock != 0U && entry->aps_dup_cnt == aps_counter) {
+            duplicate = 1U;
         }
 
         entry->aps_dup_cnt = aps_counter;
         entry->aps_dup_clock = (u8)(((APS_ACK_EXPIRY * APS_MAX_FRAME_RETRIES) + 1U) & 0x07U);
         apsDuplicateCheckFlag = 1;
-        return diff;
+        return duplicate;
     }
 }
 void aps_data_indication_process(void *arg)
@@ -855,6 +857,7 @@ void aps_data_indication_process(void *arg)
 
     if ((hdr->frameCtrl & 0x20U) != 0U) {
         if (ss_apsDecryptFrame(arg) != RET_OK) {
+            printk("zb_aps_drop: aps decrypt fail fc=0x%02x\n", hdr->frameCtrl);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -863,12 +866,15 @@ void aps_data_indication_process(void *arg)
 
     if ((hdr->frameCtrl & 0x40U) != 0U) {
         if (aps_ack_send(arg, 0) != 0U) {
+            printk("zb_aps_drop: ack send fail fc=0x%02x\n", hdr->frameCtrl);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
     }
 
     if (aps_duplicate_check(hdr->srcShortAddr, hdr->apsCounter) != 0U) {
+        printk("zb_aps_drop: duplicate src=0x%04x aps_cnt=%u\n",
+               hdr->srcShortAddr, hdr->apsCounter);
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -961,6 +967,8 @@ void aps_data_indication_process(void *arg)
     }
 
     frameType = (u8)(hdr->frameCtrl & 0x03U);
+    printk("zb_aps_ind_proc: fc=0x%02x frameType=%u profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u\n",
+           hdr->frameCtrl, frameType, hdr->profileId, hdr->clusterId, hdr->dstEp, hdr->srcEp);
     aps_indPrimBuild(arg);
 
     if (g_apsDataIndCb != NULL) {
@@ -968,6 +976,7 @@ void aps_data_indication_process(void *arg)
     }
 
     if (frameType == 1U) {
+        printk("zb_aps_route: command\n");
         aps_command_handle(arg);
         return;
     }
@@ -978,10 +987,12 @@ void aps_data_indication_process(void *arg)
     }
 
     if ((hdr->frameCtrl & 0x0cU) == 0x0cU) {
+        printk("zb_aps_route: group\n");
         aps_process_group_addressed_packet((zb_buf_t *)arg);
         return;
     }
 
+    printk("zb_aps_route: af_aps_data_entry\n");
     tl_zbTaskPost(af_aps_data_entry, arg);
 }
 void aps_interPanDataIndCb(void *arg)
@@ -1217,6 +1228,9 @@ void aps_nwk_data_indication_cb(void *arg)
 
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;
+    printk("zb_aps_nwk_ind: nsdu_len=%u hdr=%u fc=0x%02x profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst_mode=%u dst=0x%04x\n",
+           ind->nsduLen, hdrLen, hdr->frameCtrl, hdr->profileId, hdr->clusterId,
+           hdr->dstEp, hdr->srcEp, ind->dstAddrMode, ind->dstAddr);
 
     /*
      * The NLDE-DATA.indication dstAddrMode is produced by nwk_data.c as
@@ -1237,6 +1251,7 @@ void aps_nwk_data_indication_cb(void *arg)
         COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
     } else {
         if (ind->nsduLen <= hdrLen) {
+            printk("zb_aps_drop: nsdu too short len=%u hdr=%u\n", ind->nsduLen, hdrLen);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -1244,6 +1259,8 @@ void aps_nwk_data_indication_cb(void *arg)
         if ((hdr->frameCtrl & 0x03U) == 0U &&
             (hdr->frameCtrl & 0x0cU) != 0x0cU &&
             !af_profileMatchedLocal(hdr->profileId, hdr->dstEp)) {
+            printk("zb_aps_drop: profile mismatch profile=0x%04x dst_ep=%u\n",
+                   hdr->profileId, hdr->dstEp);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
