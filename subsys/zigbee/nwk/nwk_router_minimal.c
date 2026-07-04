@@ -29,6 +29,7 @@
 #include <string.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/random/random.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_config.h>
 #include <zephyr/zigbee/zb_radio_port.h>
@@ -242,4 +243,37 @@ uint8_t zb_routerStart(void)
 	}
 
 	return 0U;
+}
+
+extern void tl_zbNwkBeaconPayloadUpdate(void);
+
+/*
+ * Open this router as a PARENT so a new device can join THROUGH it.
+ *
+ * The minimal router join path never reaches the standard BDB post-join
+ * Mgmt_Permit_Joining broadcast (bdb.c NETWORK_STEER_PERMITJOIN), so the MAC
+ * stays with associationPermit=0 / beaconPayloadLen=0 and silently ignores
+ * beacon-requests (tl_zbMacBeaconRequestCb bails on either being unset). This
+ * flips the router into the parent-active state the already-wired vendor MAC
+ * expects:
+ *   - devType!=0 + beaconPayloadLen!=0  -> tl_zbMacBeaconRequestCb TXes a beacon
+ *   - associationPermit=1               -> beacon superframe advertises permit
+ *   - joinAccept=1                      -> NLME permit-join precondition
+ *   - joined=1 (already) + !joined_pro  -> tl_zbMlmeCmdBeaconReqRecvd accepts
+ * BO/SO=15 marks a non-beacon-enabled (on-demand) network.
+ *
+ * tl_zbNwkBeaconPayloadUpdate() rebuilds the payload struct but does NOT set
+ * beaconPayloadLen, so we set it here. permit_duration==0 closes the window.
+ */
+void zb_router_enable_parenting(u8 permit_duration)
+{
+	g_zbNIB.capabilityInfo.devType = 1U;   /* FFD / router-capable */
+	g_zbNwkCtx.joinAccept = 1U;
+	g_zbNwkCtx.permit_join = (permit_duration != 0U) ? 1U : 0U;
+	g_zbMacPib.beaconOrder = 15U;
+	g_zbMacPib.superframeOrder = 15U;
+	g_zbMacPib.associationPermit = (permit_duration != 0U) ? 1U : 0U;
+
+	tl_zbNwkBeaconPayloadUpdate();
+	g_zbMacPib.beaconPayloadLen = (u8)sizeof(g_zbMacPib.beaconPayload);
 }

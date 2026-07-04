@@ -14,7 +14,6 @@
 #define TLSR8258_SYSTEM_TICK_CYCLES_PER_US \
 	(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000U)
 
-extern volatile uint32_t zb_nwk_ed_trace[];
 
 static int zb_radio_port_tlsr8258_get(const struct device **dev,
 				      const struct ieee802154_radio_api **api)
@@ -136,7 +135,5 @@ void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr)
 {
-	zb_nwk_ed_trace[32] = ((uint32_t)short_addr << 16) | pan_id;
-	zb_nwk_ed_trace[33] = (zb_nwk_ed_trace[33] + 1U) & 0xffffU;
 	tlsr8258_zigbee_update_filters(pan_id, short_addr, ieee_addr);
 }

@@ -83,16 +83,8 @@ void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
 	tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_SCAN_REQ, arg);
 }
 
-extern volatile u32 zb_nwk_ed_trace[];
-
 void nwk_discoveryScanCnfHandler(void *arg)
 {
-	/* [2]: low 16 = scan_cnf hit count; bits 16..23 = arg[0] (status). */
-	u32 status = ((u8 *)arg)[0];
-
-	zb_nwk_ed_trace[2] = (zb_nwk_ed_trace[2] & 0xff000000U) |
-			      ((status & 0xffU) << 16) |
-			      ((zb_nwk_ed_trace[2] + 1U) & 0xffffU);
 	if (((u8 *)arg)[1] != 1U) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
@@ -106,12 +98,6 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 	zb_mlme_beacon_notify_ind_t *ind = (zb_mlme_beacon_notify_ind_t *)arg;
 	zb_mac_beacon_payload_t *payload = (zb_mac_beacon_payload_t *)ind->psdu;
 	nlme_state_t state = g_zbNwkCtx.state;
-
-	/* [1]: low 16 = beacon-notify hit count; bits 16..23 = state. */
-	zb_nwk_ed_trace[1] = (zb_nwk_ed_trace[1] & 0xff000000U) |
-			      (((u32)state & 0xffU) << 16) |
-			      ((zb_nwk_ed_trace[1] + 1U) & 0xffffU);
-
 
 	if (!nwk_beacon_payload_is_valid(payload)) {
 		zb_buf_free((zb_buf_t *)arg);

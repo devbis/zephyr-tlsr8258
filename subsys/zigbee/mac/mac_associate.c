@@ -37,26 +37,6 @@ void mac_assoc_cancel_wait_timer_from_rx(void)
     }
 }
 
-extern volatile u32 zb_nwk_ed_trace[];
-
-/*
- * Trace which site clears associationReqOrigBuffer. slot[38] holds the
- * most-recent site code in the low byte and a clear count in bits 8-31.
- * slot[39] is a bitmap of sites that have ever fired (1U << code).
- * Site codes: 1 wait-timer, 2 poll-alloc-fail, 3 poll-cnf-fail,
- * 4 status-check-fail, 5 req-handler early-exit, 6 req-handler tx-fail,
- * 7 resp-recvd success path.
- */
-static inline void mac_trace_origbuf_clear(u8 site)
-{
-    u32 prev = zb_nwk_ed_trace[38];
-    u32 count = (prev >> 8) + 1U;
-
-    zb_nwk_ed_trace[38] = (count << 8) | (u32)site;
-    zb_nwk_ed_trace[39] |= (1U << site);
-}
-
-
 static inline u32 assoc_timeout_ms(void)
 {
     u32 base = g_zbInfo.macPib.respWaitTime;
@@ -93,18 +73,7 @@ static int tl_zbWaitForAssociationRespTimeout(void *arg)
      * fast handoff has already seen success this round and let the late
      * success path drive the CNF.
      */
-    /*
-     * Mark unconditional timer entry in slot[39] bit 10; bit 11 if the
-     * success flag was already set at entry. Lets us tell "timer never
-     * fired" from "timer fired but flag was still 0".  slot[27] also
-     * captures the k_uptime_get_32() at entry, paired with slot[26]
-     * (fast handoff entry) to measure the actual race margin per round.
-     */
-    zb_nwk_ed_trace[39] |= (1U << 10);
-    zb_nwk_ed_trace[27] = (u32)k_uptime_get_32();
     if (mac_assoc_resp_success_seen) {
-        zb_nwk_ed_trace[39] |= (1U << 11);
-        mac_trace_origbuf_clear(9U);
         associationReqOrigBuffer = NULL;
         g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
         assocRspTimeoutEvt = NULL;
@@ -116,7 +85,6 @@ static int tl_zbWaitForAssociationRespTimeout(void *arg)
     req[10] = MAC_STA_NO_DATA;
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
 
-    mac_trace_origbuf_clear(1U);
     associationReqOrigBuffer = NULL;
     g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
     assocRspTimeoutEvt = NULL;
@@ -141,7 +109,6 @@ static int tl_zbReadyToPullParentForAssoRsp(void *arg)
             memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
             req[10] = MAC_STA_NO_RESOURCES;
             tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
-            mac_trace_origbuf_clear(2U);
             associationReqOrigBuffer = NULL;
             return -1;
         }
@@ -219,7 +186,6 @@ void tl_zbMacAssocPollConfirm(u8 status)
     memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
     req[10] = status;
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
-    mac_trace_origbuf_clear(3U);
     associationReqOrigBuffer = NULL;
     g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
 }
@@ -249,7 +215,6 @@ void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
         memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
         req[10] = status;
         tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
-        mac_trace_origbuf_clear(4U);
         associationReqOrigBuffer = NULL;
         return;
     }
@@ -262,30 +227,18 @@ void tl_zbMacAssociateRequestHandler(void *arg)
     u8 *req = (u8 *)arg;
     zb_buf_t *txBuf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
 
-    /* [5]: low 16 = AssocReqHandler hit count; bit 16 = TX_ACTIVE early exit. */
-    zb_nwk_ed_trace[5] = (zb_nwk_ed_trace[5] & 0xffff0000U) |
-			  ((zb_nwk_ed_trace[5] + 1U) & 0xffffU);
-
     if (txBuf == NULL ||
         ((((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] & 0x08U) != 0U) ||
         associationReqOrigBuffer != NULL) {
-        zb_nwk_ed_trace[5] |= 1U << 16;
         memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
         req[10] = MAC_STA_TX_ACTIVE;
         tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
-        mac_trace_origbuf_clear(5U);
         associationReqOrigBuffer = NULL;
         return;
     }
 
     ((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] |= 0x08U;
     mac_assoc_resp_success_seen = 0U;
-    /*
-     * slot[28] = k_uptime_get_32() at AssocReq tx start. Together with
-     * slot[26] (fast handoff) and slot[27] (wait-timer) this localises
-     * where the delivery delay falls within a join round.
-     */
-    zb_nwk_ed_trace[28] = (u32)k_uptime_get_32();
     associationReqOrigBuffer = arg;
     g_zbMacCtx.curChannel = req[0];
     rf_setChannel(req[0]);
@@ -347,7 +300,6 @@ void tl_zbMacAssociateRequestHandler(void *arg)
             memset(req, 0, ASSOC_REQ_CONFIRM_SIZE);
             req[10] = MAC_STA_TX_ACTIVE;
             tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, req);
-            mac_trace_origbuf_clear(6U);
             associationReqOrigBuffer = NULL;
         }
     }
@@ -359,6 +311,7 @@ void tl_zbMacAssociateResponseHandler(void *arg)
     u8 *req = (u8 *)arg;
     u8 rawMhr[26];
     u8 pendingAddr[9];
+    u8 *frameStart;
     u8 *payload;
     u8 hdrSize;
     u8 status;
@@ -378,8 +331,8 @@ void tl_zbMacAssociateResponseHandler(void *arg)
     *(u16 *)(void *)rawMhr = 0xcc63U;
 
     hdrSize = (u8)(tl_zbMacHdrSize(0xcc63U) + 4U);
-    payload = tl_bufInitalloc((zb_buf_t *)arg, hdrSize);
-    payload = tl_zbMacHdrBuilder(payload, (tl_zb_mac_mhr_t *)rawMhr);
+    frameStart = tl_bufInitalloc((zb_buf_t *)arg, hdrSize);
+    payload = tl_zbMacHdrBuilder(frameStart, (tl_zb_mac_mhr_t *)rawMhr);
     payload[0] = MAC_CMD_ASSOCIATION_RESPONSE;
     memcpy(payload + 1, req, 2);
     payload[3] = req[10];
@@ -387,8 +340,21 @@ void tl_zbMacAssociateResponseHandler(void *arg)
     pendingAddr[0] = ADDR_MODE_EXT;
     memcpy(pendingAddr + 1, req + 2, EXT_ADDR_LEN);
 
-    memcpy(arg, &payload, sizeof(payload));
-    req[4] = hdrSize;
+    {
+        /*
+         * Stash the built AssocResp {frame-start ptr, len} in the buffer's
+         * scratch head for indirect delivery. tl_zbMacTx wants the FRAME START
+         * (before the MAC header), like the AssocReq TX path — tl_zbMacHdrBuilder
+         * returns the pointer ADVANCED past the header, so store frameStart, not
+         * `payload`. The struct (real pointer + len) keeps the length correctly
+         * positioned after the pointer on both TC32 (4-byte) and native_sim
+         * (8-byte) builds.
+         */
+        mac_indirect_tx_scratch_t *scratch = (mac_indirect_tx_scratch_t *)arg;
+
+        scratch->payload = frameStart;
+        scratch->psduLen = hdrSize;
+    }
     ((zb_buf_t *)arg)->hdr.handle = 0xe1U;
 
     status = macDataPending(arg,

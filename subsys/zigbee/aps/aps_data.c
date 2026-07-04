@@ -357,9 +357,6 @@ void aps_indPrimBuild(void *arg)
         out->security_status |= SECURITY_IN_NWKLAYER;
     }
 
-    printk("zb_aps_ind_build: profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst_addr=0x%04x asdu_len=%u sec=0x%02x\n",
-           out->profile_id, out->cluster_id, out->dst_ep, out->src_ep,
-           out->dst_addr, out->asduLength, out->security_status);
 }
 
 void aps_conf(void *arg)
@@ -751,6 +748,16 @@ u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
     nsduOffset = req->nsdu - (u8 *)src;
     req->nsdu = (u8 *)buf + nsduOffset;
 
+    /*
+     * Mark the carrier active. nwk_fwdPacket() drops any buffer with hdr.used
+     * clear as a stale-buffer guard, and zb_buf_allocate() zero-inits it. The
+     * APS_TX_DUP_BUF_SIZE copy above only duplicates the payload area, not the
+     * hdr, so without this a routed (non-skip) APS frame — e.g. the router
+     * relaying a tunneled transport-key to its child — is silently dropped.
+     * (zdo_router_minimal.c af_dataSend sets this for the same reason.)
+     */
+    buf->hdr.used = 1U;
+
     if (cache->interPAN) {
         (void)tl_zbNwkInterPanDataReq(buf);
     } else {
@@ -857,7 +864,6 @@ void aps_data_indication_process(void *arg)
 
     if ((hdr->frameCtrl & 0x20U) != 0U) {
         if (ss_apsDecryptFrame(arg) != RET_OK) {
-            printk("zb_aps_drop: aps decrypt fail fc=0x%02x\n", hdr->frameCtrl);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -866,15 +872,12 @@ void aps_data_indication_process(void *arg)
 
     if ((hdr->frameCtrl & 0x40U) != 0U) {
         if (aps_ack_send(arg, 0) != 0U) {
-            printk("zb_aps_drop: ack send fail fc=0x%02x\n", hdr->frameCtrl);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
     }
 
     if (aps_duplicate_check(hdr->srcShortAddr, hdr->apsCounter) != 0U) {
-        printk("zb_aps_drop: duplicate src=0x%04x aps_cnt=%u\n",
-               hdr->srcShortAddr, hdr->apsCounter);
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -967,8 +970,6 @@ void aps_data_indication_process(void *arg)
     }
 
     frameType = (u8)(hdr->frameCtrl & 0x03U);
-    printk("zb_aps_ind_proc: fc=0x%02x frameType=%u profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u\n",
-           hdr->frameCtrl, frameType, hdr->profileId, hdr->clusterId, hdr->dstEp, hdr->srcEp);
     aps_indPrimBuild(arg);
 
     if (g_apsDataIndCb != NULL) {
@@ -976,7 +977,6 @@ void aps_data_indication_process(void *arg)
     }
 
     if (frameType == 1U) {
-        printk("zb_aps_route: command\n");
         aps_command_handle(arg);
         return;
     }
@@ -987,12 +987,10 @@ void aps_data_indication_process(void *arg)
     }
 
     if ((hdr->frameCtrl & 0x0cU) == 0x0cU) {
-        printk("zb_aps_route: group\n");
         aps_process_group_addressed_packet((zb_buf_t *)arg);
         return;
     }
 
-    printk("zb_aps_route: af_aps_data_entry\n");
     tl_zbTaskPost(af_aps_data_entry, arg);
 }
 void aps_interPanDataIndCb(void *arg)
@@ -1228,9 +1226,6 @@ void aps_nwk_data_indication_cb(void *arg)
 
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;
-    printk("zb_aps_nwk_ind: nsdu_len=%u hdr=%u fc=0x%02x profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst_mode=%u dst=0x%04x\n",
-           ind->nsduLen, hdrLen, hdr->frameCtrl, hdr->profileId, hdr->clusterId,
-           hdr->dstEp, hdr->srcEp, ind->dstAddrMode, ind->dstAddr);
 
     /*
      * The NLDE-DATA.indication dstAddrMode is produced by nwk_data.c as
@@ -1251,7 +1246,6 @@ void aps_nwk_data_indication_cb(void *arg)
         COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
     } else {
         if (ind->nsduLen <= hdrLen) {
-            printk("zb_aps_drop: nsdu too short len=%u hdr=%u\n", ind->nsduLen, hdrLen);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -1259,8 +1253,6 @@ void aps_nwk_data_indication_cb(void *arg)
         if ((hdr->frameCtrl & 0x03U) == 0U &&
             (hdr->frameCtrl & 0x0cU) != 0x0cU &&
             !af_profileMatchedLocal(hdr->profileId, hdr->dstEp)) {
-            printk("zb_aps_drop: profile mismatch profile=0x%04x dst_ep=%u\n",
-                   hdr->profileId, hdr->dstEp);
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -1484,6 +1476,31 @@ void aps_cmd_send(void *arg, u8 handle)
     nldereq->dstAddr = dstShortAddr;
     if (req->addrMode == APS_LONG_DSTADDR_WITHEP) {
         memcpy(nldereq->ieeAddr, req->dstAddr.extAddr, EXT_ADDR_LEN);
+    }
+
+    /*
+     * Coordinator/TC-bound APS command (e.g. Update-Device): send straight to
+     * the parent instead of via nwk_fwdPacket route discovery. The minimal
+     * router has no established route to its parent, so a discoverRoute frame
+     * to 0x0000 buffers pending a RouteReply that never arrives and the APS TX
+     * cache entry never drains. Mirrors zdo_router_minimal.c af_dataSend, which
+     * sets unicastSkipRouting for coordShortAddress. (A full multi-hop stack
+     * would resolve the route table entry in nwk_fwdPacket instead.)
+     */
+    if (req->addrMode == APS_SHORT_DSTADDR_WITHEP &&
+        dstShortAddr == g_zbInfo.macPib.coordShortAddress) {
+        nldereq->unicastSkipRouting = 1;
+        nldereq->discoverRoute = 0;
+        /*
+         * Force a clean NWK unicast. tl_zbNwkNldeDataRequestHandler treats a
+         * non-zero NLDE addrMode as group/multicast (sets NWK FCF bit 8 + a
+         * multicast-control byte), but the APS layer passes the APS addr mode
+         * APS_SHORT_DSTADDR_WITHEP(2) straight through — so a unicast APS
+         * command (Update-Device) would otherwise go out multicast-flagged,
+         * shifting the NWK header. Real ZDO/announce unicasts use NLDE
+         * addrMode=0 (zdo_router_minimal.c af_dataSend); match that.
+         */
+        nldereq->addrMode = 0;
     }
 
     nsdu = req->adu - 2;
