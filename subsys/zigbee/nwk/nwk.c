@@ -26,6 +26,8 @@ ev_timer_event_t *linkStTimer = NULL;
 extern void nwk_formationScanCnfHandler(void *arg);
 extern void nwk_formationStartCnfHandler(void *arg);
 extern void nwk_panIdConflictCnfHandler(void *arg);
+#else
+extern void zdo_nlme_network_discovery_confirm_cb(void *arg);
 #endif
 
 const tl_zb_callback_t g_zbNwkEventFromMacTbl[] = {

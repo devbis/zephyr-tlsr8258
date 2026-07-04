@@ -89,10 +89,10 @@ zephyr_library_sources(
     mac/mac_phy.c
     mac/mac_pib.c
 )
-if(NOT CONFIG_ZIGBEE_ROUTER)
-    # Router build uses the libzigbee-derived MAC layer in mac/mac.c,
-    # mac/mac_trx.c, etc.; mac_trx_compat / mac_trx_stub provide the
-    # ED-side simplified MAC.
+# The full libzigbee MAC (mac/mac.c, mac/mac_trx.c, ...) is used by the router
+# and by the experimental libzigbee-based ED build. The minimal ED path
+# (mac_trx_compat / mac_trx_stub) is used only by the default (minimal) ED build.
+if(NOT CONFIG_ZIGBEE_ROUTER AND NOT CONFIG_ZIGBEE_ED_LIBZIGBEE)
     zephyr_library_sources_ifndef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_compat.c)
     zephyr_library_sources_ifdef(CONFIG_ZIGBEE_MAC_TRX_STUBS mac/mac_trx_stub.c)
 endif()
@@ -102,21 +102,61 @@ zephyr_library_sources(
     af/zb_af.c
     aps/aps_group.c
     ss/ss_nv.c
+    zbapi/zb_api_ed_compat.c
+    nwk/nwk_schedule_fallback.c
 )
 
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
-    aps/aps.c
-    aps/aps_data.c
-    aps/aps_me.c
-    zdo/zdo.c
-    zdo/zdo_nwk_manager.c
-    zdo/zdp_services.c
-    ss/ss_apsEnDecrypt.c
-    ss/ss_apsSecurityME.c
-    ss/ss_nwkEnDecrypt.c
-    ss/ss_tlCCM.c
-    ss/ss_zdoSecurityME.c
-)
+# Full libzigbee core — compiled for the router AND the experimental
+# libzigbee-based ED build (CONFIG_ZIGBEE_ED_LIBZIGBEE). These are the unified
+# vendor sources whose role behaviour is selected internally by
+# ZB_ED_ROLE / ZB_ROUTER_ROLE, so the same files serve both roles.
+if(CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED_LIBZIGBEE)
+    zephyr_library_sources(
+        aps/aps.c
+        aps/aps_data.c
+        aps/aps_me.c
+        zdo/zdo.c
+        zdo/zdo_nwk_manager.c
+        zdo/zdp_services.c
+        ss/ss_apsEnDecrypt.c
+        ss/ss_apsSecurityME.c
+        ss/ss_nwkEnDecrypt.c
+        ss/ss_tlCCM.c
+        ss/ss_zdoSecurityME.c
+        nwk/nwk.c
+        nwk/nwk_data.c
+        nwk/nwk_join.c
+        nwk/nwk_nlme.c
+        nwk/nwk_neighbor.c
+        nwk/nwk_discovery.c
+        nwk/nwk_route_disc.c
+        nwk/nwk_routing.c
+        nwk/nwk_brc.c
+        nwk/nwk_addr_map.c
+        nwk/nwk_addr_conflict.c
+        nwk/nwk_panid_conflict.c
+        nwk/nwk_leave.c
+        nwk/nwk_endDev_timeout.c
+        nwk/nwk_pend.c
+        nwk/nwk_formation.c
+        nwk/nwk_permit_joining.c
+        nwk/nwk_address_assign.c
+        mac/mac.c
+        mac/mac_associate.c
+        mac/mac_common.c
+        mac/mac_data.c
+        mac/mac_mlme.c
+        mac/mac_scan.c
+        mac/mac_test.c
+        mac/mac_trx.c
+        mac/mac_cr_coordinator.c
+        mac/mac_indirect_data.c
+        common/zb_initialize.c
+        platform/zephyr/zb_buffer_zephyr.c
+        platform/zephyr/zb_task_queue_router.c
+        platform/zephyr/zb_second_clock.c
+    )
+endif()
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
@@ -131,61 +171,23 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_WWAH wwah/wwah.c wwah/wwahEpCfg.c)
 # ZCL
 add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 
-# Role-specific runtime sources.
-# ED runtime is the fully wired path. Router runtime is being added
-# incrementally and currently shares the ED minimal infrastructure
-# (steering/join helpers) plus a router-specific bootstrap stub.
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
-    zbapi/zb_api_ed_compat.c
-    zbapi/zb_api_zdo_send_minimal.c
-    nwk/nwk_schedule_fallback.c
-    nwk/nwk_ed_minimal.c
-    zdo/zdo_ed_minimal.c
-)
+# ED minimal runtime — the DEFAULT ED path. Superseded by the full libzigbee
+# core (above) for the experimental CONFIG_ZIGBEE_ED_LIBZIGBEE build.
+if(CONFIG_ZIGBEE_ED AND NOT CONFIG_ZIGBEE_ED_LIBZIGBEE)
+    zephyr_library_sources(
+        zbapi/zb_api_zdo_send_minimal.c
+        nwk/nwk_ed_minimal.c
+        zdo/zdo_ed_minimal.c
+    )
+endif()
 if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
     zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
 endif()
 
+# Router-only Zephyr-port bootstrap glue (not part of the vendor libzigbee core;
+# these provide router formation/parenting bring-up and the router af_dataSend).
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
-    platform/zephyr/zb_buffer_zephyr.c
-    platform/zephyr/zb_task_queue_router.c
-    platform/zephyr/zb_second_clock.c
-    zbapi/zb_api_ed_compat.c
-    # zb_api_zdo_send_minimal.c and zdo_ed_minimal.c are superseded by the
-    # libzigbee zdo/zdp_services.c + zdo.c ports for the router build.
-    nwk/nwk_schedule_fallback.c
-    # nwk_ed_minimal.c is superseded by the libzigbee nwk_join /
-    # nwk_data / nwk_discovery ports for the router build.
     nwk/nwk_router_minimal.c
-    nwk/nwk_permit_joining.c
-    nwk/nwk_routing.c
-    nwk/nwk_brc.c
-    nwk/nwk_neighbor.c
-    nwk/nwk_addr_map.c
-    nwk/nwk_address_assign.c
-    nwk/nwk_formation.c
-    nwk/nwk_pend.c
-    nwk/nwk_addr_conflict.c
-    nwk/nwk_panid_conflict.c
-    nwk/nwk_endDev_timeout.c
-    nwk/nwk_leave.c
-    nwk/nwk_discovery.c
-    nwk/nwk_route_disc.c
-    nwk/nwk_nlme.c
-    nwk/nwk.c
-    nwk/nwk_data.c
-    nwk/nwk_join.c
-    common/zb_initialize.c
-    mac/mac.c
-    mac/mac_associate.c
-    mac/mac_common.c
-    mac/mac_cr_coordinator.c
-    mac/mac_data.c
-    mac/mac_indirect_data.c
-    mac/mac_mlme.c
-    mac/mac_scan.c
-    mac/mac_test.c
-    mac/mac_trx.c
     zdo/zdo_router_minimal.c
 )
 if(CONFIG_ZIGBEE_ROUTER AND CONFIG_ZIGBEE_BDB)
