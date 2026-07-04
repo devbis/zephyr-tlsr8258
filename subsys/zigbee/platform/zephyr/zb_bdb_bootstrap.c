@@ -456,7 +456,7 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 		return 0xFFU;
 	}
 
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
 	{
 		uint8_t scan_channel = (g_zbMacPib.phyChannelCur != 0U)
 			? g_zbMacPib.phyChannelCur
