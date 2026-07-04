@@ -5,6 +5,7 @@
  * are replaced by the Zephyr include set.
  */
 #include <zephyr/zigbee/zb_radio_port.h>
+#include <zephyr/sys/printk.h>
 
 #include "zb_common_stub.h"
 #include "common/static_assert.h"
@@ -17,8 +18,6 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
 
-
-extern volatile u32 zb_nwk_ed_trace[];
 
 static inline u8 *phy_ind_raw_get(void *arg)
 {
@@ -81,10 +80,30 @@ static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw)
 
 static void tl_zbMlmeCmdDataReqRecvd(void *arg, void *raw)
 {
-    (void)raw;
 #if defined(ZB_ROUTER_ROLE)
+    u8 *mhr = (u8 *)raw;
+    u8 *req = (u8 *)arg;
+    u16 fcf = (u16)mhr[0] | ((u16)mhr[1] << 8);
+    u8 srcMode = (u8)((fcf >> 14) & 0x03U);
+
+    /*
+     * tl_zbMacMlmeDataRequestCb() matches the poll's SOURCE address (req+10,
+     * mode at req[18]) against the indirect-pending queue. Those buffer slots
+     * are not otherwise populated on the native_sim RX path, so seed them from
+     * the normalized MHR here (src ext addr lives at mhr+18, mirroring the
+     * AssocReq handler). Without this the poll never matches a queued
+     * AssociationResponse and a child joining THROUGH this router hangs.
+     */
+    if (srcMode == ADDR_MODE_EXT) {
+        memcpy(req + 10, mhr + 18, EXT_ADDR_LEN);
+        req[18] = ADDR_MODE_EXT;
+    } else {
+        memcpy(req + 10, mhr + 18, SHORT_ADDR_LEN);
+        req[18] = ADDR_MODE_SHORT;
+    }
     tl_zbMacMlmeDataRequestCb(arg);
 #else
+    (void)raw;
     zb_buf_free((zb_buf_t *)arg);
 #endif
 }
@@ -119,7 +138,14 @@ static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw)
         return;
     }
 
-    if (((u8 *)arg)[20] < NWK_NEIGHBORTBL_ADD_LQITHRESHOLD) {
+    /*
+     * arg[20] is the vendor RX-meta LQI slot, valid only for the TC32 meta
+     * layout (4-byte pointer). On native_sim/native/64 the 8-byte payload
+     * pointer shifts linkQuality past offset 20, so this reads 0. Treat 0 as
+     * "unknown, accept" — the simulated link is always strong and must not be
+     * rejected here. A genuine on-air weak joiner still has a non-zero LQI.
+     */
+    if (((u8 *)arg)[20] != 0U && ((u8 *)arg)[20] < NWK_NEIGHBORTBL_ADD_LQITHRESHOLD) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -151,17 +177,17 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     u8 *payload = phy_ind_raw_get(arg);
     u16 assignedShort = (u16)payload[1] | ((u16)payload[2] << 8);
     const u8 *origReq = (const u8 *)associationReqOrigBuffer;
-
-    {
-        u32 prev = zb_nwk_ed_trace[40];
-        u32 entries = ((prev & 0xffffU) + 1U) & 0xffffU;
-        u32 bails = (prev >> 16) & 0xffffU;
-
-        if (associationReqOrigBuffer == NULL) {
-            bails = (bails + 1U) & 0xffffU;
-        }
-        zb_nwk_ed_trace[40] = (bails << 16) | entries;
-    }
+    /*
+     * Snapshot the fields we need out of the original AssocReq buffer NOW.
+     * The success branch below frees associationReqOrigBuffer, so reading
+     * origReq[] afterwards is a use-after-free (ASan: heap-use-after-free in
+     * tl_zbMlmeCmdAssociateRespRecvd; on the k_mem_slab build the recycled
+     * block's free-list link is then clobbered with {chan,pan,short}, crashing
+     * the next zb_buf_allocate).
+     */
+    bool origReqCoordShortValid = (origReq != NULL && origReq[12] == ADDR_MODE_SHORT);
+    u16 origReqCoordShort =
+        (origReq != NULL) ? ((u16)origReq[4] | ((u16)origReq[5] << 8)) : 0U;
 
     memset(buf, 0, 22);
 
@@ -185,13 +211,6 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
         }
         mac_assoc_resp_success_seen = 1U;
         tl_zbMacAssociateRespReceived();
-        {
-            u32 prev = zb_nwk_ed_trace[38];
-            u32 count = (prev >> 8) + 1U;
-
-            zb_nwk_ed_trace[38] = (count << 8) | 8U;
-            zb_nwk_ed_trace[39] |= (1U << 8);
-        }
     } else {
         /*
          * The vendor `g_zbMacCtx.status != 5` check requires the joiner
@@ -206,21 +225,14 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
         }
         tl_zbMacAssociateRespReceived();
         zb_buf_free((zb_buf_t *)associationReqOrigBuffer);
-        {
-            u32 prev = zb_nwk_ed_trace[38];
-            u32 count = (prev >> 8) + 1U;
-
-            zb_nwk_ed_trace[38] = (count << 8) | 7U;
-            zb_nwk_ed_trace[39] |= (1U << 7);
-        }
         associationReqOrigBuffer = NULL;
     }
 
     memcpy((u8 *)buf + 8, &assignedShort, sizeof(assignedShort));
     g_zbInfo.macPib.shortAddress = assignedShort;
     g_zbInfo.nwkNib.nwkAddr = assignedShort;
-    if (origReq != NULL && origReq[12] == ADDR_MODE_SHORT) {
-        g_zbInfo.macPib.coordShortAddress = (u16)origReq[4] | ((u16)origReq[5] << 8);
+    if (origReqCoordShortValid) {
+        g_zbInfo.macPib.coordShortAddress = origReqCoordShort;
     }
     if (mhr[3] == ADDR_MODE_EXT) {
         memcpy(g_zbInfo.macPib.coordExtAddress, mhr + 18, EXT_ADDR_LEN);
@@ -253,20 +265,7 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
     payload = phy_ind_raw_get(arg);
     cmdId = payload[0];
 
-    /*
-     * slot[41]: low 16 = MlmeIndicate call count, bits 16-23 = last cmdId,
-     * bit 24 = status==5 path taken, bit 25 = shortcut path taken,
-     * bit 26 = table path taken. Tells us whether ASSOC_RESP reached this
-     * function and which dispatch path handled it.
-     */
-    {
-        u32 prev = zb_nwk_ed_trace[41];
-        u32 cnt = ((prev & 0xffffU) + 1U) & 0xffffU;
-        zb_nwk_ed_trace[41] = (prev & 0xff000000U) | ((u32)cmdId << 16) | cnt;
-    }
-
     if (g_zbMacCtx.status == 5U) {
-        zb_nwk_ed_trace[41] |= (1U << 24);
         if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE) {
             tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
             return;
@@ -286,19 +285,13 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
      * so this only fires for the genuine wait-for-response case.
      */
     if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE && associationReqOrigBuffer != NULL) {
-        zb_nwk_ed_trace[41] |= (1U << 25);
         tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
         return;
-    }
-
-    if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE) {
-        zb_nwk_ed_trace[41] |= (1U << 27);
     }
 
     for (u8 i = 0; i < ARRAY_SIZE(g_zbMacMlmeEventFromPhyTbl); i++) {
         if (g_zbMacMlmeEventFromPhyTbl[i].cmdId == cmdId &&
             g_zbMacMlmeEventFromPhyTbl[i].handler != NULL) {
-            zb_nwk_ed_trace[41] |= (1U << 26);
             g_zbMacMlmeEventFromPhyTbl[i].handler(arg, raw);
             return;
         }

@@ -124,17 +124,7 @@ static void ev_timer_execute_cb(void)
 			s32 next_timeout;
 
 			timer_evt->isBusy = 1U;
-			{
-				extern volatile u32 zb_dbg_tmr_cb;
-				extern volatile u16 zb_dbg_tmr_cnt;
-				zb_dbg_tmr_cb = (u32)(void *)timer_evt->cb;
-				zb_dbg_tmr_cnt++;
-			}
 			next_timeout = timer_evt->cb(timer_evt->data);
-			{
-				extern volatile u32 zb_dbg_tmr_done;
-				zb_dbg_tmr_done = (u32)(void *)timer_evt->cb;
-			}
 			if (next_timeout < 0) {
 				/*
 				 * One-shot timer: callback returned -1, meaning it

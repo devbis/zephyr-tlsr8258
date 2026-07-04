@@ -136,30 +136,41 @@ void ss_zdoTransportKeyIndHandle(void *arg)
             }
         }
 
-        {
-            extern volatile u8 zb_dbg_tk;
-            u8 v = 0x01U;
-            if (aps_ib.aps_authenticated) {
-                v |= 0x02U;
-            }
-            if (zdo_nwk_mngr()->authEvt == NULL) {
-                v |= 0x04U;
-            }
-            zb_dbg_tk = v;
-        }
-
         if (aps_ib.aps_authenticated) {
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
 
         if (zdo_nwk_mngr()->authEvt == NULL) {
+            /*
+             * Early Transport-Key: a centralized TC (and the native_sim
+             * host_socket_coordinator) push the unsolicited Transport-Key
+             * back-to-back with the ASSOCIATION-RESPONSE, so it can be
+             * processed BEFORE the deferred association-confirm chain runs
+             * zdo_nwkAuthTimeoutStart() to arm authEvt. The NWK key is already
+             * stored above; mark authenticated so the upcoming
+             * zdo_nlme_join_confirm completes the join via its
+             * `aps_authenticated` shortcut (zdo_nwk_manager.c:940) instead of
+             * arming an auth-wait timer that would expire ZDO_NOT_AUTHORIZED.
+             * (Reproduced + verified on native_sim.)
+             */
+            aps_ib.aps_authenticated = 1;
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
 
+        /*
+         * The auth-wait timer had been armed, so the deferred
+         * association-confirm buffer is stashed in savedBuf. We complete the
+         * join by reusing `arg` (the transport-key buffer) for build_join_confirm
+         * / zdo_nlme_join_confirm below, so it is the STALE savedBuf that must be
+         * released here — the vendor code freed `arg` instead, then kept reading
+         * ind->key and posting `arg`, a use-after-free (ASan: heap-use-after-free
+         * READ of size 16 == ind->key; on k_mem_slab the recycled block's
+         * free-list link is clobbered and the next zb_buf_allocate crashes).
+         */
         if (zdo_nwk_mngr()->savedBuf != NULL) {
-            zb_buf_free((zb_buf_t *)arg);
+            zb_buf_free((zb_buf_t *)zdo_nwk_mngr()->savedBuf);
             zdo_nwk_mngr()->savedBuf = NULL;
         }
 
@@ -182,10 +193,6 @@ void ss_zdoTransportKeyIndHandle(void *arg)
                                   ((ss_ib.activeSecureMaterialIndex & 0x03U) << 4));
         }
 
-        {
-            extern volatile u8 zb_dbg_tk;
-            zb_dbg_tk |= 0x08U;
-        }
         aps_ib.aps_authenticated = 1;
         build_join_confirm(arg);
         tl_zbTaskPost(zdo_nlme_join_confirm, arg);

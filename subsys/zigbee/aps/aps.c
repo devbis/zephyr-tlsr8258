@@ -177,18 +177,6 @@ void aps_command_handle(void *arg)
     u16 dst = ind->dst_addr;
     u16 local = g_zbInfo.nwkNib.nwkAddr;
     u8 cmdId = ind->asdu[0];
-    extern volatile u32 zb_nwk_ed_trace[];
-
-    /*
-     * slot[44]: low 16 = aps_command_handle call count, bits 16-23 =
-     * last cmdId seen, bits 24-31 = bit set per processed cmdId branch.
-     */
-    {
-        u32 prev = zb_nwk_ed_trace[44];
-        u32 count = ((prev & 0xffffU) + 1U) & 0xffffU;
-
-        zb_nwk_ed_trace[44] = (prev & 0xff000000U) | ((u32)cmdId << 16) | count;
-    }
 
     /*
      * Vendor libzigbee check looked like `if (dst == local) drop;`
@@ -203,35 +191,6 @@ void aps_command_handle(void *arg)
      * commands here — there's a separate relay path in
      * ss_apsTransportKeyCmdHandle for the parent-router case).
      */
-    {
-        extern volatile u8 zb_dbg_cmdh;
-        extern volatile u16 zb_dbg_dst;
-        extern volatile u16 zb_dbg_local;
-        extern volatile u16 zb_dbg_macshort;
-        if (cmdId == 5U) {
-            /* bit7 = a transport-key cmd reached aps_command_handle;
-             * bit6 = it was dropped here because dst != local;
-             * low6 = count that passed the dst filter into the switch. */
-            zb_dbg_cmdh |= 0x80U;
-            zb_dbg_dst = dst;
-            zb_dbg_local = local;
-            zb_dbg_macshort = g_zbInfo.macPib.shortAddress;
-            {
-                extern volatile u8 zb_dbg_apsind[16];
-                extern volatile u8 zb_dbg_apsind_seq;
-                if (zb_dbg_apsind_seq == 0U) {
-                    for (u8 i = 0; i < 16U; i++) {
-                        zb_dbg_apsind[i] = ((u8 *)arg)[i];
-                    }
-                    zb_dbg_apsind_seq = 1U;
-                }
-            }
-            if (dst != local) {
-                zb_dbg_cmdh |= 0x40U;
-            }
-        }
-    }
-
     if (dst != local) {
         zb_buf_free((zb_buf_t *)arg);
         return;
@@ -239,10 +198,6 @@ void aps_command_handle(void *arg)
 
     switch (cmdId) {
     case 5:
-        {
-            extern volatile u8 zb_dbg_cmdh;
-            zb_dbg_cmdh = (u8)((zb_dbg_cmdh & 0xc0U) | ((zb_dbg_cmdh + 1U) & 0x3fU));
-        }
         ss_apsTransportKeyCmdHandle(arg);
         break;
 #if defined(ZB_ROUTER_ROLE)

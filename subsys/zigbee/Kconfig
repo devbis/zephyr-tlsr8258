@@ -25,6 +25,15 @@ config ZIGBEE_ROUTER
 
 endchoice
 
+config ZIGBEE_NATIVE_SIM_IEEE_LOW
+	hex "native_sim fixed IEEE address low byte"
+	default 0x02
+	help
+	  Low byte of the compiled-in IEEE address on native_sim/POSIX builds
+	  (full address a4:c1:38:e0:50:02:00:XX). Build a second node with a
+	  distinct value so multiple native_sim Zigbee nodes (e.g. an End Device
+	  joining THROUGH a router) can share one socket medium.
+
 config ZIGBEE_CHANNEL
 	int "Default Zigbee channel"
 	default 15

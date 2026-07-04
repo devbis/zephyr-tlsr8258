@@ -90,6 +90,17 @@ static bool phy_ind_beacon_notify_post(zb_buf_t *buf, tl_zb_mac_mhr_t *mhr, u8 *
         return FALSE;
     }
 
+    /*
+     * The scratch copy lands at buf+BEACON_NOTIFY_SIZE and ind.psdu/pAddrList
+     * point back into it, so BEACON_NOTIFY_SIZE + payloadLen must not exceed
+     * the zb_buf payload area — otherwise the memmove overruns buf->buf[] into
+     * the buffer's hdr/next bookkeeping (and beyond). Reject oversized beacon
+     * payloads instead of corrupting the buffer pool.
+     */
+    if ((u16)BEACON_NOTIFY_SIZE + (u16)payloadLen > (u16)ZB_BUF_SIZE) {
+        return FALSE;
+    }
+
     safe = (u8 *)buf + BEACON_NOTIFY_SIZE;
     memmove(safe, payload, payloadLen);
 
@@ -160,8 +171,6 @@ const tl_zb_callback_t g_zbMacEventFromNwkTbl[] = {
 };
 #endif
 
-extern volatile u32 zb_nwk_ed_trace[];
-
 void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
 {
     zb_buf_t *buf = (zb_buf_t *)arg;
@@ -180,12 +189,6 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
 
     macPld = phy_ind_payload_ptr_get(arg);
     frameType = macPld[0] & 0x07U;
-
-    /* [10]: low 16 = phy_ind RX count; bits 16..18 = frameType (last). */
-    zb_nwk_ed_trace[10] = (zb_nwk_ed_trace[10] & 0xfff80000U) |
-			   (((u32)frameType & 0x7U) << 16) |
-			   ((zb_nwk_ed_trace[10] + 1U) & 0xffffU);
-
 
     if (mhr->dstAddrMode == ADDR_MODE_SHORT &&
         mhr->dstAddr.shortAddr == MAC_SHORT_ADDR_BROADCAST) {

@@ -4,6 +4,8 @@
  * one-for-one; vendor zb_local.h / mac_trx_api.h / ev_timer.h / mac_phy.h
  * are replaced by the Zephyr include set.
  */
+#include <zephyr/sys/printk.h>
+
 #include "zb_common_stub.h"
 #include "common/static_assert.h"
 #include "os/ev_timer.h"
@@ -77,8 +79,17 @@ u8 tl_zbMacMlmeBeaconCmdSend(tl_zbBeaconFrame_t *beacon)
         memcpy(&mhr.srcAddr, &g_zbMacPib.shortAddress, SHORT_ADDR_LEN);
     }
 
-    mhr.frameCtrl = (u16)(0x0043U |
-                          ((u16)beacon->srcAddrMode << 14) |
+    /*
+     * Beacon FCF: frame type = BEACON (0), source addressing per srcAddrMode
+     * (bits 14-15), no destination, no PAN-ID compression. The vendor value
+     * 0x0043 encoded frame type 3 (MAC command) + PAN-compress — a latent bug
+     * that never mattered while this port didn't actually transmit beacons; a
+     * standards-compliant receiver (our own MAC RX: frameType = psdu[0] & 0x07)
+     * then treats the "beacon" as a command and drops it, so a scanning joiner
+     * never sees this router as a parent. Build a proper beacon FCF (0x8000 for
+     * short src) so the frame is recognised.
+     */
+    mhr.frameCtrl = (u16)(((u16)beacon->srcAddrMode << 14) |
                           ((u16)beacon->framePending << 4));
     len = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + g_zbMacPib.beaconPayloadLen + 4U);
 
@@ -241,6 +252,14 @@ void tl_zbMacOrphanResponseStatusCheck(void *arg, u8 status)
 void tl_zbMacMlmeBeaconSendConfirm(void *arg, u8 status)
 {
     (void)arg;
+
+    /*
+     * Release the shared txRawDataBuf busy guard (hdr[3] bit 0x08) so the next
+     * beacon-request can be answered. mac.c clears it via hdr.active=0, but the
+     * bitfield position is arch-fragile; clear it explicitly here so repeated
+     * beacons work on native_sim/64-bit too.
+     */
+    ((u8 *)g_zbMacCtx.txRawDataBuf)[OFFSETOF(zb_buf_t, hdr) + 3] &= (u8)~0x08U;
 
     if (status != MAC_SUCCESS && g_zbMacCtx.beaconTriesNum != 0U) {
         tl_zbMacBeaconRequestCb();

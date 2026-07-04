@@ -143,8 +143,6 @@ static nwk_ed_minimal_rx_evt_t g_nwkEdRxEvtQ[NWK_ED_MINIMAL_RX_EVT_Q_LEN];
 static u8 g_nwkEdRxEvtHead;
 static u8 g_nwkEdRxEvtTail;
 static u8 g_nwkEdRxEvtCount;
-volatile u32 zb_nwk_ed_trace[48] = {0x4e574b45U};
-extern volatile u32 zb_post_tk_trace[16];
 volatile u32 zb_nwk_beacon_frame_count;
 volatile u32 zb_nwk_beacon_parse_fail_count;
 volatile u32 zb_nwk_beacon_discovery_inactive_count;
@@ -152,9 +150,7 @@ volatile u32 zb_nwk_beacon_success_count;
 volatile u32 zb_nwk_beacon_last_len;
 volatile u32 zb_nwk_beacon_last_fcf;
 /*
- * Dedicated AssocReq tx diagnostics. zb_nwk_ed_trace[11..13] capture the same
- * info but are heavily clobbered by other writers (app_bdb, drv_nv), so we
- * keep an unshared mirror here.
+ * Dedicated AssocReq tx diagnostics (unshared mirror).
  *   [0] = tx attempt counter
  *   [1] = last rc from zb_platform_radio_send_raw_psdu (signed int32)
  *   [2] = packed channel:8 | panId:16 | retry_count:8
@@ -781,7 +777,6 @@ static bool nwk_ed_minimal_rx_evt_pop(nwk_ed_minimal_rx_evt_t *evt)
 static void nwk_ed_minimal_finish_discovery(u8 status)
 {
 	bool rejoinFlow = g_nwkEdCtx.discoveryForRejoin;
-	zb_nwk_ed_trace[1] = ((u32)g_nwkEdCtx.state << 24) | status;
 	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
@@ -794,7 +789,6 @@ static void nwk_ed_minimal_finish_discovery(u8 status)
 
 static void nwk_ed_minimal_finish_join(u8 status, bool rejoinMode)
 {
-	zb_nwk_ed_trace[1] = ((u32)g_nwkEdCtx.state << 24) | ((u32)rejoinMode << 8) | status;
 	nwk_ed_minimal_timer_cancel();
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_IDLE;
 	g_nwkEdCtx.rejoinWithBackoff = FALSE;
@@ -821,7 +815,6 @@ static int nwk_ed_minimal_deferred_zb_info_save_timer(void *arg)
 
 static void nwk_ed_minimal_complete_join(bool rejoinMode)
 {
-	zb_post_tk_trace[5] = 0x50000000U | (zb_post_tk_trace[5] + 1U);
 	zb_post_join_trace[0]++;
 	zb_post_join_trace[1] = 0x10000000U | ((u32)g_nwkEdCtx.state << 16) |
 				  (rejoinMode ? 1U : 0U);
@@ -853,7 +846,6 @@ static void nwk_ed_minimal_complete_join(bool rejoinMode)
 		rejoinMode ? "rejoin" : "join", g_zbNIB.nwkAddr, g_zbNIB.panId,
 		g_zbMacPib.coordShortAddress);
 	nwk_ed_minimal_finish_join(ZDO_SUCCESS, rejoinMode);
-	zb_post_tk_trace[6] = 0x60000000U | (zb_post_tk_trace[6] + 1U);
 	memset(&g_nwkEdCtx.opTimer, 0, sizeof(g_nwkEdCtx.opTimer));
 	if (!zb_nwk_schedule_task_or_timer(nwk_ed_minimal_post_join_poll_task,
 					       &g_nwkEdCtx.opTimer,
@@ -935,9 +927,6 @@ static bool nwk_ed_minimal_send_data_request(void)
 				       ((u32)g_nwkEdCtx.state << 16) |
 				       ((u32)(u8)idx << 8) |
 				       (u16)rc);
-	zb_nwk_ed_trace[14]++;
-	zb_nwk_ed_trace[15] = ((u32)(u8)idx << 24) | ((u32)MAC_CMD_DATA_REQUEST << 16) |
-			       (u16)rc;
 	if (rc < 0) {
 		LOG_WRN("data request tx failed (rc=%d len=%u)", rc, idx);
 		return FALSE;
@@ -1061,10 +1050,6 @@ static bool nwk_ed_minimal_send_rejoin_request(void)
 	}
 
 	rc = zb_platform_radio_send_raw_psdu(frame, (u8)idx);
-	zb_nwk_ed_trace[12] = ((u32)(u8)idx << 24) | ((u32)NWK_CMD_REJOIN_REQUEST << 16) |
-			       (u16)rc;
-	zb_nwk_ed_trace[13] = ((u32)g_nwkEdCtx.activePanId << 16) |
-			       g_nwkEdCtx.activeParentShortAddr;
 	if (rc < 0) {
 		LOG_WRN("rejoin request tx failed (rc=%d len=%u)", rc, (unsigned)idx);
 		return FALSE;
@@ -1165,10 +1150,6 @@ static bool nwk_ed_minimal_start_assoc(bool rejoinMode)
 	 */
 	g_nwkEdCtx.state = rejoinMode ? NWK_ED_MINIMAL_STATE_REJOIN : NWK_ED_MINIMAL_STATE_JOINING;
 	rc = zb_platform_radio_send_raw_psdu(frame, idx);
-	zb_nwk_ed_trace[11]++;
-	zb_nwk_ed_trace[12] = ((u32)(u8)idx << 24) | ((u32)MAC_CMD_ASSOCIATION_REQUEST << 16) |
-			       (u16)rc;
-	zb_nwk_ed_trace[13] = ((u32)panId << 16) | parentShortAddr;
 	zb_assoc_tx_trace[0]++;
 	zb_assoc_tx_trace[1] = (u32)rc;
 	zb_assoc_tx_trace[2] = ((u32)channel << 24) | ((u32)panId << 8) |
@@ -1203,8 +1184,6 @@ static void nwk_ed_minimal_send_beacon_request(void)
 {
 	int rc = zb_platform_radio_send_beacon_request();
 
-	zb_nwk_ed_trace[4]++;
-	zb_nwk_ed_trace[5] = ((u32)g_nwkEdCtx.activeScanChannel << 24) | (u16)rc;
 	if (rc == -EBUSY) {
 		LOG_DBG("beacon request CCA busy ch=%u retry=%u",
 			g_nwkEdCtx.activeScanChannel, g_nwkEdCtx.beaconEbusyRetry);
@@ -1228,8 +1207,6 @@ static bool nwk_ed_minimal_start_scan_channel(void)
 
 	g_nwkEdCtx.remainingScanChannels &= ~((u32)1U << nextChannel);
 	g_nwkEdCtx.activeScanChannel = nextChannel;
-	zb_nwk_ed_trace[2]++;
-	zb_nwk_ed_trace[3] = ((u32)nextChannel << 24) | g_nwkEdCtx.remainingScanChannels;
 	if (zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, nextChannel) < 0) {
 		LOG_WRN("discovery RX arm failed on channel %u", nextChannel);
 	}
@@ -1606,7 +1583,6 @@ bool tl_zbNwkEdMinimalDiscoveryStart(u32 scanChannels, u8 scanDuration)
 	}
 
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_DISCOVERY;
-	zb_nwk_ed_trace[1] = ((u32)NWK_ED_MINIMAL_STATE_DISCOVERY << 24) | 1U;
 	g_nwkEdCtx.discoveryForRejoin = FALSE;
 	g_nwkEdCtx.lastScanChannels = scanChannels;
 	g_nwkEdCtx.lastScanDuration = scanDuration;
@@ -1681,7 +1657,6 @@ bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBa
 	}
 
 	g_nwkEdCtx.state = NWK_ED_MINIMAL_STATE_DISCOVERY;
-	zb_nwk_ed_trace[1] = ((u32)NWK_ED_MINIMAL_STATE_DISCOVERY << 24) | 2U;
 	g_nwkEdCtx.discoveryForRejoin = TRUE;
 	g_nwkEdCtx.lastScanChannels = scanChannels;
 	g_nwkEdCtx.lastScanDuration = scanDuration;
@@ -1816,8 +1791,6 @@ static void nwk_ed_minimal_transport_key_done_task(void *arg)
 {
 	ARG_UNUSED(arg);
 
-	zb_post_tk_trace[13] = 0xd0000000U | (zb_post_tk_trace[13] + 1U) |
-				((u32)g_nwkEdCtx.state << 16);
 
 	if (g_nwkEdCtx.state != NWK_ED_MINIMAL_STATE_INTERVIEW) {
 		return;
@@ -1830,11 +1803,9 @@ static void nwk_ed_minimal_post_join_poll_task(void *arg)
 {
 	ARG_UNUSED(arg);
 
-	zb_post_tk_trace[12] = 0xc0000000U | (zb_post_tk_trace[12] + 1U);
 	tl_zbNwkEdMinimalPollEnsure();
 	zb_post_join_trace[2] = 0x20000000U | (zb_post_join_trace[2] + 1U);
 	bdb_ed_runtime_join_complete();
-	zb_post_tk_trace[12] |= 0x00008000U;
 	zb_post_join_trace[3] = 0x30000000U | (zb_post_join_trace[3] + 1U);
 	nwk_ed_minimal_joined_idle_poll_schedule(nwk_ed_minimal_effective_poll_rate());
 	zb_post_join_trace[4] = 0x40000000U | (zb_post_join_trace[4] + 1U);
@@ -2128,8 +2099,6 @@ static void nwk_ed_minimal_handle_beacon_event(const nwk_ed_minimal_rx_evt_t *ev
 	}
 
 	if (!g_nwkEdCtx.haveBeaconCandidate || (evt->rssi > g_nwkEdCtx.bestBeaconRssi)) {
-		zb_nwk_ed_trace[10] = ((u32)evt->beacon.panId << 16) |
-				       evt->beacon.parentShortAddr;
 		g_nwkEdCtx.haveBeaconCandidate = TRUE;
 		g_nwkEdCtx.bestBeaconRssi = evt->rssi;
 		g_nwkEdCtx.candidatePanId = evt->beacon.panId;
@@ -2184,9 +2153,6 @@ static void nwk_ed_minimal_handle_traffic_candidate_event(const nwk_ed_minimal_r
 	}
 
 	if (preferNewCandidate) {
-		zb_nwk_ed_trace[9]++;
-		zb_nwk_ed_trace[10] = ((u32)evt->traffic.panId << 16) |
-				       evt->traffic.parentShortAddr;
 		g_nwkEdCtx.bestBeaconRssi = evt->rssi;
 		g_nwkEdCtx.candidatePanId = evt->traffic.panId;
 		g_nwkEdCtx.candidateShortAddr = evt->traffic.parentShortAddr;
@@ -2319,7 +2285,6 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		return;
 	}
 
-	zb_nwk_ed_trace[6]++;
 	discoveryActive = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_DISCOVERY);
 	joinActive = (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_JOINING) ||
 		     (g_nwkEdCtx.state == NWK_ED_MINIMAL_STATE_REJOIN);
@@ -2327,11 +2292,8 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 	/* Incoming PSDU includes FCS bytes at the end. */
 	payloadLen = (u8)(len - 2U);
 	if (!nwk_ed_minimal_parse_mac_header(macPld, payloadLen, &hdr)) {
-		zb_nwk_ed_trace[7] = ((u32)0xffU << 24) | payloadLen;
 		return;
 	}
-	zb_nwk_ed_trace[7] = ((u32)hdr.frameType << 24) | ((u32)hdr.fcf << 8) |
-			      rf_getChannel();
 
 	if (hdr.frameType == MAC_FRAME_BEACON) {
 		u16 panId = MAC_INVALID_PANID;
@@ -2362,7 +2324,6 @@ void tl_zbNwkEdMinimalMacRxIndicate(const u8 *macPld, u8 len, s8 rssi)
 		ARG_UNUSED(associationPermit);
 
 		zb_nwk_beacon_success_count++;
-		zb_nwk_ed_trace[8]++;
 		evt.type = NWK_ED_MINIMAL_RX_EVT_BEACON;
 		evt.rssi = rssi;
 		evt.beacon.panId = panId;
