@@ -50,8 +50,6 @@ struct zb_radio_ctx {
 };
 
 static struct zb_radio_ctx g_radio;
-volatile uint32_t zb_radio_submit_long_trace[6] = {0xb7f10000U};
-volatile uint32_t zb_radio_submit_datareq_trace[6] = {0xb7f20000U};
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
@@ -123,29 +121,6 @@ static void zb_radio_set_promiscuous(bool enable)
 static void zb_radio_set_error(u8 err)
 {
 	g_radio.last_error = err;
-}
-
-static void zb_radio_submit_trace_store(volatile uint32_t *trace, const uint8_t *psdu,
-					       uint8_t psdu_len)
-{
-	size_t offset = 0U;
-
-	if (trace == NULL || psdu == NULL) {
-		return;
-	}
-
-	trace[1] = ((uint32_t)g_radio.current_channel << 24) | ((uint32_t)psdu_len << 16);
-	for (size_t i = 2U; i < 6U; i++) {
-		uint32_t word = 0U;
-
-		for (size_t byte = 0U; byte < 4U; byte++) {
-			if (offset < psdu_len) {
-				word |= (uint32_t)psdu[offset] << (byte * 8U);
-			}
-			offset++;
-		}
-		trace[i] = word;
-	}
 }
 
 static int zb_radio_start_impl(u8 channel)
@@ -565,14 +540,6 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	}
 
 	g_radio.last_tx_len = psdu_len;
-	if (psdu_len >= 20U) {
-		zb_radio_submit_trace_store(zb_radio_submit_long_trace, psdu, psdu_len);
-	}
-	if (psdu_len >= 4U && psdu_len <= 12U &&
-	    ((psdu[0] & 0x07U) == 0x03U) &&
-	    (psdu[psdu_len - 1U] == 0x04U)) {
-		zb_radio_submit_trace_store(zb_radio_submit_datareq_trace, psdu, psdu_len);
-	}
 	/*
 	 * DATA REQUEST frames must bypass CCA.  During the interview phase the
 	 * coordinator retransmits transport-key frames continuously; CCA sees

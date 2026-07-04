@@ -23,7 +23,6 @@
  *
  *******************************************************************************************************/
 #include "zb_common_stub.h"
-extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
 
 
 #ifdef ZB_SECURITY
@@ -43,7 +42,6 @@ _CODE_SS_ void zdo_ssInfoSaveToFlash(void)
 _CODE_SS_ u8 zdo_ssInfoInit(void)
 {
     u8 ret = NV_ITEM_NOT_FOUND;
-    bool key_set = false;
 #if NV_ENABLE
     ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
 
@@ -77,19 +75,6 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
     if (ret != NV_SUCC) {
         ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
-    }
-    for (u8 i = 0; i < SEC_KEY_LEN; i++) {
-        if (ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key[i] != 0U) {
-            key_set = true;
-            break;
-        }
-    }
-    if (&zb_restore_diag_trace[0] != NULL) {
-        zb_restore_diag_trace[7] = 0xA5D40000U | (u32)ret;
-        zb_restore_diag_trace[8] = ((u32)ss_ib.activeSecureMaterialIndex) |
-                                   ((u32)ss_ib.securityLevel << 8) |
-                                   ((u32)ss_ib.activeKeySeqNum << 16) |
-                                   ((u32)key_set << 24);
     }
     return ret;
 }
