@@ -200,12 +200,16 @@ if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
     zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
 endif()
 
-# Router-only Zephyr-port bootstrap glue (not part of the vendor libzigbee core;
-# these provide router formation/parenting bring-up and the router af_dataSend).
+# Router-only Zephyr-port bootstrap glue (formation/parenting bring-up).
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
     nwk/nwk_router_minimal.c
-    zdo/zdo_router_minimal.c
 )
+# Role-agnostic Zephyr-port glue: af_dataSend (outbound ZDO/ZCL APS -> NLDE) and
+# the zdo_cfg_attributes SYS_INIT that network discovery needs (non-zero scan
+# attempts/duration). Shared by the router and the libzigbee-based ED.
+if(CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED_LIBZIGBEE)
+    zephyr_library_sources(zdo/zdo_router_minimal.c)
+endif()
 if(CONFIG_ZIGBEE_ROUTER AND CONFIG_ZIGBEE_BDB)
     zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
 endif()
