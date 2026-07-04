@@ -90,9 +90,17 @@ static void zb_radio_tx_complete_deferred(void *arg)
 	(void)arg;
 	rf_busyFlag &= (u8)~TX_BUSY;
 	zb_macDataSendHandler();
+#if defined(CONFIG_ZIGBEE_ROUTER)
+	/*
+	 * ACK synthesis is specific to the libzigbee (router) MAC state machine
+	 * (mac_getTrxState/mac_trxTask live in mac_trx.c/mac.c, router-only). The
+	 * ED build uses mac_trx_compat.c, whose zb_macDataSendHandler() completes
+	 * TX itself, so this block is neither needed nor linkable there.
+	 */
 	if (mac_getTrxState() == MAC_TX_WAIT_ACK) {
 		mac_trxTask((void *)(uintptr_t)MAC_TX_EV_ACK_RECV);
 	}
+#endif
 }
 
 static void zb_radio_set_promiscuous(bool enable)
