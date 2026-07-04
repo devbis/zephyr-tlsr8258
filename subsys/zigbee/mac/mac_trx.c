@@ -22,7 +22,6 @@ tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
 static u8 tx_fifo_rptr = 0;
 static u8 tx_fifo_wptr = 0;
-extern volatile u32 zb_nwk_ed_trace[];
 
 typedef struct _attribute_packed_ {
     void *curTx;
@@ -136,13 +135,6 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
         return;
     }
 
-    /*
-     * slot[26] = k_uptime_get_32() at fast handoff entry on the success
-     * branch. Compared against slot[27] (wait-timer entry) tells us
-     * which side wins the race per round.
-     */
-    zb_nwk_ed_trace[26] = (u32)k_uptime_get_32();
-
     assignedShort = (u16)psdu[hdrLen + 1U] | ((u16)psdu[hdrLen + 2U] << 8);
     /*
      * Mark that this round produced a successful AssocResp so the wait-timer
@@ -185,12 +177,6 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
     } else if (parent != NULL && parent->addrMode == ZB_ADDR_64BIT_DEV) {
         memcpy(g_zbInfo.macPib.coordExtAddress, parent->extAddr, EXT_ADDR_LEN);
     }
-
-    zb_nwk_ed_trace[34] = (zb_nwk_ed_trace[34] + 1U) & 0xffffU;
-    zb_nwk_ed_trace[34] |= ((u32)hdrLen << 16);
-    zb_nwk_ed_trace[35] = ((u32)g_zbInfo.macPib.coordShortAddress << 16) | assignedShort;
-    zb_nwk_ed_trace[36] = ((u32)g_zbInfo.nwkNib.nwkAddr << 16) | g_zbInfo.macPib.shortAddress;
-    zb_nwk_ed_trace[37] = ((u32)g_zbInfo.macPib.panId << 16) | g_zbInfo.macPib.coordShortAddress;
 
     /*
      * The coordinator can queue TRANSPORT_KEY within a few milliseconds of
@@ -248,16 +234,6 @@ void mac_rxDataParse(void *arg)
     u8 frameType;
     u8 hdrSize;
     tl_zb_mac_mhr_t mhr;
-
-    /*
-     * slot[42] = mac_rxDataParse invocation count (Layer 3 diag).
-     * Should match the rate at which the RX worker dequeues frames
-     * (slot[30] low 16). If much lower, the user task queue
-     * (zb_task_queue_zephyr.c task_queue[32], drained by
-     * zb_taskq_drain from zb_thread's ev_poll_process) is the
-     * bottleneck.
-     */
-    zb_nwk_ed_trace[42] = (zb_nwk_ed_trace[42] + 1U) & 0xffffffffU;
 
     raw[194] = (u8)rssi;
     frameType = raw[0] & 0x07U;
@@ -794,28 +770,6 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
     zb_mac_rx_pending_meta_t *meta;
     u8 *owned_payload;
-
-    /*
-     * slot[24]: low 16 = total zb_macDataRecvHandler calls,
-     *           high 16 = calls with ackPkt != 0 (ACK frames).
-     * slot[25]: low 16 = calls with len >= 5 and first byte's frame_type
-     *           bits == COMMAND (0x03). Captures every MAC command frame
-     *           the RX worker delivers — should ~match the AssocResp
-     *           count from sniffer when join is active.
-     */
-    {
-        u32 prev = zb_nwk_ed_trace[24];
-        u32 total = ((prev & 0xffffU) + 1U) & 0xffffU;
-        u32 acks = (prev >> 16) & 0xffffU;
-
-        if (ackPkt != 0U) {
-            acks = (acks + 1U) & 0xffffU;
-        }
-        zb_nwk_ed_trace[24] = (acks << 16) | total;
-    }
-    if (len >= 5U && (data[0] & 0x07U) == 0x03U) {
-        zb_nwk_ed_trace[25] = (zb_nwk_ed_trace[25] + 1U) & 0xffffffffU;
-    }
 
     if (buf == NULL) {
         return;

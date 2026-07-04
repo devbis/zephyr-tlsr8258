@@ -124,16 +124,31 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
     hdrSize = tl_zbMacHdrSize(mhr.frameCtrl);
     ((u8 *)buf)[BUF_SAVED_HANDLE_OFFSET] = req->msduHandle;
     psduLen = (u8)(hdrSize + req->msduLength);
+    /*
+     * txData must stay at the FRAME START (the MAC header) — native_sim's
+     * rf802154_tx_ready() transmits exactly [txData, txData+psduLen], so if we
+     * advanced past the MHR (as tl_zbMacHdrBuilder returns) the frame would go
+     * out NWK-only (MAC header dropped, trailing garbage). Real TC32 DMA sends
+     * the whole buffer regardless, which is why the vendor code advances here;
+     * on the socket medium a device-to-device NWK data frame (e.g. the router
+     * relaying a tunneled transport-key to its child) then can't be MAC-parsed
+     * by the receiver. Build the header in place but keep txData at the start.
+     */
     txData = req->msdu - hdrSize;
-    txData = tl_zbMacHdrBuilder(txData, &mhr);
+    (void)tl_zbMacHdrBuilder(txData, &mhr);
 
     buf->hdr.macTxFifo = 1;
 #if defined(ZB_ROUTER_ROLE)
     if ((req->txOptions & MAC_TX_OPTION_INDIRECT_TRANSMISSION_BIT) != 0U) {
         u8 pendingInfo[9];
 
-        memcpy(buf, &txData, sizeof(txData));
-        ((u8 *)buf)[4] = psduLen;
+        {
+            /* Arch-safe {payload ptr, len} scratch — see mac_associate.c. */
+            mac_indirect_tx_scratch_t *scratch = (mac_indirect_tx_scratch_t *)buf;
+
+            scratch->payload = txData;
+            scratch->psduLen = psduLen;
+        }
         pendingInfo[8] = req->dstAddr.addrMode;
         memcpy(pendingInfo, &req->dstAddr.addr, 8);
 
@@ -175,9 +190,11 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
      * by the header size (9 bytes for a short-addr frame). That silently
      * chopped the tail off APS transport-key frames (cipher 35->26 bytes), so
      * CCM* authentication could never succeed and the router never obtained
-     * the network key. `len`/`raw` are still used for the MHR fields below.
+     * the network key. `raw` is still used for the MHR fields below.
      */
     u8 msduLen = meta->payloadLen;
+
+    (void)len;
     u8 linkQuality = meta->linkQuality;
     bool frame_pending_set =
         (g_zbMacPib.rxOnWhenIdle == 0U) && ((raw[0] & MAC_FCF_FRAME_PENDING_MASK) != 0U);
@@ -186,18 +203,6 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
     /* meta and ind alias the same buf; preserve meta->payload (== msdu)
      * before we start clobbering by writing ind fields. */
     memcpy(&msdu, &meta->payload, sizeof(msdu));
-
-    {
-        extern volatile u8 zb_dbg_mac_payloadlen;
-        extern volatile u8 zb_dbg_mac_hdrlen;
-        extern volatile u8 zb_dbg_mac_seq;
-
-        if (zb_dbg_mac_seq == 0U && meta->payloadLen > 50U) {
-            zb_dbg_mac_payloadlen = meta->payloadLen;
-            zb_dbg_mac_hdrlen = len;
-            zb_dbg_mac_seq = 1U;
-        }
-    }
 
     ind = (zb_mscp_data_ind_t *)buf;
     memset(ind, 0, sizeof(*ind));

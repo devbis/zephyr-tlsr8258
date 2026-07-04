@@ -147,6 +147,17 @@ _attribute_no_inline_ int tl_zbMacPendingDataSearch(u8 addrMode, u8 *addr)
             continue;
         }
 
+        /*
+         * A matching DataRequest arrived: promote the queued transaction from
+         * "buffered" (state 1) to "ready to transmit" (state 2) so the
+         * DataRequest handler's delivery loop actually sends it. Without this
+         * the entry stays at state 1 forever and the indirect frame (e.g. an
+         * AssociationResponse to a joining child) is never delivered — the
+         * vendor's split search/check step was lost in the port.
+         */
+        if (entry->state == 1U) {
+            entry->state = 2U;
+        }
         count++;
     }
 
@@ -168,6 +179,7 @@ void tl_zbMacMlmeDataRequestCb(void *arg)
     for (entry = (mac_pending_entry_t *)listHead(macPendingQueue); entry != NULL;
          entry = entry->next) {
         zb_buf_t *buf;
+        mac_indirect_tx_scratch_t *scratch;
         u8 *txData;
         u8 txStatus;
 
@@ -176,12 +188,14 @@ void tl_zbMacMlmeDataRequestCb(void *arg)
         }
 
         buf = (zb_buf_t *)entry->buf;
-        memcpy(&txData, (u8 *)buf, sizeof(txData));
+        /* Recover the queued frame {payload ptr, len} — see mac_associate.c. */
+        scratch = (mac_indirect_tx_scratch_t *)buf;
+        txData = scratch->payload;
         if (pendingCnt > 1) {
             txData[0] |= MAC_FCF_FRAME_PENDING_MASK;
         }
 
-        txStatus = tl_zbMacTx(buf, txData, ((u8 *)buf)[4], txData[0] & MAC_FCF_ACK_REQ_BIT, entry);
+        txStatus = tl_zbMacTx(buf, txData, scratch->psduLen, txData[0] & MAC_FCF_ACK_REQ_BIT, entry);
         entry->state = (txStatus == MAC_SUCCESS) ? 3U : 1U;
         break;
     }

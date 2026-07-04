@@ -246,18 +246,6 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
     ind.srcAddr = pNwkHdr->srcAddr;
     ind.nsduLen = (u8)(macInd->msduLength - pNwkHdr->frameHdrLen);
     ind.nsdu = macInd->msdu + pNwkHdr->frameHdrLen;
-
-    {
-        extern volatile u8 zb_dbg_nwk_msdulen;
-        extern volatile u8 zb_dbg_nwk_framehdr;
-        extern volatile u8 zb_dbg_nwk_seq;
-
-        if (zb_dbg_nwk_seq == 0U && macInd->msduLength > 50U) {
-            zb_dbg_nwk_msdulen = macInd->msduLength;
-            zb_dbg_nwk_framehdr = pNwkHdr->frameHdrLen;
-            zb_dbg_nwk_seq = 1U;
-        }
-    }
     ind.lqi = macInd->mpduLinkQuality;
     ind.srcMacAddr = macInd->srcAddr.addr.shortAddr;
     ind.securityUse = pNwkHdr->frameControl.security ? 1U : 0U;
@@ -403,7 +391,6 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     u8 nwkHdrLen;
     u8 *frameStart;
     u8 savedHandle;
-    { extern volatile u8 zb_dbg_nwktx; zb_dbg_nwktx++; }
     if (buf == NULL || pNwkHdr == NULL || payload == NULL) {
         return;
     }
@@ -453,21 +440,18 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     if (!nwk_joined() &&
         savedHandle != NWK_INTERNAL_REJOIN_REQ_CMD_HANDLE &&
         savedHandle != NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE) {
-        { extern volatile u8 zb_dbg_nwktx_bail; zb_dbg_nwktx_bail |= 0x01U; }
         tl_zbMacMcpsDataRequestSendConfirm(buf, MAC_STA_BAD_STATE);
         return;
     }
 
     if (pNwkHdr->frameControl.security) {
         if (ss_nwkSecureFrame(buf, pNwkHdr->frameHdrLen) != RET_OK) {
-            { extern volatile u8 zb_dbg_nwktx_bail; zb_dbg_nwktx_bail |= 0x02U; }
             g_sysDiags.nwkTxEnDecryptFail++;
             tl_zbMacMcpsDataRequestSendConfirm(buf, NWK_STATUS_DECRYPT_ERROR);
             return;
         }
     }
 
-    { extern volatile u8 zb_dbg_nwktx_bail; zb_dbg_nwktx_bail |= 0x80U; }
     g_sysDiags.nwkTxCnt++;
     tl_zbMacMcpsDataRequestProc(buf);
 }
@@ -844,14 +828,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
     u16 srcAddr;
     u8 radius;
 
-    {
-        extern volatile u8 zb_dbg_nlde;
-        extern volatile u8 zb_dbg_nlde_g;
-        zb_dbg_nlde++;
-        zb_dbg_nlde_g = (u8)((nwk_joined() ? 0U : 0x01U) |
-                             (g_zbInfo.nwkNib.secAllFrames ? 0x02U : 0U) |
-                             ((nwk_user_state() != NLME_IDLE) ? 0x04U : 0U));
-    }
+
 
     if ((!nwk_joined()) ||
         (g_zbInfo.nwkNib.secAllFrames && nwk_user_state() != NLME_IDLE)) {
@@ -864,12 +841,10 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
     }
 
     if (req->dstAddr == g_zbInfo.nwkNib.nwkAddr) {
-        { extern volatile u8 zb_dbg_nlde_g; zb_dbg_nlde_g |= 0x08U; }
         nwkNldeDataCnf(arg, NWK_STATUS_INVALID_PARAMETER, req->ndsuHandle);
         return;
     }
 
-    { extern volatile u8 zb_dbg_nlde_g; zb_dbg_nlde_g |= 0x80U; }
     memset(&nwkHdr, 0, sizeof(nwkHdr));
     buf->hdr.handle = req->ndsuHandle;
 

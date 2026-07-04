@@ -512,10 +512,6 @@ void zdo_startup_complete(void *arg)
          * pending. The Transport-Key path will flip aps_authenticated=1.
          */
         aps_ib.aps_use_insecure_join = 0;
-        {
-            extern volatile u8 zb_dbg_anns;
-            zb_dbg_anns++;
-        }
         zdo_device_announce_send();
         g_zbNwkCtx.is_factory_new = 0;
     }
@@ -835,37 +831,6 @@ void zdo_nlme_join_confirm(void *arg)
 {
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
-    extern volatile u32 zb_nwk_ed_trace[];
-
-    /*
-     * slot[43] layout, decoded byte-by-byte:
-     *   byte0 (low 8)   = total invocations & 0xff
-     *   byte1 (bits 8-15) = invocations dropped because state was not
-     *                       ASSOC_JOIN / REJOIN / DIRECT_JOIN
-     *   byte2 (bits 16-23) = LAST observed `state` value
-     *   byte3 (bits 24-31) = LAST observed `status` value
-     *
-     * Lets the SWS reader correlate "we got the SUCCESS CNF from MAC"
-     * (slot[6]) with "but ZDO refused it because state was IDLE
-     * already" — the actual gate that prevents zdo_nwkAuthTimeoutStart
-     * from arming the authEvt that ss_zdoTransportKeyIndHandle needs.
-     */
-    {
-        u32 prev = zb_nwk_ed_trace[43];
-        u32 count = (prev & 0xffU) + 1U;
-        u32 drops = (prev >> 8) & 0xffU;
-        bool wrong_state = (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
-                            state != ZDO_NWK_MGR_STATE_REJOIN &&
-                            state != ZDO_NWK_MGR_STATE_DIRECT_JOIN);
-
-        if (wrong_state) {
-            drops = (drops + 1U) & 0xffU;
-        }
-        zb_nwk_ed_trace[43] = (count & 0xffU) |
-                              ((drops & 0xffU) << 8) |
-                              (((u32)state & 0xffU) << 16) |
-                              (((u32)status & 0xffU) << 24);
-    }
 
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
@@ -920,21 +885,6 @@ void zdo_nlme_join_confirm(void *arg)
     }
 
     zdo_set_pollRate(500U);
-    {
-        extern volatile u8 zb_dbg_jc_cnt;
-        extern volatile u8 zb_dbg_jc_state;
-        extern volatile u8 zb_dbg_jc_status;
-        extern volatile u8 zb_dbg_jc_path;
-
-        zb_dbg_jc_cnt++;
-        zb_dbg_jc_state = state;
-        zb_dbg_jc_status = status;
-        if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
-            zb_dbg_jc_path |= 0x05U; /* bit0 shortcut + bit2 startDevCnf */
-        } else {
-            zb_dbg_jc_path |= 0x02U; /* bit1 armed authEvt */
-        }
-    }
     if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
         zdo_startDeviceCnf(arg, ZDO_SUCCESS);
         return;

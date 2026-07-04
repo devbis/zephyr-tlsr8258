@@ -23,13 +23,6 @@
 
 LOG_MODULE_REGISTER(zigbee_mac_trx_compat, CONFIG_ZIGBEE_LOG_LEVEL);
 
-static void zb_minimal_debug_join_drop(const char *reason, u32 value0, u32 value1)
-{
-	ARG_UNUSED(reason);
-	ARG_UNUSED(value0);
-	ARG_UNUSED(value1);
-}
-
 /* g_sysDiags now lives in subsys/zigbee/common/zb_config.c
  * (copied from tl_zigbee_sdk/zigbee/common/zb_config.c).
  */
@@ -316,31 +309,8 @@ static u8 g_minimal_pending_zdo_rsp_count;
 static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
 static zb_minimal_pending_leave_t g_minimal_pending_leave;
 volatile u32 zb_minimal_zdo_trace[8] = {0x5a444f31U};
-volatile u32 zb_minimal_join_rx_trace[8] = {0x4a525831U};
 volatile u32 zb_minimal_join_filter_trace[8] = {0x4a464c54U};
 volatile u32 zb_minimal_join_gate_trace[8] = {0x4a474154U};
-/*
- * Post-Transport-Key path trace.  Each step on the join interview path
- * writes a unique marker so an SWS dump can show the LAST instruction the
- * device executed before locking up.  Slot semantics:
- *   [0] = 0x504f5354 ('POST') sentinel
- *   [1] = TK handler entry          (0x10000000 | seq)
- *   [2] = after key install         (0x20000000 | seq)
- *   [3] = after deferred timer      (0x30000000 | seq)
- *   [4] = TK done callback          (0x40000000 | seq)
- *   [5] = complete_join entry       (0x50000000 | seq)
- *   [6] = finish_join done          (0x60000000 | seq)
- *   [7] = bdb_retrieveTcLinkKeyDone (0x70000000 | seq)
- *   [8] = join_complete_maybe_fin   (0x80000000 | seq)
- *   [9] = PERMITJOIN bdb_task case  (0x90000000 | seq)
- *   [10] = after send_dev_annce     (0xa0000000 | status)
- *   [11] = mgmtPermitJoiningConfirm (0xb0000000 | seq)
- *   [12] = post_join_poll_task      (0xc0000000 | seq)
- *   [13] = transport_key_done_task  (0xd0000000 | seq)
- *   [14] = transport key save timer (0xe0000000 — fires at 15s)
- *   [15] = reserved
- */
-volatile u32 zb_post_tk_trace[16] = {0x504f5354U};
 
 static bool zb_minimal_security_key_is_set(const u8 *key)
 {
@@ -675,11 +645,6 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	}
 
 	if (!dst_match) {
-		zb_minimal_debug_join_drop("dst mismatch",
-					    ((u32)(info.dst_short_valid ? 1U : 0U) << 31) |
-						    ((u32)(info.dst_ext_valid ? 1U : 0U) << 30) |
-						    info.dst_short_addr,
-					    zb_u32_from_le(g_zbMacPib.extAddress));
 		zb_minimal_join_filter_trace[2] = 0xf0020000U | info.dst_short_addr;
 		return false;
 	}
@@ -704,20 +669,8 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 		    g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
 		    (ZB_IEEE_ADDR_IS_ZERO(g_zbMacPib.coordExtAddress) ||
 		     ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress))) {
-			zb_minimal_debug_join_drop("src deferred",
-						    ((u32)(info.src_short_valid ? 1U : 0U) << 31) |
-							    ((u32)(info.src_ext_valid ? 1U : 0U) << 30) |
-							    info.src_short_addr,
-						    ((u32)g_zbMacPib.coordShortAddress << 16) |
-							    zb_u16_from_le(g_zbMacPib.coordExtAddress));
 			return true;
 		}
-		zb_minimal_debug_join_drop("src mismatch",
-					    ((u32)(info.src_short_valid ? 1U : 0U) << 31) |
-						    ((u32)(info.src_ext_valid ? 1U : 0U) << 30) |
-						    info.src_short_addr,
-					    ((u32)g_zbMacPib.coordShortAddress << 16) |
-						    zb_u16_from_le(g_zbMacPib.coordExtAddress));
 		zb_minimal_join_filter_trace[4] = 0xf0030000U | info.src_short_addr;
 		return false;
 	}
@@ -1472,8 +1425,6 @@ static bool zb_minimal_handle_nwk_leave_command(const zb_minimal_nwk_frame_t *nw
 	}
 
 	leave_options = nwk->payload[1];
-	zb_minimal_join_rx_trace[6] = 0xa6060400U | leave_options;
-	zb_minimal_join_rx_trace[7] = 0xa6070000U | nwk->src_addr;
 	if (((leave_options & ZB_MINIMAL_NWK_LEAVE_REJOIN) != 0U) && zb_isUnderRejoinMode()) {
 		return true;
 	}
@@ -1642,7 +1593,6 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 static s32 zb_minimal_transport_key_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
-	zb_post_tk_trace[14] = 0xe0000000U | (zb_post_tk_trace[14] + 1U);
 	zb_info_save(NULL);
 	return -1;
 }
@@ -1656,11 +1606,8 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	const u8 *src_ieee;
 
 	if ((aps == NULL) || (aps->frame_type != 1U) || (aps->payload_len < 27U)) {
-		zb_minimal_debug_join_drop("tk bad aps", aps != NULL ? aps->frame_type : 0xffffffffU,
-					    aps != NULL ? aps->payload_len : 0xffffffffU);
 		return false;
 	}
-	zb_post_tk_trace[1] = 0x10000000U | (zb_post_tk_trace[1] + 1U);
 
 	payload = aps->payload;
 	if (aps->security &&
@@ -1668,20 +1615,14 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	}
 
 	if (payload[0] != 0x05U || payload[1] != SS_STANDARD_NETWORK_KEY) {
-		zb_minimal_debug_join_drop("tk bad payload",
-					    ((u32)payload[0] << 8) | payload[1], aps->payload_len);
 		return false;
 	}
 
 	key_seq = payload[18];
 	dst_ieee = &payload[19];
 	src_ieee = &payload[27];
-	zb_minimal_join_rx_trace[6] = 0xa6060000U | ((u32)payload[0] << 8) | payload[1];
 	if (!ZB_IS_64BIT_ADDR_ZERO(dst_ieee) &&
 	    memcmp(dst_ieee, g_zbMacPib.extAddress, sizeof(addrExt_t)) != 0) {
-		zb_minimal_debug_join_drop("tk dst ieee mismatch",
-					    zb_u32_from_le(dst_ieee),
-					    zb_u32_from_le(g_zbMacPib.extAddress));
 		return false;
 	}
 
@@ -1694,7 +1635,6 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	ss_ib.securityLevel = 5U;
 	aps_ib.aps_authenticated = 1U;
 	aps_ib.aps_use_insecure_join = FALSE;
-	zb_post_tk_trace[2] = 0x20000000U | (zb_post_tk_trace[2] + 1U);
 	if (!ZB_IS_64BIT_ADDR_ZERO(src_ieee)) {
 		ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, src_ieee);
 	}
@@ -1713,17 +1653,13 @@ static bool zb_minimal_handle_transport_key(const zb_minimal_aps_frame_t *aps)
 	 */
 	(void)TL_ZB_TIMER_SCHEDULE(zb_minimal_transport_key_save_timer,
 				   NULL, 15000U);
-	zb_minimal_debug_join_drop("tk installed", key_seq, g_zbNwkCtx.joined ? 1U : 0U);
-	zb_post_tk_trace[3] = 0x30000000U | (zb_post_tk_trace[3] + 1U);
 	LOG_INF("joined RX: installed nwk key seq=%u tc=%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		key_seq, ss_ib.trust_center_address[0], ss_ib.trust_center_address[1],
 		ss_ib.trust_center_address[2], ss_ib.trust_center_address[3],
 		ss_ib.trust_center_address[4], ss_ib.trust_center_address[5],
 		ss_ib.trust_center_address[6], ss_ib.trust_center_address[7]);
-	zb_minimal_join_rx_trace[7] = 0xa6070000U | key_seq;
-	zb_post_tk_trace[4] = 0x40000000U | (zb_post_tk_trace[4] + 1U);
 	tl_zbNwkEdMinimalTransportKeyDone();
-	zb_post_tk_trace[4] |= 0x00008000U;  /* returned from TransportKeyDone */
+/* returned from TransportKeyDone */
 	return true;
 }
 
@@ -1743,34 +1679,24 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 		return;
 	}
 	if (!zb_minimal_interview_frame_relevant(psdu, len)) {
-		zb_minimal_debug_join_drop("frame irrelevant", mac_frame_ctrl, len);
 		return;
 	}
 
 	if (!zb_minimal_parse_mac_frame(psdu, len, &mac)) {
-		zb_minimal_debug_join_drop("mac parse fail", mac_frame_ctrl, len);
 		return;
 	}
 
 	if (!zb_minimal_parse_nwk_frame(mac.payload, mac.payload_len, &nwk)) {
-		zb_minimal_debug_join_drop("nwk parse fail", mac.payload_len, mac.frame_ctrl);
 		return;
 	}
-	zb_minimal_join_rx_trace[1] = 0xa6010000U | ((u32)nwk.frame_type << 8) |
-				      (nwk.security ? 1U : 0U);
 
 	if (nwk.security) {
 		if (!zb_minimal_decrypt_nwk_payload((u8 *)mac.payload, mac.payload_len, &nwk)) {
-			zb_minimal_join_rx_trace[2] = 0xa6020000U | ((u32)nwk.frame_type << 8) |
-					      nwk.key_seq;
 			return;
 		}
 	}
 
 	if (nwk.frame_type == FRAME_TYPE_COMMAND) {
-		zb_minimal_join_rx_trace[3] = 0xa6030000U |
-					      ((u32)nwk.payload_len << 8) |
-					      (nwk.payload_len != 0U ? nwk.payload[0] : 0U);
 		if ((nwk.payload_len >= 4U) && (nwk.payload[0] == NWK_CMD_REJOIN_RESPONSE)) {
 			tl_zbNwkEdMinimalRejoinResponseReceived(nwk.payload[3],
 								zb_u16_from_le(&nwk.payload[1]),
@@ -1791,18 +1717,11 @@ static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)
 	}
 
 	if (!zb_minimal_parse_aps_frame(nwk.payload, nwk.payload_len, &aps)) {
-		zb_minimal_join_rx_trace[4] = 0xa6040000U | nwk.payload_len;
-		zb_minimal_debug_join_drop("aps parse fail",
-					    ((u32)nwk.payload[0] << 24) | ((u32)nwk.payload_len << 8) |
-						    nwk.frame_type,
-					    nwk.frame_ctrl);
 		return;
 	}
 
 	if (aps.security) {
 		if (!zb_minimal_decrypt_aps_payload((u8 *)nwk.payload, nwk.payload_len, &aps)) {
-			zb_minimal_join_rx_trace[5] = 0xa6050000U | ((u32)aps.key_id << 8) |
-					      aps.frame_type;
 			return;
 		}
 	}

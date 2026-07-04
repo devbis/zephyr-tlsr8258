@@ -341,7 +341,15 @@ void ss_apsmeUpdateDevReq(void *arg)
     u8 mode = ss_update_dev_mode();
 
     if (mode == 0U) {
-        ss_apsmeUpdateDevReqSend((zb_buf_t *)arg, 1);
+        /*
+         * NWK-secured, APS-plaintext Update-Device. Full APS-layer security
+         * (secure=1) would need the TC's ext address mapped for short 0x0000
+         * (tl_zbExtAddrPtrByShortAddr) to derive the APS nonce — the minimal
+         * router doesn't map it, so aps_cmd_send fails with SECURITY_FAIL. The
+         * native_sim host TC also only does NWK-layer crypto, so it needs the
+         * APS command in the clear. Send NWK-secured only.
+         */
+        ss_apsmeUpdateDevReqSend((zb_buf_t *)arg, 0);
         return;
     }
 
@@ -413,8 +421,6 @@ void ss_apsTunnelCmdHandle(void *arg)
     addrExt_t extAddr;
     tl_zb_normal_neighbor_entry_t *entry;
     nlde_data_req_t *req;
-    aps_tx_cache_list_t *cache;
-    u8 cnf[20] = {0};
     u8 *nsdu;
     u8 nsduLen;
     u16 dstAddr;
@@ -434,31 +440,75 @@ void ss_apsTunnelCmdHandle(void *arg)
     }
 
     dstAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
-    nsdu = ind->asdu + 1U + EXT_ADDR_LEN;
     nsduLen = (u8)(ind->asduLength - (1U + EXT_ADDR_LEN));
 
-    memset(arg, 0, 26);
+    {
+        /*
+         * The inner transport-key command sits at ind->asdu + 1 + EXT_ADDR_LEN,
+         * which overlaps BOTH the nlde_data_req_t overlay we build at buf[0]
+         * and the head-room the NWK layer needs to prepend its header. The
+         * vendor code left nsdu pointing there and then did memset(arg, 0, 26),
+         * zeroing the very bytes it was about to relay (the child received an
+         * all-zero key). Copy the inner command out, then reallocate it at the
+         * tail of the buffer via tl_bufInitalloc so it lands past the req
+         * overlay with proper header head-room — mirrors zdo_router_minimal.c
+         * af_dataSend. */
+        u8 inner[64];
+        u8 *relay;
+
+        if (nsduLen == 0U || nsduLen > sizeof(inner)) {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+        memcpy(inner, ind->asdu + 1U + EXT_ADDR_LEN, nsduLen);
+
+        memset(arg, 0, sizeof(nlde_data_req_t));
+        relay = (u8 *)tl_bufInitalloc((zb_buf_t *)arg, nsduLen);
+        if (relay == NULL) {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+        memcpy(relay, inner, nsduLen);
+        nsdu = relay;
+    }
+
     req = (nlde_data_req_t *)arg;
     req->dstAddr = dstAddr;
     req->radius = 1;
-    req->addrMode = ADDR_MODE_SHORT;
-    req->ndsuHandle = APS_CMD_HANDLE_TXKEYCMD_RELAY;
+    /*
+     * NLDE addrMode 0 = plain NWK unicast. tl_zbNwkNldeDataRequestHandler treats
+     * any non-zero addrMode as group/multicast (NWK FCF bit 8 + mcast-control
+     * byte); the vendor's ADDR_MODE_SHORT here would send the relayed
+     * transport-key multicast-flagged and the child couldn't parse it. Match
+     * zdo_router_minimal.c af_dataSend, which uses 0 for unicast.
+     */
+    req->addrMode = 0U;
+    /*
+     * NWK-UNSECURED: the joining child has no network key yet, so the relayed
+     * transport-key must go on air in the clear (NWK FCF security bit 0).
+     */
+    req->securityEnable = 0U;
+    /* Child is a direct neighbour — skip route discovery, deliver directly. */
+    req->discoverRoute = 0U;
+    req->unicastSkipRouting = 1U;
+    req->ndsuHandle = NWK_INTERNAL_NSDU_HANDLE; /* fire-and-forget: buf freed on cnf */
     req->nsdu = nsdu;
     req->nsduLen = nsduLen;
 
-    cnf[0] = LO_UINT16(dstAddr);
-    cnf[1] = HI_UINT16(dstAddr);
-    cnf[8] = ADDR_MODE_SHORT;
-    cnf[16] = APS_CMD_HANDLE_TXKEYCMD_RELAY;
-    cnf[17] = nsdu[1];
+    /*
+     * Post the NLDE-DATA.request DIRECTLY, exactly as zdo_router_minimal.c
+     * af_dataSend does. The vendor path routed the relay through the APS TX
+     * cache (apsTxDataPost/apsTxEventPost), which re-frames the buffer with its
+     * own APS header and payload pointer and discards the nlde_data_req_t we
+     * built here — the child then received a correctly-addressed frame with an
+     * all-zero payload (no key). nwk_fwdPacket also rejects any buffer whose
+     * hdr.used flag is clear as a stale-buffer guard, so mark it active.
+     */
+    ((zb_buf_t *)arg)->hdr.used = 1U;
 
-    cache = apsTxDataPost((nsdu[0] & 0x40U) ? 1U : 0U, 0, 0, arg, cnf);
-    if (cache == NULL) {
+    if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, arg) != RET_OK) {
         zb_buf_free((zb_buf_t *)arg);
-        return;
     }
-
-    apsTxEventPost(cache, 0, 0);
 }
 #endif
 

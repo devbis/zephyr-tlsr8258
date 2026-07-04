@@ -48,6 +48,21 @@ typedef struct _attribute_packed_ {
 	u8 curChannel;
 } zb_mac_rx_meta_t;
 
+/*
+ * Scratch overlay on the HEAD of an indirect-pending TX buffer (zb_buf_t.buf[]).
+ * The built PSDU for the queued frame lives at the TAIL of buf[]
+ * (tl_bufInitalloc returns &buf[ZB_BUF_SIZE - size]), so the head is free to
+ * stash the payload pointer + its length until a matching DataRequest pulls it.
+ * Using a real pointer field (rather than a hard-coded byte offset) keeps the
+ * length correctly positioned right after the pointer on both 32-bit (TC32,
+ * 4-byte ptr) and 64-bit (native_sim, 8-byte ptr) builds — a raw buf[4] length
+ * aliases the middle of a 64-bit pointer and corrupts it.
+ */
+typedef struct {
+	u8 *payload;
+	u8  psduLen;
+} mac_indirect_tx_scratch_t;
+
 typedef struct {
 	int (*cb)(void *arg);
 	u32 deadline;

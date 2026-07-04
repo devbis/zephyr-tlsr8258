@@ -81,11 +81,10 @@ __attribute__((weak)) int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, voi
 	return -1;
 }
 
-/* g_u32MacFlashAddr / zb_post_tk_trace / ZB_TASKQ_USERUSE_SIZE — vendor
- * runtime symbols referenced by the dispatcher chain.
+/* g_u32MacFlashAddr / ZB_TASKQ_USERUSE_SIZE — vendor runtime symbols
+ * referenced by the dispatcher chain.
  */
 u32 g_u32MacFlashAddr __attribute__((weak));
-volatile u32 zb_post_tk_trace[16] __attribute__((weak));
 u8 ZB_TASKQ_USERUSE_SIZE __attribute__((weak));
 
 /* Dummy anchor for the ZB_BUF_FROM_REF / ZB_REF_FROM_BUF macros in
@@ -222,33 +221,14 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	aps_data_ind_t *ad = (aps_data_ind_t *)arg;
-	extern volatile u32 zb_nwk_ed_trace[];
 
 	if (arg == NULL) {
 		return;
 	}
 
-	/*
-	 * slot[45]: low 16 = af_aps_data_entry call count,
-	 * bits 16-23 = last profile_id low byte,
-	 * bits 24-31 = last cluster_id low byte.
-	 * Single u32 write at entry — safe per the instrumentation
-	 * regression notes.
-	 */
-	{
-		u32 prev = zb_nwk_ed_trace[45];
-		zb_nwk_ed_trace[45] = ((u32)(ad->cluster_id & 0xffU) << 24) |
-				       ((u32)(ad->profile_id & 0xffU) << 16) |
-				       (((prev & 0xffffU) + 1U) & 0xffffU);
-	}
-	printk("zb_af_entry: profile=0x%04x cluster=0x%04x dst_ep=%u src_ep=%u dst=0x%04x asdu_len=%u\n",
-	       ad->profile_id, ad->cluster_id, ad->dst_ep, ad->src_ep, ad->dst_addr,
-	       ad->asduLength);
-
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
 		/* ZDP request — only handle non-response cluster IDs (bit 15 clear). */
 		if ((ad->cluster_id & 0x8000U) != 0U) {
-			printk("zb_af_drop: zdo response cluster=0x%04x\n", ad->cluster_id);
 			zb_buf_free(buf);
 			return;
 		}
@@ -296,7 +276,6 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			zdo_parentAnnounceIndicate(arg);
 			return;
 		default:
-			printk("zb_af_drop: unknown zdo cluster=0x%04x\n", ad->cluster_id);
 			break;
 		}
 	} else {
@@ -339,12 +318,10 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 
 		for (u8 i = 0; i < epNum; i++) {
 			if (epList[i].ep == ad->dst_ep && epList[i].cb_rx != NULL) {
-				printk("zb_af_route: app ep=%u\n", ad->dst_ep);
 				epList[i].cb_rx(arg);
 				return;
 			}
 		}
-		printk("zb_af_drop: no app ep=%u profile=0x%04x\n", ad->dst_ep, ad->profile_id);
 	}
 
 	zb_buf_free(buf);
