@@ -200,6 +200,15 @@ static enum zb_host_socket_frame_type identify_decrypted_aps_frame(const uint8_t
 		return ZB_HOST_SOCKET_FRAME_DATA_REQ;
 	}
 
+	/*
+	 * APS COMMAND frame (FCF frame-type bits == 0b01): aps[0]=FCF, aps[1]=APS
+	 * counter, aps[2]=command id. A router relaying a joiner sends an
+	 * Update-Device (cmd 0x06). Detect it before the data-frame cluster parse.
+	 */
+	if ((aps[0] & 0x03U) == 0x01U && aps_len >= 3U && aps[2] == 0x06U) {
+		return ZB_HOST_SOCKET_FRAME_UPDATE_DEVICE;
+	}
+
 	cluster = get_le16(&aps[2]);
 	profile = get_le16(&aps[4]);
 	command = (aps_len > 8U) ? aps[8] : 0U;
@@ -585,6 +594,94 @@ static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t ds
 	return 60U;
 }
 
+/*
+ * Build a NWK-secured APS Tunnel command (APS cmd 0x0E) to the ROUTER, wrapping
+ * a Transport-Key command (0x05) that carries the network key for the router's
+ * new child. The router's ss_apsTunnelCmdHandle unwraps the inner command and
+ * relays it (NWK-unsecured) to the child by its IEEE; the child installs the key.
+ * This is how a device joining THROUGH a router gets the network key from the TC.
+ *
+ *   MAC hdr | NWK hdr | NWK aux | NWK-enc{ APS[ FCF=0x01, cnt, 0x0E,
+ *     childIEEE(8), inner{ FCF=0x01, cnt, 0x05, keyType, key(16), keySeq,
+ *     dstIEEE=child, srcIEEE=coord } ] } | MIC
+ */
+static size_t encode_tunnel_transport_key(uint8_t *wire, uint8_t seq, uint16_t dst_router,
+					  const uint8_t *child_ieee)
+{
+	uint8_t *nwk;
+	uint8_t *aux;
+	uint8_t *aps;
+	uint8_t *cipher;
+	uint8_t nonce[13];
+	uint8_t mic[4];
+	uint8_t aad[32];
+	uint8_t inner[37];
+	size_t idx = 0U;
+	size_t nwk_hdr_len = 8U;
+	size_t aad_len = 8U + ZB_NWK_AUX_LEN;
+	size_t aps_len;
+
+	/* Inner Transport-Key APS command (37 bytes) destined for the child. */
+	inner[0] = 0x01U;               /* APS FCF: command frame */
+	inner[1] = seq;                 /* APS counter */
+	inner[2] = 0x05U;               /* transport-key command */
+	inner[3] = ZB_STANDARD_NWK_KEY; /* key type: standard network key */
+	for (size_t i = 0U; i < 16U; i++) {
+		inner[4U + i] = (uint8_t)(i + 1U); /* the network key {1..16} */
+	}
+	inner[20] = 1U;                 /* key sequence number */
+	memcpy(&inner[21], child_ieee, 8U); /* dst ext addr = child */
+	put_le64(&inner[29], ZB_COORD_IEEE); /* src ext addr = trust center */
+
+	/* MAC DATA short->short: coord 0x0000 -> router. */
+	put_le16(&wire[idx], 0x8861u);
+	wire[idx + 2U] = seq;
+	put_le16(&wire[idx + 3U], ZB_PAN_ID);
+	put_le16(&wire[idx + 5U], dst_router);
+	put_le16(&wire[idx + 7U], ZB_COORD_SHORT_ADDR);
+	idx += 9U;
+
+	/* NWK DATA v2, security enabled, coord -> router. */
+	nwk = &wire[idx];
+	put_le16(&nwk[0], 0x0208u);
+	put_le16(&nwk[2], dst_router);
+	put_le16(&nwk[4], ZB_COORD_SHORT_ADDR);
+	nwk[6] = 30U;
+	nwk[7] = seq;
+
+	aux = &nwk[nwk_hdr_len];
+	aux[0] = 0x00U;
+	aux[1] = seq;   /* frame counter (LE); seq is bumped high so it beats the
+			 * interview frames' counters in the router's replay check */
+	aux[2] = 0x00U;
+	aux[3] = 0x00U;
+	aux[4] = 0x00U;
+	put_le64(&aux[5], ZB_COORD_IEEE);
+	aux[13] = ZB_STANDARD_NWK_KEY;
+
+	memcpy(aad, nwk, aad_len);
+	aad[nwk_hdr_len] = 0x05U;
+	memcpy(&nonce[0], &aux[5], 8U);
+	memcpy(&nonce[8], &aux[1], 4U);
+	nonce[12] = 0x05U;
+
+	/* APS command frame: FCF, counter, [0x0E Tunnel, childIEEE(8), inner(37)]. */
+	aps = &aux[ZB_NWK_AUX_LEN];
+	aps[0] = 0x01U;   /* APS FCF: command */
+	aps[1] = seq;     /* APS counter */
+	aps[2] = 0x0EU;   /* Tunnel command */
+	memcpy(&aps[3], child_ieee, 8U);
+	memcpy(&aps[11], inner, sizeof(inner));
+	aps_len = 2U + 1U + 8U + sizeof(inner);   /* 48 */
+
+	cipher = aps;
+	(void)coord_ccm_encrypt(ZB_NWK_KEY, nonce, aad, (uint8_t)aad_len,
+				cipher, (uint8_t)aps_len, mic);
+	memcpy(&cipher[aps_len], mic, sizeof(mic));
+
+	return idx + nwk_hdr_len + ZB_NWK_AUX_LEN + aps_len + sizeof(mic);
+}
+
 enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t *psdu, size_t psdu_len)
 {
 	uint16_t fcf;
@@ -814,23 +911,82 @@ static void set_output(struct zb_host_socket_coord *coord,
 	coord->output_psdu_len = output->psdu_len;
 }
 
+/*
+ * Best-effort NWK decrypt (offset 0, then MAC-wrapped) ignoring MIC status —
+ * the keystream matches the device even though the daemon's CBC-MAC MIC does
+ * not, so the recovered plaintext is trustworthy for parsing. Mirrors what
+ * identify_best_effort_nwk_frame() relies on.
+ */
+static bool best_effort_decrypt(const uint8_t *psdu, size_t psdu_len,
+				uint8_t *aps, size_t *aps_len)
+{
+	bool mic_ok = false;
+
+	if (psdu == NULL || psdu_len < 8U) {
+		return false;
+	}
+
+	if (try_nwk_decrypt_best_effort_at(psdu, psdu_len, 0U, aps, aps_len, &mic_ok)) {
+		return true;
+	}
+
+	uint16_t mac_fcf = 0U;
+	size_t mac_hdr = mac_header_len_from_fcf(psdu, psdu_len, &mac_fcf);
+
+	if (mac_hdr != 0U && (mac_fcf & 0x0007U) == 0x0001U) {
+		return try_nwk_decrypt_best_effort_at(psdu, psdu_len, mac_hdr,
+						      aps, aps_len, &mic_ok);
+	}
+	return false;
+}
+
+/*
+ * Scan `buf` for a Model-Identifier (0x0005) read-attribute record:
+ * attr_id(LE) | status(0x00) | type(0x42 char string) | length | string.
+ * Scanning (rather than a fixed offset) keeps this robust to APS-header /
+ * ZCL-header length variations. Returns true and records the model id on hit.
+ */
+static bool scan_model_id(struct zb_host_socket_coord *coord,
+			  const uint8_t *buf, size_t buf_len)
+{
+	for (size_t i = 0U; i + 4U <= buf_len; i++) {
+		uint8_t str_len;
+
+		if (get_le16(&buf[i]) != ZB_ZCL_ATTR_MODEL_ID ||
+		    buf[i + 2U] != 0x00U || buf[i + 3U] != ZB_ZCL_TYPE_CHAR_STR) {
+			continue;
+		}
+		if (i + 5U > buf_len) {
+			return false;
+		}
+		str_len = buf[i + 4U];
+		if ((size_t)(i + 5U + str_len) > buf_len ||
+		    str_len >= sizeof(coord->observed_model_id)) {
+			return false;
+		}
+
+		memcpy(coord->observed_model_id, &buf[i + 5U], str_len);
+		coord->observed_model_id[str_len] = '\0';
+		coord->interview_complete = true;
+		return true;
+	}
+	return false;
+}
+
 static void maybe_capture_model_id(struct zb_host_socket_coord *coord,
 				   const struct zb_native_sim_socket_medium_msg *input)
 {
-	uint8_t str_len;
+	uint8_t aps[128];
+	size_t aps_len = 0U;
 
-	if (input->psdu_len < 23U || get_le16(&input->psdu[18]) != ZB_ZCL_ATTR_MODEL_ID) {
+	/* Real device: NWK-secured ZCL read response — decrypt then scan. */
+	if (best_effort_decrypt(input->psdu, input->psdu_len, aps, &aps_len) &&
+	    scan_model_id(coord, aps, aps_len)) {
 		return;
 	}
 
-	str_len = input->psdu[22];
-	if ((size_t)(23U + str_len) > input->psdu_len || str_len >= sizeof(coord->observed_model_id)) {
-		return;
-	}
-
-	memcpy(coord->observed_model_id, &input->psdu[23], str_len);
-	coord->observed_model_id[str_len] = '\0';
-	coord->interview_complete = true;
+	/* Unit-test / plaintext path: scan the raw PSDU directly. */
+	(void)scan_model_id(coord, input->psdu, input->psdu_len);
 }
 
 int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
@@ -854,13 +1010,39 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 
 	switch (type) {
 	case ZB_HOST_SOCKET_FRAME_BEACON_REQ:
+		/*
+		 * Once the coordinator's direct permit-join has closed (after the
+		 * router joined), stay SILENT to scans: don't emit a beacon at all.
+		 * A subsequent joiner then only hears the router's beacon and must
+		 * join THROUGH it. (A scanning joiner otherwise tends to prefer the
+		 * coordinator at 0x0000 even when its permit bit is clear.)
+		 */
+		if (!coord->permit_join) {
+			return 0;
+		}
 		if (output != NULL) {
 			set_output(coord, output, ZB_HOST_SOCKET_FRAME_BEACON);
+			if (coord->output_psdu_len > 8U) {
+				coord->output_psdu[8] |= 0x80U; /* association-permit bit */
+			}
 			return 1;
 		}
 		return 0;
 	case ZB_HOST_SOCKET_FRAME_ASSOC_REQ:
-		coord->last_assoc_status = coord->permit_join ? 0U : 1U;
+		/*
+		 * Only the coordinator parents AssocReqs addressed to it (MAC dst
+		 * short 0x0000, at psdu[5..6]). An AssocReq addressed to a joined
+		 * router (e.g. 0x2700) is that router's to answer — the coord is
+		 * just overhearing it on the shared medium, so stay out of it. This
+		 * is what lets a second node join THROUGH the router.
+		 */
+		if (input->psdu_len >= 7U && get_le16(&input->psdu[5]) != ZB_COORD_SHORT_ADDR) {
+			return 0;
+		}
+	{
+		bool accepted = coord->permit_join;
+
+		coord->last_assoc_status = accepted ? 0U : 1U;
 		/*
 		 * Cap byte is the very last byte of the AssocReq command
 		 * payload. Bit 3 (0x08) = rx-on-when-idle. Routers / FFDs
@@ -870,9 +1052,18 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 		coord->deliver_queued_unsolicited =
 			(input->psdu_len > 0U) &&
 			((input->psdu[input->psdu_len - 1U] & 0x08U) != 0U);
-		if (coord->permit_join) {
+		if (accepted) {
 			coord->child_short = coord->next_child_short++;
 			queue_frame(coord, ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
+			/*
+			 * Close direct permit-join after the first child (the router)
+			 * joins, so a subsequent joiner must go THROUGH the router
+			 * instead of associating with the coordinator directly. The
+			 * router keeps its own permit open (bdb post-join). NOTE: flip
+			 * this AFTER we've captured `accepted`, so the AssocResp below
+			 * still carries the real assigned short address, not 0xffff.
+			 */
+			coord->permit_join = false;
 		}
 		if (output != NULL) {
 			memset(output, 0, sizeof(*output));
@@ -885,13 +1076,14 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 			output->psdu_len = encode_frame(ZB_HOST_SOCKET_FRAME_ASSOC_RSP,
 							coord->output_psdu,
 							ZB_COORD_SHORT_ADDR,
-							coord->permit_join ? coord->child_short :
+							accepted ? coord->child_short :
 									ZB_NO_SHORT_ADDR,
 							NULL);
 			coord->output_psdu[12] = coord->last_assoc_status;
 			return 1;
 		}
 		return 0;
+	}
 	case ZB_HOST_SOCKET_FRAME_DATA_REQ:
 		if (output != NULL && pop_frame(coord, &queued)) {
 			set_output(coord, output, queued);
@@ -921,6 +1113,49 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 	case ZB_HOST_SOCKET_FRAME_BASIC_MODEL_ID_READ_RSP:
 		maybe_capture_model_id(coord, input);
 		return 0;
+	case ZB_HOST_SOCKET_FRAME_UPDATE_DEVICE: {
+		/*
+		 * A router relayed a new child's join to us (the Trust Center).
+		 * Respond with a Tunnel-wrapped Transport-Key so the router can
+		 * hand the network key to the child. Decrypt the Update-Device to
+		 * read the child's IEEE (APS: FCF, cnt, 0x06, childIEEE(8),
+		 * short(2), status), and address the Tunnel back to the relaying
+		 * router (the frame's NWK source).
+		 */
+		uint8_t aps[128];
+		size_t aps_len = 0U;
+
+		if (output == NULL ||
+		    !best_effort_decrypt(input->psdu, input->psdu_len, aps, &aps_len) ||
+		    aps_len < 11U) {
+			return 0;
+		}
+
+		/*
+		 * Address the Tunnel back to the relaying router. It's the
+		 * coordinator's (only) direct child, so use child_short — robust
+		 * to the frame being MAC-wrapped or NWK-only (can't assume the NWK
+		 * src is at a fixed psdu offset).
+		 */
+		uint16_t router_short = coord->child_short;
+		uint16_t grandchild_short = (aps_len >= 13U) ? get_le16(&aps[11]) : 0xffffU;
+
+		/*
+		 * Encode the Tunnel now but DEFER delivery until the joining
+		 * child publishes its assigned short to the medium (see the
+		 * pending_tunnel_* commentary in coord_logic.h). Emitting it
+		 * immediately races the router's relay ahead of the child's
+		 * MAC-association completing, and the unicast is dropped by the
+		 * medium filter (child short still 0xffff).
+		 */
+		coord->pending_tunnel_len = encode_tunnel_transport_key(
+			coord->pending_tunnel_psdu, 0x30U, router_short, &aps[3]);
+		coord->pending_tunnel_child_short = grandchild_short;
+		coord->pending_tunnel_router_node = coord->peer.node_id;
+		coord->pending_tunnel_channel = coord->peer.channel;
+		coord->pending_tunnel_valid = true;
+		return 0;
+	}
 	default:
 		return 0;
 	}
@@ -960,5 +1195,37 @@ int zb_host_socket_coord_drain_unsolicited(struct zb_host_socket_coord *coord,
 	}
 
 	set_output(coord, output, queued);
+	return 1;
+}
+
+int zb_host_socket_coord_take_ready_tunnel(struct zb_host_socket_coord *coord,
+					   uint16_t observed_short, bool observed_rx_on,
+					   struct zb_native_sim_socket_medium_msg *output,
+					   uint16_t *router_node)
+{
+	if (coord == NULL || output == NULL || router_node == NULL) {
+		return 0;
+	}
+
+	if (!coord->pending_tunnel_valid || !observed_rx_on ||
+	    observed_short == ZB_NO_SHORT_ADDR ||
+	    observed_short != coord->pending_tunnel_child_short) {
+		return 0;
+	}
+
+	memcpy(coord->output_psdu, coord->pending_tunnel_psdu, coord->pending_tunnel_len);
+	coord->output_psdu_len = coord->pending_tunnel_len;
+
+	memset(output, 0, sizeof(*output));
+	output->type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX;
+	output->node_id = coord->pending_tunnel_router_node;
+	output->channel = coord->pending_tunnel_channel;
+	output->rssi_dbm = -40;
+	output->lqi = 255U;
+	output->psdu = coord->output_psdu;
+	output->psdu_len = coord->output_psdu_len;
+
+	*router_node = coord->pending_tunnel_router_node;
+	coord->pending_tunnel_valid = false;
 	return 1;
 }
