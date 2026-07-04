@@ -422,13 +422,14 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		ev_timer_process();
 		ev_poll_process();
 		zb_platform_radio_rx_poll();
-#if defined(CONFIG_ZIGBEE_ROUTER)
-		/* Router build pulls in the libzigbee NWK / MAC primitive
-		 * dispatcher via tl_zbNwkTaskProc(); drain the per-layer
-		 * task queues on every tick so high→NWK, MAC→NWK, and
-		 * NWK→MAC primitives (active scan requests, beacon-notify
-		 * indications, association requests, NLDE confirms) are
-		 * delivered to their handlers. ED keeps its lightweight
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
+		/* The router and the libzigbee-based ED both pull in the
+		 * libzigbee NWK / MAC primitive dispatcher via
+		 * tl_zbNwkTaskProc(); drain the per-layer task queues on every
+		 * tick so high→NWK, MAC→NWK, and NWK→MAC primitives (active
+		 * scan requests, beacon-notify indications, association
+		 * requests, NLDE confirms) are delivered to their handlers.
+		 * The default (minimal) ED keeps its lightweight
 		 * nwk_ed_minimal poll path and doesn't need this drain.
 		 */
 		tl_zbNwkTaskProc();
