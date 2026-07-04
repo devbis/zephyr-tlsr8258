@@ -25,6 +25,14 @@ config ZIGBEE_ROUTER
 
 endchoice
 
+config ZIGBEE_ED_LIBZIGBEE
+	bool "Experimental: ED from full libzigbee stack"
+	depends on ZIGBEE_ED
+	default n
+	help
+	  Experimental: build the ED from the full libzigbee stack (ZB_ED_ROLE)
+	  instead of the minimal path.
+
 config ZIGBEE_NATIVE_SIM_IEEE_LOW
 	hex "native_sim fixed IEEE address low byte"
 	default 0x02
