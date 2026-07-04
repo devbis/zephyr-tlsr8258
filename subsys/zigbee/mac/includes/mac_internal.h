@@ -78,7 +78,7 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
 extern u8 *tl_zbMacHdrBuilder(u8 *txData, tl_zb_mac_mhr_t *mhr);
 extern u8 tl_zbMacHdrSize(u16 frameCtrl);
 extern u8 tl_zbMacTx(zb_buf_t *buf, u8 *txData, u8 psduLen, u8 ackRequired, void *cb);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode);
 #endif
 extern void *tl_phyRxBufTozbBuf(u8 *rxBuf);
@@ -116,7 +116,7 @@ extern void tl_zbPhyIndication(void *arg, u8 *raw, u8 len);
 extern void zb_macTimerEventProc(void *arg);
 extern void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status);
 extern void tl_zbMacDisassociateNotifyCmdConfirm(void *arg, u8 status);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern void tl_zbMacAssociateResponseHandler(void *arg);
 extern void tl_zbMacBeaconRequestCb(void);
 extern u8 tl_zbMacMlmeBeaconCmdSend(tl_zbBeaconFrame_t *beacon);
@@ -165,7 +165,7 @@ MAC_PENDING_ENTRY_STATIC_ASSERT(sizeof(mac_pending_entry_t) == 21);
 #endif
 extern void tl_zbMacDataRequestStatusCheck(zb_buf_t *buf, u8 status);
 extern void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern int macIndirPeriodic(void *arg);
 #endif
 extern void tl_zbMacActiveScanListAdd(void);
@@ -183,7 +183,7 @@ extern u8 *tl_zbMacHdrBuilder(u8 *buf, tl_zb_mac_mhr_t *mhr);
 extern u8 tl_zbMacHdrParse(tl_zb_mac_mhr_t *mhr, u8 *buf);
 extern u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList);
 extern u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8 status);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode);
 extern void macDataPendingListProc(void *arg);
 extern void macDataPendingListManage(void *arg, u8 status);
