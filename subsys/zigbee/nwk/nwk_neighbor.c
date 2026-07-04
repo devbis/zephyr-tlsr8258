@@ -35,7 +35,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 
 static inline bool neighbor_entry_used(const tl_zb_normal_neighbor_entry_t *entry)
 {

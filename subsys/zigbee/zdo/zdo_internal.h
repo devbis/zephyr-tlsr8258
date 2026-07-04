@@ -66,7 +66,7 @@ extern void zdo_nlme_direct_join_confirm(void *arg);
 extern void zdo_nlme_leave_indication_cb(void *arg);
 extern void zdo_nlme_leave_confirm_cb(void *arg);
 extern void zdo_nlme_join_confirm(void *arg);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern zdo_status_t zdo_nlmePermitJoinReq(u8 permitDuration);
 extern zdo_status_t zdo_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq);
 extern void zdo_parentAnnounceIndicate(void *arg);
