@@ -650,7 +650,17 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	}
 
 	if (info.src_short_valid && g_zbMacPib.coordShortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
-		src_match = (info.src_short_addr == g_zbMacPib.coordShortAddress);
+		/*
+		 * Accept frames from our parent (coordShortAddress) and, in a
+		 * centralized network, from the trust center / network coordinator
+		 * at 0x0000. When an ED joins THROUGH a router, the router relays
+		 * the TC's Transport-Key (and forwards later interview traffic) with
+		 * the coordinator as the MAC source (NWK source is the relaying
+		 * router). Without this the relayed key is filtered out and the join
+		 * stalls waiting for a key that was already delivered.
+		 */
+		src_match = (info.src_short_addr == g_zbMacPib.coordShortAddress) ||
+			    (info.src_short_addr == 0x0000U);
 	} else if (info.src_ext_valid &&
 		   !ZB_IEEE_ADDR_IS_ZERO(g_zbMacPib.coordExtAddress) &&
 		   !ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress)) {
