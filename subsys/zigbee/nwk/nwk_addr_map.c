@@ -20,7 +20,7 @@
 
 #include <string.h>
 
-#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 
 static tl_zb_addr_map_entry_t *addr_map_alloc_entry(void)
 {

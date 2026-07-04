@@ -31,7 +31,7 @@ extern void ss_apsmeVerifyKeyReq(void *arg);
 extern void ss_apsmeRequestKeyReq(void *arg);
 extern void ss_apsmeTransportKeyReq(void *arg);
 extern void ss_apsmeSwitchKeyReq(void *arg);
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 extern void ss_apsmeUpdateDevReq(void *arg);
 extern void ss_apsmeRemoveDeviceReq(void *arg);
 extern void ss_apsRemoveDeviceCmdHandle(void *arg);
