@@ -71,7 +71,9 @@ extern void zb_router_enable_parenting(uint8_t permit_duration);
 	};
 #define APP_BDB_FIXED_CHANNEL 11U
 #define APP_BDB_FIXED_PAN_ID  0x5b27U
+#ifndef APP_BDB_FIXED_PARENT
 #define APP_BDB_FIXED_PARENT  0x0000U
+#endif
 
 extern bool zb_isDeviceJoinedNwk(void);
 extern bool zdo_ifZdoNwkManagerIdle(void);
