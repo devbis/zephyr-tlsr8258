@@ -308,9 +308,6 @@ static u8 g_minimal_pending_zdo_rsp_tail;
 static u8 g_minimal_pending_zdo_rsp_count;
 static zb_minimal_pending_zcl_rsp_t g_minimal_pending_zcl_rsp;
 static zb_minimal_pending_leave_t g_minimal_pending_leave;
-volatile u32 zb_minimal_zdo_trace[8] = {0x5a444f31U};
-volatile u32 zb_minimal_join_filter_trace[8] = {0x4a464c54U};
-volatile u32 zb_minimal_join_gate_trace[8] = {0x4a474154U};
 
 static bool zb_minimal_security_key_is_set(const u8 *key)
 {
@@ -628,15 +625,8 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	bool src_match = false;
 
 	if (!zb_minimal_parse_mac_addr_info(psdu, len, &info)) {
-		zb_minimal_join_filter_trace[1] = 0xf0010000U | len;
 		return false;
 	}
-	zb_minimal_join_filter_trace[1] =
-		((u32)(info.dst_short_valid ? 1U : 0U) << 31) |
-		((u32)(info.dst_ext_valid ? 1U : 0U) << 30) |
-		((u32)(info.src_short_valid ? 1U : 0U) << 29) |
-		((u32)(info.src_ext_valid ? 1U : 0U) << 28) |
-		((u32)info.dst_short_addr << 16) | info.src_short_addr;
 
 	if (info.dst_short_valid) {
 		dst_match = (info.dst_short_addr == g_zbMacPib.shortAddress);
@@ -645,7 +635,6 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	}
 
 	if (!dst_match) {
-		zb_minimal_join_filter_trace[2] = 0xf0020000U | info.dst_short_addr;
 		return false;
 	}
 
@@ -669,8 +658,6 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 	} else {
 		src_match = false;
 	}
-	zb_minimal_join_filter_trace[3] =
-		((u32)(src_match ? 1U : 0U) << 24) | g_zbMacPib.coordShortAddress;
 
 	if (!src_match) {
 		if (!aps_ib.aps_authenticated &&
@@ -681,11 +668,9 @@ static bool zb_minimal_interview_frame_relevant(const u8 *psdu, u8 len)
 		     ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress))) {
 			return true;
 		}
-		zb_minimal_join_filter_trace[4] = 0xf0030000U | info.src_short_addr;
 		return false;
 	}
 
-	zb_minimal_join_filter_trace[4] = 0xf0040000U | info.src_short_addr;
 
 	return src_match;
 }
@@ -1042,8 +1027,6 @@ static void zb_minimal_zdo_response_task(void *arg)
 
 		u8 status = zb_minimal_send_zdo_response(rsp.dst_nwk_addr, rsp.cluster_id,
 						 rsp.payload, rsp.payload_len);
-		zb_minimal_zdo_trace[5] = ((u32)status << 24) | ((u32)rsp.payload_len << 16) |
-					  rsp.cluster_id;
 		if (status == APS_STATUS_SUCCESS) {
 			tl_zbNwkEdMinimalInterviewPollStart(0U, 0U);
 			LOG_INF("minimal ZDO rsp sent dst=0x%04x cluster=0x%04x len=%u",
@@ -1067,7 +1050,6 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 	if (g_minimal_pending_zdo_rsp_count >= ZB_MINIMAL_ZDO_RSP_Q_LEN) {
 		LOG_WRN("minimal ZDO rsp queue full dst=0x%04x cluster=0x%04x",
 			dst_nwk_addr, cluster_id);
-		zb_minimal_zdo_trace[4]++;
 		return false;
 	}
 
@@ -1081,8 +1063,6 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 	g_minimal_pending_zdo_rsp_head =
 		(u8)((g_minimal_pending_zdo_rsp_head + 1U) % ZB_MINIMAL_ZDO_RSP_Q_LEN);
 	g_minimal_pending_zdo_rsp_count++;
-	zb_minimal_zdo_trace[4] = ((u32)g_minimal_pending_zdo_rsp_count << 24) |
-				  ((u32)payload_len << 16) | cluster_id;
 
 	if (TL_SCHEDULE_TASK(zb_minimal_zdo_response_task, NULL) != RET_OK) {
 		g_minimal_pending_zdo_rsp_head =
@@ -1091,7 +1071,6 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 		memset(&g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_head], 0,
 		       sizeof(g_minimal_pending_zdo_rsp_q[g_minimal_pending_zdo_rsp_head]));
 		g_minimal_pending_zdo_rsp_count--;
-		zb_minimal_zdo_trace[7]++;
 		return false;
 	}
 
@@ -1458,9 +1437,6 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 	}
 	seq = aps->payload[0];
 	nwk_addr_interest = zb_u16_from_le(&aps->payload[1]);
-	zb_minimal_zdo_trace[1]++;
-	zb_minimal_zdo_trace[2] = ((u32)seq << 24) | ((u32)src_nwk_addr << 8) |
-				  (aps->cluster_id & 0xffU);
 
 	switch (aps->cluster_id) {
 	case NODE_DESC_REQ_CLID: {
@@ -1534,7 +1510,6 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 			return false;
 		}
 
-		zb_minimal_zdo_trace[3] = ((u32)aps->payload[3] << 24) | nwk_addr_interest;
 		memset(payload, 0, sizeof(payload));
 		payload[0] = seq;
 		payload[1] = ZDO_SUCCESS;
@@ -1550,9 +1525,6 @@ static bool zb_minimal_handle_zdo_request(u16 src_nwk_addr, const zb_minimal_aps
 
 		simple_len = af_simpleDescriptorCopy(&payload[5], sd);
 		payload[4] = simple_len;
-		zb_minimal_zdo_trace[6] = ((u32)simple_len << 24) |
-					  ((u32)sd->app_in_cluster_count << 16) |
-					  sd->endpoint;
 		return zb_minimal_queue_zdo_response(src_nwk_addr, SIMPLE_DESC_RSP_CLID, payload,
 						       (u16)(5U + simple_len));
 	}
@@ -1767,42 +1739,20 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 	ARG_UNUSED(rxBuf);
 	ARG_UNUSED(timestamp);
 
-	zb_minimal_join_gate_trace[1]++;
 	if ((data != NULL) && (len >= 2U)) {
 		mac_frame_ctrl = zb_u16_from_le(data);
 		frame_type = (u8)(mac_frame_ctrl & MAC_FCF_FRAME_TYPE_MASK);
 	}
-	zb_minimal_join_gate_trace[2] = ((u32)frame_type << 24) |
-					 ((u32)len << 16) |
-					 ((u32)ackPkt << 8) |
-					 rf_getChannel();
-	zb_minimal_join_gate_trace[5] = mac_frame_ctrl;
-	zb_minimal_join_gate_trace[6] =
-		((u32)((mac_frame_ctrl & MAC_FCF_FRAME_PENDING_MASK) != 0U) << 24) |
-		((u32)((mac_frame_ctrl & MAC_FCF_ACK_REQ_BIT) != 0U) << 16) |
-		((u32)(data != NULL ? data[2] : 0U) << 8) |
-		frame_type;
 
 	tl_zbNwkEdMinimalMacRxIndicate(data, len, rssi);
 	can_process = (data != NULL) &&
 		      (len >= MAC_MIN_HDR_LEN) &&
 		      tl_zbNwkEdMinimalCanProcessDataFrames();
-	zb_minimal_join_gate_trace[3] = ((u32)(g_zbNwkCtx.joined ? 1U : 0U) << 24) |
-					 ((u32)(can_process ? 1U : 0U) << 16) |
-					 ((u32)(u8)rssi << 8) |
-					 frame_type;
 
 	if (!can_process) {
-		zb_minimal_join_gate_trace[4] = ((u32)(data == NULL ? 1U : 0U) << 24) |
-						 ((u32)(len < MAC_MIN_HDR_LEN ? 1U : 0U) << 16) |
-						 ((u32)(frame_type == MAC_FRAME_DATA ? 1U : 0U) << 8) |
-						 (u32)(g_zbNwkCtx.joined ? 1U : 0U);
 		return;
 	}
 
-	zb_minimal_join_gate_trace[4] = 0xd0010000U |
-					 ((u32)(frame_type == MAC_FRAME_DATA ? 1U : 0U) << 8) |
-					 rf_getChannel();
 	zb_minimal_handle_joined_data_frame(data, len);
 }
 

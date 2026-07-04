@@ -8,7 +8,6 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
-extern __attribute__((weak)) volatile uint32_t zb_restore_diag_trace[16];
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 
 #if ZB_ED_ROLE
@@ -137,28 +136,8 @@ static bool zb_platform_bdb_has_valid_join_context(void)
 	       zb_platform_bdb_key_is_set(zb_platform_bdb_active_nwk_key_get());
 }
 
-static void zb_platform_bdb_trace_join_context(uint8_t slot)
-{
-	bool has_valid = zb_platform_bdb_has_valid_join_context();
-	bool key_set = zb_platform_bdb_key_is_set(zb_platform_bdb_active_nwk_key_get());
-
-	if (&zb_restore_diag_trace[0] == NULL || slot >= 16U) {
-		return;
-	}
-
-	zb_restore_diag_trace[slot] = ((uint32_t)g_zbNwkCtx.joined) |
-				      ((uint32_t)g_zbNwkCtx.is_factory_new << 8) |
-				      ((uint32_t)has_valid << 16) |
-				      ((uint32_t)key_set << 24);
-	if ((slot + 1U) < 16U) {
-		zb_restore_diag_trace[slot + 1U] = ((uint32_t)g_zbMacPib.shortAddress << 16) |
-						   (uint32_t)g_zbMacPib.panId;
-	}
-}
-
 static void zb_platform_bdb_repair_joined_flag_if_needed(void)
 {
-	zb_platform_bdb_trace_join_context(9U);
 	if (g_zbNwkCtx.joined || !zb_platform_bdb_has_valid_join_context()) {
 		return;
 	}
@@ -171,14 +150,12 @@ static void zb_platform_bdb_repair_joined_flag_if_needed(void)
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.user_state = NLME_IDLE;
 	g_bdbAttrs.nodeIsOnANetwork = 1U;
-	zb_platform_bdb_trace_join_context(11U);
 }
 
 static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
 {
 	int rc;
 
-	zb_platform_bdb_trace_join_context(13U);
 	if (!g_zbNwkCtx.joined || zb_platform_bdb_has_valid_join_context()) {
 		return;
 	}

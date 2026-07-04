@@ -9,8 +9,6 @@
 
 LOG_MODULE_REGISTER(main);
 
-volatile uint32_t zb_restore_diag_trace[16] = { 0xa5d10000U };
-
 bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
 	return app_bdb_get_fixed_join_target(target);
