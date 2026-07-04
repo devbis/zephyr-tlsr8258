@@ -243,6 +243,18 @@ static struct medium_peer_entry *find_peer_by_endpoint(struct medium_peer_entry 
 	return NULL;
 }
 
+static struct medium_peer_entry *find_peer_by_node(struct medium_peer_entry *peers,
+						   size_t peer_count, uint16_t node_id)
+{
+	for (size_t i = 0; i < peer_count; i++) {
+		if (peers[i].valid && peers[i].peer.node_id == node_id) {
+			return &peers[i];
+		}
+	}
+
+	return NULL;
+}
+
 static struct medium_peer_entry *alloc_peer_entry(struct medium_peer_entry *peers, size_t peer_count)
 {
 	for (size_t i = 0; i < peer_count; i++) {
@@ -786,11 +798,42 @@ int main(int argc, char **argv)
 
 		if (input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_HELLO ||
 		    input.type == ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER) {
+			uint16_t tunnel_router_node = 0U;
+
 			rc = update_peer_entry(peers, ZB_MEDIUM_MAX_PEERS, &peer_addr, &input);
 			if (rc < 0) {
 				fprintf(stderr, "socket coordinator: peer table update failed (%d)\n",
 					-rc);
 				break;
+			}
+
+			/*
+			 * The joining child just (re)published its filter. If it now
+			 * owns the short address we recorded from the router's
+			 * Update-Device, release the deferred Tunnel(Transport-Key)
+			 * to the relaying router — the child is finally addressable.
+			 */
+			if (zb_host_socket_coord_take_ready_tunnel(&coord, input.short_addr,
+								   input.rx_on, &output,
+								   &tunnel_router_node) > 0) {
+				struct medium_peer_entry *router =
+					find_peer_by_node(peers, ZB_MEDIUM_MAX_PEERS,
+							  tunnel_router_node);
+
+				if (router != NULL) {
+					fprintf(stderr,
+						"socket coordinator: release deferred TUNNEL -> router node=0x%04x (child short=0x%04x now addressable)\n",
+						tunnel_router_node, input.short_addr);
+					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
+							    &medium, &router->addr, &output,
+							    now_us);
+					if (rc < 0) {
+						fprintf(stderr,
+							"socket coordinator: deferred tunnel scheduling failed (%d)\n",
+							-rc);
+						break;
+					}
+				}
 			}
 		}
 
