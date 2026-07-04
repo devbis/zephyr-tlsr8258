@@ -58,14 +58,6 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	bool broadcast;
 	u8 apsCounter;
 
-	{ extern volatile u8 zb_dbg_afds; zb_dbg_afds++; }
-	printk("zb_af_send: cluster=0x%04x src_ep=%u dst=0x%04x dst_ep=%u profile=0x%04x len=%u\n",
-	       clusterId, srcEp,
-	       pDstEpInfo != NULL ? pDstEpInfo->dstAddr.shortAddr : 0U,
-	       pDstEpInfo != NULL ? pDstEpInfo->dstEp : 0U,
-	       pDstEpInfo != NULL ? pDstEpInfo->profileId : 0U,
-	       cmdPldLen);
-
 	if (srcEp > 240U) {
 		return APS_STATUS_NOT_SUPPORTED;
 	}
@@ -146,16 +138,9 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 		*apsCnt = apsCounter;
 	}
 
-	{
-		extern volatile u8 zb_dbg_afds_post;
-		extern volatile u8 zb_dbg_afds_rc;
-		u8 rc = tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, buf);
-		zb_dbg_afds_post++;
-		zb_dbg_afds_rc = rc;
-		if (rc != RET_OK) {
-			zb_buf_free(buf);
-			return APS_STATUS_INTERNAL_BUF_FULL;
-		}
+	if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, buf) != RET_OK) {
+		zb_buf_free(buf);
+		return APS_STATUS_INTERNAL_BUF_FULL;
 	}
 	return APS_STATUS_SUCCESS;
 }

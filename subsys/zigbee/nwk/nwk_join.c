@@ -13,9 +13,11 @@
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_internal.h"
 #include "nwk/includes/nwk_neighbor.h"
+#include "ss/security_service.h"
+#include "ss/ss_internal.h"
 #include <zephyr/zigbee/zb_radio_port.h>
+#include <zephyr/sys/printk.h>
 
-extern volatile u32 zb_nwk_ed_trace[];
 
 extern void zdo_nlme_join_confirm(void *arg);
 extern void zdo_nlme_join_indication(void *arg);
@@ -201,21 +203,13 @@ void nwk_associateJoin(void *arg)
     tl_zb_addition_neighbor_entry_t *parent;
     zb_mlme_associate_req_t *macReq;
 
-    /* [4]: low 16 = nwk_associateJoin hit count; bit 16 = state-busy
-     * exit; bit 17 = parent-not-found exit; bit 18 = posted ASSOC_REQ.
-     */
-    zb_nwk_ed_trace[4] = (zb_nwk_ed_trace[4] & 0xffff0000U) |
-			  ((zb_nwk_ed_trace[4] + 1U) & 0xffffU);
-
     if (g_zbNwkCtx.state != NLME_STATE_IDLE) {
-        zb_nwk_ed_trace[4] |= 1U << 16;
         nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_INVALID_REQUEST, 0);
         return;
     }
 
     parent = tl_zbNwkParentChoose(req->extPANId, FALSE);
     if (parent == NULL) {
-        zb_nwk_ed_trace[4] |= 1U << 17;
         nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NOT_PERMITTED, 0);
         return;
     }
@@ -256,7 +250,20 @@ void nwk_associateJoin(void *arg)
         macReq->coordAddress.addrMode = ADDR_MODE_EXT;
     }
 
-    zb_nwk_ed_trace[4] |= 1U << 18;
+    /*
+     * Enter NLME_JOINING BEFORE the association request goes out. A
+     * centralized TC (and the native_sim host_socket_coordinator) sends the
+     * unsolicited TRANSPORT_KEY back-to-back with the ASSOCIATION-RESPONSE,
+     * and the MAC delivers that DATA frame to tl_zbMacMcpsDataIndicationHandler
+     * BEFORE the deferred association-confirm chain (nwk_associateCnfHandler →
+     * nwk_nlmeJoinCnf) runs. If user_state is still NLME_IDLE at that moment
+     * the handler's `!joined && state != JOINING` guard drops the Transport-Key,
+     * the auth-wait timer expires, and the join fails ZDO_NOT_AUTHORIZED.
+     * Setting JOINING here closes that race; zdo_startup_complete clears it on
+     * join success. (Reproduced + verified on native_sim.)
+     */
+    g_zbNwkCtx.user_state = NLME_JOINING;
+
     tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_ASSOCIATE_REQ, arg);
 }
 
@@ -313,11 +320,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     u16 selfRef = 0;
     u16 parentRef = 0;
 
-    /* [6]: low 16 = AssocConfirmHandler hit count; bits 16..23 = cnf->status. */
-    zb_nwk_ed_trace[6] = (zb_nwk_ed_trace[6] & 0xff000000U) |
-			  (((u32)cnf->status & 0xffU) << 16) |
-			  ((zb_nwk_ed_trace[6] + 1U) & 0xffffU);
-
     if (cnf->status != MAC_SUCCESS) {
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
 
@@ -340,7 +342,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
 
     g_zbInfo.macPib.shortAddress = cnf->shortAddress;
     g_zbInfo.nwkNib.nwkAddr = cnf->shortAddress;
-    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x01U; }
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
 
     g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
@@ -411,7 +412,6 @@ void nwk_rejoinScanCnfHandler(void *arg)
            (g_zbInfo.nwkNib.nwkAddr & 0xfff8U) == 0xfff8U) {
         g_zbInfo.nwkNib.nwkAddr = (u16)drv_u32Rand();
     }
-    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x02U; }
 
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
     nwk_rejoinReq(arg);
@@ -456,7 +456,6 @@ void tl_zbNwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
             g_zbInfo.macPib.shortAddress = cmd->rejoinRsp.nwkAddr;
             g_zbInfo.nwkNib.nwkAddr = cmd->rejoinRsp.nwkAddr;
-            { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x04U; }
             (void)tl_zbNwkAddrMapAdd(g_zbInfo.nwkNib.nwkAddr, g_zbInfo.nwkNib.ieeeAddr, &addrRef);
             zb_info_save(NULL);
             zdo_device_announce_send();
@@ -489,7 +488,6 @@ void tl_zbNwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
     g_zbInfo.macPib.shortAddress = cmd->rejoinRsp.nwkAddr;
     g_zbInfo.nwkNib.nwkAddr = cmd->rejoinRsp.nwkAddr;
-    { extern volatile u8 zb_dbg_addrpath; zb_dbg_addrpath |= 0x08U; }
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
     g_zbInfo.macPib.coordShortAddress = pNwkHdr->srcAddr;
 
@@ -792,6 +790,28 @@ void tl_zbMacMlmeAssociateIndicationHandler(void *arg)
     resp->shortAddress = shortAddr;
     memcpy(resp->devAddress, extAddr, EXT_ADDR_LEN);
     resp->status = status;
+
+    /*
+     * A new child associated through us: tell the Trust Center so it can send
+     * back the network key (tunneled). Without this Update-Device the child
+     * MAC-associates but never receives the NWK key and can't finish joining.
+     * Fire it on a fresh buffer AFTER we've captured the child's addresses, so
+     * the AssocResp buffer (arg) is untouched.
+     */
+    if (status == MAC_SUCCESS) {
+        zb_buf_t *udBuf = zb_buf_allocate();
+
+        if (udBuf != NULL) {
+            ss_apsmeUpdateDeviceReq_t *ud = (ss_apsmeUpdateDeviceReq_t *)udBuf;
+
+            memset(ud, 0, sizeof(*ud));
+            memcpy(ud->devAddr, extAddr, EXT_ADDR_LEN);
+            ud->devShortAddr = shortAddr;
+            ud->status = SS_STANDARD_DEV_UNSECURED_JOIN;
+            tl_zbTaskPost(ss_apsmeUpdateDevReq, udBuf);
+        }
+    }
+
     tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_ASSOCIATE_RES, arg);
 }
 

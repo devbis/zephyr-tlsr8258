@@ -42,6 +42,11 @@ extern struct ev_timer_event_t *ev_timer_taskPost(app_bdb_timer_callback_t func,
 						   uint32_t t_ms);
 extern uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt);
 extern uint8_t zb_routerStart(void);
+#if APP_BDB_ROLE_ROUTER
+/* Open the router as a parent after it joins so other devices can join
+ * through it (see nwk_router_minimal.c). 0xff = permit-join permanently. */
+extern void zb_router_enable_parenting(uint8_t permit_duration);
+#endif
 
 #define APP_BDB_COMMISSIONING_RETRY_MS 5000U
 
@@ -166,6 +171,10 @@ static int app_bdb_commissioning_retry(void *data)
 		app_bdb_retry_trace_put(0x03U << 24);
 		app_bdb_activate_poll_rate();
 		commissioning_start_requested = true;
+#if APP_BDB_ROLE_ROUTER
+		printk("app_bdb_retry: router joined -> enable parenting\n");
+		zb_router_enable_parenting(0xffU);
+#endif
 		return -1;
 	}
 	if (!idle) {
@@ -446,6 +455,9 @@ static void app_bdb_active_ep_rsp_cb(void *p)
 void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
+	printk("app_bdb_commissioning_status: status=0x%02x joinedArg=%u joinedNwk=%u router=%u\n",
+	       status, joinedNetwork ? 1U : 0U, zb_isDeviceJoinedNwk() ? 1U : 0U,
+	       APP_BDB_ROLE_ROUTER);
 	app_bdb_rejoin_callback_trace_put((0x14U << 24) |
 					  ((uint32_t)status) |
 					  ((uint32_t)(joinedNetwork ? 1U : 0U) << 8) |
@@ -468,6 +480,11 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 			(void)zb_zdoActiveEpReq(0x0000U, &ep_req, &seq,
 						app_bdb_active_ep_rsp_cb);
 		}
+#if APP_BDB_ROLE_ROUTER
+		/* We are now in the network — open ourselves as a parent so
+		 * other devices can join THROUGH this router. */
+		zb_router_enable_parenting(0xffU);
+#endif
 		app_bdb_rejoin_callback_trace_put((0x15U << 24) |
 						  (zb_getPollRate() & 0xffffU));
 		LOG_INF("zigbee_shell joined network (bdb status: 0x%02x)", status);
@@ -481,6 +498,10 @@ void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 		leave_recommission_pending = false;
 		commissioning_start_requested = true;
 		app_bdb_commissioning_retry_cancel();
+#if APP_BDB_ROLE_ROUTER
+		/* Joined (per state check) — open ourselves as a parent. */
+		zb_router_enable_parenting(0xffU);
+#endif
 		app_bdb_rejoin_callback_trace_put((0x16U << 24) |
 						  (zb_getPollRate() & 0xffffU));
 		LOG_INF("zigbee_shell joined network after status check (bdb status: 0x%02x)",

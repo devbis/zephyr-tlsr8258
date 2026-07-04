@@ -16,26 +16,12 @@
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
-/*
- * DEBUG: capture fatal-error PC/LR/reason so an SWS read can tell whether the
- * post-join freeze is a CPU hard fault (and where) vs an ISR hang. Remove with
- * the rest of the SESSION-10 diagnostics once the post-join wedge is resolved.
- */
-extern volatile u32 zb_dbg_fault_cnt;
-extern volatile u32 zb_dbg_fault_reason;
-extern volatile u32 zb_dbg_fault_pc;
-extern volatile u32 zb_dbg_fault_lr;
-
 void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
 {
-	zb_dbg_fault_cnt++;
-	zb_dbg_fault_reason = reason;
-	if (esf != NULL) {
-		zb_dbg_fault_pc = esf->pc;
-		zb_dbg_fault_lr = esf->lr;
-	}
+	ARG_UNUSED(reason);
+	ARG_UNUSED(esf);
 	for (;;) {
-		/* spin so the globals stay readable over SWS */
+		/* spin on fatal error rather than rebooting */
 	}
 }
 
@@ -57,7 +43,22 @@ static const addrExt_t zb_fixed_ieee_addr = {
 	 * not clear that state, suggesting it lives in the Ember adapter NVRAM
 	 * and only a brand-new IEEE will look like a fresh joiner.
 	 */
-	0x06, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#if defined(CONFIG_ARCH_POSIX)
+	/* native_sim host_socket_coordinator hardcodes the joiner IEEE as
+	 * a4:c1:38:e0:50:02:00:02 in its Transport-Key dstExtAddr; match it so
+	 * ss_apsTransportKeyCmdHandle's ext_addr_is_local() check accepts the key.
+	 * The low byte is build-configurable (ZB_FIXED_IEEE_LOW, default 0x02) so a
+	 * second native_sim node (e.g. an ED joining THROUGH a router) can run on the
+	 * same medium with a distinct IEEE. */
+	CONFIG_ZIGBEE_NATIVE_SIM_IEEE_LOW, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#else
+	/* Bumped ...06 -> ...08 -> ...0c: a brand-new IEEE looks like a fresh joiner
+	 * to the Z2M/Ember TC, which caches a known IEEE as "already joined" and
+	 * stops sending the unsolicited Transport-Key. Sniffer 2026-06-29 confirmed
+	 * ...08 now stuck in assoc-SUCCESS-but-no-TK loop (Ember NVRAM still had it
+	 * even after a Z2M device delete), so bump again to a fresh value. */
+	0x0c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#endif
 };
 
 void zb_platform_apply_runtime_ieee_addr(void)
@@ -81,20 +82,6 @@ static bool zb_waiting_for_radio_log;
 static bool zb_persistent_rejoin_in_progress;
 static uint32_t zb_persistent_rejoin_started_ms;
 static uint32_t zb_last_commission_retry_ms;
-extern volatile u32 zb_nwk_ed_trace[];
-
-/*
- * Heartbeat counters for the zb_thread loop. Each one increments at a
- * specific point per iteration; if the chip wedges in steady state, the
- * pattern of advanced/frozen counters identifies which step blocks. All
- * stages should track within 1 of each other in normal operation.
- *   [0] = top of while(1)
- *   [1] = past bootstrap_done check
- *   [2] = after ev_timer_process
- *   [3] = after ev_poll_process
- *   [4] = after deferred-rejoin / deferred-commissioning / requeue
- */
-volatile u32 zb_thread_heartbeat[5] = {0x48425452U};
 
 #define ZB_COMMISSION_RETRY_POLL_MS 5000U
 /*
@@ -174,24 +161,15 @@ static void zb_core_bootstrap_once(void)
 	if (!zb_core_init_done) {
 		u8 cold_reset = TRUE;
 
-		zb_nwk_ed_trace[15] = 0xA5A00001U;
 		/* Deterministic ED bootstrap order. */
 		ev_buf_init();
-		zb_nwk_ed_trace[15] = 0xA5A00101U;
 		ev_timer_init();
-		zb_nwk_ed_trace[15] = 0xA5A00102U;
 		tl_zbMacInit(cold_reset);
-		zb_nwk_ed_trace[15] = 0xA5A00103U;
 		tl_zbNwkInit(cold_reset);
-		zb_nwk_ed_trace[15] = 0xA5A00104U;
 		aps_init();
-		zb_nwk_ed_trace[15] = 0xA5A00105U;
 		af_init();
-		zb_nwk_ed_trace[15] = 0xA5A00106U;
 		zdo_init();
-		zb_nwk_ed_trace[15] = 0xA5A00107U;
 		(void)zb_platform_restore_persistent_state();
-		zb_nwk_ed_trace[15] = 0xA5A00108U;
 		/*
 		 * Boot-time snapshot of NVS-restored Zigbee state. Lets us tell
 		 * from the very first RTT lines whether the chip thinks it's
@@ -224,20 +202,13 @@ static void zb_core_bootstrap_once(void)
 		zb_radio_port_update_filters(MAC_INVALID_PANID,
 					     MAC_SHORT_ADDR_BROADCAST,
 					     g_zbMacPib.extAddress);
-		zb_nwk_ed_trace[15] = 0xA5A00109U;
 		rf_init();
-		zb_nwk_ed_trace[15] = 0xA5A0010AU;
 		drv_enable_irq();
-		zb_nwk_ed_trace[15] = 0xA5A0010BU;
 		zb_core_init_done = true;
-		zb_nwk_ed_trace[15] = 0xA5A00002U;
 	}
 
 	zb_radio_init();
-	zb_nwk_ed_trace[15] = 0xA5A00003U;
 	if (!zb_radio_is_ready()) {
-		zb_nwk_ed_trace[14]++;
-		zb_nwk_ed_trace[15] = 0xA5A00004U;
 		if (!zb_waiting_for_radio_log) {
 			LOG_WRN("Zigbee bootstrap waiting for radio readiness");
 			zb_waiting_for_radio_log = true;
@@ -249,17 +220,14 @@ static void zb_core_bootstrap_once(void)
 		LOG_INF("Zigbee radio ready; completing bootstrap");
 		zb_waiting_for_radio_log = false;
 	}
-	zb_nwk_ed_trace[15] = 0xA5A00005U;
 
 	zb_platform_app_bootstrap_ready();
-	zb_nwk_ed_trace[15] = 0xA5B00001U;
 
 	if (zb_platform_bdb_service_persistent_rejoin()) {
 		uint32_t started = k_uptime_get_32();
 
 		zb_persistent_rejoin_in_progress = true;
 		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
-		zb_nwk_ed_trace[15] = 0xA5B0000DU;
 	}
 
 	if (zb_platform_app_enable_radio_smoke_probe()) {
@@ -268,10 +236,8 @@ static void zb_core_bootstrap_once(void)
 
 	if (!zb_persistent_rejoin_in_progress &&
 	    zb_platform_app_should_start_commissioning()) {
-		zb_nwk_ed_trace[15] = 0xA5B00002U;
 		zb_commissioning_pending = true;
 	} else {
-		zb_nwk_ed_trace[15] = 0xA5B00003U;
 	}
 
 	zb_bootstrap_done = true;
@@ -302,7 +268,6 @@ static void zb_process_deferred_persistent_rejoin(void)
 			zb_platform_bdb_abandon_persistent_rejoin();
 			zb_persistent_rejoin_in_progress = false;
 			zb_persistent_rejoin_started_ms = 0U;
-			zb_nwk_ed_trace[15] = 0xA5B0000FU;
 		}
 		return;
 	}
@@ -312,7 +277,6 @@ static void zb_process_deferred_persistent_rejoin(void)
 
 		zb_persistent_rejoin_in_progress = true;
 		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
-		zb_nwk_ed_trace[15] = 0xA5B0000EU;
 	}
 }
 
@@ -323,14 +287,11 @@ static void zb_process_deferred_commissioning(void)
 	}
 
 	if (!zdo_ifZdoNwkManagerIdle()) {
-		zb_nwk_ed_trace[15] = 0xA5B0000AU;
 		return;
 	}
 
-	zb_nwk_ed_trace[15] = 0xA5B00004U;
 	zb_commissioning_pending = false;
 	zb_platform_app_start_commissioning();
-	zb_nwk_ed_trace[15] = 0xA5B00006U;
 }
 
 static void zb_requeue_commissioning_if_needed(void)
@@ -353,7 +314,6 @@ static void zb_requeue_commissioning_if_needed(void)
 
 	zb_last_commission_retry_ms = now_ms;
 	zb_commissioning_pending = true;
-	zb_nwk_ed_trace[15] = 0xA5B0000CU;
 }
 
 static void zb_link_watchdog_tick(void)
@@ -408,7 +368,6 @@ static void zb_link_watchdog_tick(void)
 	zb_link_last_rejoin_attempt_ms = now_ms;
 	/* Reset baseline so the next window is measured from now. */
 	zb_link_last_tx_fail_snapshot = snap.tx_failures;
-	zb_nwk_ed_trace[11] = 0xA1B0FF00U | (fail_delta & 0xFFU);
 
 #if !defined(CONFIG_ZIGBEE_ROUTER)
 	uint32_t scan_mask = (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) -
@@ -417,6 +376,16 @@ static void zb_link_watchdog_tick(void)
 		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
 	}
 #endif
+}
+
+/*
+ * Radio RX poll hook, called every ZB-loop tick. The ZB thread is a no-yield
+ * busy-loop, so preemptible driver RX threads are starved; a polled radio
+ * backend (native_sim socket medium) overrides this to drain its RX from the
+ * ZB thread context. Real IRQ-driven radios (TLSR8258) leave it a no-op.
+ */
+__weak void zb_platform_radio_rx_poll(void)
+{
 }
 
 static void zb_thread_fn(void *a, void *b, void *c)
@@ -440,7 +409,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	 * during idle (~1 ms granularity is fine for this thread).
 	 */
 	while (1) {
-		zb_thread_heartbeat[0]++;
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
 			ev_timer_process();
@@ -451,13 +419,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			}
 		}
 
-		zb_thread_heartbeat[1]++;
 		ev_timer_process();
-		zb_thread_heartbeat[2]++;
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000001U; }
 		ev_poll_process();
+		zb_platform_radio_rx_poll();
 #if defined(CONFIG_ZIGBEE_ROUTER)
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000002U; }
 		/* Router build pulls in the libzigbee NWK / MAC primitive
 		 * dispatcher via tl_zbNwkTaskProc(); drain the per-layer
 		 * task queues on every tick so high→NWK, MAC→NWK, and
@@ -467,33 +432,21 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 * nwk_ed_minimal poll path and doesn't need this drain.
 		 */
 		tl_zbNwkTaskProc();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE0000003U; }
 		tl_zbMacTaskProc();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xE00000FFU; }
 #endif
-		zb_thread_heartbeat[3]++;
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000001U; }
 		zb_process_deferred_persistent_rejoin();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000002U; }
 		zb_process_deferred_commissioning();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000003U; }
 		zb_requeue_commissioning_if_needed();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD0000004U; }
 		zb_link_watchdog_tick();
-		{ extern volatile u32 zb_dbg_loopphase; zb_dbg_loopphase = 0xD00000FFU; }
-		zb_thread_heartbeat[4]++;
 		if (zb_commissioning_pending) {
-			zb_nwk_ed_trace[15] = 0xA5B0000BU;
 			k_busy_wait(1000);
 			continue;
 		}
 
 		if (k_sem_take(&zb_ev_sem, K_NO_WAIT) == 0) {
-			zb_nwk_ed_trace[15] = 0xA5B00007U;
 			continue;
 		}
 
-		zb_nwk_ed_trace[15] = 0xA5B00008U;
 		k_busy_wait(1000);
 	}
 }

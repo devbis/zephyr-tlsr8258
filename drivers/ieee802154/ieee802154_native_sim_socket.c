@@ -217,10 +217,11 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 		return false;
 	}
 
-	if (rx_try_trace_count < 8U) {
-		printk("zb_sock_radio: try RX fd=%d ch=%u started=%u\n",
-		       data->fd, data->channel, data->started ? 1U : 0U);
-		rx_try_trace_count++;
+	rx_try_trace_count++;
+	if (rx_try_trace_count < 8U || (rx_try_trace_count % 4000U) == 0U) {
+		printk("zb_sock_radio: try RX #%u fd=%d ch=%u started=%u uptime=%lld\n",
+		       rx_try_trace_count, data->fd, data->channel,
+		       data->started ? 1U : 0U, k_uptime_get());
 	}
 
 	len = ieee802154_native_sim_socket_recv(data->fd, packet, sizeof(packet));
@@ -250,6 +251,9 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 		printk("zb_sock_radio: rx decode failed len=%ld\n", len);
 		return true;
 	}
+
+	printk("zb_sock_radio: raw_rx type=%u node=0x%04x ch=%u psdu_len=%zu\n",
+	       msg.type, msg.node_id, msg.channel, msg.psdu_len);
 
 	if (msg.node_id != native_sim_socket_node_id(cfg) ||
 	    msg.channel != data->channel) {
@@ -358,6 +362,27 @@ static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
 		}
 
 		k_yield();
+	}
+}
+
+/*
+ * The standalone rx_thread's k_sleep(1ms) poll loop is starved once this node
+ * goes idle: the Zigbee thread is an intentional no-yield busy-loop (see
+ * zb_main.c) that never lets a preemptible thread (rx_thread, sysworkq) run, so
+ * host-socket frames delivered while idle (e.g. a joiner's beacon-request at an
+ * already-joined router) are never read. RX "works" during boot/join only
+ * because the TX/status paths call native_sim_socket_pump_rx() from the ZB
+ * thread. The real fix is to drain the socket from *inside* the ZB loop: the ZB
+ * loop calls the weak zb_platform_radio_rx_poll() every tick, which we override
+ * below. (Real TLSR radio RX is IRQ-driven, so its weak default is a no-op.)
+ */
+static const struct device *rx_kick_dev;
+
+void zb_platform_radio_rx_poll(void)
+{
+	if (rx_kick_dev != NULL) {
+		while (native_sim_socket_try_rx_once(rx_kick_dev)) {
+		}
 	}
 }
 
@@ -582,6 +607,10 @@ static int native_sim_socket_start(const struct device *dev)
 		k_thread_name_set(&data->rx_thread, "zb_sock_rx");
 		data->rx_thread_started = true;
 	}
+
+	/* Let the ZB main loop drain our socket every tick (zb_platform_radio_rx_poll),
+	 * so RX works even while this node is idle and the rx_thread is starved. */
+	rx_kick_dev = dev;
 
 	data->started = true;
 	printk("zb_sock_radio: start ch=%u\n", data->channel);
