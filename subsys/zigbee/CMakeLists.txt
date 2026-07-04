@@ -33,6 +33,16 @@ zephyr_library_compile_definitions(
     ZCL_REPORTING_TABLE_NUM=2
 )
 
+# Experimental: the ED built on the full libzigbee core (CONFIG_ZIGBEE_ED_LIBZIGBEE)
+# compiles the unified vendor MAC/NWK/APS/SS/ZDO sources (role ZB_ED_ROLE). Several
+# of those sources' declarations / whole-file bodies were guarded behind
+# ZB_ROUTER_ROLE while the port was router-only; this marker lets those guards
+# admit the ED-libzigbee build too, without perturbing the router or the default
+# minimal-ED build.
+zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_ED_LIBZIGBEE
+    ZB_ED_ROLE_LIBZIGBEE=1
+)
+
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
@@ -180,6 +190,12 @@ if(CONFIG_ZIGBEE_ED AND NOT CONFIG_ZIGBEE_ED_LIBZIGBEE)
         zdo/zdo_ed_minimal.c
     )
 endif()
+# Phase-2 placeholder glue for the experimental libzigbee-based ED: inert stubs
+# for the minimal-ED API the platform/app layer still calls, so the image links.
+# Phase-3 rewires the callers to the real libzigbee ED path and deletes this.
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED_LIBZIGBEE
+    zbapi/zb_ed_libzigbee_stubs.c
+)
 if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
     zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
 endif()

@@ -78,7 +78,7 @@ static void zb_vendor_aes_block_xor(u8 *dst, const u8 *src)
 	}
 }
 
-#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+#if (!defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE) && !defined(ZB_ED_ROLE_LIBZIGBEE)
 /* Router build uses the libzigbee ss_tlCCM.c / ss_apsSecurityME.c
  * versions of the SS hash helpers. The lightweight ED versions
  * below stay for the ED build.
@@ -208,7 +208,7 @@ static void zb_mac_pib_apply_runtime_defaults(bool cold_reset)
 	tl_zbMacChannelSet(g_zbMacPib.phyChannelCur);
 }
 
-#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+#if (!defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE) && !defined(ZB_ED_ROLE_LIBZIGBEE)
 /* Router build uses the libzigbee-derived mac.c::tl_zbMacInit which
  * resets every MAC primitive table. ED keeps the lightweight version.
  */
@@ -218,7 +218,7 @@ void tl_zbMacInit(u8 coldReset)
 }
 #endif
 
-#if !defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE
+#if (!defined(ZB_ROUTER_ROLE) || !ZB_ROUTER_ROLE) && !defined(ZB_ED_ROLE_LIBZIGBEE)
 /* Router build pulls aps_get_counter_value / aps_init from the
  * libzigbee aps.c port. ED keeps the lightweight versions below.
  */
