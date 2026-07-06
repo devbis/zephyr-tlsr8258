@@ -313,6 +313,25 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
 
         ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
 
+#if defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
+        /*
+         * Tag this MAC data-request/poll so tl_zbMaxTxConfirmCb routes its TX
+         * confirm to tl_zbMacDataRequestStatusCheck (the poll/assoc-poll path
+         * that ultimately frees the buffer via MAC_MLME_POLL_CNF ->
+         * tl_zbMacMlmePollConfirmHandler -> zdo_nlme_sync_confirm, or frees it
+         * directly for the assoc MAC_STA_NO_ACK case). Without a handle the
+         * confirm falls through to the default MCPS-DATA path
+         * (tl_zbMacMcpsDataRequestSendConfirm -> nwkNldeDataCnf), which treats
+         * the poll as an application NLDE data confirm and never frees it — so
+         * every rx-off poll leaks a zb_buf and the pool saturates within
+         * seconds, starving aps_ack_send during the post-join interview. The
+         * port omitted this handle (the vendor relies on cbType); scope it to
+         * the libzigbee-ED build so the proven router/minimal-ED paths are
+         * untouched.
+         */
+        buf->hdr.handle = 0xe9U;
+#endif
+
         txStatus = tl_zbMacTx(buf, psdu, hdrSize, 1, NULL);
     }
     if (txStatus != MAC_SUCCESS) {
