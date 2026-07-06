@@ -88,12 +88,17 @@ static void zb_radio_tx_complete_deferred(void *arg)
 	(void)arg;
 	rf_busyFlag &= (u8)~TX_BUSY;
 	zb_macDataSendHandler();
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
 	/*
-	 * ACK synthesis is specific to the libzigbee (router) MAC state machine
-	 * (mac_getTrxState/mac_trxTask live in mac_trx.c/mac.c, router-only). The
-	 * ED build uses mac_trx_compat.c, whose zb_macDataSendHandler() completes
-	 * TX itself, so this block is neither needed nor linkable there.
+	 * ACK synthesis is specific to the libzigbee MAC state machine
+	 * (mac_getTrxState/mac_trxTask live in mac_trx.c/mac.c). Both the router
+	 * and the libzigbee-based ED use that MAC and, for ack-required frames
+	 * (association-request, data-request poll, ...), sit in MAC_TX_WAIT_ACK
+	 * until MAC_TX_EV_ACK_RECV — Zephyr's api->tx already consumed the radio
+	 * ACK, so synthesize it here or the TX state machine wedges (assoc-req
+	 * retries forever, the poll never leaves the queue). The minimal-ED build
+	 * (mac_trx_compat.c) completes TX in zb_macDataSendHandler() itself and
+	 * lacks these symbols, so it is excluded.
 	 */
 	if (mac_getTrxState() == MAC_TX_WAIT_ACK) {
 		mac_trxTask((void *)(uintptr_t)MAC_TX_EV_ACK_RECV);

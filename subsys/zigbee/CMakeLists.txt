@@ -190,10 +190,12 @@ if(CONFIG_ZIGBEE_ED AND NOT CONFIG_ZIGBEE_ED_LIBZIGBEE)
         zdo/zdo_ed_minimal.c
     )
 endif()
-# Phase-2 placeholder glue for the experimental libzigbee-based ED: inert stubs
-# for the minimal-ED API the platform/app layer still calls, so the image links.
-# Phase-3 rewires the callers to the real libzigbee ED path and deletes this.
+# Experimental libzigbee-based ED glue: the real rx-off poll driver
+# (nwk_ed_libzigbee.c, endDevMacDataPoll scheduling) plus the remaining inert
+# stubs for minimal-ED API the platform/app layer still calls. Phase-3+ rewires
+# the rest of the callers to the real libzigbee ED path and trims the stubs.
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED_LIBZIGBEE
+    nwk/nwk_ed_libzigbee.c
     zbapi/zb_ed_libzigbee_stubs.c
 )
 if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
