@@ -112,10 +112,8 @@ bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBa
 	return false; /* TODO(phase3): bdb_endDeviceStart()/zb_rejoinReq() */
 }
 
-void tl_zbNwkEdMinimalPollRestart(u32 timeoutMs)
-{
-	(void)timeoutMs; /* TODO(phase3): endDevMacDataPoll() scheduling */
-}
+/* tl_zbNwkEdMinimalPollRestart + tl_zbNwkEdMinimalInterviewPollStart: the real
+ * rx-off poll driver lives in nwk/nwk_ed_libzigbee.c (endDevMacDataPoll). */
 
 void tl_zbNwkEdMinimalOperationAbort(void)
 {
