@@ -131,7 +131,7 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 		return;
 	}
 
-#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
 	{
 		tl_zb_addition_neighbor_entry_t entry;
 

@@ -112,8 +112,16 @@ void tl_zbNwkNibInit(u8 coldReset)
         memset(&g_zbNIB, 0, sizeof(g_zbNIB));
     }
 
-#if defined(ZB_ROUTER_ROLE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
+    /* Seed the base NIB defaults (stack profile, address-alloc method, depth,
+     * rxOnWhenIdle, ...) for every role that runs the libzigbee NWK. The port
+     * previously kept this router-only, which left the libzigbee-based ED with
+     * a zeroed NIB (stackProfile=0) — parent selection in the beacon-notify
+     * handler rejects every beacon because entry.stackProfile != g_zbNIB
+     * .stackProfile, so the ED could never pick a parent. */
     memcpy(&g_zbNIB, &nwkNibDefault, sizeof(g_zbNIB));
+#endif
+#if defined(ZB_ROUTER_ROLE)
     g_zbNIB.maxChildren = DEFAULT_MAX_CHILDREN;
     g_zbNIB.maxRouters = NWK_MAX_ROUTERS;
     g_zbNIB.maxSourceRoute = NWK_MAX_SOURCE_ROUTE;
