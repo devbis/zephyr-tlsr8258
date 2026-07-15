@@ -22,6 +22,8 @@ tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
 static u8 tx_fifo_rptr = 0;
 static u8 tx_fifo_wptr = 0;
+volatile u32 zb_mac_assoc_trace[16] = {0x4d415343U};
+static u8 zb_mac_assoc_trace_pos;
 
 typedef struct _attribute_packed_ {
     void *curTx;
@@ -90,6 +92,16 @@ static inline void *mac_trx_cur_get(void)
 static inline void mac_trx_cur_set(void *cur)
 {
     mac_trx_vars.curTx = cur;
+}
+
+void zb_mac_assoc_trace_put(u32 tag)
+{
+    u8 span = (u8)(ARRAY_SIZE(zb_mac_assoc_trace) - 2U);
+    u8 slot = (u8)(2U + (zb_mac_assoc_trace_pos % span));
+
+    zb_mac_assoc_trace[slot] = tag;
+    zb_mac_assoc_trace_pos++;
+    zb_mac_assoc_trace[1] = zb_mac_assoc_trace_pos;
 }
 
 static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
@@ -238,6 +250,14 @@ void mac_rxDataParse(void *arg)
     raw[194] = (u8)rssi;
     frameType = raw[0] & 0x07U;
     hdrSize = tl_zbMacHdrParse(&mhr, raw);
+
+    if (frameType == MAC_FRAME_TYPE_COMMAND &&
+        len > hdrSize &&
+        raw[hdrSize] == MAC_CMD_ASSOCIATION_RESPONSE) {
+        zb_mac_assoc_trace_put((0xa1030000U) |
+                               ((u32)raw[2] << 8) |
+                               raw[hdrSize + 3U]);
+    }
 
     if (len <= hdrSize || g_zbMacCtx.status == 1U) {
         zb_buf_free(buf);
@@ -770,8 +790,28 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
     zb_mac_rx_pending_meta_t *meta;
     u8 *owned_payload;
+    bool is_assoc_resp = false;
+    u8 assoc_resp_seq = 0U;
+    u8 assoc_resp_status = 0xffU;
+    u8 assoc_resp_hdr = 0U;
+
+    if (ackPkt == 0U && data != NULL && len >= 4U &&
+        ((data[0] & 0x07U) == MAC_FRAME_TYPE_COMMAND)) {
+        assoc_resp_hdr = tl_zbMacHdrSize((u16)data[0] | ((u16)data[1] << 8));
+        if ((u16)(assoc_resp_hdr + 4U) <= len &&
+            data[assoc_resp_hdr] == MAC_CMD_ASSOCIATION_RESPONSE) {
+            is_assoc_resp = true;
+            assoc_resp_seq = data[2];
+            assoc_resp_status = data[assoc_resp_hdr + 3U];
+        }
+    }
 
     if (buf == NULL) {
+        if (is_assoc_resp) {
+            zb_mac_assoc_trace_put((0xa1ff0001U << 0) |
+                                   ((u32)assoc_resp_seq << 8) |
+                                   assoc_resp_status);
+        }
         return;
     }
 
@@ -793,9 +833,19 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     }
 
     zb_mac_try_assoc_resp_fast_handoff(data, len);
+    if (is_assoc_resp) {
+        zb_mac_assoc_trace_put((0xa1010000U) |
+                               ((u32)assoc_resp_seq << 8) |
+                               assoc_resp_status);
+    }
 
     owned_payload = zb_buf_rx_payload_capture(buf, data, len);
     if (owned_payload == NULL) {
+        if (is_assoc_resp) {
+            zb_mac_assoc_trace_put((0xa1ff0100U) |
+                                   ((u32)assoc_resp_seq << 8) |
+                                   assoc_resp_status);
+        }
         zb_buf_free(buf);
         return;
     }
@@ -808,10 +858,20 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 
     rf_busyFlag &= (u8)~RX_BUSY;
     if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
+        if (is_assoc_resp) {
+            zb_mac_assoc_trace_put((0xa1ff0200U) |
+                                   ((u32)assoc_resp_seq << 8) |
+                                   tl_zbUserTaskQNum());
+        }
         zb_buf_free(buf);
         return;
     }
 
+    if (is_assoc_resp) {
+        zb_mac_assoc_trace_put((0xa1020000U) |
+                               ((u32)assoc_resp_seq << 8) |
+                               assoc_resp_status);
+    }
     tl_zbTaskPost(mac_rxDataParse, buf);
 }
 

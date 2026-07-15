@@ -159,9 +159,15 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 		}
 
 		entry.potentialParent = 0;
+#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE)
+		if (entry.stackProfile == g_zbNIB.stackProfile && entry.routerCapacity) {
+			entry.potentialParent = 1;
+		}
+#else
 		if (entry.stackProfile == g_zbNIB.stackProfile && entry.edCapacity) {
 			entry.potentialParent = 1;
 		}
+#endif
 
 		if (state == NLME_STATE_REJOIN &&
 		    g_zbInfo.macPib.coordShortAddress ==
