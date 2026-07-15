@@ -114,28 +114,6 @@ static uint32_t zb_link_last_tx_fail_snapshot;
 static uint32_t zb_link_last_rejoin_attempt_ms;
 static bool zb_link_baseline_set;
 
-#if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
-volatile uint32_t zb_boot_trace[16] = {0xa5b70000U};
-static uint8_t zb_boot_trace_pos;
-
-static void zb_boot_trace_put(uint32_t tag)
-{
-	enum {
-		trace_slots = sizeof(zb_boot_trace) / sizeof(zb_boot_trace[0]),
-	};
-	uint8_t slot = (uint8_t)(2U + (zb_boot_trace_pos % (trace_slots - 2U)));
-
-	zb_boot_trace[slot] = tag;
-	zb_boot_trace_pos++;
-	zb_boot_trace[1] = zb_boot_trace_pos;
-}
-#else
-static void zb_boot_trace_put(uint32_t tag)
-{
-	ARG_UNUSED(tag);
-}
-#endif
-
 void __weak zb_platform_app_bootstrap_ready(void)
 {
 }
@@ -227,7 +205,6 @@ static void zb_core_bootstrap_once(void)
 		rf_init();
 		drv_enable_irq();
 		zb_core_init_done = true;
-		zb_boot_trace_put(0x01U << 24);
 	}
 
 	zb_radio_init();
@@ -243,10 +220,8 @@ static void zb_core_bootstrap_once(void)
 		LOG_INF("Zigbee radio ready; completing bootstrap");
 		zb_waiting_for_radio_log = false;
 	}
-	zb_boot_trace_put(0x02U << 24);
 
 	zb_platform_app_bootstrap_ready();
-	zb_boot_trace_put(0x03U << 24);
 
 	if (zb_platform_bdb_service_persistent_rejoin()) {
 		uint32_t started = k_uptime_get_32();
@@ -262,12 +237,9 @@ static void zb_core_bootstrap_once(void)
 	if (!zb_persistent_rejoin_in_progress &&
 	    zb_platform_app_should_start_commissioning()) {
 		zb_commissioning_pending = true;
-		zb_boot_trace_put(0x04U << 24);
-	} else {
 	}
 
 	zb_bootstrap_done = true;
-	zb_boot_trace_put(0x05U << 24);
 }
 
 static void zb_process_deferred_persistent_rejoin(void)
@@ -318,9 +290,7 @@ static void zb_process_deferred_commissioning(void)
 	}
 
 	zb_commissioning_pending = false;
-	zb_boot_trace_put(0x06U << 24);
 	zb_platform_app_start_commissioning();
-	zb_boot_trace_put(0x07U << 24);
 }
 
 static void zb_requeue_commissioning_if_needed(void)
@@ -343,7 +313,6 @@ static void zb_requeue_commissioning_if_needed(void)
 
 	zb_last_commission_retry_ms = now_ms;
 	zb_commissioning_pending = true;
-	zb_boot_trace_put(0x08U << 24);
 }
 
 static void zb_link_watchdog_tick(void)
@@ -425,7 +394,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	ARG_UNUSED(c);
 
 	LOG_INF("Zigbee thread started");
-	zb_boot_trace_put(0x09U << 24);
 
 	/*
 	 * No k_yield() / k_sem_take(FOREVER) in this loop.  Under TLSR8258
