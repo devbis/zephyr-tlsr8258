@@ -7,4 +7,12 @@ add_executable(tlsr8258_tx_irq
     ../../../drivers/ieee802154/ieee802154_tlsr8258_tx_irq.c
 )
 
+target_include_directories(tlsr8258_tx_irq PRIVATE
+    ../../../drivers/ieee802154
+)
+
+target_compile_definitions(tlsr8258_tx_irq PRIVATE
+    WORKTREE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+)
+
 add_test(NAME tlsr8258_tx_irq COMMAND tlsr8258_tx_irq)

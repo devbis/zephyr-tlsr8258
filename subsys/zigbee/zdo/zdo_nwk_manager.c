@@ -884,6 +884,27 @@ void zdo_nlme_join_confirm(void *arg)
         return;
     }
 
+    if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpAssocDoneCb != NULL) {
+        zdo_start_device_confirm_t assoc_cnf = {
+            .status = ZDO_SUCCESS,
+            .channel_num = g_zbInfo.macPib.phyChannelCur,
+            .pan_id = g_zbInfo.macPib.panId,
+            .short_addr = g_zbInfo.macPib.shortAddress,
+        };
+
+        /*
+         * The libzigbee BDB secure-join handoff hangs off zdpAssocDoneCb:
+         * bdb_zdoAssocDone() starts the post-association transport-key wait
+         * path and arms its diagnostics. The Zephyr ED-minimal runtime calls
+         * this callback explicitly, but the standard router join path never
+         * did, so association succeeded and NLME_JOINING was entered without
+         * ever starting BDB's auth/interview handoff. The result is a silent
+         * auth timeout and an endless re-association loop. Mirror the
+         * ED-minimal contract here.
+         */
+        zdoAppIndCbLst->zdpAssocDoneCb(&assoc_cnf);
+    }
+
     zdo_set_pollRate(500U);
     if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
         zdo_startDeviceCnf(arg, ZDO_SUCCESS);

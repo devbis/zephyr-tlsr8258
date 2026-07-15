@@ -160,7 +160,12 @@ static void test_invalid_dma_clears_rx_event_bits_but_preserves_other_irqs(void)
 {
 	uint8_t dma[20] = { 0 };
 
-	dma[0] = 13u;
+	/*
+	 * dma_len < 9 is neither "valid" nor "sane" (the IRQ path is tolerant of
+	 * a bad rx[4] as long as the DMA span looks like a real frame), so this
+	 * is the case where RX event bits are actually stripped.
+	 */
+	dma[0] = 5u;
 	dma[4] = 5u;
 	dma[16] = 0x00u;
 
@@ -184,9 +189,9 @@ static void test_zigbee_port_header_exposes_sink_only_registration(void)
 {
 	const char *path = WORKTREE_FILE("subsys/zigbee/include/zephyr/zigbee/zb_radio_port.h");
 
-	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_rx_frame_view {");
+	EXPECT_FILE_CONTAINS(path, "struct zb_radio_rx_frame_view {");
 	EXPECT_FILE_CONTAINS(path, "void zb_radio_port_register_rx_sink");
-	EXPECT_FILE_CONTAINS(path, "typedef int (*zb_radio_port_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame)");
+	EXPECT_FILE_CONTAINS(path, "typedef int (*zb_radio_port_rx_sink_t)(const struct zb_radio_rx_frame_view *frame)");
 	EXPECT_FILE_NOT_CONTAINS(path, "struct zb_radio_port_rx_frame");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_rx_cb_t");
 	EXPECT_FILE_NOT_CONTAINS(path, "zb_radio_port_register_rx_cb");
@@ -228,11 +233,11 @@ static void test_rf_isr_signals_tx_success_via_radio_op_and_sem(void)
 {
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
-	EXPECT_FILE_CONTAINS(path, "else if ((effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u) {");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_tx_count_inc();");
-	EXPECT_FILE_CONTAINS(path, "tx_complete = (tlsr8258_radio.op.state == TLSR8258_RADIO_OP_TX_PENDING) &&");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_success(&tlsr8258_radio.op);");
-	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
+	EXPECT_FILE_CONTAINS(path, "if (has_tx) {");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_tx_count_inc(radio);");
+	EXPECT_FILE_CONTAINS(path, "tx_complete = tx_done_result.complete_stack_tx &&");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_success(&radio->op);");
+	EXPECT_FILE_CONTAINS(path, "k_sem_give(&radio->tx_wait);");
 }
 
 static void test_rf_isr_signals_tx_error_via_radio_op_and_sem(void)
@@ -240,9 +245,9 @@ static void test_rf_isr_signals_tx_error_via_radio_op_and_sem(void)
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
 	EXPECT_FILE_CONTAINS(path,
-		"else if ((effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_error(&tlsr8258_radio.op, -EIO);");
-	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
+		"} else if (!has_tx && (effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_tx_error(&radio->op, -EIO);");
+	EXPECT_FILE_CONTAINS(path, "k_sem_give(&radio->tx_wait);");
 }
 
 static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
@@ -254,17 +259,16 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 	EXPECT_FILE_CONTAINS(path, "bool ack_pending;");
 	EXPECT_FILE_CONTAINS(path, "bool is_pending_response;");
 	EXPECT_FILE_CONTAINS(path, "psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];");
-	EXPECT_FILE_CONTAINS(path, "psdu_len = frame.dma[4];");
+	EXPECT_FILE_CONTAINS(path, "psdu_len = tlsr8258_dma_payload_len_get(frame.dma, frame.len);");
 	EXPECT_FILE_CONTAINS(path, "is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.tx_seq);");
+	EXPECT_FILE_CONTAINS(path, "radio->op.tx_seq);");
 	EXPECT_FILE_CONTAINS(path, "ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);");
 	EXPECT_FILE_CONTAINS(path,
-			     "is_pending_response = tlsr8258_psdu_is_pending_response(");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio.op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_rx(&tlsr8258_radio.op, is_ack,");
-	EXPECT_FILE_CONTAINS(path, "ack_pending,");
+			     "tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq, radio);");
+	EXPECT_FILE_CONTAINS(path, "radio->op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_radio_op_on_rx(&radio->op, is_ack, ack_pending,");
 	EXPECT_FILE_CONTAINS(path, "is_pending_response);");
-	EXPECT_FILE_CONTAINS(path, "k_sem_give(&tlsr8258_tx_wait);");
+	EXPECT_FILE_CONTAINS(path, "k_sem_give(&radio->tx_wait);");
 }
 
 static void test_pending_response_classification_uses_shared_helper(void)
@@ -272,13 +276,29 @@ static void test_pending_response_classification_uses_shared_helper(void)
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
 	EXPECT_FILE_CONTAINS(path, "static bool tlsr8258_psdu_is_pending_response(const uint8_t *psdu,");
-	EXPECT_FILE_CONTAINS(path, "return has_ack_match_fields && !is_ack &&");
-	EXPECT_FILE_CONTAINS(path, "rx_is_pending_response =");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq);");
 	EXPECT_FILE_CONTAINS(path,
-			     "is_pending_response = tlsr8258_psdu_is_pending_response(");
+			     "tlsr8258_core_handle_rx_frame(psdu, psdu_len, seq, &filter, &result);");
+	EXPECT_FILE_CONTAINS(path, "return result.is_pending_response;");
+	EXPECT_FILE_CONTAINS(path,
+			     "tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq, radio);");
 	EXPECT_FILE_NOT_CONTAINS(path,
 				 "rx_is_pending_response = (psdu_len >= TLSR8258_MIN_FRAME_LENGTH) &&");
+}
+
+static void test_tlsr8258_driver_uses_fake_phy_core_seam(void)
+{
+	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
+	const char *header_path =
+		WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258_fake_phy_core.h");
+
+	EXPECT_FILE_CONTAINS(path, "#include \"ieee802154_tlsr8258_fake_phy_core.h\"");
+	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_core_filter_ctx");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_psdu_is_ack_for_seq");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_assoc_resp_to_ieee");
+	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_handle_rx_frame");
+	EXPECT_FILE_CONTAINS(header_path, "struct tlsr8258_radio_backend");
+	EXPECT_FILE_CONTAINS(header_path, "tlsr8258_core_handle_tx_done");
+	EXPECT_FILE_CONTAINS(header_path, "tlsr8258_core_handle_rx_frame");
 }
 
 static void test_zigbee_drv_enable_irq_reenables_global_gate(void)
@@ -314,6 +334,7 @@ int main(void)
 	test_rf_isr_signals_tx_error_via_radio_op_and_sem();
 	test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem();
 	test_pending_response_classification_uses_shared_helper();
+	test_tlsr8258_driver_uses_fake_phy_core_seam();
 	test_zigbee_drv_enable_irq_reenables_global_gate();
 	test_zigbee_bootstrap_enables_global_irq_gate();
 
