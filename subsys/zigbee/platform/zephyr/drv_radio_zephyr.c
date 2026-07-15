@@ -50,6 +50,15 @@ struct zb_radio_ctx {
 };
 
 static struct zb_radio_ctx g_radio;
+/*
+ * TX-path diagnostic for early commissioning failures.
+ *   [0] = call-site tag: type (b24-31), len (b16-23), seq (b8-15), fcf0/cmd (b0-7)
+ *   [1] = call-site aux: fcf1 (b0-7), current channel (b8-15)
+ *   [2] = call count
+ *   [3] = submit preflight: len (b0-7) | fcf0 (b8-15) | seq (b16-23) | ackreq (b24)
+ *   [4] = submit result rc (signed low16) | tx_attempts snapshot (b16-31)
+ */
+volatile uint32_t zb_radio_tx_trace[8];
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
 static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
@@ -60,6 +69,11 @@ extern void zb_macDataSendHandler(void);
 extern void mac_trxTask(void *arg);
 #include "mac/includes/mac_trx_api.h"
 #include "zb_common_stub.h"
+
+static bool zb_radio_psdu_is_ack(const uint8_t *psdu, uint8_t psdu_len)
+{
+	return (psdu != NULL) && (psdu_len >= 3U) && ((psdu[0] & 0x07U) == 0x02U);
+}
 
 /*
  * Deferred TX completion: posted from the user task queue so it
@@ -246,6 +260,7 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 {
 	const uint8_t *psdu = NULL;
 	uint8_t psdu_len = 0U;
+	u8 ack_pkt;
 	u8 *rx_buf = g_radio.rx_target;
 
 	if ((dma == NULL) || (dma_len == 0U)) {
@@ -278,7 +293,8 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 		return -EINVAL;
 	}
 
-	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, psdu_len, 0U, 0U, rssi_dbm);
+	ack_pkt = zb_radio_psdu_is_ack(psdu, psdu_len) ? 1U : 0U;
+	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, psdu_len, ack_pkt, 0U, rssi_dbm);
 	return 0;
 }
 
@@ -545,6 +561,12 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	}
 
 	g_radio.last_tx_len = psdu_len;
+	zb_radio_tx_trace[2]++;
+	zb_radio_tx_trace[3] = (uint32_t)psdu_len |
+			       ((uint32_t)((psdu_len > 0U) ? psdu[0] : 0U) << 8) |
+			       ((uint32_t)((psdu_len > 2U) ? psdu[2] : 0U) << 16) |
+			       ((uint32_t)(((psdu_len > 0U) && ((psdu[0] & 0x20U) != 0U)) ? 1U : 0U)
+				<< 24);
 	/*
 	 * DATA REQUEST frames must bypass CCA.  During the interview phase the
 	 * coordinator retransmits transport-key frames continuously; CCA sees
@@ -558,11 +580,15 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	if (ret < 0) {
 		atomic_inc(&g_radio.tx_failures);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
+		zb_radio_tx_trace[4] = ((uint32_t)(uint16_t)ret & 0xffffU) |
+				       ((uint32_t)atomic_get(&g_radio.tx_attempts) << 16);
 		return ret;
 	}
 
 	atomic_inc(&g_radio.tx_success);
 	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	zb_radio_tx_trace[4] = ((uint32_t)(uint16_t)ret & 0xffffU) |
+			       ((uint32_t)atomic_get(&g_radio.tx_attempts) << 16);
 	/*
 	 * api->tx is synchronous, but the libzigbee MAC arms its TX-IRQ
 	 * wait timer AFTER our submit returns. Defer the completion (which
@@ -693,6 +719,12 @@ int zb_platform_radio_stop(void)
 
 int zb_platform_radio_send_raw_psdu(const uint8_t *psdu, uint8_t psdu_len)
 {
+	zb_radio_tx_trace[0] = (0x52U << 24) |
+			       ((uint32_t)psdu_len << 16) |
+			       ((uint32_t)((psdu_len > 2U) ? psdu[2] : 0U) << 8) |
+			       (uint32_t)((psdu_len > 0U) ? psdu[0] : 0U);
+	zb_radio_tx_trace[1] = (uint32_t)((psdu_len > 1U) ? psdu[1] : 0U) |
+			       ((uint32_t)g_radio.current_channel << 8);
 	return zb_radio_submit_tx(psdu, psdu_len);
 }
 
@@ -706,5 +738,11 @@ int zb_platform_radio_send_beacon_request(void)
 		0x07,
 	};
 
+	zb_radio_tx_trace[0] = (0x42U << 24) |
+			       ((uint32_t)ARRAY_SIZE(beacon_req) << 16) |
+			       ((uint32_t)beacon_req[2] << 8) |
+			       (uint32_t)beacon_req[0];
+	zb_radio_tx_trace[1] = (uint32_t)beacon_req[1] |
+			       ((uint32_t)g_radio.current_channel << 8);
 	return zb_radio_submit_tx(beacon_req, ARRAY_SIZE(beacon_req));
 }

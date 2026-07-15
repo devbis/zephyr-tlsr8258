@@ -328,6 +328,16 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
          * port omitted this handle (the vendor relies on cbType); scope it to
          * the libzigbee-ED build so the proven router/minimal-ED paths are
          * untouched.
+         *
+         * NOTE (2026-07-06): enabling this for CONFIG_ZIGBEE_ROUTER too (so the
+         * router's assoc poll routes to tl_zbMacAssocPollConfirm + arms the
+         * indirect-response wait, like the ED) was tried and DID NOT fix the
+         * router join — the router still never RECEIVES the unicast AssocResp
+         * at the radio level ([7]=0 acks, [22]=0 ext-rx on HW). The blocker is
+         * below the MAC (radio RX of the post-poll unicast frame), so this
+         * MAC-routing change is likely necessary-but-insufficient; reverted to
+         * keep the diff to verified changes. Re-apply once the radio RX issue
+         * is solved. See project-router-hw-join-assoc-noack.
          */
         buf->hdr.handle = 0xe9U;
 #endif
