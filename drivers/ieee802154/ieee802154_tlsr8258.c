@@ -393,89 +393,6 @@ static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
  */
 volatile uint32_t zb_tx_rx_pending_trace[8];
 
-/*
- * ACK/TX-path diagnostic (post-join Transport-Key delivery debug). Slots:
- *   [0] = rx_capture_common entries (every RX delivered to capture)
- *   [1] = # RX frames with short-addressed destination
- *   [2] = # RX frames where ack_requested decided true
- *   [3] = last RX snapshot: dst_type | (frame_type<<8) | (length<<16) | (self_orig<<24)
- *   [4] = send_ack_if_needed entries
- *   [5] = send_ack bails: filter_match_for_ack == false
- *   [6] = send_ack bails: set_tx_payload < 0
- *   [7] = send_ack reached tlsr8258_rf_tx_pkt (ACK kicked on air)
- *   [8] = last ACKed frame: dst_short (le) | (seq<<16)
- *   [9] = # short-dest frames that reached tx_pkt for ACK
- *   [10] = tlsr8258_tx (normal data TX) entries
- *   [11] = tlsr8258_tx reached tx_pkt
- *   [12] = last normal-TX: psdu_len | (fcf_low<<8) | (dst_type<<16)
- *   [13] = last short send_ack: payload_short | (filter_short<<16)
- *   [14] = # short-dest frames entering send_ack
- *   [15] = # RX frames whose dest short == our filter_short (frames to us)
- *   [16] = RF-ISR has_tx branch entries
- *   [17] = # ACK-TX completions observed (ack_tx_pending was set in has_tx)
- *   [18] = # set_rxmode calls in has_tx branch (!has_rx path)
- *   [19] = # has_tx ISRs that also had has_rx (combined TX+RX)
- *
- * TEMP (2026-07-06 assoc-resp RX-delivery debug; strip before commit):
- *   [22] = # IEEE(ext)-dst frames reaching rx_capture_common (any target)
- *   [23] = # of those whose dst == our filter_ieee_addr (addressed to us)
- *   [24] = last ext-dst frame: seq (b0-7) | to_us (b8) | ack_requested (b9) | length (b16-23)
- *   [25] = last ext-dst frame: dst IEEE low 4 bytes (LE)
- *   [26] = last ext-dst frame: dst IEEE high 4 bytes (LE)
- *   [27] = filter_ieee_addr low 4 bytes at that instant (LE)
- *
- * TEMP (post-poll RX-gap debug; strip before commit). Cycle stamp of the last
- * TX-completion ISR, used to measure how soon a pure-RX IRQ follows a TX.
- *   [32] = # pure-RX IRQs within 6 ms of a TX-done (post-TX RX works)
- *   [33] = last such gap (us)
- *   [34] = # TX-done ISRs
- *   [35] = max post-TX RX gap seen under 6 ms (us)
- *   [36] = AssocResp-to-us pipeline packed counters:
- *          b0 seen in rx_capture, b1 ack_requested, b2 filter_match, b3 ack_kicked
- *   [37] = last AssocResp-to-us snapshot:
- *          seq (b0-7) | length (b8-15) | PAN (b16-31)
- *   [38] = last TX-completion contract snapshot:
- *          effective_irq (b0-15) | op.state (b16-23) | expect_ack (b24) |
- *          expect_post_tx_rx (b25) | has_rx (b26) | ack_tx_pending (b27)
- *   [39] = last TX-completion raw snapshot:
- *          raw_irq (b0-15) | op.tx_seq (b16-23) | tx_buffer PSDU seq (b24-31)
- *   [40] = last AssocResp->ACK kick latency (us)
- *   [41] = max AssocResp->ACK kick latency (us)
- *   [42] = # ACK-TX completions whose PSDU seq matched the last AssocResp-to-us
- *   [43] = last AssocResp-ACK completion:
- *          effective_irq (b0-15) | raw_irq (b16-31)
- *   [44] = # AssocResp-to-us frames seen immediately at RX DMA handoff
- *   [45] = last RX DMA handoff AssocResp snapshot:
- *          seq (b0-7) | length (b8-15) | PAN (b16-31)
- *   [46] = # AssocResp-to-us frames seen at rx_capture_common classification
- *   [47] = last rx_capture_common AssocResp snapshot:
- *          seq (b0-7) | length (b8-15) | PAN (b16-31)
- *   [48] = # post-poll RX windows armed after TX_DS (!has_rx + expect_post_tx_rx)
- *   [49] = # armed windows that timed out with no raw RX IRQ
- *   [50] = # armed windows where raw RX IRQ arrived but effective_status dropped it
- *   [51] = # armed windows where RX handoff path was reached
- *   [52] = last armed-window observation:
- *          gap_us (b0-15) | raw_rx (b16) | has_rx (b17) | class (b24-31)
- *   [53] = last armed-window IRQ snapshot:
- *          raw_irq (b0-15) | effective_irq (b16-31)
- *   [54] = last armed-window TX-done arm snapshot:
- *          reg0x448 (b0-7) | rx_active[0] dma_len (b8-15) |
- *          rx_active[4] psdu_len (b16-23) | irq_mask_lo (b24-31)
- *   [55] = last armed-window observation snapshot:
- *          reg0x448 (b0-7) | rx_active[0] dma_len (b8-15) |
- *          rx_active[4] psdu_len (b16-23) | class (b24-31)
- *   [56] = # armed windows whose TX-done arm snapshot had RF_DMA_BUSY set
- *   [57] = # armed-window timeouts whose observation snapshot still had RF_DMA_BUSY set
- *   [58] = last armed-window timeout rx_active[0..3] (LE)
- *   [59] = last armed-window timeout rx_active[4..7] (LE)
- *   [60] = last armed-window timeout rx_active[8..11] (LE)
- */
-volatile uint32_t zb_acktx_trace[61];
-static uint32_t zb_tx_done_isr_cyc;
-static uint8_t zb_assoc_resp_ack_seq;
-static bool zb_assoc_resp_ack_inflight;
-static bool zb_post_tx_rx_window_armed;
-
 static inline struct tlsr8258_radio_data *tlsr8258_zigbee_radio_data_get(void)
 {
 	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zb));
@@ -613,26 +530,6 @@ static inline void tlsr8258_rf_ll_mode_set(uint8_t mode)
 	TLSR_REG8(0x0f16) = (uint8_t)((TLSR_REG8(0x0f16) & 0xfcu) | (mode & 0x03u));
 }
 
-/*
- * Vendor rf_start_srx() sequence (from libdrivers_8258.a disassembly): arm the
- * SRX (auto) state machine so RX AUTO-re-arms across TX->RX and, critically,
- * after the hardware auto-ACK reception of an ACK-requested TX. Our previous
- * manual RX enable (rf_set_rxmode bits only) received spaced-out frames
- * (beacons) but never re-armed for the unicast indirect response arriving a
- * few ms after the router's own DataReq poll (the ASSOCIATION-RESPONSE), so
- * the join stalled. This is exactly how the vendor stack (drv_radio.h
- * ZB_RADIO_SRX_START -> rf_start_srx) keeps RX live.
- */
-static void tlsr8258_rf_start_srx(void)
-{
-	uint32_t tick = TLSR_REG32(0x0740); /* system timer: start RX now */
-
-	TLSR_REG32(0x0f28) = 0x0fffffffu;   /* SRX timeout ~= infinite */
-	TLSR_REG32(0x0f18) = tick;          /* SRX start time */
-	TLSR_REG8(0x0f16) |= 0x04u;         /* SRX enable */
-	TLSR_REG16(0x0f00) = 0x3f86u;       /* auto TX/RX-off mode + SRX go */
-}
-
 static void tlsr8258_rf_set_rxmode(struct tlsr8258_radio_data *radio)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
@@ -642,7 +539,7 @@ static void tlsr8258_rf_set_rxmode(struct tlsr8258_radio_data *radio)
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
 	tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);
 	/*
-	 * NOTE: tlsr8258_rf_start_srx() (vendor SRX auto state machine) was tried
+	 * NOTE: the vendor SRX auto state machine (rf_start_srx) was tried
 	 * in 3 variants — armed-once (IRQ storm), armed-once+per-frame-buffer-clear
 	 * (under-receive), and re-armed-per-RX-done+clear+inline-filter (fix #7,
 	 * under-receive ~6/s, scan broke). None reproduced the vendor's clean
@@ -1007,24 +904,6 @@ static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
 						radio->filter_ieee_addr);
 }
 
-static bool tlsr8258_assoc_resp_to_our_ieee(const uint8_t *payload, uint8_t length,
-					    const struct tlsr8258_radio_data *radio)
-{
-	struct tlsr8258_core_filter_ctx filter;
-
-	if ((payload == NULL) || (radio == NULL)) {
-		return false;
-	}
-
-	filter = (struct tlsr8258_core_filter_ctx){
-		.pan_id = radio->filter_pan_id,
-		.short_addr = radio->filter_short_addr,
-		.ieee_addr = radio->filter_ieee_addr,
-	};
-
-	return tlsr8258_core_assoc_resp_to_ieee(payload, length, &filter);
-}
-
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length)
 {
 	return tlsr8258_ackf_ack_requested(payload, length);
@@ -1049,35 +928,19 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	uint8_t ack_psdu[3];
 	uint32_t elapsed_cyc;
 	uint16_t waited = 0u;
-	bool ack_dst_short = (payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] &
-			      TLSR8258_DEST_ADDR_TYPE_MASK) == TLSR8258_DEST_ADDR_TYPE_SHORT;
-	bool assoc_resp_to_us = tlsr8258_assoc_resp_to_our_ieee(payload, length, radio);
-
-	zb_acktx_trace[4]++;
-	if (ack_dst_short) {
-		zb_acktx_trace[14]++;
-		zb_acktx_trace[13] =
-			(uint32_t)sys_get_le16(&payload[TLSR8258_DEST_ADDR_OFFSET]) |
-			((uint32_t)sys_get_le16(radio->filter_short_addr) << 16);
-	}
 
 	if (!tlsr8258_filter_match_for_ack(payload, radio)) {
-		zb_acktx_trace[5]++;
 		if (tx_prepared) {
 			tlsr8258_rf_set_rxmode(radio);
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		}
 		return;
 	}
-	if (assoc_resp_to_us) {
-		zb_acktx_trace[36] += BIT(16);
-	}
 
 	ack_psdu[0] = 0x02u;
 	ack_psdu[1] = 0x00u;
 	ack_psdu[2] = payload[2];
 	if (tlsr8258_set_tx_payload(radio, ack_psdu, sizeof(ack_psdu)) < 0) {
-		zb_acktx_trace[6]++;
 		if (tx_prepared) {
 			tlsr8258_rf_set_rxmode(radio);
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
@@ -1118,26 +981,6 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
 		radio->debug->wait_duration_us =
 			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
-	}
-	zb_acktx_trace[7]++;
-	if (assoc_resp_to_us) {
-		zb_acktx_trace[36] += BIT(24);
-		uint32_t kick_us =
-			(tx_kick_cyc - tx_prepared_at_cycles) /
-			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-
-		zb_acktx_trace[40] = kick_us;
-		if (kick_us > zb_acktx_trace[41]) {
-			zb_acktx_trace[41] = kick_us;
-		}
-		zb_assoc_resp_ack_seq = payload[2];
-		zb_assoc_resp_ack_inflight = true;
-	}
-	zb_acktx_trace[8] = (uint32_t)payload[TLSR8258_DEST_ADDR_OFFSET] |
-			    ((uint32_t)payload[TLSR8258_DEST_ADDR_OFFSET + 1u] << 8) |
-			    ((uint32_t)payload[2] << 16);
-	if (ack_dst_short) {
-		zb_acktx_trace[9]++;
 	}
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 
@@ -1198,64 +1041,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
 	bool self_originated = tlsr8258_psdu_is_self_originated_command(payload, length, radio);
 	bool ack_requested = !self_originated && tlsr8258_ack_requested(payload, length);
-	bool assoc_resp_to_us = tlsr8258_assoc_resp_to_our_ieee(payload, length, radio);
-
-	zb_acktx_trace[0]++;
-	if (assoc_resp_to_us) {
-		zb_acktx_trace[36] += 1u;
-		if (ack_requested) {
-			zb_acktx_trace[36] += BIT(8);
-		}
-		zb_acktx_trace[37] = (uint32_t)payload[2] |
-				     ((uint32_t)length << 8) |
-				     ((uint32_t)sys_get_le16(&payload[TLSR8258_PAN_ID_OFFSET]) << 16);
-		zb_acktx_trace[46]++;
-		zb_acktx_trace[47] = zb_acktx_trace[37];
-	}
-	{
-		uint8_t dtype = payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] &
-				TLSR8258_DEST_ADDR_TYPE_MASK;
-
-		if (dtype == TLSR8258_DEST_ADDR_TYPE_SHORT) {
-			uint16_t fshort = sys_get_le16(radio->filter_short_addr);
-			uint16_t pshort = sys_get_le16(&payload[TLSR8258_DEST_ADDR_OFFSET]);
-
-			zb_acktx_trace[1]++;
-			if ((fshort != 0xffffu) && (pshort == fshort)) {
-				zb_acktx_trace[15]++;
-			}
-		}
-		/*
-		 * TEMP (assoc-resp RX-delivery debug): does the ext(IEEE)-addressed
-		 * Association Response reach rx_capture at all, and does its dst match
-		 * our filter_ieee at that instant? Strip before commit.
-		 */
-		if (dtype == TLSR8258_DEST_ADDR_TYPE_IEEE) {
-			bool to_us = memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET],
-					    radio->filter_ieee_addr,
-					    TLSR8258_IEEE_ADDR_SIZE) == 0;
-
-			zb_acktx_trace[22]++;
-			if (to_us) {
-				zb_acktx_trace[23]++;
-			}
-			zb_acktx_trace[24] = (uint32_t)payload[2] |
-					     ((uint32_t)(to_us ? 1u : 0u) << 8) |
-					     ((uint32_t)(ack_requested ? 1u : 0u) << 9) |
-					     ((uint32_t)length << 16);
-			zb_acktx_trace[25] = sys_get_le32(&payload[TLSR8258_DEST_ADDR_OFFSET]);
-			zb_acktx_trace[26] = sys_get_le32(&payload[TLSR8258_DEST_ADDR_OFFSET + 4u]);
-			zb_acktx_trace[27] = sys_get_le32(radio->filter_ieee_addr);
-		}
-		if (ack_requested) {
-			zb_acktx_trace[2]++;
-		}
-		zb_acktx_trace[3] =
-			(uint32_t)dtype |
-			((uint32_t)(payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) << 8) |
-			((uint32_t)length << 16) |
-			((uint32_t)(self_originated ? 1u : 0u) << 24);
-	}
 
 	/*
 	 * Early radio-filter handoff (Zigbee join fix). The MAC ACK is decided
@@ -1284,9 +1069,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 			radio->filter_pan_id[1] = payload[TLSR8258_PAN_ID_OFFSET + 1u];
 			radio->filter_short_addr[0] = payload[arsp_hdr + 1u];
 			radio->filter_short_addr[1] = payload[arsp_hdr + 2u];
-			zb_acktx_trace[20]++;
-			zb_acktx_trace[21] = (uint32_t)payload[arsp_hdr + 1u] |
-					     ((uint32_t)payload[arsp_hdr + 2u] << 8);
 		}
 	}
 
@@ -1563,8 +1345,6 @@ static void tlsr8258_rf_isr(const void *arg)
 	struct tlsr8258_radio_debug *debug = radio->debug;
 	bool has_rx = tlsr8258_rf_irq_has_rx_event(effective_irq);
 	bool has_tx = (effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS)) != 0u;
-	struct tlsr8258_core_post_tx_rx_window_result post_tx_rx_window;
-	uint32_t post_tx_gap_us = 0u;
 
 	if (debug != NULL) {
 		uint32_t prev = debug->prev_isr_entry_cyc;
@@ -1602,44 +1382,6 @@ static void tlsr8258_rf_isr(const void *arg)
 		debug->rf_crc_debug = crc;
 	}
 	tlsr8258_radio_last_irq_set(radio, effective_irq);
-	if (zb_post_tx_rx_window_armed && !has_tx && (zb_tx_done_isr_cyc != 0u)) {
-		uint8_t rf_dma_busy_reg = TLSR_REG8(0x0448);
-
-		post_tx_gap_us = (isr_entry_cyc - zb_tx_done_isr_cyc) /
-				 (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-		tlsr8258_core_observe_post_tx_rx_window(zb_post_tx_rx_window_armed, has_tx,
-							has_rx, irq, post_tx_gap_us, 6000u,
-							&post_tx_rx_window);
-		zb_post_tx_rx_window_armed = post_tx_rx_window.window_armed_after;
-		if (post_tx_rx_window.classification != TLSR8258_CORE_POST_TX_RX_NO_EVENT) {
-			zb_acktx_trace[52] = (post_tx_gap_us & 0xffffu) |
-					     ((uint32_t)(post_tx_rx_window.saw_raw_rx ? 1u : 0u)
-					      << 16) |
-					     ((uint32_t)(post_tx_rx_window.saw_valid_rx_handoff ?
-							 1u :
-							 0u)
-					      << 17) |
-					     ((uint32_t)post_tx_rx_window.classification << 24);
-			zb_acktx_trace[53] = (uint32_t)irq | ((uint32_t)effective_irq << 16);
-			zb_acktx_trace[55] = (uint32_t)rf_dma_busy_reg |
-					     ((uint32_t)radio->rx_active[0] << 8) |
-					     ((uint32_t)radio->rx_active[4] << 16) |
-					     ((uint32_t)post_tx_rx_window.classification << 24);
-			if (post_tx_rx_window.timed_out_without_raw_rx) {
-				zb_acktx_trace[49]++;
-				zb_acktx_trace[58] = sys_get_le32(&radio->rx_active[0]);
-				zb_acktx_trace[59] = sys_get_le32(&radio->rx_active[4]);
-				zb_acktx_trace[60] = sys_get_le32(&radio->rx_active[8]);
-				if ((rf_dma_busy_reg & BIT(5)) != 0u) {
-					zb_acktx_trace[57]++;
-				}
-			} else if (post_tx_rx_window.saw_valid_rx_handoff) {
-				zb_acktx_trace[51]++;
-			} else if (post_tx_rx_window.saw_raw_rx) {
-				zb_acktx_trace[50]++;
-			}
-		}
-	}
 
 	/*
 	 * LEVEL-IRQ SAFETY: if the raw IRQ carried an RX-class bit but
@@ -1656,23 +1398,6 @@ static void tlsr8258_rf_isr(const void *arg)
 		if (debug != NULL) {
 			debug->rf_irq_ack_debug = RF_IRQ_RX_EVENTS;
 		}
-		/*
-		 * TEMP (assoc-resp RX-miss debug; strip before commit): an RX-class
-		 * raw IRQ arrived but effective_status dropped it as an invalid /
-		 * transient DMA frame. Count these + snapshot the DMA header so we can
-		 * tell whether the AssocResp is arriving but being rejected here.
-		 *   [28] = # dropped RX-class IRQs
-		 *   [30] = last dropped: dma_len(b0-7) | rx[4](b8-15) | tail_byte(b16-23)
-		 */
-		zb_acktx_trace[28]++;
-		zb_acktx_trace[30] = (uint32_t)radio->rx_active[0] |
-				     ((uint32_t)radio->rx_active[4] << 8) |
-				     ((uint32_t)crc << 16);
-	}
-	/* TEMP: total RF ISR entries + RX-class raw IRQs seen. */
-	zb_acktx_trace[29]++;
-	if ((irq & RF_IRQ_RX_EVENTS) != 0u) {
-		zb_acktx_trace[31]++;
 	}
 
 	/*
@@ -1692,24 +1417,8 @@ static void tlsr8258_rf_isr(const void *arg)
 			debug->rf_branch_debug = has_rx ? 6u : 2u;
 			debug->rf_irq_ack_debug = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		}
-		zb_acktx_trace[38] = (uint32_t)effective_irq |
-				     ((uint32_t)radio->op.state << 16) |
-				     ((uint32_t)(radio->op.expect_ack ? 1u : 0u) << 24) |
-				     ((uint32_t)(radio->op.expect_post_tx_rx ? 1u : 0u) << 25) |
-				     ((uint32_t)(has_rx ? 1u : 0u) << 26) |
-				     ((uint32_t)(radio->op.ack_tx_pending ? 1u : 0u) << 27);
-		zb_acktx_trace[39] = (uint32_t)irq |
-				     ((uint32_t)radio->op.tx_seq << 16) |
-				     ((uint32_t)radio->tx_buffer[TLSR8258_PAYLOAD_OFFSET + 2u]
-				      << 24);
 		TLSR_REG16(0x0f20) = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		tlsr8258_radio_tx_count_inc(radio);
-		zb_acktx_trace[16]++;
-		zb_tx_done_isr_cyc = isr_entry_cyc; /* TEMP: stamp TX-done */
-		zb_acktx_trace[34]++;
-		if (has_rx) {
-			zb_acktx_trace[19]++;
-		}
 		{
 			tlsr8258_core_handle_tx_done(effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS),
 						      has_rx, radio->op.ack_tx_pending,
@@ -1724,7 +1433,6 @@ static void tlsr8258_rf_isr(const void *arg)
 					radio->tx_buffer[4] - TLSR8258_FCS_LENGTH) &&
 				!has_rx;
 
-			zb_acktx_trace[18]++;
 			/*
 			 * Post-TX return to RX, mirroring the vendor rf_rx_irq_handler
 			 * ORDER: (1) switch to RX mode, then (2) re-point the RX buffer and
@@ -1752,20 +1460,6 @@ static void tlsr8258_rf_isr(const void *arg)
 				} else {
 					tlsr8258_rf_set_rxmode_fast();
 				}
-				if (poll_followup) {
-					uint8_t rf_dma_busy_reg = TLSR_REG8(0x0448);
-
-					zb_post_tx_rx_window_armed = true;
-					zb_acktx_trace[48]++;
-					zb_acktx_trace[54] = (uint32_t)rf_dma_busy_reg |
-							     ((uint32_t)radio->rx_active[0] << 8) |
-							     ((uint32_t)radio->rx_active[4] << 16) |
-							     ((uint32_t)(TLSR_REG16(0x0f1c) & 0xffu)
-							      << 24);
-					if ((rf_dma_busy_reg & BIT(5)) != 0u) {
-						zb_acktx_trace[56]++;
-					}
-				}
 			}
 		}
 		key = irq_lock();
@@ -1781,17 +1475,6 @@ static void tlsr8258_rf_isr(const void *arg)
 		if (tx_done_result.clear_ack_tx_pending) {
 			radio->op.ack_tx_pending = false;
 		}
-		if (tx_done_result.count_ack_tx_completion) {
-			zb_acktx_trace[17]++;
-			if (zb_assoc_resp_ack_inflight &&
-			    (radio->tx_buffer[TLSR8258_PAYLOAD_OFFSET + 2u] ==
-			     zb_assoc_resp_ack_seq)) {
-				zb_acktx_trace[42]++;
-				zb_acktx_trace[43] =
-					(uint32_t)effective_irq | ((uint32_t)irq << 16);
-				zb_assoc_resp_ack_inflight = false;
-			}
-		}
 		tx_complete = tx_done_result.complete_stack_tx &&
 			      tlsr8258_radio_op_on_tx_success(&radio->op);
 		irq_unlock(key);
@@ -1803,24 +1486,6 @@ static void tlsr8258_rf_isr(const void *arg)
 	if (has_rx) {
 		struct tlsr8258_core_rx_dma_result rx_dma_result;
 
-		/*
-		 * TEMP (post-poll RX-gap): for a pure-RX IRQ (not the combined TX+RX
-		 * completion), measure how long after the last TX-done it arrived. If
-		 * the radio can receive shortly after a TX, this is nonzero; if it is
-		 * ~0 the radio is deaf right after transmitting (the AssocResp window).
-		 */
-		if (!has_tx && (zb_tx_done_isr_cyc != 0u)) {
-			uint32_t gap_us = (isr_entry_cyc - zb_tx_done_isr_cyc) /
-					  (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-
-			if (gap_us < 6000u) {
-				zb_acktx_trace[32]++;
-				zb_acktx_trace[33] = gap_us;
-				if (gap_us > zb_acktx_trace[35]) {
-					zb_acktx_trace[35] = gap_us;
-				}
-			}
-		}
 		if (debug != NULL) {
 			debug->rf_branch_debug = has_tx ? 7u : 1u;
 			debug->rf_isr_rx_event_count++;
@@ -1842,21 +1507,6 @@ static void tlsr8258_rf_isr(const void *arg)
 			radio->rx_active[0] = 0u;
 			radio->rx_active[4] = 0u;
 			tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_BUF_SIZE);
-		}
-		{
-			uint8_t *payload = &radio->rx_proc[TLSR8258_PAYLOAD_OFFSET];
-			uint8_t length =
-				tlsr8258_dma_payload_len_get(radio->rx_proc,
-							     (uint16_t)radio->rx_proc[0] + 4u);
-
-			if (tlsr8258_assoc_resp_to_our_ieee(payload, length, radio)) {
-				zb_acktx_trace[44]++;
-				zb_acktx_trace[45] = (uint32_t)payload[2] |
-						     ((uint32_t)length << 8) |
-						     ((uint32_t)sys_get_le16(
-							     &payload[TLSR8258_PAN_ID_OFFSET])
-						      << 16);
-			}
 		}
 
 		tlsr8258_rx_capture_isr(effective_irq, radio);
@@ -2172,13 +1822,6 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		return -ENETDOWN;
 	}
 
-	zb_acktx_trace[10]++;
-	if (frag != NULL && frag->len >= 3u) {
-		zb_acktx_trace[12] = (uint32_t)frag->len |
-				     ((uint32_t)frag->data[0] << 8) |
-				     ((uint32_t)(frag->data[1] & 0x0cu) << 16);
-	}
-
 	if (mode != IEEE802154_TX_MODE_DIRECT && mode != IEEE802154_TX_MODE_CCA) {
 		return -ENOTSUP;
 	}
@@ -2223,7 +1866,6 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	}
 	TLSR_REG16(0x0f20) = tlsr8258_tx_irq_start_clear_mask(expect_post_tx_followup);
 	tlsr8258_tx_diag_put(radio, (0x10u << 24) | ((uint32_t)tx_seq << 16) | (uint32_t)mode);
-	zb_acktx_trace[11]++;
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 	irq_enable(TLSR8258_IRQ_ZB_RT);
 

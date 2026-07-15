@@ -189,10 +189,6 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     u16 origReqCoordShort =
         (origReq != NULL) ? ((u16)origReq[4] | ((u16)origReq[5] << 8)) : 0U;
 
-    zb_mac_assoc_trace_put((0xa2010000U) |
-                           ((u32)mhr[2] << 8) |
-                           payload[3]);
-
     memset(buf, 0, 22);
 
     if (mhr[3] == ADDR_MODE_EXT) {
@@ -210,9 +206,6 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
          * recovery path without the original request buffer, so bail.
          */
         if (payload[3] != MAC_SUCCESS) {
-            zb_mac_assoc_trace_put((0xa2ff0000U) |
-                                   ((u32)mhr[2] << 8) |
-                                   payload[3]);
             zb_buf_free(buf);
             return;
         }
@@ -254,10 +247,6 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
                                  assignedShort,
                                  g_zbInfo.macPib.extAddress);
     ((u8 *)buf)[10] = payload[3];
-
-    zb_mac_assoc_trace_put((0xa2020000U) |
-                           ((u32)mhr[2] << 8) |
-                           payload[3]);
 
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
 }

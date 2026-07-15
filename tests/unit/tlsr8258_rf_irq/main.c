@@ -294,7 +294,6 @@ static void test_tlsr8258_driver_uses_fake_phy_core_seam(void)
 	EXPECT_FILE_CONTAINS(path, "#include \"ieee802154_tlsr8258_fake_phy_core.h\"");
 	EXPECT_FILE_CONTAINS(path, "struct tlsr8258_core_filter_ctx");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_psdu_is_ack_for_seq");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_assoc_resp_to_ieee");
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_core_handle_rx_frame");
 	EXPECT_FILE_CONTAINS(header_path, "struct tlsr8258_radio_backend");
 	EXPECT_FILE_CONTAINS(header_path, "tlsr8258_core_handle_tx_done");
