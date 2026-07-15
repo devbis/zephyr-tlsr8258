@@ -27,20 +27,8 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
 
 u8 rejoinRespPollCnt;
 ev_timer_event_t *rejoinRespTimeoutEvt;
-volatile u32 zb_nwk_join_trace[16] = {0x4e4a4f49U};
-static u8 zb_nwk_join_trace_pos;
 
 void nwk_rejoinReq(void *arg);
-
-static void zb_nwk_join_trace_put(u32 tag)
-{
-    u8 span = (u8)(ARRAY_SIZE(zb_nwk_join_trace) - 2U);
-    u8 slot = (u8)(2U + (zb_nwk_join_trace_pos % span));
-
-    zb_nwk_join_trace[slot] = tag;
-    zb_nwk_join_trace_pos++;
-    zb_nwk_join_trace[1] = zb_nwk_join_trace_pos;
-}
 
 static inline u32 rejoin_resp_timeout_ms(void)
 {
@@ -96,10 +84,6 @@ void nwk_nlmeJoinCnf(void *arg, u16 nwkAddr, u8 status, u8 channel)
         cnf->nwkAddr = g_zbInfo.nwkNib.nwkAddr;
         memcpy(cnf->extPANId, g_zbInfo.nwkNib.extPANId, EXT_ADDR_LEN);
     }
-
-    zb_nwk_join_trace_put((0xb1010000U) |
-                          ((u32)status << 8) |
-                          g_zbNwkCtx.user_state);
 
     /*
      * Vendor flips user_state to NLME_IDLE here, but on the Zephyr
@@ -352,16 +336,8 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     u16 selfRef = 0;
     u16 parentRef = 0;
 
-    zb_nwk_join_trace_put((0xb1000000U) |
-                          ((u32)cnf->status << 8) |
-                          (u8)g_zbNwkCtx.user_state);
-
     if (cnf->status != MAC_SUCCESS) {
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
-
-        zb_nwk_join_trace_put((0xb1ff0000U) |
-                              ((u32)cnf->status << 8) |
-                              (u8)g_zbNwkCtx.user_state);
 
         memset(req, 0, sizeof(nlme_join_req_t));
         req->capabilityInfo = g_zbInfo.nwkNib.capabilityInfo;
@@ -371,7 +347,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     }
 
     if (parent == NULL) {
-        zb_nwk_join_trace_put(0xb1ff0001U);
         nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
         return;
     }
@@ -408,9 +383,6 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
                                                        g_zbInfo.macPib.coordExtAddress,
                                                        &parentRef);
         if (self_rc != NWK_STATUS_SUCCESS || parent_rc != NWK_STATUS_SUCCESS) {
-            zb_nwk_join_trace_put((0xb1ff0002U) |
-                                  ((u32)self_rc << 8) |
-                                  parent_rc);
             nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
             return;
         }
@@ -430,16 +402,12 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
         neighbor.outgoingCost = 1;
 
         if (tl_zbNeighborTableUpdate(&neighbor, 1) == NULL) {
-            zb_nwk_join_trace_put(0xb1ff0003U);
             nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_NEIGHBOR_TABLE_FULL, 0);
             return;
         }
     }
 
     g_zbNwkCtx.user_state = NLME_JOINING;
-    zb_nwk_join_trace_put((0xb1000001U) |
-                          ((u32)cnf->status << 8) |
-                          (u8)g_zbNwkCtx.user_state);
     nwk_nlmeJoinCnf(arg, 0, NWK_STATUS_SUCCESS, 0);
 }
 
