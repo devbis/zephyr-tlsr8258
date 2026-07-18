@@ -176,6 +176,111 @@ static inline bool tlsr8258_core_psdu_expects_post_tx_followup(const uint8_t *ps
 	       tlsr8258_core_psdu_is_mac_command(psdu, psdu_len, 0x07u);
 }
 
+/*
+ * True iff the frame's source address equals our own (filter) short/IEEE
+ * address. Port of the driver's tlsr8258_psdu_src_matches_local so the ISR's
+ * self-originated test can be exercised on host. filter->short_addr /
+ * ieee_addr are little-endian, as stored in the radio filter.
+ */
+static inline bool tlsr8258_core_psdu_src_matches_filter(
+	const uint8_t *psdu, uint8_t psdu_len, const struct tlsr8258_core_filter_ctx *filter)
+{
+	uint16_t fcf;
+	uint8_t idx = 3u;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+
+	if ((psdu == NULL) || (filter == NULL) || (filter->short_addr == NULL) ||
+	    (filter->ieee_addr == NULL) || (psdu_len < idx)) {
+		return false;
+	}
+
+	fcf = tlsr8258_core_le16(psdu);
+	dst_mode = (uint8_t)((fcf >> 10) & 0x03u);
+	src_mode = (uint8_t)((fcf >> 14) & 0x03u);
+
+	if (dst_mode != 0u) {
+		idx += 2u; /* dst PAN id */
+		idx += (dst_mode == 0x03u) ? 8u : 2u;
+	}
+	if (src_mode == 0u) {
+		return false;
+	}
+	if ((fcf & BIT(6)) == 0u) {
+		idx += 2u; /* src PAN id (no intra-PAN compression) */
+	}
+	if (src_mode == 0x02u) {
+		if ((uint16_t)(idx + 2u) > psdu_len) {
+			return false;
+		}
+		return memcmp(&psdu[idx], filter->short_addr, 2u) == 0;
+	}
+	if (src_mode == 0x03u) {
+		if ((uint16_t)(idx + 8u) > psdu_len) {
+			return false;
+		}
+		return memcmp(&psdu[idx], filter->ieee_addr, 8u) == 0;
+	}
+	return false;
+}
+
+/*
+ * True iff this is one of OUR OWN MAC command frames (data-request or beacon-
+ * request) echoed back to us — the ISR must NOT auto-ACK those. Port of the
+ * driver's tlsr8258_psdu_is_self_originated_command.
+ */
+static inline bool tlsr8258_core_psdu_is_self_originated_command(
+	const uint8_t *psdu, uint8_t psdu_len, const struct tlsr8258_core_filter_ctx *filter)
+{
+	uint16_t fcf;
+
+	if ((psdu == NULL) || (filter == NULL) || (psdu_len < 4u)) {
+		return false;
+	}
+	fcf = tlsr8258_core_le16(psdu);
+	if ((fcf & 0x0007u) != 0x03u) { /* MAC command frame type */
+		return false;
+	}
+	if (!tlsr8258_core_psdu_src_matches_filter(psdu, psdu_len, filter)) {
+		return false;
+	}
+	return tlsr8258_core_psdu_is_mac_command(psdu, psdu_len, 0x04u) ||
+	       tlsr8258_core_psdu_is_mac_command(psdu, psdu_len, 0x07u);
+}
+
+struct tlsr8258_core_rx_ack_decision {
+	bool self_originated; /* our own data/beacon-req echo -> do NOT ack */
+	bool ack_requested;   /* !self_originated && FCF ack-request bit set */
+	bool filter_match;    /* dst is us / broadcast -> we are allowed to ack */
+	bool should_ack;      /* ack_requested && filter_match: ISR sends a MAC ACK */
+};
+
+/*
+ * The exact decision the RX ISR (rx_capture_common) makes for a received PSDU:
+ * whether it is self-originated, whether it wants an ACK, whether it is
+ * addressed to us, and hence whether we transmit a MAC ACK. Extracted so the
+ * driver and the host unit test share ONE implementation (no drift).
+ */
+static inline void tlsr8258_core_rx_ack_decision(
+	const uint8_t *psdu, uint8_t psdu_len, const struct tlsr8258_core_filter_ctx *filter,
+	struct tlsr8258_core_rx_ack_decision *out)
+{
+	if (out == NULL) {
+		return;
+	}
+	*out = (struct tlsr8258_core_rx_ack_decision){ 0 };
+	if ((psdu == NULL) || (filter == NULL)) {
+		return;
+	}
+	out->self_originated =
+		tlsr8258_core_psdu_is_self_originated_command(psdu, psdu_len, filter);
+	out->ack_requested =
+		!out->self_originated && tlsr8258_ackf_ack_requested(psdu, psdu_len);
+	out->filter_match = tlsr8258_ackf_dst_matches_filter(
+		psdu, filter->pan_id, filter->short_addr, filter->ieee_addr);
+	out->should_ack = out->ack_requested && out->filter_match;
+}
+
 static inline void tlsr8258_core_handle_tx_done(uint16_t irq_status, bool has_rx,
 						bool ack_tx_pending,
 						bool expect_post_tx_rx,
