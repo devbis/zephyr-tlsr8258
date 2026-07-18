@@ -692,88 +692,12 @@ static uint8_t tlsr8258_mac_hdr_size(uint16_t fcf, uint8_t psdu_len)
 	return (idx <= psdu_len) ? idx : 0u;
 }
 
-static bool tlsr8258_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len);
-static bool tlsr8258_psdu_is_beacon_request(const uint8_t *psdu, uint8_t psdu_len);
-
-static bool tlsr8258_psdu_src_matches_local(const uint8_t *psdu, uint8_t psdu_len,
-					    const struct tlsr8258_radio_data *radio)
-{
-	uint16_t fcf;
-	uint8_t idx = 3u;
-	uint8_t dst_mode;
-	uint8_t src_mode;
-
-	if ((psdu == NULL) || (radio == NULL) || (psdu_len < idx)) {
-		return false;
-	}
-
-	fcf = sys_get_le16(psdu);
-	dst_mode = (uint8_t)((fcf >> 10) & 0x03u);
-	src_mode = (uint8_t)((fcf >> 14) & 0x03u);
-
-	if (dst_mode != 0u) {
-		idx += TLSR8258_PAN_ID_SIZE;
-		idx += (dst_mode == 0x03u) ? TLSR8258_IEEE_ADDR_SIZE : TLSR8258_SHORT_ADDR_SIZE;
-	}
-
-	if (src_mode == 0u) {
-		return false;
-	}
-
-	if ((fcf & BIT(6)) == 0u) {
-		idx += TLSR8258_PAN_ID_SIZE;
-	}
-
-	if (src_mode == 0x02u) {
-		if ((uint16_t)(idx + TLSR8258_SHORT_ADDR_SIZE) > psdu_len) {
-			return false;
-		}
-
-		return memcmp(&psdu[idx], radio->filter_short_addr, TLSR8258_SHORT_ADDR_SIZE) == 0;
-	}
-
-	if (src_mode == 0x03u) {
-		if ((uint16_t)(idx + TLSR8258_IEEE_ADDR_SIZE) > psdu_len) {
-			return false;
-		}
-
-		return memcmp(&psdu[idx], radio->filter_ieee_addr, TLSR8258_IEEE_ADDR_SIZE) == 0;
-	}
-
-	return false;
-}
-
-static bool tlsr8258_psdu_is_self_originated_command(const uint8_t *psdu, uint8_t psdu_len,
-						      const struct tlsr8258_radio_data *radio)
-{
-	uint16_t fcf;
-
-	if ((psdu == NULL) || (radio == NULL) || (psdu_len < 4u)) {
-		return false;
-	}
-
-	fcf = sys_get_le16(psdu);
-	if ((fcf & 0x0007u) != 0x03u) {
-		return false;
-	}
-
-	if (!tlsr8258_psdu_src_matches_local(psdu, psdu_len, radio)) {
-		return false;
-	}
-
-	return tlsr8258_psdu_is_data_request(psdu, psdu_len) ||
-	       tlsr8258_psdu_is_beacon_request(psdu, psdu_len);
-}
-
-static bool tlsr8258_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len)
-{
-	return tlsr8258_core_psdu_is_mac_command(psdu, psdu_len, 0x04u);
-}
-
-static bool tlsr8258_psdu_is_beacon_request(const uint8_t *psdu, uint8_t psdu_len)
-{
-	return tlsr8258_core_psdu_is_mac_command(psdu, psdu_len, 0x07u);
-}
+/*
+ * self-originated / src-matches-local / data-req / beacon-req helpers moved to
+ * tlsr8258_core_* in ieee802154_tlsr8258_fake_phy_core.h and are now driven via
+ * tlsr8258_core_rx_ack_decision() so the RX-ISR ACK decision is covered by the
+ * tlsr8258_rx_ack_decision host unit test.
+ */
 
 static bool tlsr8258_psdu_is_ack_for_seq(const uint8_t *psdu, uint8_t psdu_len, uint8_t seq)
 {
@@ -1046,8 +970,21 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
 	}
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
-	bool self_originated = tlsr8258_psdu_is_self_originated_command(payload, length, radio);
-	bool ack_requested = !self_originated && tlsr8258_ack_requested(payload, length);
+	struct tlsr8258_core_filter_ctx ack_filter_ctx = {
+		.pan_id = radio->filter_pan_id,
+		.short_addr = radio->filter_short_addr,
+		.ieee_addr = radio->filter_ieee_addr,
+	};
+	struct tlsr8258_core_rx_ack_decision ack_decision;
+
+	/*
+	 * Shared with the tlsr8258_rx_ack_decision host unit test (fake_phy_core.h)
+	 * so the ISR's self-originated / ack-request / should-ACK decision is
+	 * exercised deterministically off-hardware.
+	 */
+	tlsr8258_core_rx_ack_decision(payload, length, &ack_filter_ctx, &ack_decision);
+	bool self_originated = ack_decision.self_originated;
+	bool ack_requested = ack_decision.ack_requested;
 
 	/*
 	 * Early radio-filter handoff (Zigbee join fix). The MAC ACK is decided
