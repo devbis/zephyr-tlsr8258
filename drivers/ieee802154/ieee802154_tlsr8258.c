@@ -557,7 +557,14 @@ static void tlsr8258_rf_set_rxmode(struct tlsr8258_radio_data *radio)
  * tlsr8258_rf_set_rxmode()'s PLL re-lock left the radio not-yet-listening in
  * that window, so the AssocResp was missed and the join never completed. This
  * mirrors the vendor rf_set_rxmode() which also does no channel reload.
+ *
+ * Retained for reference but no longer called: unlike set_rxmode_vendor() it
+ * still writes 0x0f02 = RF_TRX_OFF first (the TX/RX state-machine reset), which
+ * opens a ~200us-13ms deaf window on the TX->RX turnaround. Every post-TX RX
+ * re-arm now uses the reset-free set_rxmode_vendor() instead (see the has_tx ISR
+ * branch), so unicasts the coordinator sends right after we ACK are not lost.
  */
+static void tlsr8258_rf_set_rxmode_fast(void) __maybe_unused;
 static void tlsr8258_rf_set_rxmode_fast(void)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
@@ -1458,7 +1465,23 @@ static void tlsr8258_rf_isr(const void *arg)
 				if (poll_followup) {
 					tlsr8258_rf_set_rxmode_vendor();
 				} else {
-					tlsr8258_rf_set_rxmode_fast();
+					/*
+					 * Post-TX (including MAC-ACK completion) return to
+					 * RX. Use the vendor no-reset turnaround rather than
+					 * set_rxmode_fast(): _fast still writes
+					 * 0x0f02 = RF_TRX_OFF first (the TX/RX state-machine
+					 * reset), which leaves the radio deaf for
+					 * ~200us-13ms. After we MAC-ACK a frame addressed to
+					 * us, that deaf window drops the coordinator's very
+					 * next frame to us (the Transport-Key burst and the
+					 * post-join ZDP interview requests), so those unicasts
+					 * are never received. Switching to the vendor-exact
+					 * TX-en -> RX-en turnaround (no reset, no PLL reload)
+					 * measured ~8x more of our unicasts ACKed on HW. Same
+					 * root cause as the assoc-poll fix (commit dd3854ab),
+					 * which only covered the poll_followup path above.
+					 */
+					tlsr8258_rf_set_rxmode_vendor();
 				}
 			}
 		}
