@@ -205,12 +205,18 @@ z_prep_c:
 	tmov r0, #1
 	tstorerb r0, [r1, #1]
 
-	tloadr r1, .Lanalog_base
-	TC32_ANALOG_WRITE 0x82, 0x64
-	TC32_ANALOG_WRITE 0x34, 0x80
-	TC32_ANALOG_WRITE 0x0b, 0x38
-	TC32_ANALOG_WRITE 0x8c, 0x02
-	TC32_ANALOG_WRITE 0x02, 0xa2
+	/*
+	 * NB: the vendor cpu_wakeup_init() analog/DCDC/PLL writes (ana
+	 * 0x82/0x34/0x0b/0x8c/0x02) are deliberately NOT issued here. Performing
+	 * them before the .data copy perturbs the DCDC/clock state, so the
+	 * flash-LMA reads in the copy loop land in a marginal timing window and
+	 * silently corrupt initialised data (observed on TLSR8258: non-
+	 * deterministic .data corruption of BDB/ZDO callback pointers -> random
+	 * join/interview failure). The vendor cstartup_8258.S copies .data at the
+	 * stable boot clock first and raises the clock only later in main(); we
+	 * match that by issuing these writes in z_prep_c_flash_continue AFTER the
+	 * .data/.rodata/.ramfunc copies.
+	 */
 
 	/*
 	 * Match soc_prep_hook(): clear watchdog enable in reg_tmr_ctrl
@@ -259,8 +265,6 @@ z_prep_c:
 	.word 0x0080060c
 .Lflash_ctrl:
 	.word 0x0080000c
-.Lanalog_base:
-	.word 0x008000b8
 
 SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	tloadr r0, .Lbss_start
@@ -314,6 +318,19 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	tsub r2, r2, r1
 	TC32_COPY_FROM_SRAM_MIRROR
 
+	/*
+	 * .data/.rodata/.ramfunc are now copied at the stable boot clock. Apply
+	 * the vendor cpu_wakeup_init() analog/DCDC/PLL setup here (moved from
+	 * z_prep_c) so the flash-LMA copy reads above never run in a marginal
+	 * timing window -- see the note in z_prep_c.
+	 */
+	tloadr r1, .Lanalog_base
+	TC32_ANALOG_WRITE 0x82, 0x64
+	TC32_ANALOG_WRITE 0x34, 0x80
+	TC32_ANALOG_WRITE 0x0b, 0x38
+	TC32_ANALOG_WRITE 0x8c, 0x02
+	TC32_ANALOG_WRITE 0x02, 0xa2
+
 	tjl z_cstart
 
 .Lprep_hang:
@@ -342,6 +359,8 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	.word __ramfunc_region_start
 .Lramfunc_end:
 	.word __ramfunc_end
+.Lanalog_base:
+	.word 0x008000b8
 
 SECTION_FUNC(boot_ram_mirror, __irq)
 z_tc32_irq_entry:
