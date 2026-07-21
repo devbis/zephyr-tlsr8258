@@ -302,6 +302,32 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
 			      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
 	frame.rssi_dbm = msg.rssi_dbm;
+	/*
+	 * TEST KNOB — off by default. Build with -DZB_RX_BEACON_JITTER_MS=N to
+	 * inject a randomized 0..N ms delay before delivering BEACON frames
+	 * (frame_type 0) on native_sim. This reproduces off-rig the TLSR8258 HW
+	 * scan-state race: when RX/thread latency makes the beacon-notify run
+	 * after g_zbNwkCtx.state has left NLME_STATE_DISC, the beacon is dropped
+	 * (nwk_discovery.c), no parent is stored, no AssocReq is sent, and the
+	 * router re-scans forever. native_sim's normally-instant delivery always
+	 * makes the DISC window, so the join/interview only fails once this jitter
+	 * pushes beacons past it — letting the fix be verified here, not on the
+	 * flaky rig. Self-contained xorshift PRNG (no entropy dep). See
+	 * project_router_hw_join_no_beacons UPDATE 90.
+	 */
+#ifndef ZB_RX_BEACON_JITTER_MS
+#define ZB_RX_BEACON_JITTER_MS 0
+#endif
+#if defined(CONFIG_BOARD_NATIVE_SIM) && (ZB_RX_BEACON_JITTER_MS > 0)
+	if (msg.psdu_len >= 1U && (msg.psdu[0] & 0x07u) == 0u) {
+		static uint32_t jitter_rng = 0x2b7e1516u;
+
+		jitter_rng ^= jitter_rng << 13;
+		jitter_rng ^= jitter_rng >> 17;
+		jitter_rng ^= jitter_rng << 5;
+		k_msleep((int32_t)(jitter_rng % (uint32_t)(ZB_RX_BEACON_JITTER_MS + 1U)));
+	}
+#endif
 	printk("zb_sock_radio: deliver RX node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
 	       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
 	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
