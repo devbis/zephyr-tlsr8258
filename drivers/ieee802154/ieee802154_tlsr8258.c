@@ -1255,6 +1255,56 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 	}
 }
 
+/*
+ * Drain rx_queue from the ZB thread (see zb_platform_radio_rx_poll). This is
+ * the SOLE RX consumer: the COOP rx_worker is left uncreated (see tlsr8258_init)
+ * because the zb_thread no-yield busy-loop (zb_main.c:390) intermittently
+ * starves it — on some boots it never dequeues a frame, so RX (AssocResp /
+ * Transport-Key / interview) silently stalls and the router re-associates
+ * forever. Single-consumer here (zb_thread only) removes BOTH the starvation
+ * and the zb_buf-pool data race a second concurrent consumer would cause.
+ * TX/ACK completion is independent — handled directly in tlsr8258_rf_isr
+ * (k_sem_give tx_wait on WAITING_POST_TX_RX) — so it is unaffected. The
+ * per-frame body mirrors the old worker loop (minus its diagnostics).
+ */
+static void tlsr8258_rx_drain_pending(struct tlsr8258_radio_data *radio)
+{
+	struct tlsr8258_rx_frame frame;
+
+	while (tlsr8258_rx_queue_try_dequeue(&radio->rx_queue, &frame)) {
+		bool is_ack = false;
+		bool ack_pending = false;
+		bool is_pending_response = false;
+
+		if (frame.len >= TLSR8258_PAYLOAD_OFFSET) {
+			const uint8_t *psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];
+			uint8_t psdu_len = tlsr8258_dma_payload_len_get(frame.dma, frame.len);
+			uint8_t tx_seq = radio->op.tx_seq;
+
+			is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len, tx_seq);
+			ack_pending = is_ack && ((psdu[0] & TLSR8258_FRAME_PENDING) != 0u);
+			is_pending_response =
+				tlsr8258_psdu_is_pending_response(psdu, psdu_len, tx_seq, radio);
+		}
+
+		tlsr8258_rx_dispatch(radio, &frame);
+		tlsr8258_rx_queue_release(&radio->rx_queue, frame.slot);
+
+		{
+			bool rx_complete;
+			uint32_t key = irq_lock();
+
+			rx_complete = (radio->op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX) &&
+				      tlsr8258_radio_op_on_rx(&radio->op, is_ack, ack_pending,
+							      is_pending_response);
+			irq_unlock(key);
+			if (rx_complete) {
+				k_sem_give(&radio->tx_wait);
+			}
+		}
+	}
+}
+
 static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio)
 {
 	tlsr8258_rx_capture_common(irq_status, NULL, 0u, radio);
@@ -2082,6 +2132,22 @@ static void tlsr8258_irq_config(const struct device *dev)
 }
 
 static struct tlsr8258_radio_data tlsr8258_radio_data_0;
+/* Set true once tlsr8258_init() has run rx_queue_init; gates the zb_thread
+ * RX-poll drain so it never touches an uninitialized k_fifo. */
+static bool tlsr8258_hw_inited;
+
+/*
+ * Override the weak zb_main.c hook. The ZB thread busy-loop calls this every
+ * tick; it is the sole RX consumer (the COOP rx_worker is not created — see
+ * tlsr8258_init). Draining from the always-runnable ZB thread makes RX delivery
+ * independent of cooperative-thread scheduling.
+ */
+void zb_platform_radio_rx_poll(void)
+{
+	if (tlsr8258_hw_inited) {
+		tlsr8258_rx_drain_pending(&tlsr8258_radio_data_0);
+	}
+}
 
 static const struct tlsr8258_radio_config tlsr8258_radio_config_0 = {
 	.irq_config_func = tlsr8258_irq_config,
@@ -2099,8 +2165,6 @@ static int tlsr8258_init(const struct device *dev)
 	 * around that by calling device_init() as a fallback; the flag below
 	 * prevents the k_thread_create path from running twice.
 	 */
-	static bool tlsr8258_hw_inited;
-
 	if (tlsr8258_hw_inited) {
 		return 0;
 	}
@@ -2117,10 +2181,12 @@ static int tlsr8258_init(const struct device *dev)
 	tlsr8258_rx_queue_init(&radio->rx_queue, radio->rx_slots, TLSR8258_RX_SLOT_COUNT);
 	k_sem_init(&radio->tx_wait, 0, 1);
 
-	k_thread_create(&radio->rx_worker_thread, radio->rx_worker_stack,
-			K_KERNEL_STACK_SIZEOF(radio->rx_worker_stack),
-			tlsr8258_rx_worker, radio, NULL, NULL,
-			K_PRIO_COOP(2), 0, K_NO_WAIT);
+	/*
+	 * RX worker thread DISABLED: RX is drained from the ZB thread via
+	 * zb_platform_radio_rx_poll (single consumer, no zb_buf race, no
+	 * cooperative-starvation). tlsr8258_rx_worker is kept for reference only.
+	 */
+	(void)tlsr8258_rx_worker;
 
 	tlsr8258_rf_init();
 	tlsr8258_rf_set_channel_offset(
