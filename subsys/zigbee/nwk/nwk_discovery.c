@@ -127,8 +127,27 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 			return;
 		}
 	} else if (state != NLME_STATE_FORMATION) {
-		zb_buf_free((zb_buf_t *)arg);
-		return;
+		/*
+		 * A beacon can be handed to this handler just after the active-scan
+		 * window closed and g_zbNwkCtx.state already left NLME_STATE_DISC —
+		 * on real TLSR8258 hardware the RX/thread latency between the beacon
+		 * arriving on air and this indication running routinely exceeds the
+		 * scan window, so the beacon used to be dropped here, tl_zbNwkParent-
+		 * Choose() then found no candidate, nwk_associateJoin() bailed with
+		 * NWK_STATUS_NOT_PERMITTED, and the router re-scanned forever without
+		 * ever sending an Association Request. The addition-neighbor table is
+		 * NOT reset between scans, so while we are still trying to join
+		 * (not yet on a network) keep storing valid beacons: a late one then
+		 * remains a usable parent candidate for the next steer/scan cycle.
+		 * Apply the same superframe validity guard as the DISC path. Once
+		 * joined, keep the old behaviour and drop.
+		 * (Reproduced + verified on native_sim via ZB_RX_BEACON_JITTER_MS.)
+		 */
+		if (g_zbNwkCtx.joined ||
+		    (((u8)(ind->panDesc.superframeSpec >> 8) & 0x7fU) == 0U)) {
+			zb_buf_free((zb_buf_t *)arg);
+			return;
+		}
 	}
 
 #if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
