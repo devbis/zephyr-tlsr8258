@@ -1576,6 +1576,17 @@ static void tlsr8258_rf_isr(const void *arg)
 				zb_tx_rx_pending_trace[3]++;
 				k_sem_give(&radio->tx_wait);
 			}
+			/*
+			 * Our ack-requested poll completed via its ACK arriving as an
+			 * RX event only (no RF_IRQ_TX), so the has_tx TX->RX turnaround
+			 * above never ran and the RX state machine was left un-re-armed.
+			 * The coordinator's ASSOCIATION-RESPONSE (indirect, to our
+			 * not-yet-short IEEE) follows only ~260us later; without a
+			 * reset-free re-arm here the radio is not listening and the reply
+			 * is lost (confirmed: AssocResp on air, 0 reach rx_capture_common).
+			 * Mirror the has_tx branch's reset-free re-arm so the reply lands.
+			 */
+			tlsr8258_rf_set_rxmode_vendor();
 		}
 	} else if (!has_tx && (effective_irq & (RF_IRQ_STX_TIMEOUT | RF_IRQ_FSM_TIMEOUT)) != 0u) {
 		bool tx_failed = false;
