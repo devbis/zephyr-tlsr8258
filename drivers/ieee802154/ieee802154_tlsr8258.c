@@ -986,36 +986,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	bool self_originated = ack_decision.self_originated;
 	bool ack_requested = ack_decision.ack_requested;
 
-	/*
-	 * Early radio-filter handoff (Zigbee join fix). The MAC ACK is decided
-	 * here in the RX ISR from radio->filter_short_addr, but that field is
-	 * normally only updated by the stack-side fast-handoff which runs later
-	 * on the RX worker thread. The coordinator sends its Transport-Key burst
-	 * to our freshly-assigned short within a few ms of the ASSOCIATION-
-	 * RESPONSE — before the worker runs — so those unicasts were rejected by
-	 * tlsr8258_filter_match_for_ack() (stale short) and never ACKed, stalling
-	 * the join in an associate/retry loop. Program the assigned short (and
-	 * PAN) into the filter the instant we RX a SUCCESS AssocResp addressed to
-	 * our IEEE, so the Transport-Key frames are ACKed straight from this ISR.
-	 */
-	if (((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x03u) &&
-	    ((payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) ==
-	     TLSR8258_DEST_ADDR_TYPE_IEEE)) {
-		uint16_t arsp_fcf = sys_get_le16(payload);
-		uint8_t arsp_hdr = tlsr8258_mac_hdr_size(arsp_fcf, length);
-
-		if ((arsp_hdr != 0u) && ((uint16_t)(arsp_hdr + 4u) <= length) &&
-		    (payload[arsp_hdr] == 0x02u) &&        /* MAC_CMD_ASSOCIATION_RESPONSE */
-		    (payload[arsp_hdr + 3u] == 0x00u) &&   /* MAC_SUCCESS */
-		    (memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_ieee_addr,
-			    TLSR8258_IEEE_ADDR_SIZE) == 0)) {
-			radio->filter_pan_id[0] = payload[TLSR8258_PAN_ID_OFFSET];
-			radio->filter_pan_id[1] = payload[TLSR8258_PAN_ID_OFFSET + 1u];
-			radio->filter_short_addr[0] = payload[arsp_hdr + 1u];
-			radio->filter_short_addr[1] = payload[arsp_hdr + 2u];
-		}
-	}
-
 	if (rx_ack == 0u) {
 		rx_ack = RF_IRQ_RX;
 	}
@@ -1047,6 +1017,41 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 		tlsr8258_rf_set_txmode_for_ack();
 		tlsr8258_send_ack_if_needed(payload, length, true,
 					    ack_prepared_at_cycles, radio);
+	}
+
+	/*
+	 * Early radio-filter handoff (Zigbee join fix). The coordinator sends its
+	 * Transport-Key burst to our freshly-assigned short within a few ms of the
+	 * ASSOCIATION-RESPONSE — before the stack-side fast-handoff runs — so program
+	 * the assigned short (and PAN) into the filter the instant we RX a SUCCESS
+	 * AssocResp addressed to our IEEE, so the Transport-Key frames are ACKed
+	 * straight from this ISR.
+	 *
+	 * Done AFTER the ACK is on air, not before: this parse (mac_hdr_size +
+	 * 8-byte memcmp) sits between the RX-ISR-entry timestamp the ACK turnaround
+	 * is measured from and the ACK transmission, so running it first delayed our
+	 * MAC-ACK of the (large dual-IEEE) AssocResp past the coordinator's
+	 * aTurnaroundTime window — the coord then never saw our ACK, retransmitted
+	 * the AssocResp, and gave up without sending the Transport-Key. The filter
+	 * update is only needed for the Transport-Key that arrives ~ms later, so it
+	 * is safe to defer to just after the ACK.
+	 */
+	if (((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x03u) &&
+	    ((payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) ==
+	     TLSR8258_DEST_ADDR_TYPE_IEEE)) {
+		uint16_t arsp_fcf = sys_get_le16(payload);
+		uint8_t arsp_hdr = tlsr8258_mac_hdr_size(arsp_fcf, length);
+
+		if ((arsp_hdr != 0u) && ((uint16_t)(arsp_hdr + 4u) <= length) &&
+		    (payload[arsp_hdr] == 0x02u) &&        /* MAC_CMD_ASSOCIATION_RESPONSE */
+		    (payload[arsp_hdr + 3u] == 0x00u) &&   /* MAC_SUCCESS */
+		    (memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_ieee_addr,
+			    TLSR8258_IEEE_ADDR_SIZE) == 0)) {
+			radio->filter_pan_id[0] = payload[TLSR8258_PAN_ID_OFFSET];
+			radio->filter_pan_id[1] = payload[TLSR8258_PAN_ID_OFFSET + 1u];
+			radio->filter_short_addr[0] = payload[arsp_hdr + 1u];
+			radio->filter_short_addr[1] = payload[arsp_hdr + 2u];
+		}
 	}
 
 	/*
