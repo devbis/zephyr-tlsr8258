@@ -204,6 +204,13 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchForParent(void)
 	return NULL;
 }
 
+u16 tl_zbNeighborParentShortAddrGet(void)
+{
+	tl_zb_normal_neighbor_entry_t *parent = tl_zbNeighborTableSearchForParent();
+
+	return (parent != NULL) ? tl_zbshortAddrByIdx(parent->addrmapIdx) : MAC_SHORT_ADDR_NONE;
+}
+
 tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForChildEndDev(void *entry)
 {
 	tl_zb_normal_neighbor_entry_t *cur =

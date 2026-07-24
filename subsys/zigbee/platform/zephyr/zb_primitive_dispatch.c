@@ -323,6 +323,9 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 		case DEVICE_ANNCE_CLID:
 			zdo_deviceAnnounceIndicate(arg);
 			return;
+		case MGMT_LEAVE_REQ_CLID:
+			zdo_mgmtLeaveIndicate(arg);
+			return;
 		case MGMT_PERMIT_JOINING_REQ_CLID:
 			zdo_mgmtPermitJoinIndicate(arg);
 			return;
