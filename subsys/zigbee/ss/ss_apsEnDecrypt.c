@@ -20,6 +20,8 @@
 #include "ss/security_service.h"
 #include "ss/ss_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 typedef struct _attribute_packed_ {
     u8 securityLevel:3;
     u8 keyIdentifer:2;
@@ -173,7 +175,8 @@ _CODE_SS_ u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t
 
 _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 {
-    nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
+	zb_nwk_ed_trace[38]++;
+	nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
     /*
      * Vendor pinned the apsHdr pointer at +20 (matching the libzigbee
      * vendor-build's sizeof(nlde_data_ind_t)). aps_data.c uses the
@@ -206,11 +209,13 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
     cursor += sizeof(aux);
 
     if (aux.frameCnt == 0xffffffffUL || aux.keyIdentifer == SS_SECUR_NWK_KEY) {
+		zb_nwk_ed_trace[39]++;
         return RET_ERROR;
     }
 
     if (tl_zbExtAddrByShortAddr(ind->srcAddr, nonce.srcAddr, NULL) == TL_RETURN_INVALID &&
         aps_ib.aps_authenticated) {
+		zb_nwk_ed_trace[39]++;
         return RET_ERROR;
     }
 
@@ -220,6 +225,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
     }
 
     if (ss_ib.preConfiguredKeyType == SS_PRECONFIGURED_UNIQUELLINKKEY) {
+		zb_nwk_ed_trace[39]++;
         return RET_ERROR;
     }
     /*
@@ -284,9 +290,12 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
                            (u8)((ind->nsdu + ind->nsduLen) - cursor),
                            cursor);
     if (ret == RET_OK) {
+		zb_nwk_ed_trace[40]++;
         ind->nsduLen = (u8)(ind->nsduLen - ((cursor - auxStart) + 4));
         ind->nsdu = ind->nsdu + (cursor - auxStart);
-    }
+	} else {
+		zb_nwk_ed_trace[39]++;
+	}
 
     return ret;
 }

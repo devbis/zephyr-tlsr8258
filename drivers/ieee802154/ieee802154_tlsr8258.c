@@ -383,6 +383,7 @@ static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *ra
 #endif
 
 static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
+extern volatile uint32_t zb_nwk_ed_trace[];
 
 /*
  * Diagnostic for RX-while-TX_PENDING events in the ISR. Each entry:
@@ -584,9 +585,9 @@ static void tlsr8258_rf_set_rxmode_fast(void)
  * PLL) on every TX->RX turnaround; the poll TX completes as plain RF_IRQ_TX
  * (confirmed, no auto-ACK), so the coordinator's ACK+AssocResp must be caught
  * as ordinary RX right after — and the reset/relock in that ~200us window is
- * the prime suspect for the radio not being live when the reply lands. We
- * restore RX ll_mode because our set_txmode set it to TX (the vendor keeps a
- * fixed 0x0f16 and never toggles it per switch).
+ * the prime suspect for the radio not being live when the reply lands. Keep
+ * 0x0f16 at the vendor's fixed active-session value; it is not switched per
+ * TX/RX operation.
  */
 static void tlsr8258_rf_set_rxmode_vendor(void)
 {
@@ -601,7 +602,7 @@ static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
 	tlsr8258_rf_set_channel_offset(
 		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
+	/* Vendor rf_set_txmode leaves 0x0f16 at its fixed active value 0x29. */
 }
 
 /*
@@ -617,7 +618,7 @@ static void tlsr8258_rf_set_txmode_for_ack(void)
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
 	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);
+	/* Keep 0x0f16 fixed at the vendor active-session value 0x29. */
 }
 
 static uint16_t tlsr8258_snapshot_rx_frame(struct tlsr8258_radio_data *radio, uint8_t *dst,
@@ -730,7 +731,7 @@ static void tlsr8258_rf_off(void)
 	TLSR_REG8(0x0f16) = 0x29u;
 	TLSR_REG8(0x0428) = RF_TRX_MODE;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_OFF);
+	/* Keep the vendor's fixed active-session LL mode across RF off/on. */
 }
 
 static void tlsr8258_rf_init(void)
@@ -1077,7 +1078,12 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	rx_rssi_dbm = tlsr8258_rx_rssi_dbm(rx);
 	rx_dma_len = (snapshot_len >= TLSR8258_PAYLOAD_OFFSET) ? snapshot_len : (uint16_t)rx[0] + 4u;
 	rx_dma_len = MIN(rx_dma_len, UINT8_MAX);
-	(void)tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm);
+	if (tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len,
+					  rx_rssi_dbm)) {
+		zb_nwk_ed_trace[45]++;
+	} else {
+		zb_nwk_ed_trace[46]++;
+	}
 }
 
 static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
@@ -1150,8 +1156,6 @@ static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 	}
 #endif
 }
-
-extern volatile uint32_t zb_nwk_ed_trace[];
 
 static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 {

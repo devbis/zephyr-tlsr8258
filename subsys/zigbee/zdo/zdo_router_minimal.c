@@ -14,6 +14,7 @@
  */
 
 #include <zephyr/init.h>
+#include <zephyr/kernel.h>
 
 #include "zb_common_stub.h"
 #include "zdo_api.h"
@@ -48,15 +49,63 @@
  */
 #define AF_APS_DATA_HDR_LEN  8U
 
+extern volatile u32 zb_nwk_ed_trace[];
+
+static u8 zdo_router_minimal_seq;
+
+/*
+ * The full ZDO service calls this API after a normal join, but the router
+ * restore path reaches the application without that callback. Keep the
+ * router implementation here so both fresh joins and restored sessions use
+ * the same APS/NWK transmit bridge.
+ */
+u8 zb_zdoSendDevAnnance(void)
+{
+	u8 payload[1U + sizeof(zdo_device_annce_req_t)];
+	epInfo_t dst;
+	u8 capability = 0U;
+	u8 status;
+
+	zb_nwk_ed_trace[48]++;
+
+	/* Give the coordinator time to finish the association exchange. */
+	k_sleep(K_MSEC(40));
+
+	payload[0] = zdo_router_minimal_seq++;
+	COPY_U16TOBUFFER(&payload[1], g_zbNIB.nwkAddr);
+	memcpy(&payload[3], g_zbMacPib.extAddress, sizeof(addrExt_t));
+
+	capability |= g_zbNIB.capabilityInfo.altPanCoord ? BIT(0) : 0U;
+	capability |= g_zbNIB.capabilityInfo.devType ? BIT(1) : 0U;
+	capability |= g_zbNIB.capabilityInfo.powerSrc ? BIT(2) : 0U;
+	capability |= g_zbMacPib.rxOnWhenIdle ? BIT(3) : 0U;
+	capability |= g_zbNIB.capabilityInfo.secuCapability ? BIT(6) : 0U;
+	capability |= BIT(7);
+	payload[11] = capability;
+
+	memset(&dst, 0, sizeof(dst));
+	dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+	dst.dstAddr.shortAddr = NWK_BROADCAST_RX_ON_WHEN_IDLE;
+	dst.dstEp = ZDO_EP;
+	dst.profileId = ZDO_PROFILE_ID;
+	dst.radius = 30U;
+
+	status = af_dataSend(ZDO_EP, &dst, DEVICE_ANNCE_CLID,
+			     sizeof(payload), payload, NULL);
+	zb_nwk_ed_trace[(status == ZDO_SUCCESS) ? 49U : 50U]++;
+	return status;
+}
+
 u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	       u8 *cmdPld, u8 *apsCnt)
 {
-	zb_buf_t *buf;
+	 zb_buf_t *buf;
 	nlde_data_req_t *req;
 	u8 *aps;
 	u16 dstShort;
 	bool broadcast;
 	u8 apsCounter;
+
 
 	if (srcEp > 240U) {
 		return APS_STATUS_NOT_SUPPORTED;

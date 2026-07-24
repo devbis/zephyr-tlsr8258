@@ -20,6 +20,8 @@
 #include "ss/security_service.h"
 #include "ss/ss_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 enum {
     APS_CMD_TRANSPORT_KEY_ID = 5,
     APS_CMD_UPDATE_DEVICE_ID = 6,
@@ -645,6 +647,7 @@ void ss_apsmeVerifyKeyReq(void *arg)
 
 void ss_apsTransportKeyCmdHandle(void *arg)
 {
+	zb_nwk_ed_trace[41]++;
     /*
      * Vendor reads payload (asdu) as a 4-byte LE int at buf+12 and
      * security_status as buf[31] — both 32-bit-pinned offsets that
@@ -686,7 +689,10 @@ void ss_apsTransportKeyCmdHandle(void *arg)
             memcpy(ind->srcAddr, srcExtAddr, EXT_ADDR_LEN);
             memcpy(ind->key, key, SEC_KEY_LEN);
             ind->keySeqNum = keySeqNum;
-            tl_zbTaskPost(ss_zdoTransportKeyIndHandle, ind);
+			if (tl_zbTaskPost(ss_zdoTransportKeyIndHandle, ind) != RET_OK) {
+				zb_nwk_ed_trace[43]++;
+				zb_buf_free((zb_buf_t *)arg);
+			}
             return;
         }
     } else if (keyType == SS_TC_LINK_KEY) {
@@ -699,7 +705,10 @@ void ss_apsTransportKeyCmdHandle(void *arg)
             ind->keyType = keyType;
             memcpy(ind->srcAddr, srcExtAddr, EXT_ADDR_LEN);
             memcpy(ind->key, key, SEC_KEY_LEN);
-            tl_zbTaskPost(ss_zdoTransportKeyIndHandle, ind);
+			if (tl_zbTaskPost(ss_zdoTransportKeyIndHandle, ind) != RET_OK) {
+				zb_nwk_ed_trace[43]++;
+				zb_buf_free((zb_buf_t *)arg);
+			}
             return;
         }
     } else {

@@ -15,6 +15,8 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 typedef struct {
     ev_timer_event_t *timerEvt;
     zb_mac_mlme_scan_req_t *scanReq;
@@ -52,11 +54,15 @@ u8 tl_zbMacMlmeBeaconRequestCmdSend(void)
     u8 *payload;
     u8 status = MAC_SUCCESS;
 
+    zb_nwk_ed_trace[53]++;
+
     if (buf == NULL) {
+        zb_nwk_ed_trace[54]++;
         return status;
     }
 
     if ((((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 3] & 0x08U) != 0U) {
+        zb_nwk_ed_trace[55]++;
         return status;
     }
 
@@ -76,6 +82,13 @@ u8 tl_zbMacMlmeBeaconRequestCmdSend(void)
 
     status = tl_zbMacTx(buf, psdu, 8, 0, NULL);
 
+    zb_nwk_ed_trace[58] = g_macScanParam.curChannel;
+    if (status == MAC_SUCCESS) {
+        zb_nwk_ed_trace[56]++;
+    } else {
+        zb_nwk_ed_trace[57]++;
+    }
+
     return status;
 }
 
@@ -85,6 +98,10 @@ int tl_zbMacScanRunning(void *arg)
 
     zb_buf_t *buf = (zb_buf_t *)g_macScanParam.scanReq;
     u8 scanType = g_macScanParam.scanType;
+
+    if (scanType == ACTIVE_SCAN) {
+        zb_nwk_ed_trace[52]++;
+    }
 
     if (chan_8352 <= TL_ZB_MAC_CHANNEL_STOP && g_macScanParam.orphanScanGotRealignment == 0U) {
         if (scanType == ED_SCAN && edChan_8354 != 0xffU) {
