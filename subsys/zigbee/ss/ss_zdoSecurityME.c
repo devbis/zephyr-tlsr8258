@@ -153,8 +153,9 @@ void ss_zdoTransportKeyIndHandle(void *arg)
              * `aps_authenticated` shortcut (zdo_nwk_manager.c:940) instead of
              * arming an auth-wait timer that would expire ZDO_NOT_AUTHORIZED.
              * (Reproduced + verified on native_sim.)
-             */
+            */
             aps_ib.aps_authenticated = 1;
+            zdo_nwk_authentication_complete();
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
@@ -194,6 +195,7 @@ void ss_zdoTransportKeyIndHandle(void *arg)
         }
 
         aps_ib.aps_authenticated = 1;
+        zdo_nwk_authentication_complete();
         build_join_confirm(arg);
         tl_zbTaskPost(zdo_nlme_join_confirm, arg);
         return;
