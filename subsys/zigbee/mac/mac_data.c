@@ -108,7 +108,17 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
     mhr.dstPanId = req->dstPanId;
     mhr.srcPanId = g_zbMacPib.panId;
     memcpy(&mhr.dstAddr, &req->dstAddr.addr, sizeof(mhr.dstAddr));
-    memcpy(&mhr.srcAddr, &req->srcAddr.addr, sizeof(mhr.srcAddr));
+    /*
+     * The vendor MAC builder treats addrMode as a selector and sources the
+     * actual local address from the MAC PIB. nwk_tx() intentionally leaves
+     * the source union empty; copying it here would put 0x0000 on air after
+     * the request buffer was zeroed.
+     */
+    if (req->srcAddr.addrMode == ADDR_MODE_SHORT) {
+        mhr.srcAddr.shortAddr = g_zbMacPib.shortAddress;
+    } else if (req->srcAddr.addrMode == ADDR_MODE_EXT) {
+        memcpy(mhr.srcAddr.extAddr, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+    }
 
     mhr.frameCtrl = MAC_FRAME_TYPE_DATA |
                     (((u16)req->txOptions & 0x01U) << 5) |
