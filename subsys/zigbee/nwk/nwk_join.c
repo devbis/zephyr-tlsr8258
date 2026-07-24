@@ -357,6 +357,7 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     memcpy(g_zbInfo.nwkNib.extPANId, parent->extPanId, EXT_ADDR_LEN);
 
     g_zbInfo.macPib.shortAddress = cnf->shortAddress;
+    g_zbMacPib.shortAddress = cnf->shortAddress;
     g_zbInfo.nwkNib.nwkAddr = cnf->shortAddress;
     memcpy(g_zbInfo.nwkNib.ieeeAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
 

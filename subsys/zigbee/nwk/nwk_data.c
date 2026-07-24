@@ -13,6 +13,8 @@
 #include "nwk/includes/nwk_internal.h"
 #include "nwk/includes/nwk_neighbor.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 /* Externs that the libzigbee runtime exposes through internal vendor
  * headers (aps_internal.h, mac_internal.h, zdo_internal.h) — Zephyr
  * port keeps them as link-time names and relies on --gc-sections to
@@ -422,6 +424,7 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     req = (zb_mscp_data_req_t *)buf;
     memset(req, 0, sizeof(*req));
     req->srcAddr.addrMode = ADDR_MODE_SHORT;
+    req->srcAddr.addr.shortAddr = g_zbInfo.nwkNib.nwkAddr;
     req->dstAddr.addrMode = ADDR_MODE_SHORT;
     req->dstAddr.addr.shortAddr = nextHop;
     req->dstPanId = g_zbInfo.macPib.panId;
@@ -625,6 +628,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     }
 
     if (nwk_hdr_security(&nwkHdr)) {
+		zb_nwk_ed_trace[35]++;
         /*
          * Incoming counterpart of the nwk_tx aux-header bug: ss_nwkDecryptFrame()
          * treats its length arg as nwkHdr+aux and internally subtracts the
@@ -642,8 +646,10 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         if (ss_nwkDecryptFrame(arg, (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN),
                                ind->msduLength, ind->msdu, &nwkHdr,
                                ind->mpduLinkQuality) != RET_OK) {
+			zb_nwk_ed_trace[36]++;
             return;
         }
+		zb_nwk_ed_trace[37]++;
         nwkHdr.frameHdrLen = (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN);
         ind->msduLength = (u8)(ind->msduLength - 4U);
         payloadTotalLen = ind->msduLength;

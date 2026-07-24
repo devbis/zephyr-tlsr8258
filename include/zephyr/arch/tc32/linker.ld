@@ -180,9 +180,16 @@ SECTIONS
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 	__data_size = __data_end - __data_start;
-	__data_load_start = LOADADDR(_DATA_SECTION_NAME);
-	__data_region_load_start = LOADADDR(_DATA_SECTION_NAME);
-	_tc32_data_lma_end = LOADADDR(_DATA_SECTION_NAME) + SIZEOF(_DATA_SECTION_NAME);
+	/*
+	 * LLD reports LOADADDR(datas) as the section end for this
+	 * GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION) output section.
+	 * The data image is contiguous with rodata in flash, so use the
+	 * explicitly tracked rodata LMA instead.  Otherwise TC32 crt0 copies
+	 * .data from 0x<data_lma_end>, leaving initialized globals zero/garbled.
+	 */
+	__data_load_start = _tc32_rom_data_lma_end;
+	__data_region_load_start = _tc32_rom_data_lma_end;
+	_tc32_data_lma_end = _tc32_rom_data_lma_end + SIZEOF(_DATA_SECTION_NAME);
 
 #include <zephyr/linker/common-ram.ld>
 #include <zephyr/linker/kobject-data.ld>

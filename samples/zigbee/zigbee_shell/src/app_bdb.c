@@ -55,7 +55,13 @@ extern void zb_router_enable_parenting(uint8_t permit_duration);
 	static bool bdb_runtime_ready;
 	static bool leave_recommission_pending;
 	static struct ev_timer_event_t *commissioning_retry_timer;
-	__attribute__((weak)) volatile uint32_t zb_nwk_ed_trace[48];
+	/* RX/join diagnostics: 32 MAC parse, 33 MAC guard, 34 task post,
+	 * 35/36/37 NWK decrypt try/fail/ok, 38/39/40 APS decrypt try/fail/ok,
+	 * 41 transport-key handler, 43 transport-key post, 44 join confirm,
+	 * 45/46 RX queue enqueue/drop, 47 RX stack-buffer allocation failure,
+	 * 48 router announce entry, 49 announce TX queued, 50 announce TX
+	 * rejected, 51 parenting entry, 52-63 active-scan TX path. */
+	volatile uint32_t zb_nwk_ed_trace[64] = {0x4e574b45U};
 #if defined(CONFIG_ZIGBEE_DEBUG_TRACES)
 	volatile uint32_t zb_app_bdb_retry_trace[16] = {0xa4bd0000U};
 	volatile uint32_t zb_rejoin_callback_trace[16] = {0xa5c10000U};

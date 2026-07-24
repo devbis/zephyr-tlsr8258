@@ -17,6 +17,8 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 #include <stdint.h>
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 static ev_timer_event_t *macPendingWaitTimerEvt;
 tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
@@ -148,6 +150,9 @@ static void zb_mac_try_assoc_resp_fast_handoff(const u8 *psdu, u8 len)
     mac_assoc_resp_success_seen = 1U;
     mac_assoc_cancel_wait_timer_from_rx();
     g_zbInfo.macPib.shortAddress = assignedShort;
+    /* MAC TX header construction reads the real MAC PIB, not the mirrored
+     * g_zbInfo copy. Sync it before the first post-association ZDP response. */
+    g_zbMacPib.shortAddress = assignedShort;
     g_zbInfo.nwkNib.nwkAddr = assignedShort;
 
     dstMode = (u8)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
@@ -224,7 +229,8 @@ int mac_ackWaitingTimerCb(void *arg)
 
 void mac_rxDataParse(void *arg)
 {
-    zb_buf_t *buf = (zb_buf_t *)arg;
+	zb_nwk_ed_trace[32]++;
+	zb_buf_t *buf = (zb_buf_t *)arg;
     zb_mac_rx_pending_meta_t *pending = (zb_mac_rx_pending_meta_t *)arg;
     zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)arg;
     u8 *raw = pending->payload;
@@ -651,6 +657,11 @@ void mac_trigger_tx(void *arg)
         return;
     }
 
+    if (g_zbMacCtx.status == ZB_MAC_STATE_ACTIVE_SCAN &&
+        tx_fifo_wptr != tx_fifo_rptr) {
+        zb_nwk_ed_trace[59]++;
+    }
+
     {
         void *next = get_next_data();
         if (next != NULL) {
@@ -697,6 +708,8 @@ u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList
     tx_data_queue *entry;
     u8 ackReq = ack ? 1U : 0U;
 
+
+
     if ((s8)psduLen < 0) {
         mac_trigger_tx(NULL);
         return MAC_STA_FRAME_TOO_LONG;
@@ -717,6 +730,10 @@ u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList
         status = MAC_SUCCESS;
     }
     drv_restore_irq(r);
+
+    if (status != MAC_SUCCESS) {
+        zb_nwk_ed_trace[62]++;
+    }
 
     mac_trigger_tx(NULL);
     return status;
@@ -767,15 +784,18 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 
 void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
 {
-    zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+    zb_buf_t *buf;
     zb_mac_rx_pending_meta_t *meta;
     u8 *owned_payload;
 
-    if (buf == NULL) {
-        return;
-    }
-
     if (ackPkt != 0U) {
+        /* ACKs never enter the Zigbee RX pipeline. Do not allocate a stack
+         * buffer for them: joining generates several matching ACKs and a
+         * leaked slab block here eventually starves all data RX allocations. */
+        if ((data == NULL) || (len < 3U)) {
+            return;
+        }
+
         u8 frameCtrl = data[0];
         u8 seqNum = data[2];
 
@@ -784,11 +804,14 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
                         ((u32)(u8)rssi << 8) |
                         ((u32)(frameCtrl & MAC_FCF_FRAME_PENDING_MASK) << 16) |
                         ((u32)seqNum << 24);
-
             mac_trxTask((void *)(uintptr_t)event);
-        } else {
-            zb_buf_free(buf);
         }
+        return;
+    }
+
+    buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+    if (buf == NULL) {
+        zb_nwk_ed_trace[47]++;
         return;
     }
 
@@ -807,12 +830,16 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     meta->rssi = rssi;
 
     rf_busyFlag &= (u8)~RX_BUSY;
-    if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
-        zb_buf_free(buf);
-        return;
-    }
+	if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
+		zb_nwk_ed_trace[33]++;
+		zb_buf_free(buf);
+		return;
+	}
 
-    tl_zbTaskPost(mac_rxDataParse, buf);
+	if (tl_zbTaskPost(mac_rxDataParse, buf) != RET_OK) {
+		zb_nwk_ed_trace[34]++;
+		zb_buf_free(buf);
+	}
 }
 
 void zb_macDataSendHandler(void)

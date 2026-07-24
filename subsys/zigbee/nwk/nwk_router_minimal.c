@@ -45,13 +45,27 @@ LOG_MODULE_REGISTER(zigbee_nwk_router_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL   DEFAULT_CHANNEL
 
 extern zdo_appIndCb_t *zdoAppIndCbLst;
+extern u8 zb_zdoSendDevAnnance(void);
+extern volatile u32 zb_nwk_ed_trace[];
 
 static bool nwk_router_minimal_started;
+static bool nwk_router_minimal_announce_sent;
 
 static int nwk_router_minimal_deferred_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
 	zb_info_save(NULL);
+	return -1; /* one-shot */
+}
+
+static int nwk_router_minimal_deferred_announce_timer(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	if (!nwk_router_minimal_announce_sent &&
+		zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
+		nwk_router_minimal_announce_sent = true;
+	}
 	return -1; /* one-shot */
 }
 
@@ -227,6 +241,12 @@ uint8_t zb_routerStart(void)
 					   NULL, 15000U);
 	}
 
+	/* Restore can bypass the BDB joined callback entirely. Announce after
+	 * the radio/NWK state is live so the coordinator learns the current
+	 * short address before it starts the ZDO interview. */
+	(void)TL_ZB_TIMER_SCHEDULE(nwk_router_minimal_deferred_announce_timer,
+				   NULL, 1000U);
+
 	/* Hand the synthesized confirm to BDB so the application sees a
 	 * successful commissioning event and registers its endpoint.
 	 */
@@ -267,6 +287,7 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
  */
 void zb_router_enable_parenting(u8 permit_duration)
 {
+	zb_nwk_ed_trace[51]++;
 	g_zbNIB.capabilityInfo.devType = 1U;   /* FFD / router-capable */
 	g_zbNwkCtx.joinAccept = 1U;
 	g_zbNwkCtx.permit_join = (permit_duration != 0U) ? 1U : 0U;
@@ -276,4 +297,14 @@ void zb_router_enable_parenting(u8 permit_duration)
 
 	tl_zbNwkBeaconPayloadUpdate();
 	g_zbMacPib.beaconPayloadLen = (u8)sizeof(g_zbMacPib.beaconPayload);
+
+	/* Persistent restore does not pass through zdo_startup_complete(), so
+	 * announce the current short address when the router is made active. The
+	 * application callback is the joined-state gate; do not duplicate that
+	 * check here because restored g_zbNwkCtx can be populated later. */
+	if (!nwk_router_minimal_announce_sent) {
+		if (zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
+			nwk_router_minimal_announce_sent = true;
+		}
+	}
 }
