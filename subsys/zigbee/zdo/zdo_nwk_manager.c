@@ -16,6 +16,7 @@
 #include "zdo/zdo_api.h"
 #include "zdo/zdp.h"
 #include "zdo/zdo_internal.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 extern volatile uint32_t zb_nwk_ed_trace[];
 
@@ -531,8 +532,15 @@ void zdo_startup_complete(void *arg)
          * Keep the use_insecure_join clear: post-associate we don't want
          * to admit further unsecured frames, but APS auth is still
          * pending. The Transport-Key path will flip aps_authenticated=1.
-         */
+        */
         aps_ib.aps_use_insecure_join = 0;
+#if defined(ZB_ROUTER_ROLE)
+        /* Keep both compatibility PIB copies awake for a router. MAC TX
+         * consults g_zbInfo.macPib when deciding whether to switch RF off. */
+        g_zbMacPib.rxOnWhenIdle = 1U;
+        g_zbInfo.macPib.rxOnWhenIdle = 1U;
+        g_zbNIB.capabilityInfo.rcvOnWhenIdle = 1U;
+#endif
         if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
             zdo_device_announce_send();
 #if defined(ZB_ROUTER_ROLE)
@@ -604,9 +612,21 @@ void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 void zdo_nlme_leave_indication_cb(void *arg)
 {
     nlme_leave_ind_t ind;
+    bool self_leave;
 
     memcpy(&ind, arg, sizeof(ind));
     zb_buf_free((zb_buf_t *)arg);
+
+    self_leave = (memcmp(ind.deviceAddr, g_zbInfo.macPib.extAddress,
+                         EXT_ADDR_LEN) == 0);
+    if (self_leave) {
+        /* A coordinator Leave addressed to this router is a network-loss
+         * event, not a neighbor deletion. Clear the persisted join so the
+         * next permit-join starts a real network-steer sequence. */
+        (void)zb_platform_clear_persistent_state();
+        zb_platform_app_network_left();
+    }
+
     zdo_nlmeForgetDev(ind.deviceAddr, ind.rejoin);
 
     if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpLeaveIndCb != NULL) {

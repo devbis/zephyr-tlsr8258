@@ -246,10 +246,19 @@ void nwk_associateJoin(void *arg)
     if (parent->addrMode == ZB_ADDR_64BIT_DEV) {
         memcpy(g_zbInfo.macPib.coordExtAddress, parent->extAddr, EXT_ADDR_LEN);
     }
-    g_zbInfo.nwkNib.parentInfo = 0;
-    memcpy(g_zbInfo.nwkNib.extPANId, req->extPANId, EXT_ADDR_LEN);
-    g_zbInfo.nwkNib.capabilityInfo = req->capabilityInfo;
-    g_zbInfo.macPib.rxOnWhenIdle = req->capabilityInfo.rcvOnWhenIdle;
+	g_zbInfo.nwkNib.parentInfo = 0;
+	memcpy(g_zbInfo.nwkNib.extPANId, req->extPANId, EXT_ADDR_LEN);
+	g_zbInfo.nwkNib.capabilityInfo = req->capabilityInfo;
+	#if defined(ZB_ROUTER_ROLE)
+	/* Router capability is always receive-when-idle, even when the join
+	 * request was built from stale ED-style runtime state. */
+	g_zbInfo.nwkNib.capabilityInfo.devType = 1U;
+	g_zbInfo.nwkNib.capabilityInfo.rcvOnWhenIdle = 1U;
+	#endif
+	g_zbInfo.macPib.rxOnWhenIdle = req->capabilityInfo.rcvOnWhenIdle;
+	#if defined(ZB_ROUTER_ROLE)
+	g_zbInfo.macPib.rxOnWhenIdle = 1U;
+	#endif
 
     memset(arg, 0, 25);
     macReq = (zb_mlme_associate_req_t *)arg;
