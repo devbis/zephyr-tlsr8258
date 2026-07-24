@@ -86,7 +86,9 @@ int zb_platform_clear_persistent_state(void)
 		LOG_WRN("Zigbee persistence clear failed: %d", st);
 	}
 
+	#if defined(ZB_ED_ROLE) && ZB_ED_ROLE
 	tl_zbNwkEdMinimalRuntimeReset();
+	#endif
 
 	g_zbNwkCtx.joined = 0U;
 	g_zbNwkCtx.is_factory_new = 1U;

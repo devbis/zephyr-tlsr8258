@@ -170,6 +170,13 @@ static void zb_core_bootstrap_once(void)
 		af_init();
 		zdo_init();
 		(void)zb_platform_restore_persistent_state();
+		#if defined(ZB_ROUTER_ROLE)
+		/* A router is always an always-on FFD. Older persisted images may
+		 * contain the ED default, which would make MAC TX switch RF off after
+		 * the first response and strand the device during Z2M interview. */
+		g_zbMacPib.rxOnWhenIdle = 1U;
+		g_zbNIB.capabilityInfo.rcvOnWhenIdle = 1U;
+		#endif
 		/*
 		 * Boot-time snapshot of NVS-restored Zigbee state. Lets us tell
 		 * from the very first RTT lines whether the chip thinks it's
@@ -206,6 +213,10 @@ static void zb_core_bootstrap_once(void)
 			zb_radio_port_update_filters(g_zbMacPib.panId,
 						     g_zbMacPib.shortAddress,
 						     g_zbMacPib.extAddress);
+			/* A persisted joined state bypasses network-steer, which is the
+			 * normal caller of radio_start. Re-arm RX before Z2M sends an
+			 * interview request or a normal Leave. */
+			(void)zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur);
 		} else {
 			zb_radio_port_update_filters(MAC_INVALID_PANID,
 						     MAC_SHORT_ADDR_BROADCAST,
