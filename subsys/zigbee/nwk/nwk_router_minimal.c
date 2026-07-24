@@ -94,6 +94,14 @@ static void nwk_router_minimal_apply_pib(uint8_t channel, uint16_t pan_id,
 	g_zbMacPib.rxOnWhenIdle = 1U;
 	g_zbMacPib.associationPermit = 0U;
 
+	/* Keep the libzigbee compatibility snapshot used by MAC/NWK TX in sync
+	 * with the MAC PIB programmed above, including after NVS restore. */
+	g_zbInfo.macPib.phyChannelCur = channel;
+	g_zbInfo.macPib.panId = pan_id;
+	g_zbInfo.macPib.shortAddress = short_addr;
+	g_zbInfo.macPib.coordShortAddress = short_addr;
+	g_zbInfo.macPib.rxOnWhenIdle = 1U;
+
 	g_zbNIB.panId = pan_id;
 	g_zbNIB.nwkAddr = short_addr;
 	memcpy(g_zbNIB.extPANId, ext_pan_id, EXT_ADDR_LEN);
@@ -186,6 +194,10 @@ uint8_t zb_routerStart(void)
 		memcpy(ext_pan_id, g_zbNIB.extPANId, EXT_ADDR_LEN);
 		from_app = false;
 		key_provided = true; /* keep restored key */
+		/* Older NVS images were written before the router capability was
+		 * forced awake. Re-apply the runtime router PIB before any TX; the
+		 * MAC completion path uses this value to decide whether RF may stop. */
+		nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
 	} else {
 		from_app = nwk_router_minimal_resolve_profile(&channel, &pan_id,
 							      &short_addr, ext_pan_id,
@@ -288,6 +300,11 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
 void zb_router_enable_parenting(u8 permit_duration)
 {
 	zb_nwk_ed_trace[51]++;
+	/* A router must remain awake after every unicast TX so it can ACK
+	 * interview, leave, and rejoin traffic from the coordinator. */
+	g_zbMacPib.rxOnWhenIdle = 1U;
+	g_zbInfo.macPib.rxOnWhenIdle = 1U;
+	g_zbNIB.capabilityInfo.rcvOnWhenIdle = 1U;
 	g_zbNIB.capabilityInfo.devType = 1U;   /* FFD / router-capable */
 	g_zbNwkCtx.joinAccept = 1U;
 	g_zbNwkCtx.permit_join = (permit_duration != 0U) ? 1U : 0U;
