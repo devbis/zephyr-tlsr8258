@@ -71,6 +71,14 @@ int zb_platform_restore_persistent_state(void)
 	g_zbInfo = blob.zb_info;
 	g_zbNwkCtx = blob.nwk_ctx;
 	zb_persist_normalize_nwk_ctx(&g_zbNwkCtx);
+	/*
+	 * Restore the radio filter from the same joined PIB that was just
+	 * restored.  The radio may be initialised later, so the TLSR8258 port
+	 * retains this request and applies it after its data object is cleared.
+	 */
+	zb_radio_port_update_filters(g_zbInfo.macPib.panId,
+				     g_zbInfo.macPib.shortAddress,
+				     g_zbInfo.macPib.extAddress);
 
 	return 0;
 }

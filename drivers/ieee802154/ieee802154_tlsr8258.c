@@ -82,11 +82,11 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
  * Stick with 150us — better to be slightly early than too late.  We use the
  * fast-path set_txmode_for_ack (no PLL reload) to keep total latency tight.
  *
- * 2026-06: switched to vendor mac_phy.c pattern — the prep timestamp is now
- * captured at the very start of rx_capture_common (matching libzigbee's
- * txTime = clock_time() at rf_rx_irq_handler entry), and no set_txmode call
- * precedes the ACK TX.  Vendor uses ZB_TX_WAIT_US = 120us measured from
- * that point, so we mirror that constant here.
+ * 2026-06: switched to vendor mac_phy.c pattern — the prep timestamp is
+ * captured immediately after switching to TX mode, matching the vendor's
+ * txTime = clock_time() directly after ZB_SWITCH_TO_TXMODE(). Vendor uses
+ * ZB_TX_WAIT_US = 120us measured from that point, so we mirror that
+ * constant here.
  */
 #define TLSR8258_ACK_TURNAROUND_US 120u
 /*
@@ -171,7 +171,7 @@ struct tlsr8258_radio_debug {
 	 * every ack-requested RX so the SWS-side reader gets a consistent set:
 	 *
 	 *  isr_entry_cyc      — first instruction of tlsr8258_rf_isr
-	 *  ack_capture_cyc    — ack_prepared_at_cycles inside rx_capture_common
+	 *  ack_capture_cyc    — timestamp immediately after switching to TX mode
 	 *  pre_busy_wait_cyc  — right before the cycle-domain spin in send_ack
 	 *  tx_kick_cyc        — right before tlsr8258_rf_tx_pkt for the ACK
 	 *  tx_done_cyc        — after TX_DS / CMD_DONE wait, before set_rxmode
@@ -386,6 +386,16 @@ static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
 extern volatile uint32_t zb_nwk_ed_trace[];
 
 /*
+ * Keep the Zigbee filter request across radio initialisation.  The restored
+ * router state is applied before the late device_init() fallback can run;
+ * tlsr8258_init() clears radio_data with memset(), so fields written directly
+ * into radio_data at that point would otherwise be lost.
+ */
+static uint8_t tlsr8258_filter_pan_id_shadow[TLSR8258_PAN_ID_SIZE] = {0xffu, 0xffu};
+static uint8_t tlsr8258_filter_short_addr_shadow[TLSR8258_SHORT_ADDR_SIZE] = {0xffu, 0xffu};
+static uint8_t tlsr8258_filter_ieee_addr_shadow[TLSR8258_IEEE_ADDR_SIZE];
+
+/*
  * Diagnostic for RX-while-TX_PENDING events in the ISR. Each entry:
  *   [0] = total count of such events
  *   [1] = packed: (is_ack_match << 16) | (op.tx_seq << 8) | last rx_psdu_len
@@ -410,6 +420,13 @@ void tlsr8258_zigbee_update_filters(uint16_t pan_id, uint16_t short_addr,
 				    const uint8_t *ieee_addr)
 {
 	struct tlsr8258_radio_data *radio = tlsr8258_zigbee_radio_data_get();
+
+	sys_put_le16(pan_id, tlsr8258_filter_pan_id_shadow);
+	sys_put_le16(short_addr, tlsr8258_filter_short_addr_shadow);
+	if (ieee_addr != NULL) {
+		memcpy(tlsr8258_filter_ieee_addr_shadow, ieee_addr,
+		       TLSR8258_IEEE_ADDR_SIZE);
+	}
 
 	if (radio == NULL) {
 		return;
@@ -607,18 +624,15 @@ static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
 
 /*
  * Fast TX-mode switch for MAC ACK transmission from inside the RX ISR.
- * Skips the channel-offset reload, which on TLSR8258 forces a PLL re-lock
- * and adds variable (tens-to-hundreds of microseconds) latency.  The chip
- * channel is already set correctly because we just RXed a frame on it, so
- * the reload is wasted work that pushes our ACK past the 802.15.4 aTurn-
- * aroundTime window the coordinator expects.
+ * This is the vendor rf_trx_state_set(RF_MODE_TX) sequence observed in
+ * libdrivers_8258.a: reset the link-layer state machine, enable TX, and clear
+ * the vendor TX gate bit. Do not reload the channel/PLL in this hot path.
  */
 static void tlsr8258_rf_set_txmode_for_ack(void)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
-	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
-	/* Keep 0x0f16 fixed at the vendor active-session value 0x29. */
+	TLSR_REG8(0x0428) &= (uint8_t)~BIT(1);
 }
 
 static uint16_t tlsr8258_snapshot_rx_frame(struct tlsr8258_radio_data *radio, uint8_t *dst,
@@ -955,20 +969,13 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	uint16_t rx_dma_len;
 	int8_t rx_rssi_dbm;
 	/*
-	 * Capture the RX-ISR-entry timestamp FIRST — before any other work, in
-	 * particular before the PSDU decode that follows. The ACK busy_wait
-	 * in tlsr8258_send_ack_if_needed times from this point, matching the
-	 * vendor mac_phy.c txTime semantics (clock_time() at the very start
-	 * of rf_rx_irq_handler).
+	 * Capture the RX-ISR-entry timestamp before any other work for diagnostics.
+	 * The ACK turnaround timestamp is captured separately, immediately after
+	 * switching to TX mode, matching vendor mac_phy.c.
 	 */
-	uint32_t ack_prepared_at_cycles = k_cycle_get_32();
+	uint32_t isr_entry_cycles = k_cycle_get_32();
 	if (radio->debug != NULL) {
-		radio->debug->ack_capture_cyc = ack_prepared_at_cycles;
-		uint32_t delta =
-			(ack_prepared_at_cycles - radio->debug->isr_entry_cyc) /
-			(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
-		radio->debug->isr_to_capture_us =
-			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
+		radio->debug->isr_entry_cyc = isr_entry_cycles;
 	}
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
 	struct tlsr8258_core_filter_ctx ack_filter_ctx = {
@@ -1016,6 +1023,15 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	 */
 	if (ack_requested) {
 		tlsr8258_rf_set_txmode_for_ack();
+		uint32_t ack_prepared_at_cycles = k_cycle_get_32();
+		if (radio->debug != NULL) {
+			radio->debug->ack_capture_cyc = ack_prepared_at_cycles;
+			uint32_t delta =
+				(ack_prepared_at_cycles - isr_entry_cycles) /
+				(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u);
+			radio->debug->isr_to_capture_us =
+				(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
+		}
 		tlsr8258_send_ack_if_needed(payload, length, true,
 					    ack_prepared_at_cycles, radio);
 	}
@@ -2194,8 +2210,12 @@ static int tlsr8258_init(const struct device *dev)
 	radio->debug = &tlsr8258_radio_debug_state;
 #endif
 	tlsr8258_rf_debug_reset(radio);
-	sys_put_le16(0xffffu, radio->filter_pan_id);
-	sys_put_le16(0xffffu, radio->filter_short_addr);
+	memcpy(radio->filter_pan_id, tlsr8258_filter_pan_id_shadow,
+	       TLSR8258_PAN_ID_SIZE);
+	memcpy(radio->filter_short_addr, tlsr8258_filter_short_addr_shadow,
+	       TLSR8258_SHORT_ADDR_SIZE);
+	memcpy(radio->filter_ieee_addr, tlsr8258_filter_ieee_addr_shadow,
+	       TLSR8258_IEEE_ADDR_SIZE);
 	tlsr8258_radio_current_channel_set(radio, 11u);
 
 	tlsr8258_rx_queue_init(&radio->rx_queue, radio->rx_slots, TLSR8258_RX_SLOT_COUNT);
