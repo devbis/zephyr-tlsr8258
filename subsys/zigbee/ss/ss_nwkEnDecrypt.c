@@ -20,6 +20,8 @@
 #include "ss/security_service.h"
 #include "ss/ss_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 typedef struct _attribute_packed_ {
     u8 securityLevel:3;
     u8 keyIdentifer:2;
@@ -111,6 +113,7 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
     u16 addrRef = 0;
     u8 ret = RET_OK;
     bool validationNewNeighbor = FALSE;
+    bool parentCounterResync = FALSE;
     u16 neighborAddr = pInd->srcAddr.addr.shortAddr;
     u8 *key;
 
@@ -159,6 +162,8 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
     }
 
     curNbe = (nbe != NULL) ? nbe : nbEntyBackup;
+    parentCounterResync = (g_zbNwkCtx.joined != 0U &&
+                           neighborAddr == g_zbInfo.macPib.coordShortAddress);
 
     if (ret == RET_OK && curNbe != NULL) {
         if (aux.keySeqNum == 0U) {
@@ -177,21 +182,26 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
         }
 
         if (key == NULL) {
+            zb_nwk_ed_trace[24]++;
             ret = RET_ERROR;
             ss_nwkSecureStatus(nsdu, neighborAddr, NWK_COMMAND_STATUS_BAD_KEY_SEQUENCE_NUMBER);
-        } else if ((curNbe->incomingFrameCnt > aux.frameCnt) || (curNbe->incomingFrameCnt == (u32)~0U)) {
+        } else if ((curNbe->incomingFrameCnt > aux.frameCnt && !parentCounterResync) ||
+                   (curNbe->incomingFrameCnt == (u32)~0U && !parentCounterResync)) {
+            zb_nwk_ed_trace[25]++;
             ret = RET_ERROR;
             ss_nwkSecureStatus(nsdu, neighborAddr, NWK_COMMAND_STATUS_BAD_FRAME_COUNTER);
         } else {
             curNbe->incomingFrameCnt = aux.frameCnt;
         }
     } else {
+        zb_nwk_ed_trace[28]++;
         ss_nwkSecureStatus(nsdu, neighborAddr, NWK_COMMAND_STATUS_BAD_KEY_SEQUENCE_NUMBER);
         ret = RET_ERROR;
     }
 
     if (ret == RET_OK) {
         if (payloadSize < ZB_CCM_M) {
+            zb_nwk_ed_trace[26]++;
             ret = RET_ERROR;
             ss_nwkSecureStatus(nsdu, neighborAddr, NWK_COMMAND_STATUS_BAD_KEY_SEQUENCE_NUMBER);
         }
@@ -218,6 +228,7 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
 #endif
             }
         } else {
+            zb_nwk_ed_trace[27]++;
             if (validationNewNeighbor && nbe != NULL) {
                 tl_zbNeighborTableDelete(nbe);
             } else if (nbEntyBackup != NULL) {

@@ -56,7 +56,7 @@ static bool file_contains(const char *path, const char *needle)
 	} \
 } while (0)
 
-static void test_rf_mode_switches_program_ll_mode_contract(void)
+static void test_rf_mode_switches_keep_vendor_ll_mode_contract(void)
 {
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
@@ -64,7 +64,7 @@ static void test_rf_mode_switches_program_ll_mode_contract(void)
 	EXPECT_FILE_CONTAINS(path, "tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);");
 	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rf_set_rxmode_fast(void)");
 	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)");
-	EXPECT_FILE_CONTAINS(path, "tlsr8258_rf_ll_mode_set(RF_LL_MODE_TX);");
+	EXPECT_FILE_CONTAINS(path, "Keep 0x0f16 fixed");
 	EXPECT_FILE_CONTAINS(path, "static void tlsr8258_rf_set_txmode_for_ack(void)");
 }
 
@@ -89,7 +89,7 @@ static void test_post_poll_followup_uses_vendor_minimal_rxmode_switch(void)
 
 int main(void)
 {
-	test_rf_mode_switches_program_ll_mode_contract();
+	test_rf_mode_switches_keep_vendor_ll_mode_contract();
 	test_post_poll_followup_uses_vendor_minimal_rxmode_switch();
 
 	if (failures != 0) {

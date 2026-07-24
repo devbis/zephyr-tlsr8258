@@ -29,6 +29,7 @@
 #include "zb_common_stub.h"
 
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
+extern volatile u32 zb_nwk_ed_trace[];
 #include "../zcl/zcl_include.h"
 #include "../zcl/zll_commissioning/zcl_zll_commissioning_internal.h"
 #include "includes/bdb.h"
@@ -1268,6 +1269,8 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
 {
     u8 status;
 
+    zb_nwk_ed_trace[1]++;
+
     /* [3]: low 16 = disc-cnf-cb hit count; bits 16..23 = zb_assocJoinReq status. */
 
 #if 0
@@ -1283,6 +1286,7 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
     }
 #endif
     status = zb_assocJoinReq();
+    zb_nwk_ed_trace[2] = 0xBDB00000U | status;
     if (status != SUCCESS) {
         BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
         TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
@@ -1461,6 +1465,7 @@ static void bdb_task(void *arg)
 #endif
             TL_SCHEDULE_TASK(bdb_mgmtPermitJoiningConfirm,NULL);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH) {
+            zb_nwk_ed_trace[4]++;
             status = bdb_commissioningNetworkFormation();
             if (status == BDB_STATE_IDLE) {
                 /* confirm to application */
