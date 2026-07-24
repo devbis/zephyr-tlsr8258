@@ -15,6 +15,8 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
 mac_appIndCb_t *macAppIndCb = NULL;
 tl_zb_mac_ctx_t g_zbMacCtx;
 
@@ -293,6 +295,11 @@ void tl_zbMaxTxConfirmCb(void *arg, u8 status)
 
     if (buf == (zb_buf_t *)g_zbMacCtx.txRawDataBuf) {
         buf->hdr.active = 0;
+        if (status == MAC_SUCCESS) {
+            zb_nwk_ed_trace[60]++;
+        } else {
+            zb_nwk_ed_trace[61]++;
+        }
     }
 
     handle = buf->hdr.handle;

@@ -17,6 +17,15 @@
 #include "zdo/zdp.h"
 #include "zdo/zdo_internal.h"
 
+extern volatile uint32_t zb_nwk_ed_trace[];
+
+#if defined(ZB_ROUTER_ROLE)
+/* The minimal router runtime must be activated after secure join completes.
+ * The vendor BDB router-start entrypoint does not call the Zephyr router hook.
+ */
+extern void zb_router_enable_parenting(u8 permit_duration);
+#endif
+
 enum {
     ZB_BUF_HDR_FLAGS3_OFFSET = OFFSETOF(zb_buf_t, hdr) + 3,
 };
@@ -274,7 +283,10 @@ zdo_status_t zdo_nwkRejoinReqSend(void *arg)
         ((u8 *)buf)[15] = (u8)((aps_ib.aps_use_insecure_join & 0x01U) ^ 0x01U);
     }
 
-    tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
+    /* tl_zbPrimitivePost() is a vendor ABI boundary and may clobber
+     * callee-saved TC32 registers.  Return the protocol status explicitly
+     * after the post instead of relying on a local register surviving it. */
+    (void)tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
     return ZDO_SUCCESS;
 }
 int zdo_nwkRejoinBackOffCb(void *arg)
@@ -494,6 +506,14 @@ void zdo_startup_complete(void *arg)
     } else {
         g_zbNwkCtx.joined = 1;
         g_zbNwkCtx.is_tc = 0;
+        /* The MAC association path updates shortAddress before the
+         * start-device confirm is built. Keep the NWK NIB in lockstep;
+         * otherwise locally generated ZDO replies can carry the parent's
+         * address in their NWK source field. */
+        if (cnf->short_addr < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+            g_zbInfo.nwkNib.nwkAddr = cnf->short_addr;
+            g_zbMacPib.shortAddress = cnf->short_addr;
+        }
         /*
          * Do NOT mark aps_authenticated here. zdo_startup_complete fires
          * after MAC association SUCCESS, but on a centralized-security
@@ -513,6 +533,11 @@ void zdo_startup_complete(void *arg)
          */
         aps_ib.aps_use_insecure_join = 0;
         zdo_device_announce_send();
+#if defined(ZB_ROUTER_ROLE)
+        /* At this point the Transport-Key path has authenticated the device,
+         * so the router can advertise itself and accept children. */
+        zb_router_enable_parenting(0xffU);
+#endif
         g_zbNwkCtx.is_factory_new = 0;
     }
 
@@ -829,6 +854,7 @@ void zdo_nlme_status_indication(void *arg)
 
 void zdo_nlme_join_confirm(void *arg)
 {
+	zb_nwk_ed_trace[44]++;
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
 

@@ -332,6 +332,8 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
     epInfo_t dstEpInfo;
     u8 apsCnt = 0;
 
+
+
     memset(&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.txOptions = APS_TX_OPT_ACK_TX;
     dstEpInfo.dstEp = ZDO_EP;
@@ -355,7 +357,8 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
         }
     }
 
-    af_dataSend(ZDO_EP, &dstEpInfo, req->cluster_id, req->zduLen, req->zdu, &apsCnt);
+	 af_dataSend(ZDO_EP, &dstEpInfo, req->cluster_id, req->zduLen, req->zdu,
+			&apsCnt);
 
     if (req->zdoRspReceivedIndCb != NULL) {
         zdp_cb_info_t *entry = &zdp_cbl[zdpCblWptr++ & (ZDP_CB_MAX - 1U)];
