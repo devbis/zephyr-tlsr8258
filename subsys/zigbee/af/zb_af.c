@@ -398,7 +398,7 @@ _CODE_AF_ bool af_profileIdMatched(u16 profileID, af_simple_descriptor_t *pSimpl
         return FALSE;
     }
 
-    if ((profileID == 0xFFFF) || (profileID == pSimpleDesc->app_profile_id)) {
+	if ((profileID == WILDCARD_PROFILE_ID) || (profileID == pSimpleDesc->app_profile_id)) {
         return TRUE;
     } else {
         return FALSE;

@@ -20,6 +20,7 @@
 #include "mac/includes/tl_zb_mac.h"
 #include "mac/includes/mac_phy.h"
 #include "zb_minimal_ccm.h"
+#include "../zcl/zcl_include.h"
 
 LOG_MODULE_REGISTER(zigbee_mac_trx_compat, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -1077,24 +1078,6 @@ static bool zb_minimal_queue_zdo_response(u16 dst_nwk_addr, u16 cluster_id,
 	return true;
 }
 
-#define ZB_MINIMAL_HA_PROFILE_ID              0x0104U
-#define ZB_MINIMAL_ZCL_BASIC_CLUSTER_ID       0x0000U
-#define ZB_MINIMAL_ZCL_FRAME_GLOBAL_RSP       0x18U
-#define ZB_MINIMAL_ZCL_CMD_READ               0x00U
-#define ZB_MINIMAL_ZCL_CMD_READ_RSP           0x01U
-#define ZB_MINIMAL_ZCL_STATUS_SUCCESS         0x00U
-#define ZB_MINIMAL_ZCL_STATUS_UNSUPPORTED_ATTR 0x86U
-#define ZB_MINIMAL_ZCL_TYPE_UINT8             0x20U
-#define ZB_MINIMAL_ZCL_TYPE_ENUM8             0x30U
-#define ZB_MINIMAL_ZCL_TYPE_CHAR_STR          0x42U
-#define ZB_MINIMAL_ZCL_BASIC_ZCL_VERSION      0x0000U
-#define ZB_MINIMAL_ZCL_BASIC_APP_VERSION      0x0001U
-#define ZB_MINIMAL_ZCL_BASIC_STACK_VERSION    0x0002U
-#define ZB_MINIMAL_ZCL_BASIC_HW_VERSION       0x0003U
-#define ZB_MINIMAL_ZCL_BASIC_MFR_NAME         0x0004U
-#define ZB_MINIMAL_ZCL_BASIC_MODEL_ID         0x0005U
-#define ZB_MINIMAL_ZCL_BASIC_POWER_SOURCE     0x0007U
-
 /*
  * Weak identity hooks.  The zigbee_shell sample overrides these via
  * app_profile.c so that the fallback interview path answers with the
@@ -1126,34 +1109,34 @@ static u16 zb_minimal_zcl_put_basic_attr(u8 *buf, u16 pos, u16 max_len, u16 attr
 	pos += 2U;
 
 	switch (attr_id) {
-	case ZB_MINIMAL_ZCL_BASIC_ZCL_VERSION:
-		type = ZB_MINIMAL_ZCL_TYPE_UINT8;
+	case ZCL_ATTRID_BASIC_ZCL_VER:
+		type = ZCL_DATA_TYPE_UINT8;
 		value = 3U;
 		break;
-	case ZB_MINIMAL_ZCL_BASIC_APP_VERSION:
-	case ZB_MINIMAL_ZCL_BASIC_STACK_VERSION:
-	case ZB_MINIMAL_ZCL_BASIC_HW_VERSION:
-		type = ZB_MINIMAL_ZCL_TYPE_UINT8;
+	case ZCL_ATTRID_BASIC_APP_VER:
+	case ZCL_ATTRID_BASIC_STACK_VER:
+	case ZCL_ATTRID_BASIC_HW_VER:
+		type = ZCL_DATA_TYPE_UINT8;
 		value = 1U;
 		break;
-	case ZB_MINIMAL_ZCL_BASIC_POWER_SOURCE:
-		type = ZB_MINIMAL_ZCL_TYPE_ENUM8;
-		value = 3U;
+	case ZCL_ATTRID_BASIC_POWER_SOURCE:
+		type = ZCL_DATA_TYPE_ENUM8;
+		value = POWER_SOURCE_BATTERY;
 		break;
-	case ZB_MINIMAL_ZCL_BASIC_MFR_NAME:
-		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
+	case ZCL_ATTRID_BASIC_MFR_NAME:
+		type = ZCL_DATA_TYPE_CHAR_STR;
 		str = zb_platform_app_basic_mfr_name();
 		break;
-	case ZB_MINIMAL_ZCL_BASIC_MODEL_ID:
-		type = ZB_MINIMAL_ZCL_TYPE_CHAR_STR;
+	case ZCL_ATTRID_BASIC_MODEL_ID:
+		type = ZCL_DATA_TYPE_CHAR_STR;
 		str = zb_platform_app_basic_model_id();
 		break;
 	default:
-		buf[pos++] = ZB_MINIMAL_ZCL_STATUS_UNSUPPORTED_ATTR;
+		buf[pos++] = ZCL_STA_UNSUPPORTED_ATTRIBUTE;
 		return pos;
 	}
 
-	buf[pos++] = ZB_MINIMAL_ZCL_STATUS_SUCCESS;
+	buf[pos++] = ZCL_STA_SUCCESS;
 	buf[pos++] = type;
 	if (str != NULL) {
 		u8 len = (u8)strlen(str);
@@ -1242,18 +1225,21 @@ static bool zb_minimal_handle_zcl_basic_read(u16 src_nwk_addr, const zb_minimal_
 	u16 pos = 0U;
 	u16 in_pos;
 
-	if ((aps == NULL) || (aps->profile_id != ZB_MINIMAL_HA_PROFILE_ID) ||
-	    (aps->cluster_id != ZB_MINIMAL_ZCL_BASIC_CLUSTER_ID) ||
+	if ((aps == NULL) || (aps->profile_id != HA_PROFILE_ID) ||
+	    (aps->cluster_id != ZCL_CLUSTER_GEN_BASIC) ||
 	    (aps->dst_ep == ZDO_EP) || (aps->payload_len < 3U)) {
 		return false;
 	}
-	if ((aps->payload[0] & 0x07U) != 0U || aps->payload[2] != ZB_MINIMAL_ZCL_CMD_READ) {
+	if ((aps->payload[0] & (ZCL_FRAME_CONTROL_TYPE | ZCL_FRAME_CONTROL_MANU_SPECIFIC)) !=
+		ZCL_FRAME_TYPE_PROFILE_CMD || aps->payload[2] != ZCL_CMD_READ) {
 		return false;
 	}
 
-	payload[pos++] = ZB_MINIMAL_ZCL_FRAME_GLOBAL_RSP;
+	payload[pos++] = ZCL_FRAME_TYPE_PROFILE_CMD |
+			  ZCL_FRAME_CONTROL_DIRECTION |
+			  ZCL_FRAME_CONTROL_DISABLE_DEFAULT_RSP;
 	payload[pos++] = aps->payload[1];
-	payload[pos++] = ZB_MINIMAL_ZCL_CMD_READ_RSP;
+	payload[pos++] = ZCL_CMD_READ_RSP;
 
 	in_pos = 3U;
 	while ((in_pos + 1U < aps->payload_len) && (pos + 3U < sizeof(payload))) {

@@ -26,6 +26,7 @@
 
 #include "zb_common_stub.h"
 #include "mac/includes/mac_internal.h"
+#include "../../zcl/zcl_include.h"
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 #include <zephyr/logging/log.h>
@@ -231,42 +232,42 @@ static u16 zb_dispatch_basic_read_attr(u8 *rsp, u16 pos, u16 max_len, u16 attr_i
 	pos += 2U;
 
 	switch (attr_id) {
-	case 0x0000U: /* zclVersion */
-		type = 0x20U; /* uint8 */
+	case ZCL_ATTRID_BASIC_ZCL_VER:
+		type = ZCL_DATA_TYPE_UINT8;
 		value = 3U;
 		break;
-	case 0x0001U: /* appVersion */
-	case 0x0002U: /* stackVersion */
-	case 0x0003U: /* hwVersion */
-		type = 0x20U; /* uint8 */
+	case ZCL_ATTRID_BASIC_APP_VER:
+	case ZCL_ATTRID_BASIC_STACK_VER:
+	case ZCL_ATTRID_BASIC_HW_VER:
+		type = ZCL_DATA_TYPE_UINT8;
 		value = 1U;
 		break;
-	case 0x0004U: /* manufacturerName */
-		type = 0x42U; /* char string */
+	case ZCL_ATTRID_BASIC_MFR_NAME:
+		type = ZCL_DATA_TYPE_CHAR_STR;
 		str = zb_platform_app_basic_mfr_name();
 		break;
-	case 0x0005U: /* modelIdentifier */
-		type = 0x42U; /* char string */
+	case ZCL_ATTRID_BASIC_MODEL_ID:
+		type = ZCL_DATA_TYPE_CHAR_STR;
 		str = zb_platform_app_basic_model_id();
 		break;
-	case 0x0007U: /* powerSource */
-		type = 0x30U; /* enum8 */
-		value = 3U;
+	case ZCL_ATTRID_BASIC_POWER_SOURCE:
+		type = ZCL_DATA_TYPE_ENUM8;
+		value = POWER_SOURCE_BATTERY;
 		break;
-	case 0xfffdu: /* clusterRevision */
+	case ZCL_ATTRID_GLOBAL_CLUSTER_REVISION:
 		if (pos + 1U + 1U + 2U > max_len) {
 			return pos - 2U;
 		}
-		rsp[pos++] = 0x00U;
-		rsp[pos++] = 0x21U; /* uint16 */
-		COPY_U16TOBUFFER(&rsp[pos], 0x0001U);
+		rsp[pos++] = ZCL_STA_SUCCESS;
+		rsp[pos++] = ZCL_DATA_TYPE_UINT16;
+		COPY_U16TOBUFFER(&rsp[pos], ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT);
 		return pos + 2U;
 	default:
-		rsp[pos++] = 0x86U; /* unsupported attribute */
+		rsp[pos++] = ZCL_STA_UNSUPPORTED_ATTRIBUTE;
 		return pos;
 	}
 
-	rsp[pos++] = 0x00U; /* success */
+	rsp[pos++] = ZCL_STA_SUCCESS;
 	rsp[pos++] = type;
 	if (str != NULL) {
 		u8 len = (u8)strlen(str);
@@ -348,17 +349,20 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			break;
 		}
 	} else {
-		if (ad->profile_id == 0x0104U && ad->cluster_id == 0x0000U &&
+		if (ad->profile_id == HA_PROFILE_ID && ad->cluster_id == ZCL_CLUSTER_GEN_BASIC &&
 		    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
-		    (ad->asdu[0] & 0x07U) == 0U && ad->asdu[2] == 0x00U) {
+		    (ad->asdu[0] & (ZCL_FRAME_CONTROL_TYPE | ZCL_FRAME_CONTROL_MANU_SPECIFIC)) ==
+			ZCL_FRAME_TYPE_PROFILE_CMD && ad->asdu[2] == ZCL_CMD_READ) {
 			u8 rsp[96];
 			epInfo_t dst;
 			u16 rsp_len = 3U;
 			u8 aps_cnt = 0U;
 
-			rsp[0] = 0x18U;
+			rsp[0] = ZCL_FRAME_TYPE_PROFILE_CMD |
+				 ZCL_FRAME_CONTROL_DIRECTION |
+				 ZCL_FRAME_CONTROL_DISABLE_DEFAULT_RSP;
 			rsp[1] = ad->asdu[1];
-			rsp[2] = 0x01U;
+			rsp[2] = ZCL_CMD_READ_RSP;
 			for (u16 in_pos = 3U; in_pos + 1U < ad->asduLength; in_pos += 2U) {
 				rsp_len = zb_dispatch_basic_read_attr(rsp, rsp_len, sizeof(rsp),
 								      (u16)ad->asdu[in_pos] |
