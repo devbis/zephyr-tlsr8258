@@ -35,6 +35,7 @@ static inline zdo_nwk_manager_t *zdo_nwk_mngr(void)
 extern u8 zdo_mgmt_nwk_flag;
 extern const addrExt_t g_zero_addr;
 extern const addrExt_t g_invalid_addr;
+extern void zdo_nwk_authentication_complete(void);
 
 extern zdo_status_t zdo_nlmeNwkDiscReq(void *arg);
 extern zdo_status_t zdo_nlme_edScan(void *arg);

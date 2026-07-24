@@ -193,15 +193,24 @@ static void zb_core_bootstrap_once(void)
 		 * auto-ACK for ASSOCIATION-RESPONSE (sent to our extaddr by
 		 * the coordinator before we've been assigned a short addr)
 		 * fails its filter_ieee_addr memcmp — coordinator retries 4×
-		 * and we miss the short address allocation.
+		 * and we miss the short address allocation. A persisted joined
+		 * device, however, must restore its PAN/short filter here instead
+		 * of reverting to the fresh-join wildcard filter.
 		 * tlsr8258_iface_init() does this too via net_if_set_link_addr,
 		 * but our shell sample doesn't bring up a Zephyr net iface, so
-		 * iface_init never runs. Filter PAN stays 0xFFFF (wildcard)
-		 * which is correct for the joining phase.
+		 * iface_init never runs.
 		 */
-		zb_radio_port_update_filters(MAC_INVALID_PANID,
-					     MAC_SHORT_ADDR_BROADCAST,
-					     g_zbMacPib.extAddress);
+		if (g_zbNwkCtx.joined &&
+		    g_zbMacPib.panId != MAC_INVALID_PANID &&
+		    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+			zb_radio_port_update_filters(g_zbMacPib.panId,
+						     g_zbMacPib.shortAddress,
+						     g_zbMacPib.extAddress);
+		} else {
+			zb_radio_port_update_filters(MAC_INVALID_PANID,
+						     MAC_SHORT_ADDR_BROADCAST,
+						     g_zbMacPib.extAddress);
+		}
 		rf_init();
 		drv_enable_irq();
 		zb_core_init_done = true;
@@ -219,6 +228,17 @@ static void zb_core_bootstrap_once(void)
 	if (zb_waiting_for_radio_log) {
 		LOG_INF("Zigbee radio ready; completing bootstrap");
 		zb_waiting_for_radio_log = false;
+	}
+
+	/* Radio init may reset the hardware address filters. Re-apply the
+	 * persisted joined filter after the driver is fully ready, otherwise a
+	 * rebooted router hears coordinator traffic but never emits MAC ACKs. */
+	if (g_zbNwkCtx.joined &&
+	    g_zbMacPib.panId != MAC_INVALID_PANID &&
+	    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		zb_radio_port_update_filters(g_zbMacPib.panId,
+					     g_zbMacPib.shortAddress,
+					     g_zbMacPib.extAddress);
 	}
 
 	zb_platform_app_bootstrap_ready();
