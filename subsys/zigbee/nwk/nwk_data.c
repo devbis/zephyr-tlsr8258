@@ -424,7 +424,6 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     req = (zb_mscp_data_req_t *)buf;
     memset(req, 0, sizeof(*req));
     req->srcAddr.addrMode = ADDR_MODE_SHORT;
-    req->srcAddr.addr.shortAddr = g_zbInfo.nwkNib.nwkAddr;
     req->dstAddr.addrMode = ADDR_MODE_SHORT;
     req->dstAddr.addr.shortAddr = nextHop;
     req->dstPanId = g_zbInfo.macPib.panId;
