@@ -217,6 +217,75 @@ extern af_endpoint_descriptor_t *af_epDescriptorGet(void);
 extern u8 af_availableEpNumGet(void);
 extern af_endpoint_descriptor_t *af_zdoEpDescriptorGet(void);
 
+static u16 zb_dispatch_basic_read_attr(u8 *rsp, u16 pos, u16 max_len, u16 attr_id)
+{
+	const char *str = NULL;
+	u8 type = 0U;
+	u8 value = 0U;
+
+	if (rsp == NULL || pos + 3U > max_len) {
+		return pos;
+	}
+
+	COPY_U16TOBUFFER(&rsp[pos], attr_id);
+	pos += 2U;
+
+	switch (attr_id) {
+	case 0x0000U: /* zclVersion */
+		type = 0x20U; /* uint8 */
+		value = 3U;
+		break;
+	case 0x0001U: /* appVersion */
+	case 0x0002U: /* stackVersion */
+	case 0x0003U: /* hwVersion */
+		type = 0x20U; /* uint8 */
+		value = 1U;
+		break;
+	case 0x0004U: /* manufacturerName */
+		type = 0x42U; /* char string */
+		str = zb_platform_app_basic_mfr_name();
+		break;
+	case 0x0005U: /* modelIdentifier */
+		type = 0x42U; /* char string */
+		str = zb_platform_app_basic_model_id();
+		break;
+	case 0x0007U: /* powerSource */
+		type = 0x30U; /* enum8 */
+		value = 3U;
+		break;
+	case 0xfffdu: /* clusterRevision */
+		if (pos + 1U + 1U + 2U > max_len) {
+			return pos - 2U;
+		}
+		rsp[pos++] = 0x00U;
+		rsp[pos++] = 0x21U; /* uint16 */
+		COPY_U16TOBUFFER(&rsp[pos], 0x0001U);
+		return pos + 2U;
+	default:
+		rsp[pos++] = 0x86U; /* unsupported attribute */
+		return pos;
+	}
+
+	rsp[pos++] = 0x00U; /* success */
+	rsp[pos++] = type;
+	if (str != NULL) {
+		u8 len = (u8)strlen(str);
+
+		if (pos + 1U + len > max_len) {
+			return pos - 2U;
+		}
+		rsp[pos++] = len;
+		memcpy(&rsp[pos], str, len);
+		return pos + len;
+	}
+
+	if (pos + 1U > max_len) {
+		return pos - 2U;
+	}
+	rsp[pos++] = value;
+	return pos;
+}
+
 __attribute__((weak)) void af_aps_data_entry(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
@@ -282,20 +351,19 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 		if (ad->profile_id == 0x0104U && ad->cluster_id == 0x0000U &&
 		    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
 		    (ad->asdu[0] & 0x07U) == 0U && ad->asdu[2] == 0x00U) {
-			u8 rsp[40];
+			u8 rsp[96];
 			epInfo_t dst;
-			const char *model_id = zb_platform_app_basic_model_id();
-			u8 model_len = (u8)strlen(model_id);
+			u16 rsp_len = 3U;
 			u8 aps_cnt = 0U;
 
 			rsp[0] = 0x18U;
 			rsp[1] = ad->asdu[1];
 			rsp[2] = 0x01U;
-			COPY_U16TOBUFFER(&rsp[3], 0x0005U);
-			rsp[5] = 0x00U;
-			rsp[6] = 0x42U;
-			rsp[7] = model_len;
-			memcpy(&rsp[8], model_id, model_len);
+			for (u16 in_pos = 3U; in_pos + 1U < ad->asduLength; in_pos += 2U) {
+				rsp_len = zb_dispatch_basic_read_attr(rsp, rsp_len, sizeof(rsp),
+								      (u16)ad->asdu[in_pos] |
+								      ((u16)ad->asdu[in_pos + 1U] << 8));
+			}
 
 			TL_SETSTRUCTCONTENT(dst, 0);
 			dst.profileId = ad->profile_id;
@@ -305,7 +373,7 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
 			dst.dstAddr.shortAddr = ad->src_short_addr;
 
-			if (af_dataSend(ad->dst_ep, &dst, ad->cluster_id, (u16)(8U + model_len),
+			if (af_dataSend(ad->dst_ep, &dst, ad->cluster_id, rsp_len,
 					rsp, &aps_cnt) == APS_STATUS_SUCCESS) {
 				zb_buf_free(buf);
 				return;
