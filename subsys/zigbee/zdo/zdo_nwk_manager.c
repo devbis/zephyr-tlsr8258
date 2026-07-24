@@ -43,6 +43,7 @@ typedef enum {
 
 u8 zdo_mgmt_nwk_flag = 0;
 zdo_nwk_manager_t g_zdo_nwk_manager = {0};
+static bool zdo_secure_startup_pending;
 
 #if 0 /* Vendor-pinned offsets disabled in Zephyr port. */
 STATIC_ASSERT(OFFSETOF(zdo_nwk_manager_t, discEvt) == 0);
@@ -532,12 +533,17 @@ void zdo_startup_complete(void *arg)
          * pending. The Transport-Key path will flip aps_authenticated=1.
          */
         aps_ib.aps_use_insecure_join = 0;
-        zdo_device_announce_send();
+        if (aps_ib.aps_authenticated || ss_ib.securityLevel == 0U) {
+            zdo_device_announce_send();
 #if defined(ZB_ROUTER_ROLE)
-        /* At this point the Transport-Key path has authenticated the device,
-         * so the router can advertise itself and accept children. */
-        zb_router_enable_parenting(0xffU);
+            /* Only advertise as a parent after secure join is complete. */
+            zb_router_enable_parenting(0xffU);
 #endif
+        } else {
+            /* Association success is not secure-join completion. The TC
+             * still has to deliver the NWK Transport-Key first. */
+            zdo_secure_startup_pending = true;
+        }
         g_zbNwkCtx.is_factory_new = 0;
     }
 
@@ -549,6 +555,19 @@ void zdo_startup_complete(void *arg)
     }
 
     zb_buf_free((zb_buf_t *)arg);
+}
+
+void zdo_nwk_authentication_complete(void)
+{
+    if (!zdo_secure_startup_pending || !aps_ib.aps_authenticated) {
+        return;
+    }
+
+    zdo_secure_startup_pending = false;
+    zdo_device_announce_send();
+#if defined(ZB_ROUTER_ROLE)
+    zb_router_enable_parenting(0xffU);
+#endif
 }
 void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 {
