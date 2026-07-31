@@ -333,7 +333,6 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
     u8 apsCnt = 0;
 
 
-
     memset(&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.txOptions = APS_TX_OPT_ACK_TX;
     dstEpInfo.dstEp = ZDO_EP;
