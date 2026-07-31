@@ -756,14 +756,25 @@ static void tlsr8258_rf_init(void)
 	TLSR_REG8(0x0c20) |= DMA_CHN_RF_RX | DMA_CHN_RF_TX;
 }
 
-#if !defined(CONFIG_IEEE802154_RAW_MODE)
+/* rx_length_ok / rx_crc_ok are used by the RX ISR (tlsr8258_rx_capture_common)
+ * in every config, so they must live OUTSIDE the CONFIG_IEEE802154_RAW_MODE
+ * (net-stack path) guard below. */
 static bool tlsr8258_rx_length_ok(const uint8_t *rx)
 {
-	if (rx[0] >= (TLSR8258_RX_BUF_SIZE - 3u)) {
+	/*
+	 * Vendor RF_ZIGBEE_PACKET_LENGTH_OK (platform/.../rf_drv.h,
+	 * mac_phy.c rf_rx_irq_handler): a real Zigbee RX DMA buffer has its length
+	 * header (rx[0]) consistent with the PHY payload-length byte (rx[4]):
+	 *   rx[0] == rx[4] + 9
+	 * On a busy channel the radio also DMAs noise / collisions whose rx[0]/rx[4]
+	 * are inconsistent (garbage). The consistency check rejects those; also bound
+	 * rx[0] so the CRC-status read rx[rx[0]+3] stays inside the RX buffer.
+	 */
+	if (((uint16_t)rx[0] + 3u) >= TLSR8258_RX_BUF_SIZE) {
 		return false;
 	}
 
-	return tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u) != 0u;
+	return (uint16_t)rx[0] == (uint16_t)rx[4] + 9u;
 }
 
 static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
@@ -771,6 +782,7 @@ static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
 	return (rx[rx[0] + 3u] & 0x51u) == 0x10u;
 }
 
+#if !defined(CONFIG_IEEE802154_RAW_MODE)
 static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *payload)
 {
 	uint16_t filter_pan;
@@ -999,6 +1011,24 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	}
 	TLSR_REG16(0x0f20) = rx_ack;
 	tlsr8258_radio_rx_count_inc(radio);
+
+	/*
+	 * Vendor mac_phy.c rf_rx_irq_handler drops CRC-fail / length-inconsistent
+	 * frames HERE — before the address filter, MAC-ACK, or PSDU parse:
+	 *   if ((!ZB_RADIO_CRC_OK(p)) || (!ZB_RADIO_PACKET_LENGTH_OK(p)) ...) {
+	 *       ZB_RADIO_RX_BUF_CLEAR(rf_rxBuf); ZB_RADIO_RX_ENABLE; return; }
+	 * On a busy channel the radio DMAs noise/collisions as frames with a garbage
+	 * length byte (RTT: "RX sink rejected invalid frame len=146/226/242"). We were
+	 * missing this guard, so the in-ISR ack-decision / AssocResp handoff parsed
+	 * with a bogus `length`, indexing past the PSDU — hard-resetting the TC32
+	 * (which doesn't trap the fault) into the post-join reboot loop. Re-arm RX and
+	 * drop, exactly as the vendor does. rx_active/rx_proc were already swapped by
+	 * the caller, so the DMA stays armed for the next frame.
+	 */
+	if (!tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
+		tlsr8258_rf_set_rxmode(radio);
+		return;
+	}
 
 	if (self_originated) {
 		tlsr8258_rf_set_rxmode(radio);
@@ -1267,6 +1297,7 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 		 * execution_cycles barely grows while slot[31] (uptime) ticks
 		 * forward, the worker is genuinely blocked off-CPU — not slow.
 		 */
+#if defined(CONFIG_SCHED_THREAD_USAGE)
 		{
 			k_thread_runtime_stats_t stats;
 
@@ -1277,6 +1308,7 @@ static void tlsr8258_rx_worker(void *arg1, void *arg2, void *arg3)
 					(uint32_t)(stats.total_cycles & 0xffffffffU);
 			}
 		}
+#endif
 	}
 }
 
@@ -1790,7 +1822,9 @@ static int tlsr8258_start(const struct device *dev)
 	radio->rx_buffer[4] = 0u;
 	radio->rx_shadow[0] = 0u;
 	radio->rx_shadow[4] = 0u;
-	tlsr8258_rf_set_power_level(rf_power_level_list[23]);
+	/* 0 dBm (rf_power_level_list[30] = 0xa9). TX power is not the interview-
+	 * reliability factor; use a clean standard 0 dBm. */
+	tlsr8258_rf_set_power_level(rf_power_level_list[30]);
 	TLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	TLSR_REG16(0x0f1c) = 0u;

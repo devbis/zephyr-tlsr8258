@@ -5,7 +5,7 @@
  * include "zb_local.h" at file scope; in this port most were rewritten to
  * include the specific headers directly, but the ED-role (#else) branches of
  * several vendor sources still `#include "zb_local.h"`. Provide the umbrella so
- * the experimental CONFIG_ZIGBEE_ED_LIBZIGBEE build resolves them.
+ * the experimental CONFIG_ZIGBEE_ED build resolves them.
  */
 #ifndef ZB_LOCAL_H
 #define ZB_LOCAL_H

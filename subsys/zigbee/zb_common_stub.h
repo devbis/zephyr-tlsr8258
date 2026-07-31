@@ -41,7 +41,28 @@ typedef struct zb_buf_s {
 } zb_buf_t;
 
 #ifndef ZB_BUF_POOL_NUM
+/*
+ * Vendor SDK (tl_zigbee_sdk zb_buffer.h) uses 36 blocks for a ROUTER, 18 for an
+ * ED. On this RAM-constrained 8258 build (48 KB, ~97% used) we run the router at
+ * 24: buffer exhaustion turned out NOT to be the interview blocker (that was a
+ * measurement artifact), and the freed RAM is spent on a larger zb_thread stack
+ * (CONFIG_ZIGBEE_STACK_SIZE in router.conf) to survive the deep RX->MAC->NWK->
+ * APS->ZDP->CCM dispatch chain during the re-interview retransmit burst.
+ */
+#if defined(ZB_ROUTER_ROLE) || defined(CONFIG_ZIGBEE_ROUTER)
+#define ZB_BUF_POOL_NUM 24
+#else
 #define ZB_BUF_POOL_NUM 18
+#endif
+#endif
+
+/*
+ * Slab headroom the RX path leaves free so TX responses (af_dataSend) can always
+ * allocate even when an inbound interview-retry flood is consuming the pool.
+ * Inbound data frames are dropped once free blocks fall to this level.
+ */
+#ifndef ZB_BUF_RX_RESERVE
+#define ZB_BUF_RX_RESERVE 8U
 #endif
 #ifndef SEC_KEY_LEN
 #define SEC_KEY_LEN 16

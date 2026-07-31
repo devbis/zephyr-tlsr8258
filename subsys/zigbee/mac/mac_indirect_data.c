@@ -313,7 +313,7 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
 
         ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
 
-#if defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
+#if defined(CONFIG_ZIGBEE_ED)
         /*
          * Tag this MAC data-request/poll so tl_zbMaxTxConfirmCb routes its TX
          * confirm to tl_zbMacDataRequestStatusCheck (the poll/assoc-poll path

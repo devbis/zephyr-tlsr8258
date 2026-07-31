@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * rx-off End-Device poll glue for the experimental CONFIG_ZIGBEE_ED_LIBZIGBEE
+ * rx-off End-Device poll glue for the experimental CONFIG_ZIGBEE_ED
  * build (ED on the full libzigbee stack).
  *
  * An rx-off ED must poll its parent (MAC DATA_REQ) to fetch frames the parent /
@@ -23,7 +23,7 @@
  * These are STRONG definitions overriding the weak no-op
  * tl_zbNwkEdMinimalInterviewPollStart in zb_primitive_dispatch.c;
  * tl_zbNwkEdMinimalPollRestart was moved out of zb_ed_libzigbee_stubs.c so this
- * is its single definition. Compiled only for CONFIG_ZIGBEE_ED_LIBZIGBEE.
+ * is its single definition. Compiled only for CONFIG_ZIGBEE_ED.
  */
 #include "zb_common_stub.h"
 

@@ -25,7 +25,7 @@
 
 #include <string.h>
 
-#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
+#if (defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE)
 
 extern void endDevMacDataPoll(void);
 extern void tl_zbNwkBeaconPayloadUpdate(void);
