@@ -112,7 +112,7 @@ void tl_zbNwkNibInit(u8 coldReset)
         memset(&g_zbNIB, 0, sizeof(g_zbNIB));
     }
 
-#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE_LIBZIGBEE)
+#if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE)
     /* Seed the base NIB defaults (stack profile, address-alloc method, depth,
      * rxOnWhenIdle, ...) for every role that runs the libzigbee NWK. The port
      * previously kept this router-only, which left the libzigbee-based ED with

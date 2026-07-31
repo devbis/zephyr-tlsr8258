@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Phase-2 placeholder stubs for the experimental CONFIG_ZIGBEE_ED_LIBZIGBEE
+ * Phase-2 placeholder stubs for the experimental CONFIG_ZIGBEE_ED
  * build (ED on the full libzigbee stack).
  *
  * The Zephyr platform/app layer (zb_main.c, zb_bdb_bootstrap.c,
@@ -95,14 +95,9 @@ u8 tl_zbMacMlmeCoordRealignmentCmdSend(u8 rxOnWhenIdle, const u8 *orphanAddr, u1
 }
 
 /*
- * ED parent short-address getter. The vendor's neighbor-table implementation of
- * this was not ported; for an End Device the parent is the node it associated
- * with, tracked in the MAC PIB coordShortAddress.
+ * tl_zbNeighborParentShortAddrGet() is now provided by the libzigbee core
+ * (nwk/nwk_neighbor.c), which the ED build compiles — no local copy needed.
  */
-u16 tl_zbNeighborParentShortAddrGet(void)
-{
-	return g_zbMacPib.coordShortAddress;
-}
 
 bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff)
 {

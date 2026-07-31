@@ -52,12 +52,26 @@ static const addrExt_t zb_fixed_ieee_addr = {
 	 * same medium with a distinct IEEE. */
 	CONFIG_ZIGBEE_NATIVE_SIM_IEEE_LOW, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #else
-	/* Bumped ...06 -> ...08 -> ...0c: a brand-new IEEE looks like a fresh joiner
-	 * to the Z2M/Ember TC, which caches a known IEEE as "already joined" and
+	/* Bumped ...06 -> ...08 -> ...0c -> ...0d: a brand-new IEEE looks like a fresh
+	 * joiner to the Z2M/Ember TC, which caches a known IEEE as "already joined" and
 	 * stops sending the unsolicited Transport-Key. Sniffer 2026-06-29 confirmed
 	 * ...08 now stuck in assoc-SUCCESS-but-no-TK loop (Ember NVRAM still had it
-	 * even after a Z2M device delete), so bump again to a fresh value. */
-	0x0c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	 * even after a Z2M device delete); ...0c later re-interviewed as a phantom
+	 * all-zero IEEE after a rejoin, so bump again to a fresh value. ...0d then
+	 * got cached by the Ember TC after its first join (rejoin/re-interview then
+	 * blocked), so ...0e for a fresh diagnostic join. ...0f = next fresh IEEE
+	 * for the no-flash-write diagnostic (...0e now Ember-cached). ...10 = fresh
+	 * IEEE for the RX-path re-interview instrumentation (...0f now cached).
+	 * ...11 = fresh IEEE for the stack-overflow/reset diagnostic. ...12 = fresh
+	 * IEEE for the min-TX-power brownout test. ...13 = fresh IEEE to verify the
+	 * vendor RX CRC/length validation fix (drop garbage frames before parse).
+	 * ...14 = fresh IEEE for the HANDS-OFF (no -s halting) fix verification.
+	 * ...15 = fresh IEEE for the ZDP response-TX instrumentation.
+	 * ...16 = fresh IEEE to verify the router zb_buf pool fix (18->36).
+	 * ...17 = fresh IEEE for the MAC-TX-confirm (response delivery) measurement.
+	 * ...18 = fresh IEEE to verify the RX-buf reserve fix (stable re-interview).
+	 * ...19 = fresh IEEE to verify the vendor apsDataRequest af_dataSend fix. */
+	0x2c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #endif
 };
 
@@ -452,7 +466,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		ev_timer_process();
 		ev_poll_process();
 		zb_platform_radio_rx_poll();
-#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED_LIBZIGBEE)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED)
 		/* The router and the libzigbee-based ED both pull in the
 		 * libzigbee NWK / MAC primitive dispatcher via
 		 * tl_zbNwkTaskProc(); drain the per-layer task queues on every
