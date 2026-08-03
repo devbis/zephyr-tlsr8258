@@ -70,8 +70,10 @@ static const addrExt_t zb_fixed_ieee_addr = {
 	 * ...16 = fresh IEEE to verify the router zb_buf pool fix (18->36).
 	 * ...17 = fresh IEEE for the MAC-TX-confirm (response delivery) measurement.
 	 * ...18 = fresh IEEE to verify the RX-buf reserve fix (stable re-interview).
-	 * ...19 = fresh IEEE to verify the vendor apsDataRequest af_dataSend fix. */
-	0x2c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	 * ...19 = fresh IEEE to verify the vendor apsDataRequest af_dataSend fix.
+	 * Bumped through ...31 across 2026-08-03 HW test cycles (each fresh IEEE
+	 * dodges the Ember TC "already joined" cache). ...31 = short-filter guard fix. */
+	0x31, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #endif
 };
 
@@ -432,6 +434,41 @@ __weak void zb_platform_radio_rx_poll(void)
 {
 }
 
+/*
+ * Re-assert the radio short-address filter while joined. On-HW SWS reads
+ * (2026-08-03) confirmed the TLSR8258 driver's radio->filter_short_addr can sit
+ * at 0xFFFF while the device is joined (byte-level: joined as 0x6918 but filter
+ * 0xFFFF). Address filtering is SOFTWARE, so a 0xFFFF filter rejects every
+ * unicast addressed to our short while broadcasts (dst 0xFFFF) still pass — the
+ * device answers nothing (interview / re-interview / commands fail) yet looks
+ * alive on air. The fresh-join AssocResp handoff sets the filter (why the first
+ * interview works) but it is lost afterward. Periodically push the authoritative
+ * joined short/PAN back into the radio filter so any drift self-heals within
+ * ~250 ms. Guarded on joined + valid short, so it never touches the fresh-join
+ * wildcard-filter window.
+ */
+static void zb_radio_short_filter_guard(void)
+{
+	static uint32_t last_ms;
+	uint32_t now_ms;
+
+	if (!g_zbNwkCtx.joined ||
+	    g_zbMacPib.panId == MAC_INVALID_PANID ||
+	    g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		return;
+	}
+
+	now_ms = k_uptime_get_32();
+	if (last_ms != 0U && (now_ms - last_ms) < 250U) {
+		return;
+	}
+	last_ms = now_ms;
+
+	zb_radio_port_update_filters(g_zbMacPib.panId,
+				     g_zbMacPib.shortAddress,
+				     g_zbMacPib.extAddress);
+}
+
 static void zb_thread_fn(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -483,6 +520,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		zb_process_deferred_commissioning();
 		zb_requeue_commissioning_if_needed();
 		zb_link_watchdog_tick();
+		zb_radio_short_filter_guard();
 		if (zb_commissioning_pending) {
 			k_busy_wait(1000);
 			continue;
