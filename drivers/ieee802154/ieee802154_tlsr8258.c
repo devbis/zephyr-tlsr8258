@@ -989,6 +989,31 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	if (radio->debug != NULL) {
 		radio->debug->isr_entry_cyc = isr_entry_cycles;
 	}
+	if (rx_ack == 0u) {
+		rx_ack = RF_IRQ_RX;
+	}
+	TLSR_REG16(0x0f20) = rx_ack;
+	tlsr8258_radio_rx_count_inc(radio);
+
+	/*
+	 * Vendor mac_phy.c rf_rx_irq_handler drops CRC-fail / length-inconsistent
+	 * frames HERE — before the address filter, MAC-ACK, or PSDU parse:
+	 *   if ((!ZB_RADIO_CRC_OK(p)) || (!ZB_RADIO_PACKET_LENGTH_OK(p)) ...) {
+	 *       ZB_RADIO_RX_BUF_CLEAR(rf_rxBuf); ZB_RADIO_RX_ENABLE; return; }
+	 * On a busy channel the radio DMAs noise/collisions as frames with a garbage
+	 * length byte (RTT: "RX sink rejected invalid frame len=146/226/242"). This
+	 * guard MUST precede dma_payload_len_get()/rx_ack_decision() below: a garbage
+	 * rx[0]/rx[4] otherwise yields a bogus `length` (up to ~250) so the PSDU parse
+	 * reads several bytes past the DMA buffer into the adjacent rx_shadow AND — the
+	 * real hazard — we would MAC-ACK and run the AssocResp filter-handoff on pure
+	 * noise. Re-arm RX and drop, exactly as the vendor does. rx_active/rx_proc were
+	 * already swapped by the caller, so the DMA stays armed for the next frame.
+	 */
+	if (!tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
+		tlsr8258_rf_set_rxmode(radio);
+		return;
+	}
+
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
 	struct tlsr8258_core_filter_ctx ack_filter_ctx = {
 		.pan_id = radio->filter_pan_id,
@@ -1005,30 +1030,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	tlsr8258_core_rx_ack_decision(payload, length, &ack_filter_ctx, &ack_decision);
 	bool self_originated = ack_decision.self_originated;
 	bool ack_requested = ack_decision.ack_requested;
-
-	if (rx_ack == 0u) {
-		rx_ack = RF_IRQ_RX;
-	}
-	TLSR_REG16(0x0f20) = rx_ack;
-	tlsr8258_radio_rx_count_inc(radio);
-
-	/*
-	 * Vendor mac_phy.c rf_rx_irq_handler drops CRC-fail / length-inconsistent
-	 * frames HERE — before the address filter, MAC-ACK, or PSDU parse:
-	 *   if ((!ZB_RADIO_CRC_OK(p)) || (!ZB_RADIO_PACKET_LENGTH_OK(p)) ...) {
-	 *       ZB_RADIO_RX_BUF_CLEAR(rf_rxBuf); ZB_RADIO_RX_ENABLE; return; }
-	 * On a busy channel the radio DMAs noise/collisions as frames with a garbage
-	 * length byte (RTT: "RX sink rejected invalid frame len=146/226/242"). We were
-	 * missing this guard, so the in-ISR ack-decision / AssocResp handoff parsed
-	 * with a bogus `length`, indexing past the PSDU — hard-resetting the TC32
-	 * (which doesn't trap the fault) into the post-join reboot loop. Re-arm RX and
-	 * drop, exactly as the vendor does. rx_active/rx_proc were already swapped by
-	 * the caller, so the DMA stays armed for the next frame.
-	 */
-	if (!tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
-		tlsr8258_rf_set_rxmode(radio);
-		return;
-	}
 
 	if (self_originated) {
 		tlsr8258_rf_set_rxmode(radio);
