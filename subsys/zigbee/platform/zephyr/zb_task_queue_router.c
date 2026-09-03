@@ -37,11 +37,19 @@ extern void zb_buf_free(zb_buf_t *buf);
  * window while zb_thread catches up.
  */
 #define ZB_TASKQ_DEPTH 32
+/* MAC indications arrive in RF bursts; keep room while zb_thread drains
+ * the NWK dispatcher in bounded batches. */
+#define ZB_MAC2NWK_TASKQ_DEPTH 64
+/* ZDP/APS responses are posted from the MAC2NWK consumer while the
+ * coordinator is retrying an interview request.  They must not share the
+ * smaller control queue budget: a burst of confirms/status callbacks can
+ * otherwise make af_dataSend() fail after RX and decrypt already succeeded. */
+#define ZB_HIGH2NWK_TASKQ_DEPTH 64
 
 K_MSGQ_DEFINE(zb_taskq_ev_task,  sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_mac2nwk,  sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_mac2nwk,  sizeof(tl_zb_task_t), ZB_MAC2NWK_TASKQ_DEPTH, 4);
 K_MSGQ_DEFINE(zb_taskq_nwk2mac,  sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_high2nwk, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_high2nwk, sizeof(tl_zb_task_t), ZB_HIGH2NWK_TASKQ_DEPTH, 4);
 K_MSGQ_DEFINE(zb_taskq_nwk2high, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
 
 static struct k_msgq *const zb_taskq_per_layer[TL_Q_TYPE_MAX] = {

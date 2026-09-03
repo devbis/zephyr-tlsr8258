@@ -14,6 +14,10 @@
 #include "aps/aps_api.h"
 #include "aps/aps_internal.h"
 
+#if defined(ZB_ROUTER_ROLE)
+#include "zdo/zdo_internal.h"
+#endif
+
 u16 dstPanID = 0;
 u8 g_apsTxCacheNum = 0;
 static apsDataIndCb_t g_apsDataIndCb;
@@ -34,6 +38,10 @@ u8 aps_get_handle(void);
 u8 ss_apsDecryptFrame(void *arg);
 void aps_command_handle(void *arg);
 void aps_process_group_addressed_packet(zb_buf_t *buf);
+void zdo_activeEpIndicate(void *arg);
+#if defined(ZB_ROUTER_ROLE)
+extern void zb_router_schedule_persistence_save(void);
+#endif
 
 typedef struct _attribute_packed_ {
     u8 seqNum;
@@ -337,7 +345,7 @@ void aps_indPrimBuild(void *arg)
     out->srcMacAddr = src.srcMacAddr;
     out->aps_counter = srcHdr.frameCounter;
     out->lqi = srcHdr.apsCounter;
-    out->rssi = (s8)buf[194];
+    out->rssi = src.rssi;
 
     if ((srcHdrFlags & 0x0cU) == 0x0cU) {
         out->dst_addr_mode = APS_SHORT_GROUPADDR_NOEP;
@@ -389,7 +397,18 @@ void aps_conf(void *arg)
 
             if (shortAddr != localShort) {
                 tl_zbNwkAddrMapAdd(idx, g_zbInfo.macPib.extAddress, &shortAddr);
+#if defined(ZB_ROUTER_ROLE)
+                /*
+                 * nv_flashWriteNew() masks RF IRQs during the page/sector
+                 * operation.  Doing this synchronously from an APS confirm
+                 * can leave an always-on router deaf after an idle handoff.
+                 * The router persistence helper coalesces and defers the save
+                 * until the interview/RX exchange has drained.
+                 */
+                zb_router_schedule_persistence_save();
+#else
                 zb_info_save(NULL);
+#endif
             }
         }
     }
@@ -508,7 +527,9 @@ void apsRcvingWindowHandling(void *arg)
     }
 
     if (win->receivedBlocks == win->expectedBlocks) {
-        tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj);
+		if (tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj) != RET_OK) {
+            ev_buf_free((u8 *)reassemblyObj);
+        }
         apsDataFragmentRcvWinClear();
     }
 }
@@ -642,7 +663,15 @@ u8 aps_ack_send(void *arg, u8 blockAck)
     req->nsdu = payload;
     req->nsduLen = payloadLen;
 
-    tl_zbPrimitivePost(3, 0x70, buf);
+    /* nwk_fwdPacket() rejects a carrier whose vendor `used` bit is clear.
+     * aps_ack_send() allocates a fresh buffer, so set the bit before handing
+     * it to the NWK queue; otherwise every APS-ACK request leaks its buffer
+     * at that guard and eventually starves the real ZDP/ZCL response. */
+    buf->hdr.used = 1U;
+    if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, buf) != RET_OK) {
+        zb_buf_free(buf);
+        return APS_STATUS_INTERNAL_BUF_FULL;
+    }
     return 0;
 }
 
@@ -877,7 +906,17 @@ void aps_data_indication_process(void *arg)
         }
     }
 
-    if (aps_duplicate_check(hdr->srcShortAddr, hdr->apsCounter) != 0U) {
+    /*
+     * The packed RX header is also used by aps_hdr_parse().  For ordinary
+     * (non-fragmented) APS data that overlay places the destination endpoint
+     * in apsCounter; it is not the APS frame counter.  Applying duplicate
+     * suppression here therefore drops every subsequent packet addressed to
+     * the same endpoint (notably Active_EP requests on endpoint 0 and ZCL
+     * reads on endpoint 1).  Only the extended/fragmented form carries a
+     * counter that is safe to use for duplicate suppression.
+     */
+    if ((hdr->frameCtrl & 0x80U) != 0U && hdr->extHdr != 0U &&
+        aps_duplicate_check(hdr->srcShortAddr, hdr->apsCounter) != 0U) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -960,7 +999,9 @@ void aps_data_indication_process(void *arg)
             if (*aps_frag_rcv_timer_evt() != NULL) {
                 ev_timer_taskCancel(aps_frag_rcv_timer_evt());
             }
-            tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj);
+			if (tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj) != RET_OK) {
+                ev_buf_free((u8 *)reassemblyObj);
+            }
             aps_frag_rcv_win()->reassemblyBuf = NULL;
             memset(&g_apsDataFragmentRcvWin, 0, sizeof(g_apsDataFragmentRcvWin));
         }
@@ -981,17 +1022,44 @@ void aps_data_indication_process(void *arg)
         return;
     }
 
-    if (!g_zbNwkCtx.joined) {
+if (!g_zbNwkCtx.joined) {
+#if defined(ZB_ROUTER_ROLE)
+    /* A late NWK failure may clear only the runtime bit while the restored
+     * PAN/short/NWK-key tuple is still valid. Repair it before dropping an
+     * otherwise valid APS request (notably MGMT_LEAVE_REQ from Z2M). */
+    if (zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+    } else {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
+#else
+    zb_buf_free((zb_buf_t *)arg);
+    return;
+#endif
+}
 
     if ((hdr->frameCtrl & 0x0cU) == 0x0cU) {
         aps_process_group_addressed_packet((zb_buf_t *)arg);
         return;
     }
 
-    tl_zbTaskPost(af_aps_data_entry, arg);
+	/* This function already runs in the Zigbee worker after NWK security.
+	 * On TLSR8258 the extra callback FIFO can be drained without invoking
+	 * the stored TC32 function pointer (the MAC ACK still goes out), leaving
+	 * an ACKed ZDP/ZCL request with no response.  Keep the router's complete
+	 * RX -> APS -> ZDP/ZCL handoff inline; this is also the vendor's effective
+	 * ordering at this boundary and preserves the RX-on-when-idle policy.
+	 * The ED path retains the queued handoff used by its polling model. */
+#if defined(ZB_ROUTER_ROLE)
+	af_aps_data_entry(arg);
+#else
+	if (tl_zbRxTaskPost(af_aps_data_entry, arg) != RET_OK) {
+		zb_buf_free((zb_buf_t *)arg);
+	}
+#endif
 }
 void aps_interPanDataIndCb(void *arg)
 {
@@ -1041,7 +1109,9 @@ void aps_interPanDataIndCb(void *arg)
 
         localInd.dst_ep = epList[i].ep;
         memcpy(arg, &localInd, sizeof(localInd));
-        tl_zbTaskPost(af_aps_data_entry, arg);
+		if (tl_zbTaskPost(af_aps_data_entry, arg) != RET_OK) {
+            zb_buf_free((zb_buf_t *)arg);
+        }
         return;
     }
 
@@ -1221,11 +1291,13 @@ void aps_nwk_data_indication_cb(void *arg)
     nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
     aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
     u8 hdrLen;
+	bool profile_match;
 
     hdrLen = aps_hdr_parse(ind->nsdu, hdr);
 
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;
+	profile_match = af_profileMatchedLocal(hdr->profileId, hdr->dstEp);
 
     /*
      * The NLDE-DATA.indication dstAddrMode is produced by nwk_data.c as
@@ -1252,13 +1324,16 @@ void aps_nwk_data_indication_cb(void *arg)
 
         if ((hdr->frameCtrl & 0x03U) == 0U &&
             (hdr->frameCtrl & 0x0cU) != 0x0cU &&
-            !af_profileMatchedLocal(hdr->profileId, hdr->dstEp)) {
+		    !profile_match) {
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
     }
 
-    tl_zbTaskPost(aps_data_indication_process, arg);
+    /* NWK indication is delivered inline from the Zigbee worker.  Keep APS
+     * parsing inline as well: the coordinator's retry burst must not leave
+     * the indication waiting behind timer/TX callbacks in the shared queue. */
+    aps_data_indication_process(arg);
 }
 u8 apsHandleIsExit(u8 handle)
 {

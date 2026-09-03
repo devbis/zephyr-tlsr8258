@@ -1593,7 +1593,24 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
 
     case BDB_STATE_COMMISSIONING_NETWORK_STEER:
         if (startDevCnf->status == SUCCESS) {
+#if ZB_ROUTER_ROLE
+            /*
+             * The ED TCLK-retrieval procedure is not part of the router
+             * join handoff.  A router has already completed the centralized
+             * security handoff when this confirm is delivered: the NWK
+             * Transport-Key is installed by ss_zdoTransportKeyIndHandle().
+             * Running the ED-only NodeDesc/RequestKey exchange here leaves a
+             * router in the commissioning state and, when the coordinator
+             * does not answer that optional exchange, eventually sends it
+             * through the leave/recommission path.  That is the observed
+             * "works after interview, then starts associating again" loop.
+             */
+            g_bdbCtx.edRuntimeReady = 1;
+            g_bdbCtx.tcLinkKeyReady = 1;
+            bdb_ed_join_complete_maybe_finish();
+#else
             bdb_ed_secure_join_handoff_start();
+#endif
         } else {
             //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_NO_NETWORK;
             BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
@@ -1638,7 +1655,9 @@ _CODE_BDB_ void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf)
     }
 
     if (BDB_STATE_GET() == BDB_STATE_COMMISSIONING_NETWORK_STEER) {
+#if !ZB_ROUTER_ROLE
         bdb_ed_assoc_handoff_start();
+#endif
     }
 }
 

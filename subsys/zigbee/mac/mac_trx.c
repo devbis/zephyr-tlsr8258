@@ -17,13 +17,16 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 #include <stdint.h>
 
-extern volatile uint32_t zb_nwk_ed_trace[];
-
 static ev_timer_event_t *macPendingWaitTimerEvt;
 tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
 static u8 tx_fifo_rptr = 0;
 static u8 tx_fifo_wptr = 0;
+
+/* The vendor ABI stores only a txData pointer.  The originating zb_buf can
+ * be released/reused before the MAC task consumes the entry, so retain an
+ * immutable PSDU per queue slot. */
+static volatile u8 mac_tx_psdu_storage[TX_QUEUE_BN][128] __aligned(4);
 
 typedef struct _attribute_packed_ {
     void *curTx;
@@ -35,6 +38,7 @@ typedef struct _attribute_packed_ {
     u8 ackRequired;
     u8 skipFreeTxBuf;
     u8 ackSeqNum;
+    u8 tx_psdu_prepared;
 } mac_trx_vars_t;
 
 static mac_trx_vars_t mac_trx_vars;
@@ -208,6 +212,8 @@ int mac_waitTxIrqCb(void *arg)
     (void)arg;
 
     if (timer_evt_state_get() != 0U) {
+        tx_data_queue *entry = (tx_data_queue *)mac_trx_cur_get();
+
         rf_busyFlag &= (u8)~TX_BUSY;
         rf_setTrxState(RF_STATE_RX);
         tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_SEND_FAIL);
@@ -229,7 +235,6 @@ int mac_ackWaitingTimerCb(void *arg)
 
 void mac_rxDataParse(void *arg)
 {
-	zb_nwk_ed_trace[32]++;
 	zb_buf_t *buf = (zb_buf_t *)arg;
     zb_mac_rx_pending_meta_t *pending = (zb_mac_rx_pending_meta_t *)arg;
     zb_mac_rx_meta_t *meta = (zb_mac_rx_meta_t *)arg;
@@ -241,11 +246,32 @@ void mac_rxDataParse(void *arg)
     u8 hdrSize;
     tl_zb_mac_mhr_t mhr;
 
-    raw[194] = (u8)rssi;
+    /*
+     * Keep RX RSSI in the buffer header.  `raw` points at the dedicated
+     * 188-byte radio snapshot, not at the old vendor scratch buffer; writing
+     * raw[194] corrupted the next slab block and eventually broke the ZDP/ZCL
+     * interview after the radio had already received the frame.
+     */
+    buf->hdr.rssi = rssi;
     frameType = raw[0] & 0x07U;
     hdrSize = tl_zbMacHdrParse(&mhr, raw);
 
-    if (len <= hdrSize || g_zbMacCtx.status == 1U) {
+    /* The ED-scan state normally suppresses queued RX frames.  A successful
+     * Association Response is an exception: the coordinator can deliver it
+     * on the first poll before the scan-completion callback has moved the MAC
+     * back to NORMAL.  The radio fast-handoff already accepted this exact
+     * frame and updated the PAN/short filter; dropping it here leaves the
+     * device with a programmed address but no MAC->NWK associate confirm. */
+    bool assoc_resp_during_ed_scan =
+        (g_zbMacCtx.status == ZB_MAC_STATE_ED_SCAN) &&
+        (frameType == MAC_FRAME_TYPE_COMMAND) &&
+        (hdrSize != 0U) &&
+        ((u16)(hdrSize + 4U) <= len) &&
+        (raw[hdrSize] == MAC_CMD_ASSOCIATION_RESPONSE) &&
+        (raw[hdrSize + 3U] == MAC_SUCCESS);
+
+    if (len <= hdrSize ||
+        (g_zbMacCtx.status == ZB_MAC_STATE_ED_SCAN && !assoc_resp_during_ed_scan)) {
         zb_buf_free(buf);
         return;
     }
@@ -291,9 +317,11 @@ void mac_rxDataParse(void *arg)
 void mac_csmaStart(void *arg)
 {
     u32 r;
+    u8 cca;
 
     r = drv_disable_irq();
-    if (rf_performCCA() == 4U) {
+    cca = rf_performCCA();
+    if (cca == 4U) {
         if ((rf_busyFlag & TX_ACKPACKET) != 0U) {
             rf_busyFlag &= (u8)~TX_ACKPACKET;
         }
@@ -495,8 +523,19 @@ void mac_trxTask(void *arg)
     if (event == MAC_TX_EV_NEW_DATA) {
         mac_trx_vars.ackSeqNum = entry->seqNum;
         mac_trx_vars.ackRequired = (u8)(txq_flags_get(entry) & 0x0fU);
-        mac_trx_vars.frameRetryCnt = 0;
-        rf802154_tx_ready(entry->txData, entry->psduLen);
+        /*
+         * Keep the first prepared PSDU immutable across MAC retries.  The
+         * queue entry points into the shared Zigbee carrier; rebuilding the
+         * RF buffer from that pointer after a failed ACK can race its
+         * confirmation/free path and expose the carrier's plaintext+MIC
+         * transient on the retry.  rf_tx_buf is already the MAC-owned copy
+         * consumed by the radio driver, so retries only rerun CSMA/TX.
+         */
+        if (mac_trx_vars.tx_psdu_prepared == 0U) {
+            mac_trx_vars.frameRetryCnt = 0;
+            rf802154_tx_ready(entry->txData, entry->psduLen);
+            mac_trx_vars.tx_psdu_prepared = 1U;
+        }
     }
 
     switch (state) {
@@ -542,10 +581,16 @@ void mac_trxTask(void *arg)
                 }
             }
 
-            if (drv_hwTmr_set(3, backoffUs, (timerCb_t)mac_csmaStart, entry) != 0) {
-                drv_disable_irq();
-                ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TX_TIMER);
-            }
+			if (drv_hwTmr_set(3, backoffUs, (timerCb_t)mac_csmaStart, entry) != 0) {
+				u32 r = drv_disable_irq();
+				ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TX_TIMER);
+				drv_restore_irq(r);
+				/* The Zephyr router port has no vendor HW-timer backend;
+				 * do not leave MAC_TX_CSMA wedged when the weak timer stub
+				 * rejects the request.  The task queue is already the normal
+				 * deferred MAC path, so retry CCA there. */
+				tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
+			}
 
             if (mac_trx_vars.backoffExponent < g_zbInfo.macPib.maxBe) {
                 mac_trx_vars.backoffExponent++;
@@ -649,18 +694,13 @@ void mac_trigger_tx(void *arg)
         return;
     }
 
-    /* Active scan queues a BeaconReq via tl_zbMacTx(); allow that one
-     * scan-time transmit to run even though the MAC status is not NORMAL.
-     */
-    if (g_zbMacCtx.status != 0U &&
-        g_zbMacCtx.status != ZB_MAC_STATE_ACTIVE_SCAN) {
-        return;
-    }
-
-    if (g_zbMacCtx.status == ZB_MAC_STATE_ACTIVE_SCAN &&
-        tx_fifo_wptr != tx_fifo_rptr) {
-        zb_nwk_ed_trace[59]++;
-    }
+    /* A queued TX must not be lost merely because the MAC is in a transient
+     * scan/indirect-data state.  af_dataSend() posts NLDE-DATA.request
+     * asynchronously; its response can reach tl_zbMacTx while the state is
+     * still non-NORMAL, and the old status gate then left the FIFO queued
+     * forever because no later transition kicked mac_trigger_tx again.  The
+     * queue/state guard above still serializes one TX at a time, while the
+     * PHY owns the actual RX/TX turnaround. */
 
     {
         void *next = get_next_data();
@@ -718,34 +758,111 @@ u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList
     r = drv_disable_irq();
     depth = (u8)(tx_fifo_wptr - tx_fifo_rptr);
     if (depth < MAC_TX_QUEUE_SIZE) {
-        entry = &g_pTxQueue[tx_fifo_wptr & (MAC_TX_QUEUE_SIZE - 1U)];
+        u8 slot = (u8)(tx_fifo_wptr & (MAC_TX_QUEUE_SIZE - 1U));
+
+        entry = &g_pTxQueue[slot];
+        for (u8 i = 0U; i < psduLen; i++) {
+            mac_tx_psdu_storage[slot][i] = txData[i];
+        }
         tx_fifo_wptr++;
 
         entry->buf = (u8 *)txBuf;
         txq_flags_set(entry, (u8)((txq_flags_get(entry) & 0xf0U) | ackReq));
         entry->psduLen = psduLen;
-        entry->txData = txData;
+        entry->txData = (u8 *)mac_tx_psdu_storage[slot];
         entry->seqNum = txBuf->buf[2];
         entry->pendingList = pendingList;
         status = MAC_SUCCESS;
     }
     drv_restore_irq(r);
 
-    if (status != MAC_SUCCESS) {
-        zb_nwk_ed_trace[62]++;
-    }
-
     mac_trigger_tx(NULL);
     return status;
 }
 
+/*
+ * The coordinator retransmits an APS-ACKed frame several times when the
+ * deferred Zigbee worker has not produced the response yet.  The radio must
+ * still ACK those copies, but handing every byte-identical copy to the stack
+ * consumes the shared 36-buffer slab before the first copy is drained.  Keep
+ * a tiny MAC-level cache and reject only exact recent duplicates, before a
+ * zb_buf is allocated.  A four-entry cache is enough for the retry burst and
+ * costs 32 bytes of RAM on TLSR8258.
+ */
+#define MAC_RX_DUP_CACHE_SIZE 4U
+
+struct mac_rx_dup_entry {
+	u32 hash;
+	u8 len;
+	u8 valid;
+};
+
+static struct mac_rx_dup_entry mac_rx_dup_cache[MAC_RX_DUP_CACHE_SIZE];
+static u8 mac_rx_dup_wptr;
+
+static bool mac_rx_is_local_short_unicast(const u8 *data, u8 len)
+{
+	u16 fcf;
+	u16 dst;
+
+	/* FCF + sequence + destination PAN + short destination. */
+	if (data == NULL || len < 7U) {
+		return false;
+	}
+
+	fcf = (u16)data[0] | ((u16)data[1] << 8);
+	if ((fcf & 0x0007U) != 0x0001U || ((fcf >> 10) & 0x03U) != 0x02U) {
+		return false;
+	}
+
+	dst = (u16)data[5] | ((u16)data[6] << 8);
+	return dst == g_zbInfo.macPib.shortAddress;
+}
+
+static bool mac_rx_is_exact_duplicate(const u8 *data, u8 len)
+{
+	u32 hash = 2166136261U;
+
+	if (data == NULL || len < 3U) {
+		return false;
+	}
+
+	/* The encrypted NWK auxiliary header and ciphertext carry the frame
+	 * counter/cluster identity. Hashing only the MAC+NWK prefix makes a
+	 * same-length Node-Desc request look identical to Active-EP (and ZCL)
+	 * traffic, so the latter gets discarded as a false duplicate. */
+	for (u8 i = 0U; i < len; i++) {
+		hash ^= data[i];
+		hash *= 16777619U;
+	}
+	hash ^= len;
+
+	for (u8 i = 0U; i < MAC_RX_DUP_CACHE_SIZE; i++) {
+		if (mac_rx_dup_cache[i].valid != 0U &&
+		    mac_rx_dup_cache[i].len == len &&
+		    mac_rx_dup_cache[i].hash == hash) {
+			return true;
+		}
+	}
+
+	mac_rx_dup_cache[mac_rx_dup_wptr] = (struct mac_rx_dup_entry){
+		.hash = hash,
+		.len = len,
+		.valid = 1U,
+	};
+	mac_rx_dup_wptr = (u8)((mac_rx_dup_wptr + 1U) % MAC_RX_DUP_CACHE_SIZE);
+	return false;
+}
+
 void mac_trxInit(void)
 {
-    tx_fifo_rptr = 0;
-    tx_fifo_wptr = 0;
-    memset(&mac_trx_vars, 0, sizeof(mac_trx_vars));
-    g_pTxQueue = g_txQueue;
-    rf_init();
+	tx_fifo_rptr = 0;
+	tx_fifo_wptr = 0;
+	memset(&mac_trx_vars, 0, sizeof(mac_trx_vars));
+	memset(mac_rx_dup_cache, 0, sizeof(mac_rx_dup_cache));
+	mac_rx_dup_wptr = 0U;
+	g_pTxQueue = g_txQueue;
+	rf_init();
 }
 
 u8 mac_getTrxState(void)
@@ -807,15 +924,34 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
             mac_trxTask((void *)(uintptr_t)event);
         }
         return;
-    }
+	}
 
-    buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
-    if (buf == NULL) {
-        zb_nwk_ed_trace[47]++;
-        return;
-    }
+	/* The RX slab is shared with TX, APS and security buffers. Under a
+	 * coordinator retry storm, admitting every received duplicate can consume
+	 * the whole slab before the RX worker gets a chance to drain it. Keep the
+	 * reserved blocks for interview responses and other locally generated TX.
+	 * The association fast-handoff must run first: it updates the short-address
+	 * filter directly from the AssocResp and does not need a zb_buf_t. */
+	zb_mac_try_assoc_resp_fast_handoff(data, len);
+	if (mac_rx_is_exact_duplicate(data, len)) {
+		return;
+	}
+	/* Keep the reserve for joined routers too: interview/ZCL responses are
+	 * generated from the same slab, and a retry burst must not consume the
+	 * last blocks before af_dataSend() can build the response. */
+	/* Broadcast retry storms may consume the shared slab, but a valid
+	 * unicast addressed to this router is the work that produces the response
+	 * the coordinator is waiting for. Admit that frame down to the last
+	 * reserved blocks; keep the reserve for unrelated broadcasts. */
+	if (zb_buf_rx_free_count() <= ZB_BUF_RX_RESERVE &&
+	    !mac_rx_is_local_short_unicast(data, len)) {
+		return;
+	}
 
-    zb_mac_try_assoc_resp_fast_handoff(data, len);
+	buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+	if (buf == NULL) {
+		return;
+	}
 
     owned_payload = zb_buf_rx_payload_capture(buf, data, len);
     if (owned_payload == NULL) {
@@ -830,14 +966,17 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     meta->rssi = rssi;
 
     rf_busyFlag &= (u8)~RX_BUSY;
-	if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
-		zb_nwk_ed_trace[33]++;
+	if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U) &&
+	    !mac_rx_is_local_short_unicast(data, len)) {
 		zb_buf_free(buf);
 		return;
 	}
 
-	if (tl_zbTaskPost(mac_rxDataParse, buf) != RET_OK) {
-		zb_nwk_ed_trace[34]++;
+	/* RX parsing has its own priority queue.  Putting this callback on the
+	 * generic task lane lets timer/TX callbacks consume the whole queue while
+	 * the RF ISR continues to MAC-ACK coordinator retries; the packet is then
+	 * acknowledged on air but never reaches NWK/ZDP. */
+	if (tl_zbRxTaskPost(mac_rxDataParse, buf) != RET_OK) {
 		zb_buf_free(buf);
 	}
 }

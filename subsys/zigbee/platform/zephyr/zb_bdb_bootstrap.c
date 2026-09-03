@@ -200,7 +200,6 @@ static bool zb_platform_bdb_restore_joined_target(void)
 		return false;
 	}
 
-	bdb_outgoingFrameCountUpdate(1U);
 	zb_rejoinSecModeSet(REJOIN_SECURITY);
 	if (zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,
 			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
@@ -352,6 +351,31 @@ static void zb_platform_bdb_apply_join_profile(void)
 
 #endif
 
+#if defined(ZB_ROUTER_ROLE)
+static bool zb_platform_bdb_router_has_valid_join_context(void)
+{
+	const u8 *key;
+
+	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL ||
+	    g_zbMacPib.panId == MAC_INVALID_PANID ||
+	    g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+	    g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+	    g_zbNIB.panId != g_zbMacPib.panId ||
+	    g_zbNIB.nwkAddr != g_zbMacPib.shortAddress) {
+		return false;
+	}
+
+	key = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+		if (key[i] != 0U) {
+			return true;
+		}
+	}
+
+	return false;
+}
+#endif
+
 /*
  * Optional hook for the application to register endpoints and initialize
  * ZCL before BDB starts.  The zigbee_shell sample overrides this to call
@@ -379,6 +403,19 @@ int zb_platform_bdb_init_default(void)
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
+	#if defined(ZB_ROUTER_ROLE)
+	/*
+	 * A previous interrupted join can persist the MAC/NWK tuple without the
+	 * NWK key.  Treating that blob as a joined router makes it skip fresh
+	 * commissioning: it programs the old address filter, cannot decrypt
+	 * coordinator traffic, and eventually loops through association attempts.
+	 * The key is available now because zdo_ssInfoInit() has restored SSIB.
+	 */
+	if (g_zbNwkCtx.joined && !zb_platform_bdb_router_has_valid_join_context()) {
+		LOG_WRN("zb bdb: dropping joined router state without a valid NWK key");
+		(void)zb_platform_clear_persistent_state();
+	}
+	#endif
 	/*
 	 * The vendor flow runs ss_zdoInit(TRUE) from bdb_init() to raise
 	 * securityLevel to 5, but the Zephyr platform bootstrap bypasses
@@ -434,6 +471,11 @@ int zb_platform_bdb_init_default(void)
 	zdo_zdpCbTblRegister(&zb_shell_zdo_cb);
 
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
+	if (g_bdbAttrs.nodeIsOnANetwork != 0U) {
+		/* Match vendor bdb_init(repower=1): reserve a fresh NWK security
+		 * frame-counter range before any restored-network traffic. */
+		bdb_outgoingFrameCountUpdate(1U);
+	}
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
 	zb_platform_bdb_apply_fixed_target();
 	zb_platform_bdb_apply_join_profile();

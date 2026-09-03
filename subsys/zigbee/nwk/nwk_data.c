@@ -14,6 +14,18 @@
 #include "nwk/includes/nwk_neighbor.h"
 
 extern volatile uint32_t zb_nwk_ed_trace[];
+#if defined(ZB_ROUTER_ROLE)
+extern bool zdo_live_join_context(void);
+
+static inline void nwk_router_repair_live_join(void)
+{
+    if (!g_zbNwkCtx.joined && zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+    }
+}
+#endif
 
 /* Externs that the libzigbee runtime exposes through internal vendor
  * headers (aps_internal.h, mac_internal.h, zdo_internal.h) — Zephyr
@@ -237,6 +249,8 @@ void nwkNldeDataCnf(void *arg, u8 status, u8 nsduHandle)
     tl_zbTaskPost((tl_zb_callback_t)aps_nwk_data_confirm_cb, arg);
 }
 
+extern void zdo_mgmt_leave_response_confirm(void *arg, u8 status);
+
 void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
 {
     zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
@@ -251,6 +265,7 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
     ind.lqi = macInd->mpduLinkQuality;
     ind.srcMacAddr = macInd->srcAddr.addr.shortAddr;
     ind.securityUse = pNwkHdr->frameControl.security ? 1U : 0U;
+    ind.rssi = ((zb_buf_t *)arg)->hdr.rssi;
 
     if (g_zbInfo.nwkNib.timeStamp) {
         ind.rxTime = macInd->timestamp;
@@ -267,7 +282,11 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
         g_nwkDataIndCb(arg);
         return;
     }
-    tl_zbTaskPost(aps_nwk_data_indication_cb, arg);
+    /* This is already running in the Zigbee worker, after NWK security has
+     * accepted the frame.  Deliver the vendor's NWK->APS indication inline:
+     * a retry burst can fill the callback queue before it gets serviced,
+     * which otherwise drops every later ZDP/ZCL request. */
+    aps_nwk_data_indication_cb(arg);
 }
 
 u8 tl_zbNwkInterPanDataReq(void *arg)
@@ -373,6 +392,9 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
     case NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE:
         nwk_leaveCmdSendCnf(arg, nwkHdr.dstAddr);
         return;
+    case NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE:
+        zdo_mgmt_leave_response_confirm(arg, status);
+        return;
     case NWK_INTERNAL_ENDDEVTIMEOUT_REQ_CMD_HANDLE:
         nwkEndDevTimeoutReqCnfHandler(arg);
         return;
@@ -396,7 +418,6 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     if (buf == NULL || pNwkHdr == NULL || payload == NULL) {
         return;
     }
-
     savedHandle = ((u8 *)buf)[BUF_SAVED_HANDLE_OFFSET];
     /*
      * Reserve the NWK auxiliary security header (NWK_SEC_AUX_HDR_LEN = 14:
@@ -569,6 +590,12 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     }
 
     frameType = nwkHdr.frameControl.frameType;
+#if defined(ZB_ROUTER_ROLE)
+    /* Repair the live context before the joined-state gate. The APS-layer
+     * repair is too late for a router whose stale joined bit would otherwise
+     * discard every secured ZDP/ZCL request here. */
+    nwk_router_repair_live_join();
+#endif
     if (!nwk_joined() && nwk_user_state() != NLME_JOINING) {
         if (frameType != FRAME_TYPE_INTERPAN) {
             zb_buf_free(buf);
@@ -646,8 +673,12 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
                                ind->msduLength, ind->msdu, &nwkHdr,
                                ind->mpduLinkQuality) != RET_OK) {
 			zb_nwk_ed_trace[36]++;
-            return;
-        }
+			/* The indication carrier is still owned by this handler on every
+			 * decrypt failure.  Returning without releasing it exhausts the
+			 * shared RX/TX slab after a few malformed or stale secured frames. */
+			zb_buf_free(buf);
+			return;
+		}
 		zb_nwk_ed_trace[37]++;
         nwkHdr.frameHdrLen = (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN);
         ind->msduLength = (u8)(ind->msduLength - 4U);
@@ -730,8 +761,18 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         ss_ib.securityLevel != 0U &&
         !nwkHdr.frameControl.security) {
         if (frameType == FRAME_TYPE_DATA) {
-            zb_buf_free(buf);
-            return;
+            /* During rejoin/Transport-Key delivery the NWK header is
+             * intentionally unsecured while the APS payload is secured.
+             * Do not reject that frame merely because a restored joined
+             * snapshot has already raised the NWK security policy; APS must
+             * receive it to install/refresh the network key.  Plain DATA
+             * without either NWK or APS security remains rejected. */
+            bool aps_secure = payloadTotalLen > nwkHdr.frameHdrLen &&
+                              (payload[0] & BIT(5)) != 0U;
+            if (!aps_secure) {
+                zb_buf_free(buf);
+                return;
+            }
         }
 
         if (frameType == FRAME_TYPE_COMMAND &&
@@ -832,8 +873,18 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
     u8 *fc = (u8 *)&nwkHdr.frameControl;
     u16 srcAddr;
     u8 radius;
-
-
+#if defined(ZB_ROUTER_ROLE)
+    /*
+     * A late startup/NLME failure can clear only the runtime joined bit after
+     * association has already committed the PAN, short address and NWK key.
+     * RX accepts such a live context (aps_data.c repairs it there), but TX
+     * used to reject the response here as BAD_STATE. That produced the
+     * characteristic post-idle failure: the router MAC-ACKed a ZCL read but
+     * never transmitted the response. Repair the bit before the normal NWK
+     * state check.
+     */
+    nwk_router_repair_live_join();
+#endif
 
     if ((!nwk_joined()) ||
         (g_zbInfo.nwkNib.secAllFrames && nwk_user_state() != NLME_IDLE)) {

@@ -194,7 +194,21 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 			entry.potentialParent = 1;
 		}
 
+		/*
+		 * Ember's non-beacon coordinator can keep the MAC beacon's
+		 * associationPermit bit cleared while Z2M has opened joining through
+		 * its centralized permit-join command.  The beacon is still a valid
+		 * parent advertisement (matching PAN/profile, router capacity and
+		 * usable LQI), and the coordinator is the final authority: it can
+		 * reject the Association Request with the normal MAC status.  Keep
+		 * the permit bit for diagnostics, but do not discard the only parent
+		 * candidate on the router path.
+		 */
+#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+		/* Keep the stack/profile/router-capacity result for router joins. */
+#else
 		entry.potentialParent = entry.permitJoining && entry.potentialParent;
+#endif
 		entry.deviceType = ((ind->panDesc.superframeSpec & 0x4000U) != 0U)
 					   ? NWK_DEVICE_TYPE_COORDINATOR
 					   : NWK_DEVICE_TYPE_ROUTER;

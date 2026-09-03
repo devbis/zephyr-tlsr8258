@@ -23,6 +23,68 @@ static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
 volatile u8 mac_assoc_resp_success_seen = 0U;
 
+#if defined(ZB_ROUTER_ROLE)
+/*
+ * A router is receive-on-when-idle, but the coordinator may queue the first
+ * Transport-Key as indirect data while completing association.  The vendor
+ * stack pulls that one pending frame with a MAC Data Request after the
+ * Association Response.  Always-RX only removes the need for periodic polls;
+ * it does not remove this bounded post-association handshake.
+ */
+void tl_zbPostAssociationPullNow(void)
+{
+	zb_buf_t *buf;
+	zb_mlme_data_req_cmd_t req;
+
+	if (g_zbInfo.macPib.shortAddress > 0xfffdU ||
+	    g_zbInfo.macPib.coordShortAddress > 0xfffdU) {
+		return;
+	}
+
+	buf = zb_buf_allocate();
+	if (buf == NULL) {
+		return;
+	}
+
+	memset(&req, 0, sizeof(req));
+	req.srcAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+	req.srcAddr.shortAddr = g_zbInfo.macPib.shortAddress;
+	req.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+	req.dstAddr.shortAddr = g_zbInfo.macPib.coordShortAddress;
+	req.cbType = 0U;
+
+	/* MAC_STA_NO_ACK routes the confirm through the association-poll path;
+	 * the buffer is released there even when the parent has no data. */
+	(void)tl_zbMacMlmeDataRequestCmdSend(&req, buf, MAC_STA_NO_ACK);
+}
+
+void tl_zbSchedulePostAssociationPull(void)
+{
+	/* The immediate pull above is sufficient for a receive-on-when-idle router.
+	 * Do not turn it into a periodic poll loop. */
+}
+
+void tl_zbPostAssociationPollStatus(u8 status)
+{
+	/* A missing Transport-Key is handled by the normal NWK authentication
+	 * timeout/rejoin path; this hook only exists for the shared MAC poll path. */
+	(void)status;
+}
+#else
+void tl_zbPostAssociationPullNow(void)
+{
+}
+
+void tl_zbSchedulePostAssociationPull(void)
+{
+}
+
+void tl_zbPostAssociationPollStatus(u8 status)
+{
+    (void)status;
+}
+#endif
+
 /*
  * Minimal helper safe to call from the RX worker thread when fast handoff
  * sees a successful AssocResp. Cancels the wait-timer only; does NOT touch
@@ -239,7 +301,7 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 
     ((u8 *)txBuf)[OFFSETOF(zb_buf_t, hdr) + 3] |= 0x08U;
     mac_assoc_resp_success_seen = 0U;
-    associationReqOrigBuffer = arg;
+	associationReqOrigBuffer = arg;
     g_zbMacCtx.curChannel = req[0];
     rf_setChannel(req[0]);
 

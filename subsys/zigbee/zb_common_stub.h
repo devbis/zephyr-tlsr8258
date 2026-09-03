@@ -10,7 +10,7 @@
 #include <zephyr/random/random.h>
 
 #ifndef ZB_BUF_SIZE
-#define ZB_BUF_SIZE 164
+#define ZB_BUF_SIZE 192
 #endif
 
 /* zb_buf_t / zb_buf_hdr_t mirror the SDK layout (tl_zigbee_sdk
@@ -49,10 +49,13 @@ typedef struct zb_buf_s {
  * tl_phyRxBufTozbBuf() returned NULL 9 times because the pool ran dry during the
  * interview-request burst, dropping frames at the driver->stack boundary and
  * contributing to interview flakiness. The rx_worker strip freed ~2.2 KB RAM, so
- * restore the vendor router value of 36 to absorb the burst.
+ * Keep the router pool at 33: the vendor value is 36, but the Zephyr buffer
+ * carries a 128-byte RX snapshot in each block and the 48 KiB TLSR RAM cannot
+ * fit all 36 blocks together with the router runtime. 33 retains the burst
+ * headroom while fitting the actual Zephyr layout.
  */
 #if defined(ZB_ROUTER_ROLE) || defined(CONFIG_ZIGBEE_ROUTER)
-#define ZB_BUF_POOL_NUM 36
+#define ZB_BUF_POOL_NUM 33
 #else
 #define ZB_BUF_POOL_NUM 18
 #endif
@@ -61,10 +64,11 @@ typedef struct zb_buf_s {
 /*
  * Slab headroom the RX path leaves free so TX responses (af_dataSend) can always
  * allocate even when an inbound interview-retry flood is consuming the pool.
- * Inbound data frames are dropped once free blocks fall to this level.
+ * Inbound data frames are dropped before allocation once free blocks fall to
+ * this level, preserving capacity for locally generated interview responses.
  */
 #ifndef ZB_BUF_RX_RESERVE
-#define ZB_BUF_RX_RESERVE 8U
+#define ZB_BUF_RX_RESERVE 2U
 #endif
 #ifndef SEC_KEY_LEN
 #define SEC_KEY_LEN 16
@@ -73,6 +77,8 @@ typedef struct zb_buf_s {
 /* Task queue API matching SDK's tl_zb_callback_t / tl_zbTaskPost signature */
 typedef void (*tl_zb_callback_t)(void *arg);
 u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg);
+u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg);
+void zb_taskq_run_pending_for_test(void);
 #define TL_SCHEDULE_TASK tl_zbTaskPost
 
 /* Layer-queue identifiers used by the SDK macros wrapping

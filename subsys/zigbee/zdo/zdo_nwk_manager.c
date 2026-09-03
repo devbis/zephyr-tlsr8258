@@ -18,13 +18,12 @@
 #include "zdo/zdo_internal.h"
 #include <zephyr/zigbee/zb_bootstrap.h>
 
-extern volatile uint32_t zb_nwk_ed_trace[];
-
 #if defined(ZB_ROUTER_ROLE)
 /* The minimal router runtime must be activated after secure join completes.
  * The vendor BDB router-start entrypoint does not call the Zephyr router hook.
  */
 extern void zb_router_enable_parenting(u8 permit_duration);
+extern void zb_router_schedule_persistence_save(void);
 #endif
 
 enum {
@@ -44,7 +43,25 @@ typedef enum {
 
 u8 zdo_mgmt_nwk_flag = 0;
 zdo_nwk_manager_t g_zdo_nwk_manager = {0};
-static bool zdo_secure_startup_pending;
+bool zdo_secure_startup_pending;
+#if defined(ZB_ROUTER_ROLE)
+static volatile bool zdo_router_join_latched;
+
+void zdo_router_join_latch_set(void)
+{
+    zdo_router_join_latched = true;
+}
+
+void zdo_router_join_latch_clear(void)
+{
+    zdo_router_join_latched = false;
+}
+
+bool zdo_router_join_latch_is_set(void)
+{
+    return zdo_router_join_latched;
+}
+#endif
 
 #if 0 /* Vendor-pinned offsets disabled in Zephyr port. */
 STATIC_ASSERT(OFFSETOF(zdo_nwk_manager_t, discEvt) == 0);
@@ -66,6 +83,7 @@ STATIC_ASSERT(sizeof(zdo_nwk_manager_t) == 0x26);
 #endif
 void zdo_startup_complete(void *arg);
 void zdo_startDeviceCnf(void *arg, u8 status);
+bool zdo_live_join_context(void);
 
 #if defined(ZB_ROUTER_ROLE)
 static void zdo_nlme_start_router_req(void *arg)
@@ -492,11 +510,72 @@ void zdo_set_pollRate(u32 rate)
     }
 }
 
+bool zdo_live_join_context(void)
+{
+    /*
+     * A stale NLME failure can arrive after MAC association has committed
+     * the PAN/short address and the NWK security material, but before the
+     * deferred startup-confirm callback has set g_zbNwkCtx.joined.  Do not
+     * let that old failure tear down a live router: the radio filter and
+     * continuous-RX guard are driven by this flag.
+     */
+    if (g_zbNwkCtx.joined) {
+        return true;
+    }
+
+#if defined(ZB_ROUTER_ROLE)
+    if (zdo_router_join_latched) {
+        return true;
+    }
+
+    /*
+     * A late association/startup confirm can transiently overwrite the MAC
+     * short address with 0xfffe before it reaches this callback.  These BDB
+     * flags are committed only after the first secure router join and are
+     * cleared by zb_platform_clear_persistent_state() on an explicit leave.
+     * Keep the live-network decision stable across that transient window.
+     */
+    if (g_bdbAttrs.nodeIsOnANetwork &&
+        g_bdbCtx.edRuntimeReady && g_bdbCtx.tcLinkKeyReady) {
+        return true;
+    }
+#endif
+
+    if (g_zbMacPib.panId == MAC_INVALID_PANID ||
+        g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+        g_zbNIB.panId != g_zbMacPib.panId ||
+        g_zbNIB.nwkAddr != g_zbMacPib.shortAddress) {
+        return false;
+    }
+
+    return aps_ib.aps_authenticated ||
+           !ZB_IS_16BYTE_SECURITY_KEY_ZERO(
+               ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key);
+}
+
 void zdo_startup_complete(void *arg)
 {
     zdo_start_device_confirm_t *cnf = (zdo_start_device_confirm_t *)arg;
 
     if (cnf->status != ZDO_SUCCESS) {
+        /*
+         * A late failure from an older association/rejoin attempt can be
+         * delivered after the centralized-security join already installed
+         * the NWK key and announced the device.  Treating that stale CNF as
+         * authoritative clears joined, disables the router's continuous-RX
+         * guard, and starts a fresh scan; the device then ACKs nothing after
+         * an otherwise successful interview. Keep the live network state and
+         * discard only this stale completion notification. Explicit
+         * leave/rejoin paths clear joined before starting their operation, so
+         * they still take the normal failure path below.
+         */
+        if (zdo_live_join_context()) {
+            g_zbNwkCtx.joined = 1;
+            g_zbNwkCtx.is_factory_new = 0;
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+
         if (g_zbNwkCtx.is_factory_new) {
             ZB_IEEE_ADDR_ZERO(ss_ib.trust_center_address);
         }
@@ -507,6 +586,9 @@ void zdo_startup_complete(void *arg)
         keepaliveMsgSendStop();
     } else {
         g_zbNwkCtx.joined = 1;
+#if defined(ZB_ROUTER_ROLE)
+        zdo_router_join_latch_set();
+#endif
         g_zbNwkCtx.is_tc = 0;
         /* The MAC association path updates shortAddress before the
          * start-device confirm is built. Keep the NWK NIB in lockstep;
@@ -546,6 +628,7 @@ void zdo_startup_complete(void *arg)
 #if defined(ZB_ROUTER_ROLE)
             /* Only advertise as a parent after secure join is complete. */
             zb_router_enable_parenting(0xffU);
+            zb_router_schedule_persistence_save();
 #endif
         } else {
             /* Association success is not secure-join completion. The TC
@@ -567,7 +650,38 @@ void zdo_startup_complete(void *arg)
 
 void zdo_nwk_authentication_complete(void)
 {
-    if (!zdo_secure_startup_pending || !aps_ib.aps_authenticated) {
+    if (!aps_ib.aps_authenticated) {
+        return;
+    }
+
+    /*
+     * On TLSR8258 the Transport-Key and the deferred MLME-associate
+     * confirm can be delivered in either order.  In the early-key order the
+     * old code authenticated the APS layer but left joined=0 until the
+     * confirm callback.  A subsequent encrypted ZDP request was therefore
+     * decrypted successfully and then discarded by aps_data_indication_process
+     * (!g_zbNwkCtx.joined), which is exactly the "association succeeded but
+     * interview cannot get node descriptor" failure seen on hardware.
+     *
+     * The PAN/short/NIB tuple is committed by the association response before
+     * the Transport-Key can be accepted, so it is safe to make the network
+     * state visible here.  The normal confirm path remains idempotent.
+     */
+    if (!g_zbNwkCtx.joined &&
+        g_zbMacPib.panId != MAC_INVALID_PANID &&
+        g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+        g_zbNIB.panId == g_zbMacPib.panId &&
+        g_zbNIB.nwkAddr == g_zbMacPib.shortAddress) {
+        g_zbNwkCtx.joined = 1U;
+#if defined(ZB_ROUTER_ROLE)
+        zdo_router_join_latch_set();
+#endif
+        g_zbNwkCtx.joined_pro = 0U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+    }
+
+    if (!zdo_secure_startup_pending) {
         return;
     }
 
@@ -575,6 +689,7 @@ void zdo_nwk_authentication_complete(void)
     zdo_device_announce_send();
 #if defined(ZB_ROUTER_ROLE)
     zb_router_enable_parenting(0xffU);
+    zb_router_schedule_persistence_save();
 #endif
 }
 void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
@@ -665,6 +780,23 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
         return ZDO_INVALID_REQUEST;
     }
 
+#if defined(ZB_ROUTER_ROLE)
+    /*
+     * A router may briefly expose joined==0 while a late association/BDB
+     * callback is being retired.  The MAC/NWK/security tuple is still the
+     * live network in that interval.  Starting network-steer here would
+     * clear joined again, replace the filter/key state, and leave a router
+     * that ACKs frames but discards every interview request.  A real leave
+     * clears the tuple first, so this guard does not block leave->rejoin.
+     */
+    if (zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+        return ZDO_SUCCESS;
+    }
+#endif
+
     buf = zb_buf_allocate();
     if (buf == NULL) {
         return ZDO_INSUFFICIENT_SPACE;
@@ -682,6 +814,17 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
 }
 zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
 {
+#if defined(ZB_ROUTER_ROLE)
+    /* A live always-on router must not be pulled into an active scan by a
+     * delayed BDB/network-update task. */
+    if (zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+        return ZDO_SUCCESS;
+    }
+#endif
+
     if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
         return ZDO_INVALID_REQUEST;
     }
@@ -715,22 +858,42 @@ void zdo_nwkRejoinWithBackOffStop(void)
 }
 void zdo_nlme_leave_confirm_cb(void *arg)
 {
-    nlme_leave_cnf_t cnf;
-    bool rejoin;
+	nlme_leave_cnf_t cnf;
+	bool rejoin;
 
     memcpy(&cnf, arg, sizeof(cnf));
     rejoin = ((((u8 *)arg)[ZB_BUF_HDR_FLAGS3_OFFSET] >> 2) & 0x01U) != 0U;
     zb_buf_free((zb_buf_t *)arg);
 
-    if (memcmp(cnf.deviceAddr, g_zero_addr, EXT_ADDR_LEN) == 0 ||
-        memcmp(cnf.deviceAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN) == 0) {
-        zdo_nwkRejoinWithBackOffStop();
-        g_zbNwkCtx.user_state = NLME_LEAVING;
-        zdo_set_pollRate(0);
-        keepaliveMsgSendStop();
-        ev_timer_taskPost(zdo_selfLeaveProcessCb, (void *)(u32)rejoin, 200);
-        return;
-    }
+	if (memcmp(cnf.deviceAddr, g_zero_addr, EXT_ADDR_LEN) == 0 ||
+	    memcmp(cnf.deviceAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN) == 0) {
+		zdo_nwkRejoinWithBackOffStop();
+		if (cnf.status == 0U) {
+			/* A successful coordinator-requested leave is the terminal local
+			 * operation.  The old port only changed user_state and scheduled
+			 * zdo_selfLeaveProcessCb with `rejoin` cast to a pointer; that
+			 * callback then interpreted a one-byte integer as an
+			 * nlme_leave_req_t and, crucially, never removed the persisted
+			 * joined context.  Z2M consequently removed its database entry
+			 * while this router rebooted/restored as joined=1 and refused to
+			 * commission again.
+			 */
+			g_zbNwkCtx.user_state = NLME_LEAVING;
+#if defined(ZB_ROUTER_ROLE)
+			tl_zbNwkLinkStatusStop();
+#else
+			zdo_set_pollRate(0);
+			keepaliveMsgSendStop();
+#endif
+			(void)zb_platform_clear_persistent_state();
+			zb_platform_app_network_left();
+			return;
+		}
+
+		/* A failed self-leave must retain the joined state and must not
+		 * schedule the invalid integer-as-pointer callback. */
+		return;
+	}
 
     if (cnf.status != 0x20U && cnf.status != 0U) {
         zdo_nlmeForgetDev(cnf.deviceAddr, rejoin);
@@ -738,6 +901,15 @@ void zdo_nlme_leave_confirm_cb(void *arg)
 }
 zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 {
+#if defined(ZB_ROUTER_ROLE)
+    if (zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+        return ZDO_SUCCESS;
+    }
+#endif
+
     if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
         return ZDO_INVALID_REQUEST;
     }
@@ -765,6 +937,15 @@ zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 }
 zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
 {
+#if defined(ZB_ROUTER_ROLE)
+    if (zdo_live_join_context()) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        g_zbNwkCtx.user_state = NLME_IDLE;
+        return ZDO_SUCCESS;
+    }
+#endif
+
     zb_buf_t *buf;
 
     if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
@@ -873,6 +1054,22 @@ void zdo_nlme_status_indication(void *arg)
     }
 
     zb_buf_free((zb_buf_t *)arg);
+
+#if defined(ZB_ROUTER_ROLE)
+    /*
+     * An always-on router must not abandon a valid network context because
+     * of a short burst of parent no-ACKs.  zdo_nwkDirectJoinStart() clears
+     * g_zbNwkCtx.joined and starts commissioning from scratch; that is
+     * appropriate for a sleepy device, but it makes a router disappear
+     * after an otherwise recoverable RF/link hiccup.  Keep the joined state
+     * and let the continuous RX path recover the parent link.
+     */
+    if (g_zbNwkCtx.joined != 0U) {
+        zdo_nwk_mngr()->linkRetryCnt = 0;
+        return;
+    }
+#endif
+
     if (zdo_af_get_link_retry_threshold() == 0U) {
         zdo_nwk_mngr()->linkRetryCnt = 0;
         return;
@@ -893,9 +1090,33 @@ void zdo_nlme_status_indication(void *arg)
 
 void zdo_nlme_join_confirm(void *arg)
 {
-	zb_nwk_ed_trace[44]++;
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
+
+#if defined(ZB_ROUTER_ROLE)
+    /*
+     * Association has already committed the PAN, short address and NWK
+     * tuple before this deferred confirm is delivered.  A centralized
+     * security confirm can arrive later (or arrive as a stale failure after
+     * the coordinator has already started the interview).  Keep the router
+     * marked live at this boundary so that such a completion cannot clear
+     * joined/factory state and leave a MAC-ACKing, NWK-deaf device.
+     *
+     * The security handoff still owns APS authentication and parenting;
+     * this latch only protects the always-on router's live network context.
+     * Explicit leave clears the tuple and the latch, so leave->rejoin is
+     * unaffected.
+     */
+    if (status == ZDO_SUCCESS &&
+        g_zbMacPib.panId != MAC_INVALID_PANID &&
+        g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+        g_zbNIB.panId == g_zbMacPib.panId &&
+        g_zbNIB.nwkAddr == g_zbMacPib.shortAddress) {
+        g_zbNwkCtx.joined = 1U;
+        g_zbNwkCtx.is_factory_new = 0U;
+        zdo_router_join_latch_set();
+    }
+#endif
 
     if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
         state != ZDO_NWK_MGR_STATE_REJOIN &&
