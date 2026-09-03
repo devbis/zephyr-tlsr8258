@@ -61,6 +61,31 @@ extern void mac_trxTask(void *arg);
 #include "mac/includes/mac_trx_api.h"
 #include "zb_common_stub.h"
 
+/*
+ * A router is an always-on 802.15.4 receiver.  The vendor MAC still uses
+ * TRX_OFF as a short CSMA/turnaround state, so letting that request reach the
+ * Zephyr driver after association can leave the hardware stopped while the
+ * stack remains joined.  Keep the guard based on the live PIB tuple rather
+ * than only g_zbNwkCtx.joined: the short address is committed before the
+ * deferred NWK join-confirm path runs.
+ */
+static bool zb_radio_keep_router_rx_on_idle(void)
+{
+#if defined(CONFIG_ZIGBEE_ROUTER)
+	/*
+	 * A router is an always-on FFD during commissioning as well as after
+	 * association.  PAN ID and short address are intentionally invalid while
+	 * scanning/joining, so using them as an additional gate turns the first
+	 * TRX_OFF after a Beacon Request into a permanently stopped radio.  The
+	 * RX-on-when-idle PIB bit is the complete policy decision here; the
+	 * address filter remains permissive until the join assigns the tuple.
+	 */
+	return g_zbMacPib.rxOnWhenIdle != 0u;
+#else
+	return false;
+#endif
+}
+
 static bool zb_radio_psdu_is_ack(const uint8_t *psdu, uint8_t psdu_len)
 {
 	return (psdu != NULL) && (psdu_len >= 3U) && ((psdu[0] & 0x07U) == 0x02U);
@@ -428,6 +453,27 @@ void zb_radio_trx_switch(u8 mode, u8 phy_chn)
 	}
 
 	if (mode == RF_MODE_OFF) {
+		if (zb_radio_keep_router_rx_on_idle()) {
+			/*
+			 * RF_MODE_OFF is used by the MAC immediately before a new
+			 * CSMA attempt.  For an already joined router this is not an
+			 * idle-power request; turning the PHY off creates the exact
+			 * post-join deaf state seen on hardware.  Re-arm RX instead,
+			 * including recovery if an earlier path already stopped it.
+			 */
+			logical_chn = zb_radio_logical_from_phy_offset(phy_chn);
+			ret = zb_radio_start_impl(logical_chn);
+			if ((ret < 0) && (ret != -EALREADY)) {
+				zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_START);
+				return;
+			}
+			g_radio.current_channel = logical_chn;
+			g_radio.trx_state = RF_MODE_RX;
+			atomic_set(&g_radio.started, 1);
+			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+			return;
+		}
+
 		ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_OFF, g_radio.current_channel);
 		if (ret < 0) {
 			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_STOP);
@@ -463,6 +509,13 @@ void zb_radio_trx_off_auto_mode(void)
 	int ret;
 
 	if (g_radio.trx_state == RF_MODE_AUTO) {
+		if (zb_radio_keep_router_rx_on_idle()) {
+			/* RX is continuous for an always-on router; do not stop it
+			 * between the MAC's AUTO and the next TX/RX handoff. */
+			g_radio.trx_state = RF_MODE_RX;
+			return;
+		}
+
 		ret = zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_OFF, g_radio.current_channel);
 		if (ret < 0) {
 			LOG_WRN("auto-mode stop failed (rc=%d)", ret);

@@ -38,6 +38,7 @@ bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us);
 uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us);
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr);
+void zb_radio_port_idle_rx_guard(void);
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink);
 int zb_radio_port_native_sim_socket_register_rx_frame(
 	const struct zb_radio_rx_frame_view *frame);
