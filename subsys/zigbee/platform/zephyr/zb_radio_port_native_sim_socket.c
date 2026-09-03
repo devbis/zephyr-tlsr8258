@@ -130,3 +130,7 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 		(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_IEEE_ADDR, &filter);
 	}
 }
+
+void zb_radio_port_idle_rx_guard(void)
+{
+}

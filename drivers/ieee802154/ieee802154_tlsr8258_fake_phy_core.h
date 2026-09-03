@@ -352,7 +352,7 @@ static inline void tlsr8258_core_handle_rx_dma(uint8_t *rx_active, uint8_t *buf_
 }
 
 static inline void tlsr8258_core_handle_rx_only_tx_completion(
-	bool has_tx, bool op_state_is_tx_pending,
+	bool has_tx, bool op_state_is_tx_pending, bool ack_for_tx,
 	struct tlsr8258_core_rx_only_tx_result *result)
 {
 	if (result == NULL) {
@@ -360,7 +360,11 @@ static inline void tlsr8258_core_handle_rx_only_tx_completion(
 	}
 
 	result->saw_rx_while_tx_pending = !has_tx && op_state_is_tx_pending;
-	result->complete_stack_tx = result->saw_rx_while_tx_pending;
+	/* An arbitrary RX frame can arrive while the TX state is pending.  It is
+	 * only a completion when the frame is the MAC ACK for this TX sequence;
+	 * otherwise completing here reports a lost TX as successful and lets the
+	 * next stack packet overwrite the radio descriptor. */
+	result->complete_stack_tx = result->saw_rx_while_tx_pending && ack_for_tx;
 }
 
 static inline void tlsr8258_core_observe_post_tx_rx_window(

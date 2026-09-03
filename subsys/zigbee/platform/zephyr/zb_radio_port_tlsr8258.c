@@ -137,3 +137,8 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 {
 	tlsr8258_zigbee_update_filters(pan_id, short_addr, ieee_addr);
 }
+
+void zb_radio_port_idle_rx_guard(void)
+{
+	tlsr8258_zigbee_idle_rx_guard();
+}
