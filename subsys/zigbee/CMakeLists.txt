@@ -61,6 +61,14 @@ zephyr_library_sources(
     platform/zephyr/zb_persistence_zephyr.c
     platform/zephyr/zb_primitive_dispatch.c
 )
+
+# Use the vendor TLSR8258 AES implementation for the libzigbee security
+# service.  The archive's aes.o is the exact hardware implementation used by
+# the working vendor router; keep it out of native_sim and other targets.
+if(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258)
+    zephyr_link_libraries(${ZEPHYR_BASE}/../drivers/libdrivers_8258.a)
+endif()
+
 if(NOT CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR
    AND NOT CONFIG_XOSHIRO_RANDOM_GENERATOR
    AND NOT CONFIG_TIMER_RANDOM_GENERATOR
