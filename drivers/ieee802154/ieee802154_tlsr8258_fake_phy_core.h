@@ -252,6 +252,7 @@ struct tlsr8258_core_rx_ack_decision {
 	bool self_originated; /* our own data/beacon-req echo -> do NOT ack */
 	bool ack_requested;   /* !self_originated && FCF ack-request bit set */
 	bool filter_match;    /* dst is us / broadcast -> we are allowed to ack */
+	bool assoc_resp_to_ieee; /* association response addressed to our EUI-64 */
 	bool should_ack;      /* ack_requested && filter_match: ISR sends a MAC ACK */
 };
 
@@ -276,8 +277,16 @@ static inline void tlsr8258_core_rx_ack_decision(
 		tlsr8258_core_psdu_is_self_originated_command(psdu, psdu_len, filter);
 	out->ack_requested =
 		!out->self_originated && tlsr8258_ackf_ack_requested(psdu, psdu_len);
+	out->assoc_resp_to_ieee = tlsr8258_core_assoc_resp_to_ieee(psdu, psdu_len, filter);
 	out->filter_match = tlsr8258_ackf_dst_matches_filter(
 		psdu, filter->pan_id, filter->short_addr, filter->ieee_addr);
+	/*
+	 * Association Response is the handoff frame: it is addressed to our
+	 * extended address before the coordinator assigns us a short address.
+	 * Keep the ACK decision independent of a stale PAN/short hardware filter
+	 * while still requiring an exact local IEEE destination.
+	 */
+	out->filter_match = out->filter_match || out->assoc_resp_to_ieee;
 	out->should_ack = out->ack_requested && out->filter_match;
 }
 
@@ -320,13 +329,14 @@ static inline void tlsr8258_core_handle_rx_frame(const uint8_t *psdu, uint8_t ps
 	}
 
 	result->ack_requested = tlsr8258_ackf_ack_requested(psdu, psdu_len);
-	result->ack_eligible = result->ack_requested &&
-			       tlsr8258_ackf_dst_matches_filter(psdu, filter->pan_id,
-								filter->short_addr,
-								filter->ieee_addr);
-	result->is_ack = tlsr8258_core_psdu_is_ack_for_seq(psdu, psdu_len, tx_seq);
 	result->assoc_resp_to_ieee =
 		tlsr8258_core_assoc_resp_to_ieee(psdu, psdu_len, filter);
+	result->ack_eligible = result->ack_requested &&
+			       (tlsr8258_ackf_dst_matches_filter(psdu, filter->pan_id,
+								  filter->short_addr,
+								  filter->ieee_addr) ||
+								result->assoc_resp_to_ieee);
+	result->is_ack = tlsr8258_core_psdu_is_ack_for_seq(psdu, psdu_len, tx_seq);
 	result->ack_seq = (psdu_len >= 3u) ? psdu[2] : 0u;
 
 	if (result->is_ack) {
