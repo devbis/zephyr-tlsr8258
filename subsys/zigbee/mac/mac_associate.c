@@ -303,7 +303,8 @@ void tl_zbMacAssociateRequestHandler(void *arg)
     mac_assoc_resp_success_seen = 0U;
 	associationReqOrigBuffer = arg;
     g_zbMacCtx.curChannel = req[0];
-    rf_setChannel(req[0]);
+    g_zbMacPib.phyChannelCur = req[0];
+    (void)zb_radio_port_set_channel(req[0]);
 
     {
         tl_zb_mac_mhr_t mhr;

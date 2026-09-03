@@ -16,7 +16,7 @@
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 extern void zdo_router_join_latch_set(void);
 extern void zdo_router_join_latch_clear(void);
 #endif
@@ -34,7 +34,7 @@ extern void rf_init(void);
 extern void aps_init(void);
 extern void tl_zbMacInit(u8 coldReset);
 extern void tl_zbNwkInit(u8 coldReset);
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 extern void tl_zbMacTaskProc(void);
 #endif
 
@@ -131,7 +131,6 @@ static uint32_t zb_last_commission_retry_ms;
 #define ZB_LINK_REJOIN_BACKOFF_MS      60000U   /* don't re-fire within 60 s */
 #define ZB_LINK_REJOIN_SCAN_DURATION   3U       /* short scan: 60ms × 16 ch */
 
-extern bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff);
 extern bool zb_isDeviceJoinedNwk(void);
 
 static uint32_t zb_link_last_tx_success_count;
@@ -214,7 +213,7 @@ static void zb_core_bootstrap_once(void)
 			g_zbNwkCtx.joined = 0U;
 			g_zbNwkCtx.is_factory_new = 1U;
 		}
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 		if (g_zbNwkCtx.joined) {
 			zdo_router_join_latch_set();
 		}
@@ -504,10 +503,10 @@ static void zb_link_watchdog_tick(void)
 	/* Reset baseline so the next window is measured from now. */
 	zb_link_last_tx_fail_snapshot = snap.tx_failures;
 
-#if !defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ED)
 	uint32_t scan_mask = (((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) -
 			      ((u32)1U << TL_ZB_MAC_CHANNEL_START));
-	if (!tl_zbNwkEdMinimalRejoinStart(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION, false)) {
+	if (zb_rejoinReq(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION) != ZDO_SUCCESS) {
 		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
 	}
 #endif
@@ -591,7 +590,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	zb_link_last_tx_fail_snapshot = 0U;
 	zb_link_last_rejoin_attempt_ms = 0U;
 	zb_link_baseline_set = false;
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 	/* SRAM survives the TLSR soft reset; a fresh boot must not inherit a
 	 * pre-reset latch. A valid persisted join is re-latched after restore. */
 	zdo_router_join_latch_clear();
@@ -623,7 +622,8 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			 * never saw them. */
 			zb_radio_port_idle_rx_guard();
 			zb_platform_radio_rx_poll();
-			#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED)
+			#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
+				defined(CONFIG_ZIGBEE_ED)
 			for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
 				tl_zbNwkTaskProc();
 			}
@@ -648,15 +648,16 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 * Drain once more before layer dispatch so a burst cannot fill the
 		 * dedicated RX FIFO and lose the frame that must trigger a response. */
 		zb_taskq_run_pending_for_test();
-#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
+	defined(CONFIG_ZIGBEE_ED)
 		/* The router and the libzigbee-based ED both pull in the
 		 * libzigbee NWK / MAC primitive dispatcher via
 		 * tl_zbNwkTaskProc(); drain the per-layer task queues on every
 		 * tick so high→NWK, MAC→NWK, and NWK→MAC primitives (active
 		 * scan requests, beacon-notify indications, association
 		 * requests, NLDE confirms) are delivered to their handlers.
-		 * The default (minimal) ED keeps its lightweight
-		 * nwk_ed_minimal poll path and doesn't need this drain.
+		 * The ED lifecycle adapter leaves polling to the recovered vendor
+		 * zdo_nwk_manager state machine, so it uses this same drain path.
 		 */
 		/* A coordinator can deliver several interview requests back-to-back.
 		 * Process a bounded batch so MAC2NWK does not lag behind the RF RX

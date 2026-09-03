@@ -5,8 +5,8 @@
  * Adapted from libzigbee/src/nwk_leave.c (~185 LOC). Adaptations:
  *
  *   * vendor "zb_local.h" → zb_common_stub.h + nwk/includes/nwk_internal.h
- *   * Wrapped in ZB_ROUTER_ROLE; the ED build links nwk_ed_minimal.c
- *     which carries its own leave path.
+ *   * Wrapped in the FFD role guard; the ED lifecycle seam in
+ *     nwk_ed_libzigbee.c delegates leave completion to the same ZDO API.
  *   * Forward-declared zdo / aps helpers that other TUs still own.
  *   * tabs / Zephyr-style formatting; logic preserved verbatim.
  */

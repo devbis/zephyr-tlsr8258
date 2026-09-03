@@ -8,18 +8,14 @@
  *   * vendor "zb_local.h" → zb_common_stub.h + nwk/includes + mac/includes
  *   * STATIC_ASSERTs preserved
  *   * tl_zbPrimitivePost() is provided by
- *     platform/zephyr/zb_primitive_dispatch.c as a logging stub until
- *     the MAC MLME-SCAN / MLME-START layers are wired. Once those
- *     primitives have real handlers, the state machine below drives
+ *     platform/zephyr/zb_primitive_dispatch.c through the Zephyr
+ *     layer queue. The recovered MAC MLME-SCAN / MLME-START layers drive
  *     a real channel/PAN scan + start sequence.
  *   * Externs g_secondCnt / g_zero_addr / ZB_PROTOCOL_VERSION are
  *     declared in zb_common_stub.h (the Zephyr aggregator).
  *
- * Until the MAC primitives are real, calling
- * tl_zbNwkNlmeNetworkFormationRequestHandler() posts a SCAN_REQ that
- * is logged and dropped — formation never confirms. The static
- * formation path in nwk_router_minimal.c remains the working router
- * commissioning route.
+ * Zephyr only supplies the include and task-queue adaptation; formation
+ * state transitions and confirmations remain in this vendor-derived file.
  */
 
 #include "zb_common_stub.h"

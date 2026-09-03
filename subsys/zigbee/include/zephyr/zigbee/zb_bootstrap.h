@@ -45,6 +45,7 @@ const uint8_t *zb_platform_runtime_ieee_addr_get(void);
  */
 int zb_platform_bdb_init_default(void);
 uint8_t zb_platform_bdb_network_steer_start(void);
+uint8_t zb_platform_bdb_network_formation_start(void);
 bool zb_platform_bdb_service_persistent_rejoin(void);
 /*
  * Abandon any in-flight persisted-state rejoin and return the BDB/NWK state
@@ -59,15 +60,14 @@ void zb_platform_app_network_left(void);
 
 /*
  * Called by zb_platform_bdb_init_default() before BDB attribute
- * initialization.  Applications override this weak stub to call
+ * initialization.  Applications may override this optional hook to call
  * zcl_init / af_endpointRegister / zcl_register for their endpoints.
  */
 void zb_platform_app_register_endpoints(void);
 
 /*
- * Identity strings used by the fallback Basic-cluster interview path in
- * mac_trx_compat.c.  Applications override these weak stubs so the
- * interview answers mirror the real ZCL attribute table.
+ * Identity strings used by the Basic-cluster interview fallback. Applications
+ * provide these hooks so the interview answers mirror the ZCL attribute table.
  */
 const char *zb_platform_app_basic_mfr_name(void);
 const char *zb_platform_app_basic_model_id(void);

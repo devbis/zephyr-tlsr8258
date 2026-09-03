@@ -119,6 +119,23 @@ bool is_zb_buf(void *p)
 	       ((addr - base) % zb_buf_slab.info.block_size == 0U);
 }
 
+zb_buf_t *zb_buf_from_ref(u8 ref)
+{
+	if (ref >= ZB_BUF_POOL_NUM) {
+		return NULL;
+	}
+
+	return (zb_buf_t *)((u8 *)zb_buf_slab.buffer +
+				((size_t)ref * zb_buf_slab.info.block_size));
+}
+
+u8 zb_buf_to_ref(zb_buf_t *buf)
+{
+	u32 index;
+
+	return zb_buf_index(buf, &index) ? (u8)index : 0xffU;
+}
+
 /*
  * The vendor TL_BUF_INITIAL_ALLOC pattern hands back the tail of the
  * buf->buf[] payload area minus `size` bytes. libzigbee callers
@@ -171,10 +188,7 @@ u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
 
 /*
  * Vendor zb_buffer.c also exports g_mPool / ZB_BUF_POOL_SIZE etc.
- * Those are referenced from a couple of helper symbols
- * (zbBufferSizeGet, etc.); leave the SDK-copied stubs in
- * subsys/zigbee/common/zb_config.c gated behind
- * ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL — no caller in the router path
- * actually dereferences g_mPool now that this TU owns the
- * allocator.
+ * Those pool symbols are intentionally omitted from the Zephyr
+ * adapter; the corresponding size helpers use the Zephyr slab and
+ * no full-stack caller dereferences the vendor free-list storage.
  */

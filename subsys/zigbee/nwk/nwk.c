@@ -46,16 +46,34 @@ const tl_zb_callback_t g_zbNwkEventFromMacTbl[] = {
 const tl_zb_callback_t g_zbNwkEventFromHighTbl[] = {
     tl_zbNwkNldeDataRequestHandler,
     tl_zbNwkNlmeNwkDiscRequestHandler,
+#if defined(ZB_ROUTER_ROLE)
     tl_zbNwkNlmeNetworkFormationRequestHandler,
     tl_zbNwkNlmePermitJoiningRequestHandler,
     tl_zbNwkNlmeStartRouterRequestHandler,
+#else
+    NULL,
+    NULL,
+    NULL,
+#endif
     tl_zbNwkNlmeEDScanRequestHandler,
     tl_zbNwkNlmeJoinRequestHandler,
+#if defined(ZB_ROUTER_ROLE)
     tl_zbNwkNlmeDirectJoinRequestHandler,
+#else
+    NULL,
+#endif
+#if defined(ZB_ROUTER_ROLE)
     tl_zbNwkNlmeLeaveRequestHandler,
+#else
+    tl_zbNwkNlmeLeaveRequestHandler,
+#endif
     tl_zbNwkNlmeResetRequestHandler,
     tl_zbNwkNlmeSyncRequestHandler,
+#if defined(ZB_ROUTER_ROLE)
     tl_zbNwkNlmeRouteDiscRequestHandler,
+#else
+    NULL,
+#endif
 };
 
 void tl_zbMacMlmeScanConfirmHandler(void *arg)
@@ -478,13 +496,25 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNlmeNwkDiscRequestHandler(task->data);
             break;
         case NWK_NLME_NWK_FORMATION_REQ:
+#if defined(ZB_ROUTER_ROLE)
             tl_zbNwkNlmeNetworkFormationRequestHandler(task->data);
+#else
+            zb_buf_free((zb_buf_t *)task->data);
+#endif
             break;
         case NWK_NLME_PERMIT_JOINING_REQ:
+#if defined(ZB_ROUTER_ROLE)
             tl_zbNwkNlmePermitJoiningRequestHandler(task->data);
+#else
+            zb_buf_free((zb_buf_t *)task->data);
+#endif
             break;
         case NWK_NLME_START_ROUTER_REQ:
+#if defined(ZB_ROUTER_ROLE)
             tl_zbNwkNlmeStartRouterRequestHandler(task->data);
+#else
+            zb_buf_free((zb_buf_t *)task->data);
+#endif
             break;
         case NWK_NLME_ED_SCAN_REQ:
             tl_zbNwkNlmeEDScanRequestHandler(task->data);
@@ -493,7 +523,11 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNlmeJoinRequestHandler(task->data);
             break;
         case NWK_NLME_DIRECT_JOIN_REQ:
+#if defined(ZB_ROUTER_ROLE)
             tl_zbNwkNlmeDirectJoinRequestHandler(task->data);
+#else
+            zb_buf_free((zb_buf_t *)task->data);
+#endif
             break;
         case NWK_NLME_LEAVE_REQ:
             tl_zbNwkNlmeLeaveRequestHandler(task->data);
@@ -505,7 +539,11 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNlmeSyncRequestHandler(task->data);
             break;
         case NWK_NLME_ROUTE_DISCOVERY_REQ:
+#if defined(ZB_ROUTER_ROLE)
             tl_zbNwkNlmeRouteDiscRequestHandler(task->data);
+#else
+            zb_buf_free((zb_buf_t *)task->data);
+#endif
             break;
         default:
 			zb_buf_free((zb_buf_t *)task->data);

@@ -56,8 +56,8 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 void zb_platform_app_register_endpoints(void);
 
 /*
- * Identity hook stubs used by the fallback interview path in
- * mac_trx_compat.c.  Applications override these weak defaults.
+ * Identity hooks used by the Basic-cluster interview path. Applications
+ * override these weak defaults.
  */
 const char *zb_platform_app_basic_mfr_name(void);
 const char *zb_platform_app_basic_model_id(void);

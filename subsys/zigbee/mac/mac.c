@@ -180,6 +180,7 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
     u8 *macPld;
     u8 frameType;
 
+
     if (arg == NULL) {
         return;
     }
@@ -248,7 +249,8 @@ void tl_zbPhyIndication(void *arg, u8 *raw, u8 len)
 void tl_zbMacChannelSet(u8 chan)
 {
     g_zbMacCtx.curChannel = chan;
-    rf_setChannel(chan);
+    g_zbMacPib.phyChannelCur = chan;
+    (void)zb_radio_port_set_channel(chan);
 }
 
 void mac_pibNvInit(u8 coldReset)

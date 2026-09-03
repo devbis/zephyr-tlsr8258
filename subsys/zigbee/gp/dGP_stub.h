@@ -25,6 +25,7 @@
 #ifndef DGP_STUB_H
 #define DGP_STUB_H
 
+#include "cGP_stub.h"
 
 //A GP Basic Proxy device shall have a minimum length of 1 entry
 #define GP_TX_QUEUE_MAX_NUM             1

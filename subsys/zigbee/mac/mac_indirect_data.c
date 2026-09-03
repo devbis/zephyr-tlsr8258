@@ -314,7 +314,8 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
 
         ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
 
-#if defined(CONFIG_ZIGBEE_ED) || defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ED) || defined(CONFIG_ZIGBEE_ROUTER) || \
+	defined(CONFIG_ZIGBEE_COORDINATOR)
         /*
          * Tag this MAC data-request/poll so tl_zbMaxTxConfirmCb routes its TX
          * confirm to tl_zbMacDataRequestStatusCheck (the poll/assoc-poll path
@@ -330,7 +331,7 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
          * the libzigbee-ED build so the proven router/minimal-ED paths are
          * untouched.
          *
-         * NOTE (2026-07-06): enabling this for CONFIG_ZIGBEE_ROUTER too (so the
+         * NOTE (2026-07-06): enabling this for all FFD roles (so the
          * router's assoc poll routes to tl_zbMacAssocPollConfirm + arms the
          * indirect-response wait, like the ED) was tried and DID NOT fix the
          * router join — the router still never RECEIVES the unicast AssocResp

@@ -47,7 +47,7 @@ static inline u32 clock_cycles_to_us(u32 cycles)
 	return zb_radio_port_clock_delta_to_us(cycles);
 }
 
-/* ─── Adapter contract (Phase 2) ─────────────────────────────────── */
+/* ─── Zephyr radio adapter contract ─────────────────────────────── */
 void zb_radio_init(void);
 bool zb_radio_is_ready(void);
 void zb_radio_reset(void);
@@ -80,7 +80,10 @@ u8 zb_radio_pkt_rssi_get(const u8 *p);
 #define ZB_RADIO_RX_BUF_SET(addr)             zb_radio_rx_buf_set(addr)
 static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
 
-/* Still-stubbed operations used by mac_phy.c */
+/* Legacy MAC hooks owned by the Zephyr radio adapter.  The normal Zephyr
+ * sink path performs these operations in the IEEE 802.15.4 driver before it
+ * calls zb_macDataRecvHandler(); the legacy IRQ entry points remain source
+ * compatible for the vendor MAC translation unit. */
 #define RF_DMA_BUSY()                         (0)
 #define ZB_RADIO_SRX_START(tick)              do { } while (0)
 #define ZB_RADIO_MODE_MAX_GAIN()              do { } while (0)
@@ -112,13 +115,36 @@ static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
 	_p[3] = 0; \
 } while (0)
 
+/* Translate the vendor RF_STATE_* numbering (TX=0, RX=1, ED=2, OFF=3)
+ * without exposing the vendor RF entry points to functional MAC sources. */
+static inline enum zb_radio_port_trx_state
+zb_radio_port_legacy_state(u8 state)
+{
+	switch (state) {
+	case 0U:
+		return ZB_RADIO_PORT_TRX_TX;
+	case 1U:
+		return ZB_RADIO_PORT_TRX_RX;
+	case 2U:
+		return ZB_RADIO_PORT_TRX_ED;
+	default:
+		return ZB_RADIO_PORT_TRX_OFF;
+	}
+}
+
+static inline void zb_radio_port_set_legacy_state(u8 state, u8 channel)
+{
+	(void)zb_radio_port_set_trx_state(zb_radio_port_legacy_state(state), channel);
+}
+
 #define ZB_RADIO_TRX_CFG(size)                do { } while (0)
 
-/* Stubs for hardware functions used by mac_phy.c */
+/* Board-specific PA GPIOs are absent unless a board adapter supplies them. */
 #define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
 static inline void WaitUs(u32 us) { k_busy_wait(us); }
 
-/* Packet field accessors — stub values from fixed offsets used by TLSR8258 RF */
+/* Packet field accessors for the TLSR8258 DMA layout.  CRC validation is
+ * performed by the Zephyr IEEE 802.15.4 driver before the sink callback. */
 #define ZB_RADIO_ACTUAL_PAYLOAD_LEN(p)  ((p)[4])
 #define ZB_RADIO_CRC_OK(p)              (1)
 #define ZB_RADIO_PACKET_LENGTH_OK(p)    ((p)[4] >= 5 && (p)[4] <= 127)
