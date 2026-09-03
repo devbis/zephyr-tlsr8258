@@ -215,7 +215,8 @@ int mac_waitTxIrqCb(void *arg)
         tx_data_queue *entry = (tx_data_queue *)mac_trx_cur_get();
 
         rf_busyFlag &= (u8)~TX_BUSY;
-        rf_setTrxState(RF_STATE_RX);
+        zb_radio_port_set_legacy_state(RF_STATE_RX,
+                                        g_zbMacPib.phyChannelCur);
         tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_SEND_FAIL);
     }
 
@@ -474,7 +475,8 @@ void mac_sendTxCnf(tx_data_queue *entry)
 
     if (g_zbInfo.macPib.rxOnWhenIdle == 0U &&
         (g_zbMacCtx.status | needPendingWait) == 0U) {
-        rf_setTrxState(RF_STATE_OFF);
+        zb_radio_port_set_legacy_state(RF_STATE_OFF,
+                                        g_zbMacPib.phyChannelCur);
     }
 
 #if defined(ZB_ROUTER_ROLE)
@@ -561,9 +563,10 @@ void mac_trxTask(void *arg)
             u16 backoffUs = 200U;
 
             mac_trx_vars.csmaBackoffCnt++;
-            rf_TrxStateGet();
-            rf_setTrxState(RF_STATE_OFF);
-            rf_setTrxState(RF_STATE_RX);
+            zb_radio_port_set_legacy_state(RF_STATE_OFF,
+                                            g_zbMacPib.phyChannelCur);
+            zb_radio_port_set_legacy_state(RF_STATE_RX,
+                                            g_zbMacPib.phyChannelCur);
 
             if (mac_trx_vars.csmaBackoffCnt == 1U) {
                 mac_csmaStart(entry);
@@ -585,8 +588,8 @@ void mac_trxTask(void *arg)
 				u32 r = drv_disable_irq();
 				ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_MAC_TX_TIMER);
 				drv_restore_irq(r);
-				/* The Zephyr router port has no vendor HW-timer backend;
-				 * do not leave MAC_TX_CSMA wedged when the weak timer stub
+				/* The Zephyr port schedules this through its timer adapter;
+				 * do not leave MAC_TX_CSMA wedged when timer setup fails
 				 * rejects the request.  The task queue is already the normal
 				 * deferred MAC path, so retry CCA there. */
 				tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
@@ -714,7 +717,8 @@ void mac_trigger_tx(void *arg)
 void tl_zbSwitchOffRx(void)
 {
     if (g_zbInfo.macPib.rxOnWhenIdle == 0U) {
-        rf_setTrxState(RF_STATE_OFF);
+        zb_radio_port_set_legacy_state(RF_STATE_OFF,
+                                        g_zbMacPib.phyChannelCur);
     }
 
     timer_evt_state_set(0);
@@ -963,7 +967,7 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
     meta->payload = owned_payload;
     meta->payloadLen = (u8)(len - 2U);
     meta->timestamp = timestamp;
-    meta->rssi = rssi;
+	meta->rssi = rssi;
 
     rf_busyFlag &= (u8)~RX_BUSY;
 	if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U) &&
@@ -978,6 +982,7 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 	 * acknowledged on air but never reaches NWK/ZDP. */
 	if (tl_zbRxTaskPost(mac_rxDataParse, buf) != RET_OK) {
 		zb_buf_free(buf);
+	} else {
 	}
 }
 

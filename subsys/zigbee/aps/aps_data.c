@@ -783,7 +783,7 @@ u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
      * APS_TX_DUP_BUF_SIZE copy above only duplicates the payload area, not the
      * hdr, so without this a routed (non-skip) APS frame — e.g. the router
      * relaying a tunneled transport-key to its child — is silently dropped.
-     * (zdo_router_minimal.c af_dataSend sets this for the same reason.)
+* (the Zephyr af_dataSend seam sets this for the same reason.)
      */
     buf->hdr.used = 1U;
 
@@ -890,6 +890,7 @@ void aps_data_indication_process(void *arg)
     u8 *buf = (u8 *)arg;
     aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
     u8 frameType;
+
 
     if ((hdr->frameCtrl & 0x20U) != 0U) {
         if (ss_apsDecryptFrame(arg) != RET_OK) {
@@ -1012,6 +1013,7 @@ void aps_data_indication_process(void *arg)
 
     frameType = (u8)(hdr->frameCtrl & 0x03U);
     aps_indPrimBuild(arg);
+
 
     if (g_apsDataIndCb != NULL) {
         g_apsDataIndCb(arg);
@@ -1558,7 +1560,7 @@ void aps_cmd_send(void *arg, u8 handle)
      * the parent instead of via nwk_fwdPacket route discovery. The minimal
      * router has no established route to its parent, so a discoverRoute frame
      * to 0x0000 buffers pending a RouteReply that never arrives and the APS TX
-     * cache entry never drains. Mirrors zdo_router_minimal.c af_dataSend, which
+* cache entry never drains. Mirrors the Zephyr af_dataSend seam, which
      * sets unicastSkipRouting for coordShortAddress. (A full multi-hop stack
      * would resolve the route table entry in nwk_fwdPacket instead.)
      */
@@ -1573,7 +1575,7 @@ void aps_cmd_send(void *arg, u8 handle)
          * APS_SHORT_DSTADDR_WITHEP(2) straight through — so a unicast APS
          * command (Update-Device) would otherwise go out multicast-flagged,
          * shifting the NWK header. Real ZDO/announce unicasts use NLDE
-         * addrMode=0 (zdo_router_minimal.c af_dataSend); match that.
+         * addrMode=0 (the Zephyr af_dataSend seam); match that.
          */
         nldereq->addrMode = 0;
     }

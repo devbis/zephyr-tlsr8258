@@ -8,8 +8,7 @@
  * …), aps_bindingTblExist, rf_lqi2cost, nwk_endDev_timeout, and the
  * vendor NV index/itemIfno_t persistence layout.
  *
- * This port intentionally keeps the SUBSET that other already-ported
- * TUs reference (nwk_brc.c, the upcoming nwk_formation.c):
+ * This port keeps the vendor table API used by the MAC/NWK/APS/ZDO layers:
  *
  *   * table reset / free-list management
  *   * row counters (normalNeighborNum, childrenNum, router-valid count)
@@ -17,13 +16,8 @@
  *   * addition-neighbor table API consumed by formation channel/PAN
  *     selection
  *
- * Symbols that depend on the address map (tl_zbNeighborTableSearchFromExtAddr,
- * tl_zbNeighborTableUpdate full path, tl_zbNeighborTableDelete, the
- * NV-restore tl_zbNeighborTableInit, ZBHCI-shaped tl_childNodesListGet)
- * are deferred to the address-map port that lands separately. Their
- * absence is fine — the static-formation router does not yet touch
- * them, and --gc-sections drops the unused entry points from the
- * binary.
+ * Address-map access is provided by nwk_addr_map.c and the Zephyr persistence
+ * layer supplies the runtime restore data.
  */
 
 #include "zb_common_stub.h"
@@ -445,24 +439,17 @@ u8 tl_neighborFrameCntReset(void)
 	return 0;
 }
 
-/* Stub for the vendor NV-restore entrypoint: the Zephyr port does
- * its own NVS restore from zb_persistence_zephyr.c, so all this
- * stub needs to do is clear the in-RAM table. The full vendor
- * implementation will land when the address-map NV layout is ported.
- */
+/* The Zephyr persistence adapter restores the serialized table separately;
+ * this entry point resets the in-RAM table before that restore. */
 void tl_zbNeighborTableInit(void)
 {
 	tl_zbNeighborTableRst();
 }
 
 /*
- * Address-map-dependent neighbor-table operations, ported from libzigbee
- * src/nwk_neighbor.c. These used to be weak single-slot stubs in
- * zb_primitive_dispatch.c, which made tl_zbNeighborTableUpdate() "succeed"
- * without ever storing a retrievable entry — so a router that parented a child
- * could not later look the child up (nwk_neTblGetByExtAddr -> NULL), breaking
- * the APS Tunnel transport-key relay to a device joining THROUGH the router.
- * These strong definitions override the weak stubs.
+ * Address-map-dependent neighbor-table operations, ported from
+ * libzigbee/src/nwk_neighbor.c. They use the same address-map contract as the
+ * vendor implementation, including persistent child and parent lookups.
  */
 extern u8 aps_bindingTblExist(addrExt_t extAddr);
 
@@ -485,6 +472,19 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromExtAddr(u16 *shortAdd
 	u16 *idxOut = (idx != NULL) ? idx : &addrmapIdx;
 
 	if (tl_zbShortAddrByExtAddr(shortAddr, extAddr, idxOut) != RET_OK) {
+		return NULL;
+	}
+
+	return tl_zbNeighborTableSearchFromAddrmapIdx(*idxOut);
+}
+
+tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromShortAddr(u16 shortAddr,
+								    addrExt_t extAddr, u16 *idx)
+{
+	u16 addrmapIdx;
+	u16 *idxOut = (idx != NULL) ? idx : &addrmapIdx;
+
+	if (tl_zbExtAddrByShortAddr(shortAddr, extAddr, idxOut) != RET_OK) {
 		return NULL;
 	}
 

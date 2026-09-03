@@ -29,6 +29,10 @@ struct zb_task_item {
  * always-RX guard on every loop iteration. */
 #define ZB_TASK_DRAIN_BUDGET 32U
 
+/* Public vendor ABI used by mac_trx.c for queue back-pressure. The Zephyr
+ * callback lane has the same fixed capacity as the vendor user-task queue. */
+u8 ZB_TASKQ_USERUSE_SIZE = ZB_TASK_POST_QUEUE_DEPTH;
+
 static struct zb_task_item task_queue[ZB_TASK_POST_QUEUE_DEPTH];
 static u8 task_wptr;
 static u8 task_rptr;

@@ -13,6 +13,7 @@
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_config.h>
 
 #if !defined(ZDO_ZCL_STUBS_H_)
@@ -26,7 +27,7 @@
 
 LOG_MODULE_REGISTER(app_bdb);
 
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 #define APP_BDB_ROLE_ROUTER 1
 #define APP_BDB_ROLE_ED 0
 #else
@@ -43,8 +44,8 @@ extern struct ev_timer_event_t *ev_timer_taskPost(app_bdb_timer_callback_t func,
 extern uint8_t ev_timer_taskCancel(struct ev_timer_event_t **evt);
 extern uint8_t zb_routerStart(void);
 #if APP_BDB_ROLE_ROUTER
-/* Open the router as a parent after it joins so other devices can join
- * through it (see nwk_router_minimal.c). 0xff = permit-join permanently. */
+/* Open the FFD as a parent after it joins so other devices can join through
+ * it. 0xff = permit-join permanently. */
 extern void zb_router_enable_parenting(uint8_t permit_duration);
 #endif
 
@@ -70,13 +71,13 @@ extern void zb_router_enable_parenting(uint8_t permit_duration);
 	static uint8_t zb_rejoin_callback_trace_pos;
 #endif
 	static const uint8_t app_bdb_fixed_tc_addr[8] = {
-		0x60, 0x2d, 0xce, 0xfe, 0xff, 0x89, 0xc0, 0x1c,
+		0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16, 0xa7, 0x20,
 	};
 	static const uint8_t app_bdb_fixed_ext_pan_id[8] = {
-		0x3b, 0x09, 0x9d, 0x06, 0x4f, 0x8f, 0xee, 0x70,
+		0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
 	};
 #define APP_BDB_FIXED_CHANNEL CONFIG_ZIGBEE_CHANNEL
-#define APP_BDB_FIXED_PAN_ID  0x5b27U
+#define APP_BDB_FIXED_PAN_ID  0x1a62U
 #ifndef APP_BDB_FIXED_PARENT
 #define APP_BDB_FIXED_PARENT  0x0000U
 #endif
@@ -380,7 +381,11 @@ void app_bdb_start_commissioning(void)
 
 	/* [22]: pre-call canary: written right before invoking steer_start. */
 	zb_nwk_ed_trace[22] = 0xBDB00022U;
+	#if defined(CONFIG_ZIGBEE_COORDINATOR)
+	status = zb_platform_bdb_network_formation_start();
+	#else
 	status = zb_platform_bdb_network_steer_start();
+	#endif
 	/* [23]: post-call canary: written right after steer_start returns. */
 	zb_nwk_ed_trace[23] = 0xBDB00023U | ((uint32_t)status & 0xffU);
 	app_bdb_retry_trace_put((0x07U << 24) | status);

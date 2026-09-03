@@ -1,16 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Router-mode ZDO helpers. Symmetric counterpart to zdo_ed_minimal.c.
+ * Zephyr ZDO/AF platform glue for the full libzigbee stack.
  *
  * zdo_cfg_attributes itself is declared in subsys/zigbee/zdo/zdo.c (the
  * libzigbee port). zdo.c only declares it — it leaves the struct
  * zero-initialized, which makes zdo_nwkDiscoveryStart() return
  * ZDO_NOT_PERMITTED because config_nwk_scan_attempts == 0.
  *
- * Populate the attributes here via a SYS_INIT() so the router build
- * gets non-zero defaults without conflicting with zdo.c's tentative
- * definition. ED build keeps its own static initializer in
- * zdo_ed_minimal.c (not linked for router).
+ * Populate the attributes here via SYS_INIT() so every full-stack role gets
+ * non-zero defaults without conflicting with zdo.c's tentative definition.
  */
 
 #include <zephyr/init.h>
@@ -23,23 +21,74 @@
 #include "nwk/includes/nwk.h"
 #include "mac/includes/mac_internal.h"
 #include "ss/ss_internal.h"
+#include "zdo/zdp.h"
+
+/* ZDP endpoint metadata and response handoff from libzigbee/src/zdp.c. */
+static const u16 zdo_in_clusters[] = {
+	NWK_ADDR_RSP_CLID,
+	IEEE_ADDR_RSP_CLID,
+	NODE_DESC_RSP_CLID,
+	POWER_DESC_RSP_CLID,
+	SIMPLE_DESC_RSP_CLID,
+	ACTIVE_EP_RSP_CLID,
+	MATCH_DESC_RSP_CLID,
+};
+
+static const u16 zdo_out_clusters[] = {
+	NWK_ADDR_REQ_CLID,
+	IEEE_ADDR_REQ_CLID,
+	NODE_DESC_REQ_CLID,
+	POWER_DESC_REQ_CLID,
+	SIMPLE_DESC_REQ_CLID,
+	ACTIVE_EP_REQ_CLID,
+	MATCH_DESC_REQ_CLID,
+	DEVICE_ANNCE_CLID,
+};
+
+static const af_simple_descriptor_t zdo_simple_desc = {
+	.app_profile_id = ZDO_PROFILE_ID,
+	.app_dev_id = 0U,
+	.endpoint = ZDO_EP,
+	.app_dev_ver = 0U,
+	.reserved = 0U,
+	.app_in_cluster_count = ARRAY_SIZE(zdo_in_clusters),
+	.app_out_cluster_count = ARRAY_SIZE(zdo_out_clusters),
+	.app_in_cluster_lst = (u16 *)zdo_in_clusters,
+	.app_out_cluster_lst = (u16 *)zdo_out_clusters,
+};
+
+static void zdo_zdp_data_indication(void *arg)
+{
+	aps_data_ind_t *aps_ind = (aps_data_ind_t *)arg;
+	zdo_zdpDataInd_t *zdp_ind = (zdo_zdpDataInd_t *)arg;
+
+	if (aps_ind == NULL || aps_ind->asdu == NULL || aps_ind->asduLength < 2U) {
+		zb_buf_free((zb_buf_t *)arg);
+		return;
+	}
+
+	/* zdp_cb_process() consumes the vendor-shaped zdo_zdpDataInd_t overlay
+	 * synchronously, so the RX carrier can be released immediately after it. */
+	zdp_ind->zpdu = aps_ind->asdu;
+	zdp_ind->src_addr = aps_ind->src_short_addr;
+	zdp_ind->clusterId = aps_ind->cluster_id;
+	zdp_ind->seq_num = aps_ind->asdu[0];
+	zdp_ind->status = aps_ind->asdu[1];
+	zdp_ind->length = aps_ind->asduLength;
+	zdp_cb_process(zdp_ind->seq_num, arg);
+	zb_buf_free((zb_buf_t *)arg);
+}
+
+void zdp_init(void)
+{
+	(void)af_endpointRegister(ZDO_EP, (af_simple_descriptor_t *)&zdo_simple_desc,
+				 zdo_zdp_data_indication, NULL);
+}
 
 /*
- * Router APS/ZDO data-send bridge.
+ * APS/ZDO data-send bridge.
  *
- * The router build links the WEAK no-op af_dataSend stub from
- * zb_api_bdb_ed_compat.c (which just returns APS_STATUS_NOT_SUPPORTED) —
- * the real implementation lives in zb_api_zdo_send_minimal.c, which is NOT
- * compiled for the router (CMakeLists comment: "superseded by the libzigbee
- * zdo/zdp_services.c ports"), yet no replacement was ever provided. The net
- * effect: every outbound ZDO/ZCL APS frame on the router (Device Announce,
- * Node-Descriptor / Active-EP / Simple-Descriptor responses, etc.) was
- * silently dropped, so a joined router transmitted nothing at the NWK layer
- * and the coordinator could never interview it (Z2M: "can not get node
- * descriptor"). See zephyr-docs/router-aps-join-fixes-handoff-2026-06-23.md.
- *
- * This strong definition overrides the weak stub for the router build and
- * routes application data through the full stack: build the 8-byte APS data
+ * Routes application data through the full stack: build the 8-byte APS data
  * header, then submit an NLDE-DATA.request (NWK_NLDE_DATA_REQ) which the
  * libzigbee nwk_data.c port carries down through nwk_tx -> MAC -> radio with
  * proper NWK security and (for unicast) routing.
@@ -49,12 +98,12 @@
  */
 #define AF_APS_DATA_HDR_LEN  8U
 
-static u8 zdo_router_minimal_seq;
+static u8 zdo_announce_seq;
 
 /*
- * The full ZDO service calls this API after a normal join, but the router
- * restore path reaches the application without that callback. Keep the
- * router implementation here so both fresh joins and restored sessions use
+ * The full ZDO service calls this API after a normal join, but a restored
+ * session may reach the application without that callback. Keep the
+ * platform implementation here so fresh joins and restored sessions use
  * the same APS/NWK transmit bridge.
  */
 u8 zb_zdoSendDevAnnance(void)
@@ -67,7 +116,7 @@ u8 zb_zdoSendDevAnnance(void)
 	/* Give the coordinator time to finish the association exchange. */
 	k_sleep(K_MSEC(40));
 
-	payload[0] = zdo_router_minimal_seq++;
+	payload[0] = zdo_announce_seq++;
 	COPY_U16TOBUFFER(&payload[1], g_zbNIB.nwkAddr);
 	memcpy(&payload[3], g_zbMacPib.extAddress, sizeof(addrExt_t));
 
@@ -132,7 +181,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	broadcast = ZB_NWK_IS_ADDRESS_BROADCAST(dstShort);
 	apsCounter = aps_get_counter_value();
 
-	/* APS data-frame header (mirrors zb_minimal_build_aps_header). */
+	/* APS data-frame header follows the libzigbee APS data request layout. */
 	aps[0] = (u8)((broadcast ? 0x02U : 0x00U) << 2);
 	if (!broadcast && (pDstEpInfo->txOptions & APS_TX_OPT_ACK_TX) != 0U) {
 		aps[0] |= BIT(6);
@@ -191,7 +240,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	return APS_STATUS_SUCCESS;
 }
 
-static int zdo_router_minimal_attr_init(void)
+static int zdo_platform_attr_init(void)
 {
 	zdo_cfg_attributes.config_nwk_indirectPollRate = 1000U;
 	zdo_cfg_attributes.config_nwk_time_btwn_scans = 100U;
@@ -210,4 +259,4 @@ static int zdo_router_minimal_attr_init(void)
 	return 0;
 }
 
-SYS_INIT(zdo_router_minimal_attr_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+SYS_INIT(zdo_platform_attr_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

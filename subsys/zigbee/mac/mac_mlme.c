@@ -377,7 +377,8 @@ void tl_zbMacStartReqConfirm(void *arg, u8 status)
         g_zbInfo.macPib.phyPageCur = req->channelPage;
         g_zbInfo.macPib.phyChannelCur = req->logicalChannel;
         tl_zbMacChannelSet(req->logicalChannel);
-        rf_setTrxState(RF_STATE_RX);
+        (void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX,
+                                          req->logicalChannel);
     }
 
     ((u8 *)arg)[0] = status;
@@ -406,16 +407,21 @@ void tl_zbMacStartRequestHandler(void *arg)
         return;
     }
 
-    if (req->coordRealignment == 0U) {
-        tl_zbMacStartReqConfirm(arg, MAC_SUCCESS);
-        return;
-    }
+	if (req->coordRealignment == 0U) {
+		tl_zbMacStartReqConfirm(arg, MAC_SUCCESS);
+		return;
+	}
 
-    ((zb_buf_t *)arg)->hdr.handle = 0xe6U;
-    status = tl_zbMacMlmeCoordRealignmentCmdSend(1, 0, 0, arg);
-    if (status != MAC_SUCCESS) {
-        tl_zbMacStartReqConfirm(arg, MAC_STA_CHANNEL_ACCESS_FAILURE);
-    }
+#if defined(ZB_ROUTER_ROLE)
+	((zb_buf_t *)arg)->hdr.handle = 0xe6U;
+	status = tl_zbMacMlmeCoordRealignmentCmdSend(1, 0, 0, arg);
+	if (status != MAC_SUCCESS) {
+		tl_zbMacStartReqConfirm(arg, MAC_STA_CHANNEL_ACCESS_FAILURE);
+	}
+#else
+	/* Coordinator realignment is a parent-side operation. */
+	tl_zbMacStartReqConfirm(arg, MAC_STA_INVALID_PARAMETER);
+#endif
 }
 
 void tl_zbMacCommStatusSend(void *arg, u8 status)

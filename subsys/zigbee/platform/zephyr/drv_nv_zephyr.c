@@ -17,11 +17,25 @@
 #include <errno.h>
 #include "drv_nv.h"
 
+/* Vendor factory-address globals remain part of the public driver ABI. The
+ * Zephyr NV backend resolves storage through fixed partitions instead of
+ * these absolute addresses, but the libzigbee headers still reference them.
+ */
+u32 g_u32MacFlashAddr;
+u32 g_u32CfgFlashAddr;
+
 #if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
 #error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
 #endif
 
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
+#define NV_INDEX_KEY_BASE         0x8000U
+#define NV_INDEX_MAGIC            0xa7U
+#define NV_INDEX_MAX              UINT8_MAX
+#define NV_INDEX_HEADER_LEN       4U
+#ifndef CONFIG_ZIGBEE_NV_INDEX_VALUE_MAX
+#define CONFIG_ZIGBEE_NV_INDEX_VALUE_MAX 256U
+#endif
 
 static struct nvs_fs zb_nvs;
 static bool zb_nvs_ready;
@@ -45,6 +59,13 @@ struct zb_nvs_ate {
 } __packed;
 
 static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
+/* Indexed vendor records are small (neighbor/key-pair/timeout entries), but
+ * are not singleton values. Keep one bounded scratch record so the adapter
+ * can strip its metadata before copying into the caller's payload buffer. */
+static u8 nv_index_scratch[NV_INDEX_HEADER_LEN +
+				  CONFIG_ZIGBEE_NV_INDEX_VALUE_MAX];
+
+static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len);
 
 static void zb_nvs_log_degraded(const char *reason, int rc)
 {
@@ -250,6 +271,110 @@ static inline uint16_t nv_key(u8 id, u8 itemId)
 	return (uint16_t)((id << 8) | itemId);
 }
 
+static inline uint16_t nv_index_key(u8 id, u8 opIdx)
+{
+	return (uint16_t)(NV_INDEX_KEY_BASE | ((u16)id << 8) | opIdx);
+}
+
+static bool nv_index_record_read(u8 id, u8 itemId, u8 opIdx, u16 len,
+					 u8 *buf)
+{
+	ssize_t stored_len;
+	ssize_t read_len;
+	u16 expected_len;
+
+	stored_len = nvs_read(&zb_nvs, nv_index_key(id, opIdx), NULL, 0);
+	if (stored_len < (ssize_t)NV_INDEX_HEADER_LEN ||
+	    stored_len > (ssize_t)sizeof(nv_index_scratch)) {
+		return false;
+	}
+
+	read_len = nvs_read(&zb_nvs, nv_index_key(id, opIdx),
+				    nv_index_scratch, (size_t)stored_len);
+	if (read_len != stored_len ||
+	    nv_index_scratch[0] != NV_INDEX_MAGIC ||
+	    nv_index_scratch[1] != itemId) {
+		return false;
+	}
+
+	stored_len = (ssize_t)nv_index_scratch[2] |
+			     ((ssize_t)nv_index_scratch[3] << 8);
+	expected_len = nv_item_expected_read_len(itemId, len);
+	if (expected_len > len || stored_len < expected_len || stored_len < len ||
+	    stored_len > (ssize_t)(sizeof(nv_index_scratch) -
+				    NV_INDEX_HEADER_LEN)) {
+		return false;
+	}
+
+	if (buf != NULL && len != 0U) {
+		memcpy(buf, &nv_index_scratch[NV_INDEX_HEADER_LEN], len);
+	}
+
+	return true;
+}
+
+static bool nv_index_header_read(u8 id, u8 opIdx, u8 *item_id)
+{
+	ssize_t stored_len;
+	ssize_t read_len;
+
+	stored_len = nvs_read(&zb_nvs, nv_index_key(id, opIdx), NULL, 0);
+	if (stored_len < (ssize_t)NV_INDEX_HEADER_LEN ||
+	    stored_len > (ssize_t)sizeof(nv_index_scratch)) {
+		return false;
+	}
+
+	read_len = nvs_read(&zb_nvs, nv_index_key(id, opIdx),
+				    nv_index_scratch, (size_t)stored_len);
+	if (read_len != stored_len ||
+	    nv_index_scratch[0] != NV_INDEX_MAGIC) {
+		return false;
+	}
+
+	if (item_id != NULL) {
+		*item_id = nv_index_scratch[1];
+	}
+
+	return ((u16)nv_index_scratch[2] |
+		((u16)nv_index_scratch[3] << 8)) ==
+	       (u16)(stored_len - NV_INDEX_HEADER_LEN);
+}
+
+static bool nv_index_latest(u8 id, u8 item_id, u8 *op_idx)
+{
+	bool found = false;
+
+	for (u16 i = 0U; i <= NV_INDEX_MAX; i++) {
+		u8 stored_item;
+
+		if (!nv_index_header_read(id, (u8)i, &stored_item) ||
+		    (item_id != ITEM_FIELD_IDLE && stored_item != item_id)) {
+			continue;
+		}
+
+		if (op_idx != NULL) {
+			*op_idx = (u8)i;
+		}
+		found = true;
+	}
+
+	return found;
+}
+
+static bool nv_index_free_slot(u8 id, u8 *op_idx)
+{
+	for (u16 i = 0U; i <= NV_INDEX_MAX; i++) {
+		ssize_t len = nvs_read(&zb_nvs, nv_index_key(id, (u8)i), NULL, 0);
+
+		if (len == -ENOENT) {
+			*op_idx = (u8)i;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len)
 {
 	u16 expected_len = requested_len;
@@ -274,25 +399,47 @@ static nv_sts_t nv_clear_module_items(u8 module_id)
 		if (rc < 0 && rc != -ENOENT) {
 			return NV_INVALID_MODULS;
 		}
+
+		rc = nvs_delete(&zb_nvs, nv_index_key(module_id, (u8)item_id));
+		if (rc < 0 && rc != -ENOENT) {
+			return NV_INVALID_MODULS;
+		}
 	}
 
 	return NV_SUCC;
 }
 
-static bool nv_index_key_supported(u8 opSect, u16 opIdx)
-{
-	return (opSect == 0U) && (opIdx == 0U);
-}
-
 nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
 {
-	ARG_UNUSED(single);
+	u8 op_idx;
+	ssize_t written;
+
 	if (!zb_nvs_ensure_writable()) {
 		return NV_NO_MEDIA;
 	}
-	int rc = nvs_write(&zb_nvs, nv_key((u8)id, itemId), buf, len);
+	if (id >= NV_MAX_MODULS || buf == NULL || len == 0U) {
+		return NV_INVALID_ID;
+	}
 
-	return rc >= 0 ? NV_SUCC : NV_NOT_ENOUGH_SAPCE;
+	if (single) {
+		written = nvs_write(&zb_nvs, nv_key((u8)id, itemId), buf, len);
+		return written >= 0 ? NV_SUCC : NV_NOT_ENOUGH_SAPCE;
+	}
+
+	if (len > CONFIG_ZIGBEE_NV_INDEX_VALUE_MAX ||
+	    !nv_index_free_slot((u8)id, &op_idx)) {
+		return NV_NOT_ENOUGH_SAPCE;
+	}
+
+	nv_index_scratch[0] = NV_INDEX_MAGIC;
+	nv_index_scratch[1] = itemId;
+	nv_index_scratch[2] = (u8)len;
+	nv_index_scratch[3] = (u8)(len >> 8);
+	memcpy(&nv_index_scratch[NV_INDEX_HEADER_LEN], buf, len);
+	written = nvs_write(&zb_nvs, nv_index_key((u8)id, op_idx),
+				    nv_index_scratch, len + NV_INDEX_HEADER_LEN);
+
+	return written >= 0 ? NV_SUCC : NV_NOT_ENOUGH_SAPCE;
 }
 
 nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
@@ -301,18 +448,40 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	ssize_t rc;
 	u16 expected_len;
 
-	ARG_UNUSED(single);
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
 	if (zb_nvs_blank_partition) {
 		return NV_ITEM_NOT_FOUND;
 	}
+
+	if (!single && itemId == ITEM_FIELD_IDLE) {
+		itemIfno_t *info = (itemIfno_t *)buf;
+		u8 op_idx;
+
+		if (info == NULL || len < sizeof(*info) ||
+		    !nv_index_latest(id, ITEM_FIELD_IDLE, &op_idx)) {
+			return NV_ITEM_NOT_FOUND;
+		}
+		info->opSect = 0U;
+		info->opIndex = op_idx;
+		return NV_SUCC;
+	}
+
 	expected_len = nv_item_expected_read_len(itemId, len);
+	if (expected_len > len) {
+		return NV_DATA_CHECK_ERROR;
+	}
 	actual_len = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
 
 	if (actual_len == -ENOENT) {
-		return NV_ITEM_NOT_FOUND;
+		u8 op_idx;
+
+		if (!nv_index_latest(id, itemId, &op_idx) ||
+		    !nv_index_record_read(id, itemId, op_idx, len, buf)) {
+			return NV_ITEM_NOT_FOUND;
+		}
+		return NV_SUCC;
 	}
 	if (actual_len < 0) {
 		return NV_DATA_CHECK_ERROR;
@@ -334,7 +503,8 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 
 nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 {
-	ARG_UNUSED(len);
+	u8 op_idx;
+
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
@@ -342,12 +512,17 @@ nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 		return NV_ITEM_NOT_FOUND;
 	}
 	int rc = nvs_delete(&zb_nvs, nv_key(id, itemId));
+	if (rc == -ENOENT && nv_index_latest(id, itemId, &op_idx)) {
+		rc = nvs_delete(&zb_nvs, nv_index_key(id, op_idx));
+	}
 
 	return rc == 0 ? NV_SUCC : NV_ITEM_NOT_FOUND;
 }
 
 nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 {
+	u8 op_idx;
+
 	if (len == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
@@ -357,7 +532,12 @@ nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 	ssize_t rc = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
 
 	if (rc < 0) {
-		return NV_ITEM_NOT_FOUND;
+		if (!nv_index_latest(id, itemId, &op_idx) ||
+		    !nv_index_header_read(id, op_idx, NULL)) {
+			return NV_ITEM_NOT_FOUND;
+		}
+		rc = (ssize_t)nv_index_scratch[2] |
+			 ((ssize_t)nv_index_scratch[3] << 8);
 	}
 	*len = (u16)rc;
 	return NV_SUCC;
@@ -433,37 +613,42 @@ nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount)
 	return rc >= 0 ? NV_SUCC : NV_DATA_CHECK_ERROR;
 }
 
-/* Stub for multi-item read-by-index (used by address table, binding) */
 nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx,
 			      u16 len, u8 *buf)
 {
+	if (opSect != 0U || opIdx > NV_INDEX_MAX) {
+		return NV_ITEM_NOT_FOUND;
+	}
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
-	}
-	if (!nv_index_key_supported(opSect, opIdx)) {
-		return NV_ITEM_NOT_FOUND;
 	}
 	if (zb_nvs_blank_partition) {
 		return NV_ITEM_NOT_FOUND;
 	}
 
-	return nv_flashReadNew(1, id, itemId, len, buf);
+	return nv_index_record_read(id, itemId, (u8)opIdx, len, buf) ?
+		NV_SUCC : NV_ITEM_NOT_FOUND;
 }
 
 nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx)
 {
 	int rc;
 
+	if (opSect != 0U || opIdx > NV_INDEX_MAX) {
+		return NV_ITEM_NOT_FOUND;
+	}
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
-	}
-	if (!nv_index_key_supported(opSect, opIdx)) {
-		return NV_ITEM_NOT_FOUND;
 	}
 	if (zb_nvs_blank_partition) {
 		return NV_ITEM_NOT_FOUND;
 	}
-	rc = nvs_delete(&zb_nvs, nv_key(id, itemId));
+	u8 stored_item;
+	if (!nv_index_header_read(id, (u8)opIdx, &stored_item) ||
+	    stored_item != itemId) {
+		return NV_ITEM_NOT_FOUND;
+	}
+	rc = nvs_delete(&zb_nvs, nv_index_key(id, (u8)opIdx));
 
 	return rc == 0 ? NV_SUCC : NV_ITEM_NOT_FOUND;
 }

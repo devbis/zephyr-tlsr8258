@@ -1015,6 +1015,7 @@ void zdo_descriptorsIndicate(void *arg)
     zdo_zdp_req_t zzr;
     af_simple_descriptor_t *simpleDesc;
 
+
     if (is_short_broadcast(ad->dst_addr)) {
         zb_buf_free((zb_buf_t *)arg);
         return;
@@ -1022,6 +1023,7 @@ void zdo_descriptorsIndicate(void *arg)
 
     memset(&zzr, 0, sizeof(zzr));
     TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, ZDO_CMD_PAYLOAD_MAX, zzr.zdu, u8 *);
+
 
     u8 *ptr = zzr.zdu;
     *ptr++ = seqNum;
