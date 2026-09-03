@@ -11,7 +11,14 @@ zephyr_include_directories(
 
 zephyr_library_named(subsys__zigbee)
 
-if(CONFIG_ZIGBEE_ROUTER)
+if(CONFIG_ZIGBEE_COORDINATOR)
+    set(ZIGBEE_ROLE_DEFS
+        ZB_COORDINATOR_ROLE=1
+        ZB_ROUTER_ROLE=1
+        END_DEVICE=0
+        ROUTER=0
+        COORDINATOR=1)
+elseif(CONFIG_ZIGBEE_ROUTER)
     set(ZIGBEE_ROLE_DEFS
         ZB_ROUTER_ROLE=1
         ROUTER=1
@@ -39,6 +46,7 @@ zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
     ${CMAKE_CURRENT_SOURCE_DIR}/os
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/ss
     ${CMAKE_CURRENT_SOURCE_DIR}/mac/includes
     ${CMAKE_CURRENT_SOURCE_DIR}/zbapi
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -57,7 +65,6 @@ zephyr_library_sources(
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
     platform/zephyr/drv_security_zephyr.c
-    platform/zephyr/zb_vendor_compat.c
     platform/zephyr/zb_persistence_zephyr.c
     platform/zephyr/zb_primitive_dispatch.c
 )
@@ -98,24 +105,22 @@ zephyr_library_sources(
     mac/mac_phy.c
     mac/mac_pib.c
 )
-# The full libzigbee MAC (mac/mac.c, mac/mac_trx.c, ...) is used by BOTH roles
-# (router and ED) — see the libzigbee core block below. The former minimal-ED MAC
-# (mac_trx_compat.c / mac_trx_stub.c) has been removed as part of unifying the ED
-# onto the libzigbee core.
+# The full libzigbee MAC (mac/mac.c, mac/mac_trx.c, ...) is used by both roles;
+# the former minimal-ED MAC glue has been removed.
 
 # Upper layers (open-source SDK files)
 zephyr_library_sources(
     af/zb_af.c
     aps/aps_group.c
     ss/ss_nv.c
-    zbapi/zb_api_ed_compat.c
+    zbapi/zb_api.c
     nwk/nwk_schedule_fallback.c
 )
 
 # Full libzigbee core — the single unified stack for BOTH roles (router and ED).
 # These are the unified vendor sources whose role behaviour is selected internally
 # by ZB_ED_ROLE / ZB_ROUTER_ROLE, so the same files serve both roles.
-if(CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
+if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
     zephyr_library_sources(
         aps/aps.c
         aps/aps_data.c
@@ -163,10 +168,12 @@ if(CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
     )
 endif()
 
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c bdb/bdb_base.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_GP
+    gp/cGP_stub.c gp/dGP_stub.c
+    gp/gp_base.c gp/gp_sec.c
     gp/gp.c gp/gp_proxy.c gp/gp_sink.c
     gp/gp_proxyTab.c gp/gp_sinkTab.c
     gp/gp_trans.c gp/gp_transCfg.c
@@ -176,32 +183,24 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_WWAH wwah/wwah.c wwah/wwahEpCfg.c)
 # ZCL
 add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 
-# libzigbee-based ED glue: the rx-off poll driver (nwk_ed_libzigbee.c drives
-# polling natively via zdo_set_pollRate + nwk_data.c quick-poll) plus the
-# link-completion stubs for the ED commissioning entry points that are not yet
-# wired onto the libzigbee join path (ED "boots but does not auto-join yet" —
-# tracked follow-up). The former parallel minimal-ED runtime
-# (zb_api_zdo_send_minimal.c, nwk_ed_minimal.c, zdo_ed_minimal.c) has been removed.
+# ED-specific Zephyr persistence/bootstrap hooks.  Join, rejoin, polling and
+# ZDO requests themselves are implemented by the vendor-derived NWK/ZDO/API
+# sources above; this file only contains the small ED platform seam.
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
     nwk/nwk_ed_libzigbee.c
-    zbapi/zb_ed_libzigbee_stubs.c
 )
-if(CONFIG_ZIGBEE_ED AND CONFIG_ZIGBEE_BDB)
-    zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
-endif()
 
-# Router-only Zephyr-port bootstrap glue (formation/parenting bring-up).
+# FFD Zephyr-port bootstrap glue (formation/parenting bring-up).
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ROUTER
+    nwk/nwk_router_bootstrap.c
+)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_COORDINATOR
     nwk/nwk_router_bootstrap.c
 )
 # Role-agnostic Zephyr-port glue: af_dataSend (outbound ZDO/ZCL APS -> NLDE) and
 # the zdo_cfg_attributes SYS_INIT that network discovery needs (non-zero scan
-# attempts/duration). Shared by the router and the libzigbee-based ED.
-if(CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
+# attempts/duration). Shared by all full-stack roles.
+if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
     zephyr_library_sources(zdo/zdo_zephyr_glue.c)
 endif()
-if(CONFIG_ZIGBEE_ROUTER AND CONFIG_ZIGBEE_BDB)
-    zephyr_library_sources(zbapi/zb_api_bdb_ed_compat.c)
-endif()
-
 endif() # CONFIG_ZIGBEE

@@ -121,6 +121,10 @@ static int updateDeviceSendAgain(void *arg)
 
 ss_info_base_t ss_ib;
 ss_dev_keyPair_t g_ssDevKeyPair;
+#if defined(ZB_COORDINATOR_ROLE) && ZB_COORDINATOR_ROLE
+/* Coordinator trust-center key cache from libzigbee/src/ss_apsSecurityME.c. */
+ss_tc_keyPair_t g_ssTcKeyPair[SS_TC_KEY_PAIR_CACHE_NUM];
+#endif
 
 u32 ss_outgoingFrameCntGet(void) { return ss_ib.outgoingFrameCounter; }
 
@@ -453,7 +457,7 @@ void ss_apsTunnelCmdHandle(void *arg)
          * zeroing the very bytes it was about to relay (the child received an
          * all-zero key). Copy the inner command out, then reallocate it at the
          * tail of the buffer via tl_bufInitalloc so it lands past the req
-         * overlay with proper header head-room — mirrors zdo_router_minimal.c
+         * overlay with proper header head-room — mirrors the Zephyr AF seam
          * af_dataSend. */
         u8 inner[64];
         u8 *relay;
@@ -482,7 +486,7 @@ void ss_apsTunnelCmdHandle(void *arg)
      * any non-zero addrMode as group/multicast (NWK FCF bit 8 + mcast-control
      * byte); the vendor's ADDR_MODE_SHORT here would send the relayed
      * transport-key multicast-flagged and the child couldn't parse it. Match
-     * zdo_router_minimal.c af_dataSend, which uses 0 for unicast.
+     * the Zephyr af_dataSend seam, which uses 0 for unicast.
      */
     req->addrMode = 0U;
     /*
@@ -498,7 +502,7 @@ void ss_apsTunnelCmdHandle(void *arg)
     req->nsduLen = nsduLen;
 
     /*
-     * Post the NLDE-DATA.request DIRECTLY, exactly as zdo_router_minimal.c
+     * Post the NLDE-DATA.request DIRECTLY, exactly as the Zephyr AF seam
      * af_dataSend does. The vendor path routed the relay through the APS TX
      * cache (apsTxDataPost/apsTxEventPost), which re-frames the buffer with its
      * own APS header and payload pointer and discards the nlde_data_req_t we

@@ -6,13 +6,11 @@
  *
  *   * vendor "zb_local.h" / "ev_timer.h" → zb_common_stub.h +
  *     nwk/includes/nwk_internal.h + os/ev_timer.h
- *   * Whole TU wrapped in ZB_ROUTER_ROLE. Vendor file kept the
- *     keepalive/request path outside the ROUTER guard so an ED build
- *     could reuse it; the Zephyr ED build instead uses nwk_ed_minimal.c
- *     and this file is only linked into the router build.
+ *   * The vendor keepalive/request path is retained for both FFD and ED
+ *     builds; only the parent-side timeout service is role-guarded.
  *   * Forward-declared cross-TU helpers (endDevMacDataPoll, zdo*,
- *     nv_* persistence, ev_buf_*) that still live in other TUs or are
- *     stubbed by the Zephyr platform layer.
+ *     nv_* persistence, ev_buf_*) that still live in other TUs or the
+ *     Zephyr platform layer.
  *   * tabs / Zephyr-style formatting; logic preserved verbatim.
  */
 

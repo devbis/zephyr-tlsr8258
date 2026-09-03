@@ -167,50 +167,37 @@ static void test_raw_mode_tclk_path_starts_with_vendor_nodedesc_probe(void)
 	free(source);
 }
 
-static void test_raw_mode_tclk_path_keeps_post_join_polling_during_nodedesc_probe(void)
+static void test_native_polling_remains_owned_by_vendor_zdo_manager(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
-	const char *start_func =
-		"static s32 bdb_retrieveTcLinkKeyStart(void *arg)";
-	const char *timeout_func =
-		"static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)";
-	const char *raw_if = "#if defined(CONFIG_IEEE802154_RAW_MODE)";
-	const char *raw_else = "#else";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zdo/zdo_nwk_manager.c");
+	const char *poll_func = "int pollRateCb(void *arg)";
+	const char *set_func = "void zdo_set_pollRate(u32 rate)";
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
 
-	EXPECT_TRUE(function_branch_contains(source, start_func, raw_if, raw_else,
-					     "bdb_ed_post_join_poll_kick();"));
-	EXPECT_TRUE(function_branch_contains(source, timeout_func, raw_if, raw_else,
-					     "bdb_ed_post_join_poll_kick();"));
-
+	EXPECT_TRUE(contains_between(source, poll_func, set_func,
+				     "zdo_syncReq(NULL);"));
+	EXPECT_TRUE(contains_between(source, set_func, "void zdo_nwkRejoinWithBackOffStop(void)",
+				     "ev_timer_taskPost(pollRateCb, NULL, rate);"));
 	free(source);
 }
 
 static void test_security_mode_set_does_not_force_nwk_security_before_key_install(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zbapi/zb_api_bdb_ed_compat.c");
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zbapi/zb_api.c");
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
 
-	EXPECT_TRUE(contains(source,
-			     "__attribute__((weak)) void ss_securityModeSet(ss_securityMode_e m)\n"
-			     "{\n"
-			     "\tif (m == SS_SEMODE_DISTRIBUTED) {\n"
-			     "\t\tss_ib.tcPolicy.updateTCLKrequired = 0;\n"
-			     "\t\tmemcpy(ss_ib.trust_center_address, g_invalid_addr, EXT_ADDR_LEN);\n"
-			     "\t} else if (m == SS_SEMODE_CENTRALIZED) {\n"
-			     "\t\tss_ib.tcPolicy.updateTCLKrequired = 1;\n"
-			     "\t\tmemset(ss_ib.trust_center_address, 0, EXT_ADDR_LEN);\n"
-			     "\t}\n"
-			     "}"));
-	EXPECT_FALSE(contains(source, "ss_ib.securityLevel = (m == SS_SEMODE_DISTRIBUTED) ? 0U : 5U;"));
+	EXPECT_TRUE(contains(source, "void zb_rejoinSecModeSet(u8 mode)"));
+	EXPECT_TRUE(contains(source, "aps_ib.aps_use_insecure_join = FALSE;"));
+	EXPECT_TRUE(contains(source, "aps_ib.aps_authenticated = ss_ib.securityLevel ? TRUE : FALSE;"));
+	EXPECT_FALSE(contains(source, "__attribute__((weak))"));
 
 	free(source);
 }
@@ -219,7 +206,7 @@ int main(void)
 {
 	test_raw_mode_tclk_path_requests_key_from_nodedesc_handler();
 	test_raw_mode_tclk_path_starts_with_vendor_nodedesc_probe();
-	test_raw_mode_tclk_path_keeps_post_join_polling_during_nodedesc_probe();
+	test_native_polling_remains_owned_by_vendor_zdo_manager();
 	test_security_mode_set_does_not_force_nwk_security_before_key_install();
 
 	if (failures != 0) {

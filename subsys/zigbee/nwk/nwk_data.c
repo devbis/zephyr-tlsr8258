@@ -256,6 +256,7 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
     zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
     nlde_data_ind_t ind;
 
+
     memset(&ind, 0, sizeof(ind));
     ind.dstAddrMode = pNwkHdr->frameControl.multicastFlg ? 2U : 1U;
     ind.dstAddr = pNwkHdr->dstAddr;
@@ -387,10 +388,18 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
         nwk_rejoinCmdSendCnf(arg);
         return;
     case NWK_INTERNAL_REJOIN_RESP_CMD_HANDLE:
+#if defined(ZB_ROUTER_ROLE)
         tl_zbMcpsRejoinRespCnfHandler(arg, status, nwkHdr.dstAddr);
+#else
+        zb_buf_free((zb_buf_t *)arg);
+#endif
         return;
     case NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE:
+#if defined(ZB_ROUTER_ROLE)
         nwk_leaveCmdSendCnf(arg, nwkHdr.dstAddr);
+#else
+        zb_buf_free((zb_buf_t *)arg);
+#endif
         return;
     case NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE:
         zdo_mgmt_leave_response_confirm(arg, status);
@@ -821,6 +830,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     }
 
     switch (cmd.cmdId) {
+#if defined(ZB_ROUTER_ROLE)
     case NWK_CMD_ROUTE_REQUEST:
         nwkRouteReqCmdHandler(arg, &nwkHdr, &cmd);
         return;
@@ -836,6 +846,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     case NWK_CMD_NETWORK_REPORT:
         tl_zbNwkReportCmdHandler(arg, &nwkHdr, &cmd);
         return;
+#endif
     case NWK_CMD_ENDDEVTIMEOUT_RESPONSE:
         nwkEndDevTimeoutRspCmdHandler(arg, &nwkHdr, &cmd);
         return;
@@ -845,17 +856,32 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
         return;
 #endif
     case NWK_CMD_NETWORK_UPDATE:
+#if defined(ZB_ROUTER_ROLE)
         tl_zbNwkNetworkUpdateCmdHandler(arg, &nwkHdr, &cmd);
         return;
+#else
+        zb_buf_free(buf);
+        return;
+#endif
     case NWK_CMD_REJOIN_RESPONSE:
         tl_zbNwkRejoinRespCmdHandler(arg, &nwkHdr, &cmd);
         return;
     case NWK_CMD_REJOIN_REQUEST:
+#if defined(ZB_ROUTER_ROLE)
         tl_zbNwkRejoinReqCmdHandler(arg, &nwkHdr, &cmd);
         return;
+#else
+        zb_buf_free(buf);
+        return;
+#endif
     case NWK_CMD_LEAVE:
+#if defined(ZB_ROUTER_ROLE)
         tl_zbNwkLeaveReqCmdHandler(arg, &nwkHdr, &cmd);
         return;
+#else
+        zb_buf_free(buf);
+        return;
+#endif
     case NWK_CMD_NETWORK_STATUS:
         tl_zbNwkStatusCmdHandler(arg, &nwkHdr, &cmd);
         return;

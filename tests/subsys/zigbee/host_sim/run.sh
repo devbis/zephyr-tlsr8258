@@ -46,8 +46,8 @@ if rg -n 'CONFIG_ZIGBEE_MAC_TIMER_CYCLES_PER_US' \
 	exit 1
 fi
 
-if ! rg -q 'nwk_ed_minimal_rx_evt_drop_record' subsys/zigbee/nwk/nwk_ed_minimal.c; then
-	echo "nwk_ed_minimal RX event queue drops must be counted and logged" >&2
+if ! rg -q 'tl_zbRxTaskPost\(mac_rxDataParse, buf\)' subsys/zigbee/mac/mac_trx.c; then
+	echo "MAC RX frames must use the dedicated deferred RX task lane" >&2
 	exit 1
 fi
 
@@ -81,13 +81,13 @@ if rg -n 'SYS_INIT\s*\(\s*zb_nvs_init\s*,' \
 	exit 1
 fi
 
-leave_success_line="$(rg -n 'rsp\[1\][[:space:]]*=[[:space:]]*ZDO_SUCCESS' \
-	subsys/zigbee/mac/mac_trx_compat.c | head -n 1 | cut -d: -f1 || true)"
+leave_start_line="$(rg -n 'tl_zbNwkNlmeLeaveRequestHandler\(arg\)' \
+	subsys/zigbee/zdo/zdp_services.c | head -n 1 | cut -d: -f1 || true)"
 leave_clear_line="$(rg -n 'zb_platform_clear_persistent_state' \
-	subsys/zigbee/mac/mac_trx_compat.c | head -n 1 | cut -d: -f1 || true)"
-if [ -n "$leave_success_line" ] && [ -n "$leave_clear_line" ] &&
-	[ "$leave_success_line" -lt "$leave_clear_line" ]; then
-	echo "MGMT_LEAVE_RSP success must be sent only after local leave/reset is applied" >&2
+	subsys/zigbee/zdo/zdp_services.c | head -n 1 | cut -d: -f1 || true)"
+if [ -n "$leave_start_line" ] && [ -n "$leave_clear_line" ] &&
+	[ "$leave_start_line" -gt "$leave_clear_line" ]; then
+	echo "local leave/reset must follow the vendor leave transaction" >&2
 	exit 1
 fi
 

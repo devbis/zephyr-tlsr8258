@@ -1,24 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Zephyr-native router-mode NWK runtime — minimal "static formation" path.
+ * Zephyr-native FFD bootstrap for the vendor-derived NWK runtime.
  *
- * Companion to nwk_ed_minimal.c. Provides the entry point that BDB calls
- * when CONFIG_ZIGBEE_ROUTER=y. The current implementation performs a
- * static, single-shot formation: pick (or take) a fixed PAN ID,
- * extended PAN ID, NWK key and short address, push them into the MAC
- * PIB / NWK NIB / security IB, configure the radio filter chain, and
- * signal BDB success.
- *
- * This is intentionally NOT a full router runtime: it does not run a
- * MAC ED/active scan, does not transmit beacons, does not respond to
- * AssocRequest, and does not broadcast link-status. Those layers
- * require MAC MLME support (MLME-START, beacon TX path, indirect
- * pending tables) which is not wired in subsys/zigbee/mac/ yet.
+ * Provides the FFD startup seam that BDB calls when
+ * CONFIG_ZIGBEE_ROUTER=y or CONFIG_ZIGBEE_COORDINATOR=y. Profile and restored
+ * state are applied here,
+ * then startup is handed to the vendor-derived zdo_nwkRouterStart() /
+ * MLME-START path. This keeps formation, beacon-request, association,
+ * permit-join, link-status and indirect-data behavior in the ported
+ * NWK/MAC sources instead of maintaining a second static runtime.
  *
  * Reference (do not copy verbatim): vendor-derived libzigbee
- * src/nwk_formation.c, src/nwk_permit_joining.c, src/nwk_brc.c. The
- * symbol shape and the "set MAC PIB, then notify ZDO" sequence mirror
- * the vendor's nwk_formationStartCnfHandler() success branch.
+ * src/nwk_formation.c, src/nwk_permit_joining.c, src/nwk_brc.c and
+ * src/zdo_nwk_manager.c. Zephyr-specific code is limited to profile/NV
+ * preparation and radio filter/persistence hooks.
  */
 
 #include "zb_common_stub.h"
@@ -34,7 +29,7 @@
 #include <zephyr/zigbee/zb_config.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
-LOG_MODULE_REGISTER(zigbee_nwk_router_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
+LOG_MODULE_REGISTER(zigbee_nwk_router_bootstrap, CONFIG_ZIGBEE_LOG_LEVEL);
 
 /* Defaults match the existing zigbee_shell fixed-target ED profile so a
  * locally-formed router and an externally-driven ED can share a PAN for
@@ -47,12 +42,13 @@ LOG_MODULE_REGISTER(zigbee_nwk_router_minimal, CONFIG_ZIGBEE_LOG_LEVEL);
 extern zdo_appIndCb_t *zdoAppIndCbLst;
 extern u8 zb_zdoSendDevAnnance(void);
 extern volatile u32 zb_nwk_ed_trace[];
+extern zdo_status_t zdo_nwkRouterStart(void);
 
-static bool nwk_router_minimal_started;
-static bool nwk_router_minimal_announce_sent;
+static bool nwk_router_started;
+static bool nwk_router_bootstrap_announce_sent;
 static ev_timer_event_t *nwk_router_persist_save_evt;
 
-static int nwk_router_minimal_deferred_save_timer(void *arg)
+static int nwk_router_bootstrap_deferred_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
 	nwk_router_persist_save_evt = NULL;
@@ -72,21 +68,10 @@ void zb_router_schedule_persistence_save(void)
 	 * association/interview traffic has drained before saving the joined
 	 * PIB, but make sure the learned short address survives reboot. */
 	nwk_router_persist_save_evt = TL_ZB_TIMER_SCHEDULE(
-		nwk_router_minimal_deferred_save_timer, NULL, 15000U);
+		nwk_router_bootstrap_deferred_save_timer, NULL, 15000U);
 }
 
-static int nwk_router_minimal_deferred_announce_timer(void *arg)
-{
-	ARG_UNUSED(arg);
-
-	if (!nwk_router_minimal_announce_sent &&
-		zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
-		nwk_router_minimal_announce_sent = true;
-	}
-	return -1; /* one-shot */
-}
-
-static void nwk_router_minimal_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
+static void nwk_router_bootstrap_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
 {
 	/* drv_u32Rand() is the vendor RNG hook wired through to
 	 * Zephyr's entropy source via drv_rand_zephyr.c (or to the
@@ -100,7 +85,7 @@ static void nwk_router_minimal_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
 	}
 }
 
-static void nwk_router_minimal_apply_pib(uint8_t channel, uint16_t pan_id,
+static void nwk_router_bootstrap_apply_pib(uint8_t channel, uint16_t pan_id,
 					 uint16_t short_addr,
 					 const uint8_t ext_pan_id[EXT_ADDR_LEN])
 {
@@ -126,7 +111,7 @@ static void nwk_router_minimal_apply_pib(uint8_t channel, uint16_t pan_id,
 	g_zbNIB.updateId = 0U;
 }
 
-static bool nwk_router_minimal_resolve_profile(uint8_t *channel,
+static bool nwk_router_bootstrap_resolve_profile(uint8_t *channel,
 					       uint16_t *pan_id,
 					       uint16_t *short_addr,
 					       uint8_t ext_pan_id[EXT_ADDR_LEN],
@@ -168,7 +153,7 @@ static bool nwk_router_minimal_resolve_profile(uint8_t *channel,
 	return true;
 }
 
-static bool nwk_router_minimal_has_restored_state(void)
+static bool nwk_router_bootstrap_has_restored_state(void)
 {
 	/* zb_platform_restore_persistent_state() loads g_zbInfo (with the
 	 * nested macPib/nwkNib) and g_zbNwkCtx from NVS at boot. A fully
@@ -182,7 +167,6 @@ static bool nwk_router_minimal_has_restored_state(void)
 
 uint8_t zb_routerStart(void)
 {
-	zdo_start_device_confirm_t cnf;
 	uint8_t ext_pan_id[EXT_ADDR_LEN];
 	uint8_t nwk_key[SEC_KEY_LEN] = {0};
 	uint8_t channel;
@@ -193,12 +177,12 @@ uint8_t zb_routerStart(void)
 	bool restored = false;
 	int rc;
 
-	if (nwk_router_minimal_started) {
+	if (nwk_router_started) {
 		LOG_DBG("zb_routerStart: already started, ignoring");
 		return 0U;
 	}
 
-	if (nwk_router_minimal_has_restored_state()) {
+	if (nwk_router_bootstrap_has_restored_state()) {
 		/* Reboot with valid NVS state: keep restored PIB/NIB and
 		 * just reprogram the radio. Skip key generation and skip
 		 * zb_info_save (state is already persisted from the prior
@@ -214,17 +198,17 @@ uint8_t zb_routerStart(void)
 		/* Older NVS images were written before the router capability was
 		 * forced awake. Re-apply the runtime router PIB before any TX; the
 		 * MAC completion path uses this value to decide whether RF may stop. */
-		nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
+		nwk_router_bootstrap_apply_pib(channel, pan_id, short_addr, ext_pan_id);
 	} else {
-		from_app = nwk_router_minimal_resolve_profile(&channel, &pan_id,
+		from_app = nwk_router_bootstrap_resolve_profile(&channel, &pan_id,
 							      &short_addr, ext_pan_id,
 							      nwk_key, &key_provided);
 
 		if (!key_provided) {
-			nwk_router_minimal_fill_nwk_key(nwk_key);
+			nwk_router_bootstrap_fill_nwk_key(nwk_key);
 		}
 
-		nwk_router_minimal_apply_pib(channel, pan_id, short_addr, ext_pan_id);
+		nwk_router_bootstrap_apply_pib(channel, pan_id, short_addr, ext_pan_id);
 
 		/* Store the network key into the security IB so the APS
 		 * encrypt/decrypt path can find it. Slot 0 / seqNum 0
@@ -245,50 +229,26 @@ uint8_t zb_routerStart(void)
 	zb_radio_port_update_filters(pan_id, short_addr, g_zbMacPib.extAddress);
 	(void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, channel);
 
-	g_zbNwkCtx.joined = 1U;
+	/* The vendor start path owns the joined transition and the start
+	 * confirmation. Keeping joined clear until MLME-START succeeds avoids
+	 * exposing a half-started FFD to ZDO and BDB. */
+	g_zbNwkCtx.joined = 0U;
 	g_zbNwkCtx.is_factory_new = 0U;
 	g_zbNwkCtx.user_state = NLME_IDLE;
 
-	nwk_router_minimal_started = true;
+	rc = zdo_nwkRouterStart();
+	if (rc != ZDO_SUCCESS) {
+		LOG_ERR("zb_routerStart: vendor start failed (%d)", rc);
+		return 1U;
+	}
+
+	nwk_router_started = true;
 
 	LOG_INF("zb router %s: pan 0x%04x ch %u short 0x%04x%s%s",
 		restored ? "restored" : "formed",
 		pan_id, channel, short_addr,
 		restored ? "" : (from_app ? " (app-profile)" : " (default)"),
 		restored ? "" : (key_provided ? " key=from-app" : " key=generated"));
-
-	if (!restored) {
-		/* Persist the freshly-formed network so the next boot
-		 * comes back via the restore branch above instead of
-		 * re-forming with a new key. Defer ~15 s; on TLSR8258
-		 * the synchronous flash write races with the radio IRQ
-		 * window and can wedge the chip (see ED rejoin restore
-		 * fix: 47c59f7f6 "drop synchronous zb_info_save from
-		 * rejoin restore").
-		 */
-		zb_router_schedule_persistence_save();
-	}
-
-	/* Restore can bypass the BDB joined callback entirely. Announce after
-	 * the radio/NWK state is live so the coordinator learns the current
-	 * short address before it starts the ZDO interview. */
-	(void)TL_ZB_TIMER_SCHEDULE(nwk_router_minimal_deferred_announce_timer,
-				   NULL, 1000U);
-
-	/* Hand the synthesized confirm to BDB so the application sees a
-	 * successful commissioning event and registers its endpoint.
-	 */
-	memset(&cnf, 0, sizeof(cnf));
-	cnf.status = 0; /* ZDO_SUCCESS */
-	cnf.channel_num = channel;
-	cnf.pan_id = pan_id;
-	cnf.short_addr = short_addr;
-
-	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
-		zdoAppIndCbLst->zdpStartDevCnfCb(&cnf);
-	} else {
-		LOG_WRN("zb router: no zdpStartDevCnfCb registered");
-	}
 
 	return 0U;
 }
@@ -298,12 +258,9 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
 /*
  * Open this router as a PARENT so a new device can join THROUGH it.
  *
- * The minimal router join path never reaches the standard BDB post-join
- * Mgmt_Permit_Joining broadcast (bdb.c NETWORK_STEER_PERMITJOIN), so the MAC
- * stays with associationPermit=0 / beaconPayloadLen=0 and silently ignores
- * beacon-requests (tl_zbMacBeaconRequestCb bails on either being unset). This
- * flips the router into the parent-active state the already-wired vendor MAC
- * expects:
+ * The application-facing parenting request is the point at which the
+ * standard BDB post-join Mgmt_Permit_Joining policy is applied. It flips the
+ * router into the parent-active state the vendor MAC expects:
  *   - devType!=0 + beaconPayloadLen!=0  -> tl_zbMacBeaconRequestCb TXes a beacon
  *   - associationPermit=1               -> beacon superframe advertises permit
  *   - joinAccept=1                      -> NLME permit-join precondition
@@ -335,9 +292,9 @@ void zb_router_enable_parenting(u8 permit_duration)
 	 * announce the current short address when the router is made active. The
 	 * application callback is the joined-state gate; do not duplicate that
 	 * check here because restored g_zbNwkCtx can be populated later. */
-	if (!nwk_router_minimal_announce_sent) {
+	if (!nwk_router_bootstrap_announce_sent) {
 		if (zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
-			nwk_router_minimal_announce_sent = true;
+			nwk_router_bootstrap_announce_sent = true;
 		}
 	}
 }

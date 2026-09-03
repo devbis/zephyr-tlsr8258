@@ -25,6 +25,8 @@
 #ifndef GP_H
 #define GP_H
 
+#include "dGP_stub.h"
+
 
 //if ZERO, means only BASIC PROXY include.
 #ifndef GP_BASIC_COMBO

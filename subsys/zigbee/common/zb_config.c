@@ -32,8 +32,7 @@
  * (zb_buf_pool_t, tl_zbtaskq_user_t) are gated by the
  * ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL / _TASKQ_USER macros below — the
  * Zephyr runtime uses zb_main.c + drv_nv_zephyr.c instead, so those
- * tables would just sit unused. tx_data_queue likewise lives in
- * platform/zephyr/zb_vendor_compat.c.
+ * tables would just sit unused.
  */
 #include "zb_common_stub.h"
 #include "aps/aps_api.h"
@@ -44,7 +43,6 @@
 
 #define ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL 1
 #define ZB_ZEPHYR_NO_VENDOR_TASKQ_USER 1
-#define ZB_ZEPHYR_TX_QUEUE_IN_VENDOR_COMPAT 1
 
 /* Zephyr port: constants that vendor proj/common/* / proj/os/* headers
  * normally provide. Mirrored from tl_zigbee_sdk vendor defaults so the
@@ -220,11 +218,9 @@ aps_tx_cache_list_t aps_txCache_tbl[APS_TX_CACHE_TABLE_NUM];
 /* the offset of the rx buffer to the zb-buffer */
 u8 RX_ZBBUF_OFFSET = TL_RXPRIMITIVEHDR;
 
-#if !ZB_ZEPHYR_TX_QUEUE_IN_VENDOR_COMPAT
 /* MAC layer TX Queue size */
 u8 MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
 tx_data_queue g_txQueue[TX_QUEUE_BN];
-#endif
 
 /* WWAH long up time threshold, (24 * 60 * 60) seconds. */
 u32 LONG_UPTIME_THRESHOLD = 86400;

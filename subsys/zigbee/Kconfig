@@ -23,6 +23,9 @@ config ZIGBEE_ED
 config ZIGBEE_ROUTER
 	bool "Router"
 
+config ZIGBEE_COORDINATOR
+	bool "Coordinator"
+
 endchoice
 
 config ZIGBEE_NATIVE_SIM_IEEE_LOW
@@ -85,13 +88,6 @@ config ZIGBEE_MAC_TIMER_CYCLES_PER_US
 	  clock_time() cycles. The TLSR8258 Zigbee MAC path is hardware-verified
 	  with the vendor 24-cycle timing scale even though Zephyr's system timer
 	  runs at 16 MHz.
-
-config ZIGBEE_MAC_TRX_STUBS
-	bool "Enable weak MAC trx stubs"
-	default n
-	help
-	  Build weak MAC trx stub handlers for incomplete stack integration.
-	  Keep this disabled for normal Zigbee builds.
 
 config ZIGBEE_DEBUG_TRACES
 	bool "Enable Zigbee debug trace buffers"

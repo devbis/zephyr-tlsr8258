@@ -9,39 +9,20 @@
  * polled by ev_main() / tl_zbTaskProcedure().
  *
  * The Zephyr port uses tl_zbTaskPost() (a single Zephyr work queue)
- * for callbacks. To keep the SDK / libzigbee macros (tl_zbMacScanRequest,
- * tl_zbMacStartRequest, …) link-clean while the MAC MLME path is
- * being ported, this TU provides a *minimal* primitive dispatcher
- * that just logs unhandled primitives and frees the carrier buffer.
+ * for callbacks. This TU provides the platform dispatch boundary for
+ * primitives that are not represented by a dedicated Zephyr work item,
+ * while the vendor-derived MAC/NWK/APS/ZDO handlers remain authoritative.
  *
- * Once individual primitives have a real handler (e.g. a MAC scan
- * service) the dispatch table below grows entries that hand the
- * arg to the handler instead of dropping it.
- *
- * Also hosts the two globals the SDK runtime exposes that don't fit
- * anywhere else: g_zero_addr (used as an "all-zero IEEE" reference)
- * and g_secondCnt (uptime-in-seconds counter consumed by the formation
- * beacon-payload long_uptime flag).
+ * It also hosts the small AF dispatch bridge needed by the Zephyr worker.
  */
+
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 #include "zb_common_stub.h"
 #include "mac/includes/mac_internal.h"
 
 #include "af/zb_af.h"
 #include "../../zcl/zcl_include.h"
-#include <zephyr/zigbee/zb_bootstrap.h>
-
-#include <zephyr/logging/log.h>
-
-LOG_MODULE_REGISTER(zigbee_primitive_dispatch, CONFIG_ZIGBEE_LOG_LEVEL);
-
-/* g_zero_addr and g_secondCnt live in common/zb_initialize.c +
- * common/second_clock.c (libzigbee-derived) when those TUs are
- * compiled; provide weak fallbacks here so the ED build that
- * doesn't pull those in still links.
- */
-const u8 g_zero_addr[8] __attribute__((weak)) = {0};
-u32 g_secondCnt __attribute__((weak));
 
 /*
  * GreenPower hook — zdp_services.c::zdo_deviceAnnounceIndicate consults
@@ -54,171 +35,71 @@ gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb __attribute__((weak)) = NULL
 
 /*
  * tl_zbPrimitivePost / tl_zbTaskQPop / tl_zbUserTaskQNum live in
- * platform/zephyr/zb_task_queue_router.c (router build) backed by
+ * platform/zephyr/zb_task_queue_router.c backed by
  * a per-layer k_msgq.
  *
  * zb_buf_allocate / zb_buf_free / tl_bufInitalloc / zb_buf_clear /
  * is_zb_buf / tl_phyRxBufTozbBuf live in
- * platform/zephyr/zb_buffer_zephyr.c (router build) backed by a
+ * platform/zephyr/zb_buffer_zephyr.c backed by a
  * K_MEM_SLAB_DEFINE_STATIC pool of zb_buf_t.
  *
- * The weak stubs below remain because they fill in symbols that the
- * dispatcher chain reaches but the Zephyr port hasn't bound to a
- * real implementation yet (ED-only helpers reachable from shared
- * code, exception posting, hardware timer driver, vendor flash
- * address constant).
+ * The remaining definitions in this file are platform bindings for symbols
+ * that are not part of a libzigbee functional translation unit. Functional
+ * NWK, buffer, AF and ZDO entry points are implemented by their respective
+ * vendor-derived sources or by the Zephyr adapter below.
  */
 
-__attribute__((weak)) u8 sys_exceptionPost(u16 line, u8 evt)
+/* AF confirm and fragmentation entry points mirror libzigbee/src/zb_af_data.c.
+ * The carrier for a confirmation is an event-buffer allocation, while the
+ * carrier for an APS indication is a Zephyr zb_buf_t.
+ */
+void af_dataCnfHandler(void *arg)
 {
-	LOG_WRN("sys_exceptionPost line=%u evt=0x%02x", line, evt);
-	return 0U;
-}
+	apsdeDataConf_t *cnf = (apsdeDataConf_t *)arg;
+	af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
+	af_endpoint_descriptor_t *ep_list = af_epDescriptorGet();
+	u8 ep_num = af_availableEpNumGet();
 
-__attribute__((weak)) int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg)
-{
-	ARG_UNUSED(tmrIdx);
-	ARG_UNUSED(t_us);
-	ARG_UNUSED(func);
-	ARG_UNUSED(arg);
-	return -1;
-}
-
-/* g_u32MacFlashAddr / ZB_TASKQ_USERUSE_SIZE — vendor runtime symbols
- * referenced by the dispatcher chain.
- */
-u32 g_u32MacFlashAddr __attribute__((weak));
-u8 ZB_TASKQ_USERUSE_SIZE __attribute__((weak));
-
-/* Dummy anchor for the ZB_BUF_FROM_REF / ZB_REF_FROM_BUF macros in
- * aps_internal.h. The runtime never enters the aps group queue path
- * that consumes the ref index — but the dispatcher table reachability
- * forces the symbol to be present.
- */
-zb_buf_t g_zb_buf_ref_dummy __attribute__((weak));
-
-/* Application/ZDP entrypoints that the dispatcher tables reach but
- * the Zephyr port hasn't bound yet. Weak so a real implementation
- * can override at link time.
- */
-__attribute__((weak)) void zdp_init(void)
-{
-}
-
-__attribute__((weak)) u8 zb_zdoSendDevAnnance(void)
-{
-	return 0U;
-}
-
-/* ED-only helper invoked from shared bdb.c — gated out of the
- * libzigbee build path; provide a weak no-op for the router build.
- */
-__attribute__((weak)) void tl_zbNwkEdMinimalInterviewPollStart(u8 count, u32 intervalMs)
-{
-	ARG_UNUSED(count);
-	ARG_UNUSED(intervalMs);
-}
-
-/* Neighbor-table operations that depend on the address-map NV layout
- * we haven't ported yet. Weak so the router build links; the static-
- * formation path doesn't use them.
- */
-#include "nwk/includes/nwk_neighbor.h"
-
-/*
- * The full libzigbee `tl_zbNeighborTableUpdate` (~75 LOC, calls
- * tl_zbNeighborTableChildEDNumGet / tl_zbNeighborTableDeleteAuto /
- * tl_nebListAdd / neighbor_active_count_update, plus diagnostic
- * counters) hasn't landed in the Zephyr port yet. The vendor returns
- * NULL on table-full / low-LQI, otherwise a pointer to the stored
- * entry. The Zephyr stub used to always return NULL, which made
- * `tl_zbMacMlmeAssociateConfirmHandler` short-circuit with
- * NWK_STATUS_NEIGHBOR_TABLE_FULL right after a successful AssocResp
- * — the joiner never enters NLME_JOINING, the TRANSPORT_KEY frame is
- * dropped by `tl_zbMacMcpsDataIndicationHandler`'s
- * `!joined && state != NLME_JOINING` guard, and BDB cycles forever.
- *
- * As a pragmatic stop-gap until the real table lands, stash a single
- * "parent neighbor" entry locally and return it. Multiple neighbors
- * collapse into one slot (the most recent caller wins) — adequate
- * for the router-as-joiner path which only needs the coord parent
- * present so the join state machine reaches "joined".
- */
-static tl_zb_normal_neighbor_entry_t zb_neighbor_stub_slot;
-
-__attribute__((weak)) tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(
-	tl_zb_normal_neighbor_entry_t *entry, u8 delete_flag)
-{
-	ARG_UNUSED(delete_flag);
-	if (entry == NULL) {
-		return NULL;
+	if (cnf == NULL) {
+		return;
 	}
-	zb_neighbor_stub_slot = *entry;
-	zb_neighbor_stub_slot.used = 1U;
-	return &zb_neighbor_stub_slot;
-}
-
-__attribute__((weak)) void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry)
-{
-	ARG_UNUSED(entry);
-}
-
-__attribute__((weak)) tl_zb_normal_neighbor_entry_t *
-tl_zbNeighborTableSearchFromExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx)
-{
-	ARG_UNUSED(shortAddr);
-	ARG_UNUSED(extAddr);
-	ARG_UNUSED(idx);
-	return NULL;
-}
-
-__attribute__((weak)) tl_zb_normal_neighbor_entry_t *
-tl_zbNeighborTableSearchFromShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx)
-{
-	ARG_UNUSED(shortAddr);
-	ARG_UNUSED(extAddr);
-	ARG_UNUSED(idx);
-	return NULL;
-}
-
-__attribute__((weak)) void zb_buf_clear(zb_buf_t *p)
-{
-	ARG_UNUSED(p);
-}
-
-/* af / aps_data confirm + interpan entry-points from libzigbee
- * zb_af_data.c (not ported — Zephyr af/zb_af.c handles AF on its own
- * path). Weak stubs let dispatcher tables link.
- */
-__attribute__((weak)) void af_dataCnfHandler(void *arg)
-{
-	ARG_UNUSED(arg);
+	if (zdo_ep != NULL && zdo_ep->cb_cnf != NULL &&
+	    cnf->srcEndpoint == zdo_ep->ep) {
+		zdo_ep->cb_cnf(arg);
+		return;
+	}
+	for (u8 i = 0; i < ep_num; i++) {
+		if (ep_list[i].cb_cnf != NULL && ep_list[i].ep == cnf->srcEndpoint) {
+			ep_list[i].cb_cnf(arg);
+			return;
+		}
+	}
+	ev_buf_free((u8 *)arg);
 }
 
 /*
- * APS data indication dispatcher. The vendor af_aps_data_entry weak stub
- * (left below for callers that prefer to override) drops every frame on
- * the floor, which means Z2M's ZDP-interview queries (Node Descriptor,
- * Active Endpoint, Simple Descriptor, etc.) addressed to ZDO endpoint 0
- * are silently discarded by the joined router. Replace it with a routing
- * function:
+ * APS data indication dispatcher. ZDP requests are routed to the vendor-
+ * derived indicate handlers and ZDP responses to zdp_cb_process(); application
+ * frames are delivered to their endpoint callback. This preserves Z2M's
+ * ZDP-interview queries (Node Descriptor, Active Endpoint, Simple Descriptor,
+ * etc.) addressed to ZDO endpoint 0.
  *
  *   profile_id == ZDO_PROFILE_ID  → dispatch by cluster_id to the
  *                                   zdp_services.c indicate handlers
  *   else                          → invoke the endpoint's cb_rx
  *                                   (zcl_rx_handler for app endpoints)
  *
- * Each indicate handler frees the buf when it's done; if no handler
- * matches we free the buf ourselves so the slab pool doesn't leak.
+ * Each indicate handler owns the buffer when it is done; if no handler
+ * matches we free the buffer ourselves so the slab pool does not leak.
  *
  * Cluster IDs are from subsys/zigbee/zdo/zdp.h. Responses (bit 15 set)
- * are not dispatched — we're the responder, not the client.
+ * are handed to the registered ZDP response callback.
  */
 #include "zdo/zdp.h"
 
 extern af_endpoint_descriptor_t *af_epDescriptorGet(void);
 extern u8 af_availableEpNumGet(void);
-extern af_endpoint_descriptor_t *af_zdoEpDescriptorGet(void);
+extern af_endpoint_descriptor_t *af_zdoSimpleDescriptorGet(void);
 
 static u16 zb_dispatch_basic_read_attr(u8 *rsp, u16 pos, u16 max_len, u16 attr_id)
 {
@@ -289,7 +170,7 @@ static u16 zb_dispatch_basic_read_attr(u8 *rsp, u16 pos, u16 max_len, u16 attr_i
 	return pos;
 }
 
-__attribute__((weak)) void af_aps_data_entry(void *arg)
+void af_aps_data_entry(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	aps_data_ind_t *ad = (aps_data_ind_t *)arg;
@@ -298,11 +179,17 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 		return;
 	}
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
-		/* ZDP request — only handle non-response cluster IDs (bit 15 clear). */
 		if ((ad->cluster_id & 0x8000U) != 0U) {
-			zb_buf_free(buf);
+			af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
+
+			if (zdo_ep != NULL && zdo_ep->cb_rx != NULL) {
+				zdo_ep->cb_rx(arg);
+			} else {
+				zb_buf_free(buf);
+			}
 			return;
 		}
+		/* ZDP request — dispatch through the vendor-derived handlers. */
 		switch (ad->cluster_id) {
 		case NODE_DESC_REQ_CLID:
 		case POWER_DESC_REQ_CLID:
@@ -324,14 +211,24 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			zdo_ieeeAddrIndicate(arg);
 			return;
 		case DEVICE_ANNCE_CLID:
+		#if defined(ZB_ROUTER_ROLE)
 			zdo_deviceAnnounceIndicate(arg);
 			return;
+		#else
+			zb_buf_free(buf);
+			return;
+		#endif
 		case MGMT_LEAVE_REQ_CLID:
 			zdo_mgmtLeaveIndicate(arg);
 			return;
 		case MGMT_PERMIT_JOINING_REQ_CLID:
+		#if defined(ZB_ROUTER_ROLE)
 			zdo_mgmtPermitJoinIndicate(arg);
 			return;
+		#else
+			zb_buf_free(buf);
+			return;
+		#endif
 		case MGMT_LQI_REQ_CLID:
 			zdo_mgmtLqiIndicate(arg);
 			return;
@@ -349,8 +246,13 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			zdo_SysServerDiscoveryIndicate(arg);
 			return;
 		case PARENT_ANNCE_CLID:
+		#if defined(ZB_ROUTER_ROLE)
 			zdo_parentAnnounceIndicate(arg);
 			return;
+		#else
+			zb_buf_free(buf);
+			return;
+		#endif
 		default:
 			break;
 		}
@@ -420,23 +322,7 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 	zb_buf_free(buf);
 }
 
-__attribute__((weak)) void af_aps_data_fragment_entry(void *arg)
+void af_aps_data_fragment_entry(void *arg)
 {
-	ARG_UNUSED(arg);
-}
-
-/* zb_zdoNwkAddrReq is declared in zbapi/zb_api.h with the
- * (dstNwkAddr, pReq, seqNo, indCb) shape; provide a weak stub here
- * that returns 0 (ZDO_SUCCESS).
- */
-#include "zbapi/zb_api.h"
-__attribute__((weak)) zdo_status_t zb_zdoNwkAddrReq(u16 dstNwkAddr,
-						    zdo_nwk_addr_req_t *pReq,
-						    u8 *seqNo, zdo_callback indCb)
-{
-	ARG_UNUSED(dstNwkAddr);
-	ARG_UNUSED(pReq);
-	ARG_UNUSED(seqNo);
-	ARG_UNUSED(indCb);
-	return 0;
+	af_aps_data_entry(arg);
 }

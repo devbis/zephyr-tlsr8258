@@ -346,7 +346,7 @@ uint8_t value[4] = { 10, 11, 12, 13 };
 uint8_t readback[4] = { 0 };
 
 setup_test();
-EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
  sizeof(value), value), NV_SUCC);
 EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
  0, 0, sizeof(readback), readback), NV_SUCC);
@@ -357,6 +357,53 @@ EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
 sizeof(readback), readback), NV_ITEM_NOT_FOUND);
 
 return true;
+}
+
+static bool test_indexed_records_keep_item_and_index_identity(void)
+{
+	uint8_t binding[] = { 0x10, 0x11, 0x12 };
+	uint8_t group[] = { 0x20, 0x21 };
+	uint8_t timeout[] = { 0x30, 0x31, 0x32, 0x33 };
+	uint8_t readback[sizeof(timeout)] = { 0 };
+	itemIfno_t info = { 0, 0 };
+
+	setup_test();
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_ED_TIMEOUT, sizeof(binding), binding), NV_SUCC);
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_APS_GROUP_TABLE, sizeof(group), group), NV_SUCC);
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_ED_TIMEOUT, sizeof(timeout), timeout), NV_SUCC);
+
+	/* ITEM_FIELD_IDLE is the vendor enumeration operation: return the
+	 * latest physical indexed record, while preserving its item id/index. */
+	EXPECT_EQ(nv_flashReadNew(0, NV_MODULE_ZB_INFO, ITEM_FIELD_IDLE,
+				  sizeof(info), (uint8_t *)&info), NV_SUCC);
+	EXPECT_EQ(info.opSect, 0);
+	EXPECT_EQ(info.opIndex, 2);
+
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+				      info.opSect, info.opIndex,
+				      sizeof(readback), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, timeout, sizeof(timeout)) == 0);
+
+	memset(readback, 0, sizeof(readback));
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO,
+				      NV_ITEM_APS_GROUP_TABLE, 0, 1,
+				      sizeof(group), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, group, sizeof(group)) == 0);
+
+	EXPECT_EQ(nv_itemDeleteByIndex(NV_MODULE_ZB_INFO, NV_ITEM_APS_GROUP_TABLE,
+				       0, 1), NV_SUCC);
+	memset(readback, 0, sizeof(readback));
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+				      0, 2, sizeof(timeout), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, timeout, sizeof(timeout)) == 0);
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO,
+				      NV_ITEM_APS_GROUP_TABLE, 0, 1,
+				      sizeof(group), readback), NV_ITEM_NOT_FOUND);
+
+	return true;
 }
 
 int main(void)
@@ -373,6 +420,7 @@ bool (*fn)(void);
 { "read_by_index_no_alias", test_read_by_index_does_not_alias_other_item },
 { "delete_by_index_no_alias", test_delete_by_index_does_not_alias_other_item },
 { "index_zero_behavior", test_read_delete_by_index_zero_behaves_like_item },
+{ "indexed_record_identity", test_indexed_records_keep_item_and_index_identity },
 };
 
 int failed = 0;
