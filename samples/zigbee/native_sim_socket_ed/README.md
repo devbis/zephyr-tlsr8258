@@ -36,3 +36,17 @@ Runtime command-line overrides exposed by the radio driver:
 
 Current scope is a single sleepy end device talking to the host daemon over the
 experimental native_sim macOS path.
+
+## Behavioral PHY mode
+
+The sample enables the optional TLSR8258-like receive path. A socket RX frame
+is copied into a bounded RX FIFO, held for the configured worker delay, and
+then handed to the Zigbee MAC from `zb_platform_radio_rx_poll()`. The shared
+TLSR fake-PHY core classifies address filtering and MAC-ACK eligibility before
+the handoff; TX airtime and RX/TX turnaround also delay re-arming RX.
+
+Fault-injection options are available in `drivers/ieee802154/Kconfig.native_sim_socket`:
+`IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_FRAME` drops one numbered RX frame and
+`IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_EVERY_N` drops every Nth frame. Enable
+`IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY_TRACE` for FIFO enqueue/handoff
+records during a regression run.

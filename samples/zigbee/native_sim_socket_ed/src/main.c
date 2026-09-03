@@ -10,7 +10,15 @@ LOG_MODULE_REGISTER(main);
 
 bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
-	return app_bdb_get_fixed_join_target(target);
+	/*
+	 * libzigbee's normal BDB network-steer path learns PAN/extPAN and the
+	 * parent from the active-scan Beacon.  The shared zigbee_shell app also
+	 * exposes a fixed-target hook for hardware restore tests; applying that
+	 * target here would constrain this socket coordinator to the shell's
+	 * unrelated PAN (0x1a62), so the ED never selects the Beacon's parent.
+	 */
+	ARG_UNUSED(target);
+	return false;
 }
 
 bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile)
