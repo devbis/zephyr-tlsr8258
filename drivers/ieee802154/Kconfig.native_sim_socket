@@ -16,4 +16,64 @@ config IEEE802154_NATIVE_SIM_SOCKET_INIT_PRIO
 	int "native_sim socket IEEE 802.15.4 initialization priority"
 	default 80
 
+config IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+	bool "model TLSR8258 RX FIFO and worker handoff"
+	default n
+	help
+	  Insert a bounded, delayed RX FIFO between the socket medium and the
+	  Zigbee MAC receive sink. This models the relevant TLSR8258 behavior:
+	  DMA/FIFO ownership, RX worker latency, RX/TX turnaround and deterministic
+	  frame drops. It is disabled by default so the socket driver remains a
+	  low-latency medium for existing tests.
+
+if IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_FIFO_SIZE
+	int "behavioral PHY RX FIFO depth"
+	default 8
+	range 2 32
+	help
+	  Number of complete PSDUs retained between the simulated RX ISR and
+	  worker. Frames arriving while this FIFO is full are dropped.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_WORKER_DELAY_US
+	int "behavioral PHY RX worker delay"
+	default 1000
+	range 0 1000000
+	help
+	  Delay between the simulated DMA/FIFO enqueue and stack handoff.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_TURNAROUND_US
+	int "behavioral PHY RX/TX turnaround"
+	default 192
+	range 0 1000000
+	help
+	  Minimum RX re-arm delay after a simulated TX, in microseconds. 192 us
+	  is the TLSR/802.15.4 SHR-scale turnaround used by the medium model.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_FRAME
+	int "behavioral PHY frame number to drop"
+	default 0
+	range 0 1000000
+	help
+	  Drop exactly this one received frame number. Zero disables the fault.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_EVERY_N
+	int "behavioral PHY periodic RX drop"
+	default 0
+	range 0 1000000
+	help
+	  Drop every Nth received frame. Zero disables the fault. This is applied
+	  after the exact-frame fault and before FIFO-overflow handling.
+
+config IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY_TRACE
+	bool "trace behavioral PHY FIFO transitions"
+	default n
+	help
+	  Print enqueue and worker-handoff records for every received frame. Keep
+	  this disabled for timing-sensitive runs; the counters remain available in
+	  the driver for debugger inspection.
+
+endif # IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+
 endif # IEEE802154_NATIVE_SIM_SOCKET

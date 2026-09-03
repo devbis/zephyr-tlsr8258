@@ -29,8 +29,14 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <zephyr/zigbee/native_sim_socket_medium.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+#include "ieee802154_tlsr8258_fake_phy_core.h"
+#endif
+
 #define NATIVE_SIM_SOCKET_PAYLOAD_OFFSET 5U
 #define NATIVE_SIM_SOCKET_FCS_LENGTH     2U
+#define NATIVE_SIM_SOCKET_PHY_BYTE_US   32U
+#define NATIVE_SIM_SOCKET_PHY_SHR_US   192U
 
 struct native_sim_socket_config {
 	const char *server_host;
@@ -38,6 +44,17 @@ struct native_sim_socket_config {
 	uint16_t node_id;
 	uint8_t mac_addr[8];
 };
+
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+struct native_sim_socket_rx_fifo_entry {
+	uint8_t psdu[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE];
+	uint8_t len;
+	int8_t rssi_dbm;
+	uint8_t lqi;
+	uint64_t ready_us;
+	uint32_t frame_no;
+};
+#endif
 
 struct native_sim_socket_data {
 	struct net_if *iface;
@@ -52,6 +69,16 @@ struct native_sim_socket_data {
 	int tx_status_rc;
 	bool started;
 	bool cca_busy;
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+	struct native_sim_socket_rx_fifo_entry rx_fifo[CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_FIFO_SIZE];
+	uint8_t rx_fifo_head;
+	uint8_t rx_fifo_tail;
+	uint8_t rx_fifo_count;
+	uint32_t rx_frame_no;
+	uint32_t rx_fifo_overflow;
+	uint32_t rx_fault_drops;
+	uint64_t tx_blocked_until_us;
+#endif
 };
 
 static const char *cmd_server_host;
@@ -148,6 +175,137 @@ static int native_sim_socket_send_msg(const struct device *dev,
 				      const struct zb_native_sim_socket_medium_msg *msg);
 static int native_sim_socket_query_cca(const struct device *dev, bool *busy);
 
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+static uint64_t native_sim_socket_now_us(void)
+{
+	/* native_sim exposes a monotonic cycle source finer than the 1 ms
+	 * scheduler tick; use it so the 192 us PHY turnaround is observable. */
+	return k_cyc_to_us_floor64(k_cycle_get_64());
+}
+
+static void native_sim_socket_rx_fifo_reset(struct native_sim_socket_data *data)
+{
+	data->rx_fifo_head = 0U;
+	data->rx_fifo_tail = 0U;
+	data->rx_fifo_count = 0U;
+}
+
+static bool native_sim_socket_rx_fault_drop(struct native_sim_socket_data *data,
+						uint32_t frame_no)
+{
+	if (CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_FRAME != 0 &&
+	    frame_no == CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_FRAME) {
+		return true;
+	}
+
+	return CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_EVERY_N != 0 &&
+	       (frame_no % CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_EVERY_N) == 0U;
+}
+
+static bool native_sim_socket_rx_fifo_enqueue(struct native_sim_socket_data *data,
+						 const struct zb_native_sim_socket_medium_msg *msg)
+{
+	struct native_sim_socket_rx_fifo_entry *entry;
+	struct tlsr8258_core_filter_ctx filter;
+	struct tlsr8258_core_rx_ack_decision ack_decision;
+	uint64_t ready_us;
+	uint64_t now_us;
+	uint32_t frame_no;
+
+	frame_no = ++data->rx_frame_no;
+	if (native_sim_socket_rx_fault_drop(data, frame_no)) {
+		data->rx_fault_drops++;
+		return true;
+	}
+
+	if (data->rx_fifo_count >= ARRAY_SIZE(data->rx_fifo)) {
+		data->rx_fifo_overflow++;
+		return true;
+	}
+
+	entry = &data->rx_fifo[data->rx_fifo_tail];
+	entry->len = (uint8_t)msg->psdu_len;
+	entry->rssi_dbm = msg->rssi_dbm;
+	entry->lqi = msg->lqi;
+	entry->frame_no = frame_no;
+	memcpy(entry->psdu, msg->psdu, msg->psdu_len);
+
+	filter.pan_id = (const uint8_t *)&data->peer.pan_id;
+	filter.short_addr = (const uint8_t *)&data->peer.short_addr;
+	filter.ieee_addr = data->peer.ieee_addr;
+	tlsr8258_core_rx_ack_decision(entry->psdu, entry->len, &filter, &ack_decision);
+
+	now_us = native_sim_socket_now_us();
+	ready_us = now_us +
+			   CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_WORKER_DELAY_US;
+	if (ack_decision.should_ack &&
+	    ready_us < now_us + CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_TURNAROUND_US) {
+		ready_us = now_us + CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_TURNAROUND_US;
+	}
+	if (ready_us < data->tx_blocked_until_us) {
+		ready_us = data->tx_blocked_until_us;
+	}
+	entry->ready_us = ready_us;
+	#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY_TRACE)
+	printk("zb_sock_phy: enqueue #%u len=%u ack=%u fifo=%u/%u ready=%llu\n",
+	       frame_no, entry->len, ack_decision.should_ack ? 1U : 0U,
+	       (unsigned int)(data->rx_fifo_count + 1U),
+	       (unsigned int)ARRAY_SIZE(data->rx_fifo),
+	       (unsigned long long)entry->ready_us);
+	#endif
+
+	data->rx_fifo_tail = (uint8_t)((data->rx_fifo_tail + 1U) % ARRAY_SIZE(data->rx_fifo));
+	data->rx_fifo_count++;
+	return true;
+}
+
+static bool native_sim_socket_rx_fifo_deliver_one(const struct device *dev)
+{
+	struct native_sim_socket_data *data = dev->data;
+	struct native_sim_socket_rx_fifo_entry *entry;
+	struct zb_radio_rx_frame_view frame;
+	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
+		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
+
+	if (data->rx_fifo_count == 0U) {
+		return false;
+	}
+
+	entry = &data->rx_fifo[data->rx_fifo_head];
+	if (native_sim_socket_now_us() < entry->ready_us) {
+		return false;
+	}
+
+	memset(dma, 0, sizeof(dma));
+	dma[4] = (uint8_t)(entry->len + NATIVE_SIM_SOCKET_FCS_LENGTH);
+	memcpy(&dma[NATIVE_SIM_SOCKET_PAYLOAD_OFFSET], entry->psdu, entry->len);
+	frame.dma = dma;
+	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + entry->len +
+				      NATIVE_SIM_SOCKET_FCS_LENGTH);
+	frame.rssi_dbm = entry->rssi_dbm;
+	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
+	#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY_TRACE)
+	printk("zb_sock_phy: worker handoff #%u fifo=%u/%u\n", entry->frame_no,
+	       (unsigned int)(data->rx_fifo_count - 1U),
+	       (unsigned int)ARRAY_SIZE(data->rx_fifo));
+	#endif
+
+	data->rx_fifo_head = (uint8_t)((data->rx_fifo_head + 1U) % ARRAY_SIZE(data->rx_fifo));
+	data->rx_fifo_count--;
+	return true;
+}
+
+static void native_sim_socket_rx_worker(const struct device *dev)
+{
+	/* A bounded worker budget makes FIFO pressure and overflow reproducible. */
+	for (size_t i = 0; i < 4U; i++) {
+		if (!native_sim_socket_rx_fifo_deliver_one(dev)) {
+			break;
+		}
+	}
+}
+#endif
+
 static void native_sim_socket_publish_state(const struct device *dev,
 					    enum zb_native_sim_socket_medium_msg_type type)
 {
@@ -198,10 +356,7 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	static uint32_t rx_try_trace_count;
 	static uint32_t rx_eagain_trace_count;
 	uint8_t packet[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PACKET_SIZE];
-	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
-		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
 	struct zb_native_sim_socket_medium_msg msg;
-	struct zb_radio_rx_frame_view frame;
 	long len;
 	int err;
 
@@ -282,10 +437,24 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 		       msg.psdu_len);
 		return true;
 	}
+	if (!data->started) {
+		/* A frame arriving while the TLSR is in TRX_OFF is not retained by
+		 * hardware. Consume the socket datagram and drop it here. */
+		return true;
+	}
 
 	if (msg.psdu_len > ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE) {
 		return true;
 	}
+
+	#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+	/* Socket RX is the simulated TLSR DMA/FIFO interrupt. The worker below
+	 * owns the copied frame and performs the later MAC handoff. */
+	(void)native_sim_socket_rx_fifo_enqueue(data, &msg);
+	#else
+	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
+		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
+	struct zb_radio_rx_frame_view frame;
 
 	memset(dma, 0, sizeof(dma));
 	dma[4] = (uint8_t)(msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
@@ -294,6 +463,7 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
 			      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
 	frame.rssi_dbm = msg.rssi_dbm;
+	#endif
 	/*
 	 * TEST KNOB — off by default. Build with -DZB_RX_BEACON_JITTER_MS=N to
 	 * inject a randomized 0..N ms delay before delivering BEACON frames
@@ -320,9 +490,11 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 		k_msleep((int32_t)(jitter_rng % (uint32_t)(ZB_RX_BEACON_JITTER_MS + 1U)));
 	}
 #endif
-	printk("zb_sock_radio: deliver RX node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
+	printk("zb_sock_radio: RX IRQ node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
 	       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
+	#if !defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
 	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
+	#endif
 	return true;
 }
 
@@ -357,15 +529,31 @@ static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms)
 			handled = true;
 		}
 
-		if (handled || wait_ms == 0) {
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+		/* STATUS and RX replies share the socket. Keep servicing the
+		 * simulated worker while the synchronous TX/CCA operation waits;
+		 * otherwise the first STATUS datagram would make this function return
+		 * before a delayed BEACON/Transport-Key reaches the stack. */
+		native_sim_socket_rx_worker(dev);
+		ARG_UNUSED(handled);
+#endif
+
+		if (wait_ms == 0) {
 			return;
 		}
+
+#if !defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+		if (handled) {
+			return;
+		}
+#endif
 
 		k_sleep(K_MSEC(1));
 	}
 }
 
-/* RX is polled by zb_platform_radio_rx_poll(); no worker thread is needed. */
+/* RX is polled by zb_platform_radio_rx_poll(); the behavioral configuration
+ * inserts a bounded worker handoff without creating a second socket reader. */
 /*
  * The standalone rx_thread's k_sleep(1ms) poll loop is starved once this node
  * goes idle: the Zigbee thread is an intentional no-yield busy-loop (see
@@ -384,6 +572,9 @@ void zb_platform_radio_rx_poll(void)
 	if (rx_kick_dev != NULL) {
 		while (native_sim_socket_try_rx_once(rx_kick_dev)) {
 		}
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+		native_sim_socket_rx_worker(rx_kick_dev);
+#endif
 	}
 }
 
@@ -563,6 +754,13 @@ static int native_sim_socket_tx(const struct device *dev,
 		return -errno;
 	}
 
+#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+	data->tx_blocked_until_us = native_sim_socket_now_us() +
+				     NATIVE_SIM_SOCKET_PHY_SHR_US +
+				     ((uint64_t)frag->len * NATIVE_SIM_SOCKET_PHY_BYTE_US) +
+				     CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_TURNAROUND_US;
+#endif
+
 	native_sim_socket_pump_rx(dev, 5);
 	rc = k_sem_take(&data->tx_status_sem, K_MSEC(20));
 	if (rc < 0) {
@@ -621,6 +819,9 @@ static int native_sim_socket_stop(const struct device *dev)
 	}
 
 	data->started = false;
+	#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
+	native_sim_socket_rx_fifo_reset(data);
+	#endif
 	printk("zb_sock_radio: stop\n");
 	native_sim_socket_publish_state(dev, ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_FILTER);
 	return 0;
