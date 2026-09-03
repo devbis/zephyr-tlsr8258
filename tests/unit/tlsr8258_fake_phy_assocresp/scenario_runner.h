@@ -23,6 +23,7 @@ struct fake_phy_script_step {
 	enum fake_phy_step_kind kind;
 	uint16_t irq_status;
 	int has_rx;
+	int ack_for_tx;
 	int ack_tx_pending;
 	int op_state_is_tx_pending;
 	int dma_valid;

@@ -156,21 +156,20 @@ static void test_non_rx_irq_bits_do_not_trigger_rx_capture(void)
 	EXPECT_TRUE(tlsr8258_rf_irq_has_rx_event(RF_IRQ_TX | RF_IRQ_RX_DR));
 }
 
-static void test_invalid_dma_clears_rx_event_bits_but_preserves_other_irqs(void)
+static void test_invalid_dma_keeps_hardware_rx_event_for_consumer(void)
 {
 	uint8_t dma[20] = { 0 };
 
 	/*
-	 * dma_len < 9 is neither "valid" nor "sane" (the IRQ path is tolerant of
-	 * a bad rx[4] as long as the DMA span looks like a real frame), so this
-	 * is the case where RX event bits are actually stripped.
+	 * The RF RX latch is authoritative even when DMA2 has not completed its
+	 * header writeback yet. The consumer will validate/rearm the buffer.
 	 */
 	dma[0] = 5u;
 	dma[4] = 5u;
 	dma[16] = 0x00u;
 
 	EXPECT_EQ(tlsr8258_rf_irq_effective_status(RF_IRQ_TX | RF_IRQ_RX_DR, dma, sizeof(dma)),
-		  RF_IRQ_TX);
+		  RF_IRQ_TX | RF_IRQ_RX);
 }
 
 static void test_public_bridge_header_exposes_sink_only_registration(void)
@@ -254,10 +253,10 @@ static void test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem(void)
 {
 	const char *path = WORKTREE_FILE("drivers/ieee802154/ieee802154_tlsr8258.c");
 
-	EXPECT_FILE_CONTAINS(path, "const uint8_t *psdu;");
-	EXPECT_FILE_CONTAINS(path, "bool is_ack;");
-	EXPECT_FILE_CONTAINS(path, "bool ack_pending;");
-	EXPECT_FILE_CONTAINS(path, "bool is_pending_response;");
+	EXPECT_FILE_CONTAINS(path, "const uint8_t *psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];");
+	EXPECT_FILE_CONTAINS(path, "bool is_ack = false;");
+	EXPECT_FILE_CONTAINS(path, "bool ack_pending = false;");
+	EXPECT_FILE_CONTAINS(path, "bool is_pending_response = false;");
 	EXPECT_FILE_CONTAINS(path, "psdu = &frame.dma[TLSR8258_PAYLOAD_OFFSET];");
 	EXPECT_FILE_CONTAINS(path, "psdu_len = tlsr8258_dma_payload_len_get(frame.dma, frame.len);");
 	EXPECT_FILE_CONTAINS(path, "is_ack = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,");
@@ -324,7 +323,7 @@ int main(void)
 	test_secondary_rx_irq_with_valid_dma_promotes_to_logical_rx();
 	test_zero_irq_with_invalid_dma_does_not_synthesize_rx_status();
 	test_non_rx_irq_bits_do_not_trigger_rx_capture();
-	test_invalid_dma_clears_rx_event_bits_but_preserves_other_irqs();
+	test_invalid_dma_keeps_hardware_rx_event_for_consumer();
 	test_public_bridge_header_exposes_sink_only_registration();
 	test_zigbee_port_header_exposes_sink_only_registration();
 	test_zigbee_driver_registers_sink_api();

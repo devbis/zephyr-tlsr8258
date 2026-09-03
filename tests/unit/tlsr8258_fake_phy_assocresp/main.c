@@ -516,7 +516,8 @@ static void test_rx_only_completion_while_tx_pending_completes_stack_tx(void)
 	struct fake_phy_run_result result;
 	const struct tlsr8258_core_filter_ctx filter = test_filter();
 	const struct fake_phy_script_step steps[] = {
-		{ .kind = FAKE_PHY_STEP_RX_ONLY_TX_COMPLETE, .op_state_is_tx_pending = 1 },
+		{ .kind = FAKE_PHY_STEP_RX_ONLY_TX_COMPLETE, .op_state_is_tx_pending = 1,
+		  .ack_for_tx = 1 },
 	};
 
 	fake_phy_backend_init(&phy);
@@ -526,6 +527,24 @@ static void test_rx_only_completion_while_tx_pending_completes_stack_tx(void)
 	EXPECT_TRUE(result.last_rx_only_tx.complete_stack_tx);
 	EXPECT_EQ(result.rx_only_tx_complete_count, 1u);
 	EXPECT_EQ(result.stack_tx_complete_count, 1u);
+}
+
+static void test_rx_only_unrelated_frame_does_not_complete_stack_tx(void)
+{
+	struct fake_phy_backend phy;
+	struct fake_phy_run_result result;
+	const struct tlsr8258_core_filter_ctx filter = test_filter();
+	const struct fake_phy_script_step steps[] = {
+		{ .kind = FAKE_PHY_STEP_RX_ONLY_TX_COMPLETE, .op_state_is_tx_pending = 1,
+		  .has_rx = 0 },
+	};
+
+	fake_phy_backend_init(&phy);
+	fake_phy_run_script(&phy, 0x23u, &filter, steps, sizeof(steps) / sizeof(steps[0]), &result);
+
+	EXPECT_TRUE(result.last_rx_only_tx.saw_rx_while_tx_pending);
+	EXPECT_FALSE(result.last_rx_only_tx.complete_stack_tx);
+	EXPECT_EQ(result.stack_tx_complete_count, 0u);
 }
 
 static void test_rx_only_completion_without_tx_pending_is_noop(void)
@@ -609,6 +628,7 @@ int main(void)
 	test_on_air_assocresp_but_no_raw_rx_irq_matches_current_hw_failure_shape();
 	test_on_air_assocresp_with_invalid_dma_rx_stops_before_handoff();
 	test_rx_only_completion_while_tx_pending_completes_stack_tx();
+	test_rx_only_unrelated_frame_does_not_complete_stack_tx();
 	test_rx_only_completion_without_tx_pending_is_noop();
 	test_vendor_manual_tx_path_poll_ack_then_assoc_resp_still_kicks_ack();
 	test_coord_ack_is_seen_but_not_reacked();
