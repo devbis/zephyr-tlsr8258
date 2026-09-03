@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,64 +7,32 @@ static int failures;
 
 static char *read_file(const char *path)
 {
-	FILE *fp;
+	FILE *fp = fopen(path, "rb");
 	long size;
 	char *buffer;
 
-	fp = fopen(path, "rb");
 	if (fp == NULL) {
 		fprintf(stderr, "FAIL %s:%d: unable to open %s\n", __FILE__, __LINE__, path);
 		failures++;
 		return NULL;
 	}
-
-	if (fseek(fp, 0, SEEK_END) != 0) {
-		fclose(fp);
-		return NULL;
-	}
-
+	fseek(fp, 0, SEEK_END);
 	size = ftell(fp);
-	if (size < 0 || fseek(fp, 0, SEEK_SET) != 0) {
-		fclose(fp);
-		return NULL;
-	}
-
+	fseek(fp, 0, SEEK_SET);
 	buffer = malloc((size_t)size + 1u);
-	if (buffer == NULL) {
-		fclose(fp);
-		return NULL;
-	}
-
-	if (fread(buffer, 1u, (size_t)size, fp) != (size_t)size) {
+	if (buffer == NULL || fread(buffer, 1u, (size_t)size, fp) != (size_t)size) {
 		free(buffer);
 		fclose(fp);
 		return NULL;
 	}
-
 	buffer[size] = '\0';
 	fclose(fp);
 	return buffer;
 }
 
-static bool contains_between(const char *source, const char *start_marker,
-			     const char *end_marker, const char *needle)
+static bool contains(const char *source, const char *needle)
 {
-	const char *start;
-	const char *end;
-	const char *match;
-
-	start = strstr(source, start_marker);
-	if (start == NULL) {
-		return false;
-	}
-
-	end = strstr(start, end_marker);
-	if (end == NULL) {
-		return false;
-	}
-
-	match = strstr(start, needle);
-	return match != NULL && match < end;
+	return strstr(source, needle) != NULL;
 }
 
 #define EXPECT_TRUE(expr) do { \
@@ -75,33 +42,38 @@ static bool contains_between(const char *source, const char *start_marker,
 	} \
 } while (0)
 
-static void test_apply_tc_context_uses_coord_ext_address_for_centralized_join(void)
+static void test_fixed_join_seeds_trust_center_context(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func = "static void nwk_ed_minimal_apply_tc_context(void)";
-	const char *centralized_branch = "\tif (centralized) {";
-	const char *distributed_branch = "\t} else {";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_libzigbee.c");
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
+	EXPECT_TRUE(contains(source, "void zb_ed_fixed_join_target("));
+	EXPECT_TRUE(contains(source, "memcpy(g_zbInfo.macPib.coordExtAddress, tc_addr, EXT_ADDR_LEN);"));
+	EXPECT_TRUE(contains(source, "memcpy(ss_ib.trust_center_address, tc_addr, EXT_ADDR_LEN);"));
+	EXPECT_TRUE(contains(source, "zb_preConfigNwkKey((u8 *)nwk_key, FALSE);"));
+	free(source);
+}
 
-	EXPECT_TRUE(contains_between(source, func, centralized_branch,
-				     "!ZB_IEEE_ADDR_IS_ZERO(g_zbMacPib.coordExtAddress)"));
-	EXPECT_TRUE(contains_between(source, func, centralized_branch,
-				     "!ZB_IEEE_ADDR_IS_INVALID(g_zbMacPib.coordExtAddress)"));
-	EXPECT_TRUE(contains_between(source, func, centralized_branch,
-				     "tcAddr = g_zbMacPib.coordExtAddress;"));
-	EXPECT_TRUE(contains_between(source, func, distributed_branch,
-				     "ss_securityModeSet(SS_SEMODE_CENTRALIZED);"));
+static void test_security_service_consumes_seeded_trust_center_address(void)
+{
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/ss/ss_apsEnDecrypt.c");
 
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
+	EXPECT_TRUE(contains(source, "ss_ib.trust_center_address"));
+	EXPECT_TRUE(contains(source, "SS_SECUR_KEY_TRANSPORT_KEY"));
 	free(source);
 }
 
 int main(void)
 {
-	test_apply_tc_context_uses_coord_ext_address_for_centralized_join();
+	test_fixed_join_seeds_trust_center_context();
+	test_security_service_consumes_seeded_trust_center_address();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_tc_context_seed: %d failure(s)\n", failures);

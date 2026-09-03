@@ -181,7 +181,8 @@ scan_done:
 
     g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
     tl_zbMacChannelSet(g_macScanParam.savedChannel);
-    rf_setTrxState(g_macScanParam.savedTrxState);
+    zb_radio_port_set_legacy_state(g_macScanParam.savedTrxState,
+                                   g_macScanParam.savedChannel);
     g_macScanParam.timerEvt = NULL;
 
     return -1;

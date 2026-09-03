@@ -62,9 +62,9 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
      * ss_ib default initializer (Mach-O ld64 limitation). But on TC32 with
      * Zephyr-style linking the SAME hole exists for a different reason:
      * ss_apsSecurityME.c:120 declares an uninitialized strong
-     * `ss_info_base_t ss_ib;`, which wins linker resolution against the
-     * weak-initialized definitions in zb_api_bdb_ed_compat.c:35/40. The
-     * pointers end up NULL at boot, ss_apsDecryptFrame later derives the
+     * `ss_info_base_t ss_ib;`, which is the canonical storage used by the
+     * Zephyr port. The pointers must be restored explicitly before
+     * ss_apsDecryptFrame derives the
      * Transport-Key encryption key from a NULL tcLinkKey, and every
      * inbound TC Transport-Key fails CCM (slot[47] = 0x4000000N) — the
      * device never gets the network key. Verified via SWS read:

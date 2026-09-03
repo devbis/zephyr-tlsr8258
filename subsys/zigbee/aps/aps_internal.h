@@ -81,14 +81,11 @@ extern void tl_zbNwkInterPanDataReq(void *arg);
 /* Misc helpers consumed by aps_*.c. */
 extern void secondClockStop(void);
 
-/* Buffer-ref macros mirror tl_zigbee_sdk zb_buffer.h. The vendor uses
- * a packed buffer pool (g_mPool) so the ref is the buffer index; we
- * have no such pool yet, so the macros stand in as link-time names
- * (the aps group queue that consumes them stays dead-stripped on the
- * Zephyr runtime path).
- */
-extern zb_buf_t g_zb_buf_ref_dummy;
-#define ZB_BUF_FROM_REF(ref) (&g_zb_buf_ref_dummy + (ref))
-#define ZB_REF_FROM_BUF(p)   ((u8)((p) - &g_zb_buf_ref_dummy))
+/* Buffer refs retain the vendor's compact pool-index ABI. The Zephyr buffer
+ * adapter owns the index mapping; no synthetic buffer object is needed. */
+extern zb_buf_t *zb_buf_from_ref(u8 ref);
+extern u8 zb_buf_to_ref(zb_buf_t *buf);
+#define ZB_BUF_FROM_REF(ref) zb_buf_from_ref(ref)
+#define ZB_REF_FROM_BUF(p)   zb_buf_to_ref(p)
 
 #endif

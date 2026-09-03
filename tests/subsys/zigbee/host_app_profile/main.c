@@ -7,7 +7,7 @@
  *  - app_profile_register() wires zcl_init, af_endpointRegister, and
  *    zcl_register exactly once and with the expected arguments.
  *  - The authoritative manufacturer / model strings used by the fallback
- *    interview path in mac_trx_compat.c match the constants defined here.
+ *    Basic-cluster identity hooks in app_profile.c match the constants here.
  */
 
 #include <stdbool.h>

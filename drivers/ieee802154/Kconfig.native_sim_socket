@@ -16,12 +16,4 @@ config IEEE802154_NATIVE_SIM_SOCKET_INIT_PRIO
 	int "native_sim socket IEEE 802.15.4 initialization priority"
 	default 80
 
-config IEEE802154_NATIVE_SIM_SOCKET_RX_STACK_SIZE
-	int "native_sim socket RX worker stack size"
-	default 2048
-
-config IEEE802154_NATIVE_SIM_SOCKET_RX_THREAD_PRIO
-	int "native_sim socket RX worker priority"
-	default 2
-
 endif # IEEE802154_NATIVE_SIM_SOCKET

@@ -38,12 +38,27 @@
 #define APS_BINDING_TABLE_NUM           8
 #endif
 
-/* NWK (stubs until Phase 3) */
+/* NWK routing capacity from the TLSR8258 libzigbee profile. */
 #ifndef NWK_ROUTE_RECORD_TABLE_NUM
+#if defined(ZB_COORDINATOR_ROLE) && ZB_COORDINATOR_ROLE
+#define NWK_ROUTE_RECORD_TABLE_NUM      127
+#else
 #define NWK_ROUTE_RECORD_TABLE_NUM      0
 #endif
+#endif
 #ifndef NWK_ROUTE_TABLE_NUM
+#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+#define NWK_ROUTE_TABLE_NUM             48
+#else
 #define NWK_ROUTE_TABLE_NUM             0
+#endif
+#endif
+#ifndef ROUTING_TABLE_NUM
+#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+#define ROUTING_TABLE_NUM               48
+#else
+#define ROUTING_TABLE_NUM               0
+#endif
 #endif
 
 /* ZCL defaults */

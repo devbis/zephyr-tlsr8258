@@ -10,12 +10,42 @@
 #include <zephyr/zigbee/zb_types.h>
 #include "drv_hw.h"
 #include "drv_nv.h"
+#include "ev_timer.h"
+#include "mac/includes/mac_internal.h"
 
 #if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
 #error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
 #endif
 
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
+
+u8 sys_exceptionPost(u16 line, u8 evt)
+{
+	LOG_WRN("Zigbee exception line=%u event=0x%02x", line, evt);
+	return 0U;
+}
+
+int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg)
+{
+	ev_timer_event_t *evt;
+	u32 timeout_ms;
+
+	ARG_UNUSED(tmrIdx);
+	if (func == NULL) {
+		return -EINVAL;
+	}
+
+	/* The vendor CSMA timer is expressed in microseconds; the Zephyr EV
+	 * timer backend is millisecond based. Round up so a non-zero backoff is
+	 * never collapsed into an immediate callback. */
+	timeout_ms = (t_us + 999U) / 1000U;
+	if (timeout_ms == 0U) {
+		timeout_ms = 1U;
+	}
+
+	evt = ev_timer_taskPost(func, arg, timeout_ms);
+	return (evt != NULL) ? 0 : -ENOMEM;
+}
 
 volatile int32_t zb_hwinfo_trace[4] = {
 	0x48574945, 0, 0, 0,

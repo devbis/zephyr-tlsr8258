@@ -71,7 +71,7 @@ extern void mac_trxTask(void *arg);
  */
 static bool zb_radio_keep_router_rx_on_idle(void)
 {
-#if defined(CONFIG_ZIGBEE_ROUTER)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 	/*
 	 * A router is an always-on FFD during commissioning as well as after
 	 * association.  PAN ID and short address are intentionally invalid while
@@ -118,7 +118,8 @@ static void zb_radio_tx_complete_deferred(void *arg)
 	(void)arg;
 	rf_busyFlag &= (u8)~TX_BUSY;
 	zb_macDataSendHandler();
-#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
+	defined(CONFIG_ZIGBEE_ED)
 	/*
 	 * ACK synthesis is specific to the libzigbee MAC state machine
 	 * (mac_getTrxState/mac_trxTask live in mac_trx.c/mac.c). Both the router
@@ -126,9 +127,8 @@ static void zb_radio_tx_complete_deferred(void *arg)
 	 * (association-request, data-request poll, ...), sit in MAC_TX_WAIT_ACK
 	 * until MAC_TX_EV_ACK_RECV — Zephyr's api->tx already consumed the radio
 	 * ACK, so synthesize it here or the TX state machine wedges (assoc-req
-	 * retries forever, the poll never leaves the queue). The minimal-ED build
-	 * (mac_trx_compat.c) completes TX in zb_macDataSendHandler() itself and
-	 * lacks these symbols, so it is excluded.
+	 * retries forever, the poll never leaves the queue). The full-stack ED
+	 * follows the same MAC path, so this applies to both FFD and ED roles.
 	 */
 	if (mac_getTrxState() == MAC_TX_WAIT_ACK) {
 		mac_trxTask((void *)(uintptr_t)MAC_TX_EV_ACK_RECV);

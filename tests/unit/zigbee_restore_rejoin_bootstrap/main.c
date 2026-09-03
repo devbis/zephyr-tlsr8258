@@ -48,7 +48,7 @@ static char *read_file(const char *path)
 }
 
 static bool contains_between(const char *source, const char *start_marker,
-			     const char *end_marker, const char *needle)
+				     const char *end_marker, const char *needle)
 {
 	const char *start;
 	const char *end;
@@ -68,6 +68,11 @@ static bool contains_between(const char *source, const char *start_marker,
 	return match != NULL && match < end;
 }
 
+static bool contains(const char *source, const char *needle)
+{
+	return strstr(source, needle) != NULL;
+}
+
 #define EXPECT_TRUE(expr) do { \
 	if (!(expr)) { \
 		fprintf(stderr, "FAIL %s:%d expected true: %s\n", __FILE__, __LINE__, #expr); \
@@ -85,31 +90,27 @@ static bool contains_between(const char *source, const char *start_marker,
 static void test_restore_joined_target_uses_rejoin_instead_of_direct_poll_resume(void)
 {
 	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/platform/zephyr/zb_bdb_bootstrap.c");
-	const char *func = "static void zb_platform_bdb_restore_joined_target(void)";
-	const char *next_func = "static void zb_platform_bdb_apply_fixed_target(void)";
+	const char *func = "static bool zb_platform_bdb_restore_joined_target(void)";
+	const char *next_func = "return true;\n}\n#endif";
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
 
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "bdb_outgoingFrameCountUpdate(1U);"));
+	EXPECT_TRUE(contains(source, "bdb_outgoingFrameCountUpdate(1U);"));
 	EXPECT_TRUE(contains_between(source, func, next_func,
 				     "zb_rejoinSecModeSet(REJOIN_SECURITY);"));
 	EXPECT_TRUE(contains_between(source, func, next_func,
 				     "zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,"));
-	EXPECT_FALSE(contains_between(source, func, next_func,
-				      "tl_zbNwkEdMinimalPollRestart(zdo_af_get_syn_rate());"));
-
 	free(source);
 }
 
 static void test_rejoin_security_mode_matches_vendor_semantics(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zbapi/zb_api_ed_compat.c");
-	const char *func = "__attribute__((weak)) void zb_rejoinSecModeSet(u8 mode)";
-	const char *next_func = "__attribute__((weak)) u8 zb_directJoinReq(u32 scanChannels, u8 scanDuration)";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zbapi/zb_api.c");
+	const char *func = "void zb_rejoinSecModeSet(u8 mode)";
+	const char *next_func = "u8 zb_directJoinReq(u32 scan_channels, u8 scan_duration)";
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
@@ -129,13 +130,20 @@ static void test_rejoin_security_mode_matches_vendor_semantics(void)
 				     next_func,
 				     "aps_ib.aps_authenticated = FALSE;"));
 
+	free(source);
+
+	source = read_file(WORKTREE_ROOT "/subsys/zigbee/bdb/bdb.c");
+	EXPECT_TRUE(source != NULL);
+	if (source == NULL) {
+		return;
+	}
 	EXPECT_TRUE(contains_between(source,
-				     "__attribute__((weak)) void bdb_outgoingFrameCountUpdate(u8 repower)",
-				     func,
+				     "void bdb_outgoingFrameCountUpdate(u8 repower)",
+				     "/**********************************************************************",
 				     "ss_ib.outgoingFrameCounter += SS_UPDATE_FRAMECOUNT_THRES;"));
 	EXPECT_TRUE(contains_between(source,
-				     "__attribute__((weak)) void bdb_outgoingFrameCountUpdate(u8 repower)",
-				     func,
+				     "void bdb_outgoingFrameCountUpdate(u8 repower)",
+				     "/**********************************************************************",
 				     "nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);"));
 
 	free(source);

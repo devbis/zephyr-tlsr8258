@@ -7,90 +7,42 @@ static int failures;
 
 static char *read_file(const char *path)
 {
-	FILE *fp;
+	FILE *fp = fopen(path, "rb");
 	long size;
 	char *buffer;
 
-	fp = fopen(path, "rb");
 	if (fp == NULL) {
 		fprintf(stderr, "FAIL %s:%d: unable to open %s\n", __FILE__, __LINE__, path);
 		failures++;
 		return NULL;
 	}
-
-	if (fseek(fp, 0, SEEK_END) != 0) {
-		fclose(fp);
-		return NULL;
-	}
-
+	fseek(fp, 0, SEEK_END);
 	size = ftell(fp);
-	if (size < 0 || fseek(fp, 0, SEEK_SET) != 0) {
-		fclose(fp);
-		return NULL;
-	}
-
+	fseek(fp, 0, SEEK_SET);
 	buffer = malloc((size_t)size + 1u);
-	if (buffer == NULL) {
-		fclose(fp);
-		return NULL;
-	}
-
-	if (fread(buffer, 1u, (size_t)size, fp) != (size_t)size) {
+	if (buffer == NULL || fread(buffer, 1u, (size_t)size, fp) != (size_t)size) {
 		free(buffer);
 		fclose(fp);
 		return NULL;
 	}
-
 	buffer[size] = '\0';
 	fclose(fp);
 	return buffer;
 }
 
 static bool contains_between(const char *source, const char *start_marker,
-			     const char *end_marker, const char *needle)
+				     const char *end_marker, const char *needle)
 {
-	const char *start;
+	const char *start = strstr(source, start_marker);
 	const char *end;
 	const char *match;
 
-	start = strstr(source, start_marker);
 	if (start == NULL) {
 		return false;
 	}
-
 	end = strstr(start, end_marker);
-	if (end == NULL) {
-		return false;
-	}
-
 	match = strstr(start, needle);
-	return match != NULL && match < end;
-}
-
-static bool ordered_between(const char *source, const char *start_marker,
-			    const char *end_marker, const char *first,
-			    const char *second)
-{
-	const char *start;
-	const char *end;
-	const char *first_match;
-	const char *second_match;
-
-	start = strstr(source, start_marker);
-	if (start == NULL) {
-		return false;
-	}
-
-	end = strstr(start, end_marker);
-	if (end == NULL) {
-		return false;
-	}
-
-	first_match = strstr(start, first);
-	second_match = strstr(start, second);
-	return first_match != NULL && second_match != NULL &&
-	       first_match < second_match &&
-	       first_match < end && second_match < end;
+	return end != NULL && match != NULL && match < end;
 }
 
 #define EXPECT_TRUE(expr) do { \
@@ -107,85 +59,40 @@ static bool ordered_between(const char *source, const char *start_marker,
 	} \
 } while (0)
 
-static void test_rejoin_start_uses_dedicated_nwk_rejoin_request(void)
+static void test_rejoin_api_delegates_to_vendor_zdo(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func = "bool tl_zbNwkEdMinimalRejoinStart(u32 scanChannels, u8 scanDuration, bool withBackoff)";
-	const char *next_func = "void tl_zbNwkEdMinimalOperationAbort(void)";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zbapi/zb_api.c");
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
-
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "nwk_ed_minimal_send_rejoin_request("));
-	EXPECT_FALSE(contains_between(source, func, next_func,
-				      "nwk_ed_minimal_start_assoc(TRUE)"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "g_nwkEdCtx.activeChannel = g_nwkEdCtx.fixedJoinChannel;"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "g_nwkEdCtx.activePanId = g_nwkEdCtx.fixedJoinPanId;"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "g_nwkEdCtx.activeParentShortAddr = g_nwkEdCtx.fixedJoinShortAddr;"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "g_nwkEdCtx.activeShortAddr = g_zbMacPib.shortAddress;"));
-	EXPECT_TRUE(contains_between(source,
-				     "static bool nwk_ed_minimal_send_rejoin_request(void)",
-				     "static bool nwk_ed_minimal_start_assoc(bool rejoinMode)",
-				     "NWK_CMD_REJOIN_REQUEST"));
-
+	EXPECT_TRUE(contains_between(source, "u8 zb_rejoinReq(u32 scan_channels",
+				     "u8 zb_rejoinReqWithBackOff", "zdo_nwkRejoinStart"));
+	EXPECT_TRUE(contains_between(source, "u8 zb_rejoinReqWithBackOff(u32 scan_channels",
+				     "void zb_rejoinSecModeSet", "zdo_nwkRejoinWithBackOff"));
+	EXPECT_FALSE(strstr(source, "__attribute__((weak))") != NULL);
 	free(source);
 }
 
-static void test_joined_rx_routes_rejoin_response_into_minimal_rejoin_handler(void)
+static void test_ed_abort_is_the_only_platform_lifecycle_hook(void)
 {
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/mac/mac_trx_compat.c");
-	const char *func = "static void zb_minimal_handle_joined_data_frame(u8 *psdu, u8 len)";
-	const char *next_func = "void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_libzigbee.c");
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
-
-	EXPECT_TRUE(contains_between(source,
-				     "__attribute__((weak)) void tl_zbNwkEdMinimalRejoinResponseReceived(",
-				     "__attribute__((weak)) void tl_zbMinimalZdoResponseIndication(",
-				     "ARG_UNUSED(status);"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "NWK_CMD_REJOIN_RESPONSE"));
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "tl_zbNwkEdMinimalRejoinResponseReceived("));
-
-	free(source);
-}
-
-static void test_rejoin_request_clears_wire_security_level_after_ccm_auth(void)
-{
-	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func = "static bool nwk_ed_minimal_send_rejoin_request(void)\n{";
-	const char *next_func = "static bool nwk_ed_minimal_start_assoc(bool rejoinMode)";
-
-	EXPECT_TRUE(source != NULL);
-	if (source == NULL) {
-		return;
-	}
-
-	EXPECT_TRUE(contains_between(source, func, next_func,
-				     "frame[sec_ctrl_idx] = NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE;"));
-	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "enc_len = zb_minimal_ccm_encrypt_auth(",
-				    "frame[sec_ctrl_idx] = NWK_ED_MINIMAL_NWK_SEC_CTRL_WIRE;"));
-
+	EXPECT_TRUE(strstr(source, "void zb_ed_operation_abort(void)") != NULL);
+	EXPECT_TRUE(strstr(source, "void zb_ed_runtime_reset(void)") != NULL);
+	EXPECT_TRUE(strstr(source, "void zb_ed_fixed_join_target(") != NULL);
 	free(source);
 }
 
 int main(void)
 {
-	test_rejoin_start_uses_dedicated_nwk_rejoin_request();
-	test_joined_rx_routes_rejoin_response_into_minimal_rejoin_handler();
-	test_rejoin_request_clears_wire_security_level_after_ccm_auth();
+	test_rejoin_api_delegates_to_vendor_zdo();
+	test_ed_abort_is_the_only_platform_lifecycle_hook();
 
 	if (failures != 0) {
 		fprintf(stderr, "zigbee_secure_rejoin_path: %d failure(s)\n", failures);

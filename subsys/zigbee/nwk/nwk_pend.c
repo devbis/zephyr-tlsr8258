@@ -7,7 +7,7 @@
  * nwk_internal.h. The pending table (g_txDataPendTab) and the cache-
  * copy helper drive NWK forwarding while a route-disc round-trip is
  * outstanding; both rely on zb_buf_allocate / zb_buf_free, declared
- * in nwk_internal.h and waiting for the vendor zb_buffer.c port.
+ * in nwk_internal.h and supplied by the Zephyr buffer adapter.
  */
 
 #include "zb_common_stub.h"

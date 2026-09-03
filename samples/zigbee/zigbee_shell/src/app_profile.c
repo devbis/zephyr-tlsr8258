@@ -166,7 +166,7 @@ void app_profile_register(void)
 }
 
 /*
- * Override the weak stub in zb_bdb_bootstrap.c so that BDB init
+ * Override the optional hook in zb_bdb_bootstrap.c so that BDB init
  * picks up our real ZCL-wired endpoint descriptor.
  */
 void zb_platform_app_register_endpoints(void)
@@ -175,9 +175,9 @@ void zb_platform_app_register_endpoints(void)
 }
 
 /*
- * Override the weak identity stubs in mac_trx_compat.c so the fallback
- * interview path answers with the same strings as the real ZCL attribute
- * table.  The strings are plain C strings (not ZCL length-prefixed).
+ * Provide the identity hooks used by the Basic-cluster interview fallback,
+ * keeping the answers consistent with the real ZCL attribute table. The
+ * strings are plain C strings (not ZCL length-prefixed).
  */
 const char *zb_platform_app_basic_mfr_name(void)
 {

@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_PERSIST_BLOB_VERSION 2U
 
-extern void tl_zbNwkEdMinimalRuntimeReset(void);
+extern void zb_ed_runtime_reset(void);
 
 typedef struct {
 	u8 version;
@@ -123,7 +123,7 @@ int zb_platform_clear_persistent_state(void)
 	}
 
 	#if defined(ZB_ED_ROLE) && ZB_ED_ROLE
-	tl_zbNwkEdMinimalRuntimeReset();
+	zb_ed_runtime_reset();
 	#endif
 
 	g_zbNwkCtx.joined = 0U;

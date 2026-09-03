@@ -210,6 +210,7 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
         (g_zbMacPib.rxOnWhenIdle == 0U) && ((raw[0] & MAC_FCF_FRAME_PENDING_MASK) != 0U);
     zb_mscp_data_ind_t *ind;
 
+
     /* meta and ind alias the same buf; preserve meta->payload (== msdu)
      * before we start clobbering by writing ind fields. */
     memcpy(&msdu, &meta->payload, sizeof(msdu));

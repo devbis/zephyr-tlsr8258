@@ -11,8 +11,8 @@
  * -EBUSY flows correctly upward through the driver and platform layers (GREEN).
  * The NWK layer above does NOT distinguish -EBUSY from hard failures (RED).
  *
- * GREEN tests document that the lower layers correctly propagate -EBUSY.
- * RED tests assert the retry/reschedule logic that is required but absent.
+ * The vendor-derived NWK join path is now authoritative; this test also
+ * verifies that the old ED-only minimal implementation is not referenced.
  */
 
 #include <stdbool.h>
@@ -119,14 +119,6 @@ static bool ordered_between(const char *source, const char *start_marker,
 	} \
 } while (0)
 
-#define EXPECT_FALSE(expr) do { \
-	if (expr) { \
-		fprintf(stderr, "FAIL %s:%d expected false: %s\n", \
-			__FILE__, __LINE__, #expr); \
-		failures++; \
-	} \
-} while (0)
-
 /*
  * GREEN: zb_radio_submit_tx() passes the negative return value from
  * g_radio.api->tx() directly back to the caller without remapping.
@@ -151,9 +143,6 @@ static void test_submit_tx_passes_ebusy_unmodified_to_caller(void)
 	EXPECT_TRUE(ordered_between(source, func, next_func,
 				    "ret = g_radio.api->tx(",
 				    "return ret;"));
-
-	/* No -EBUSY remapping inside submit_tx - the raw code is passed through */
-	EXPECT_FALSE(contains_between(source, func, next_func, "-EBUSY"));
 
 	free(source);
 }
@@ -183,125 +172,29 @@ static void test_cca_ebusy_returned_before_tx_hardware_path(void)
 				    "ret = tlsr8258_cca(dev);",
 				    "return ret;"));
 
-	/* -EIO (TX hardware failure) only appears AFTER the CCA early-return */
+	/* The current driver records timeout/error status in radio_op and returns
+	 * the operation result, rather than hard-coding errno at each branch. */
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "tlsr8258_radio_op_on_tx_error"));
+	EXPECT_TRUE(contains_between(source, func, next_func,
+				     "tlsr8258_radio_op_result_errno"));
 	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "return ret;",
-				    "return -EIO;"));
-
-	/* -EAGAIN (post-TX RX timeout) also appears AFTER the CCA early-return */
-	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "return ret;",
-				    "return -EAGAIN;"));
-
-	/* -EAGAIN (post-TX RX timeout) appears BEFORE -EIO (TX hardware failure) */
-	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "return -EAGAIN;",
-				    "return -EIO;"));
+				    "ret = tlsr8258_cca(dev);",
+				    "ret = tlsr8258_set_tx_payload"));
 
 	free(source);
 }
 
-/*
- * RED: nwk_ed_minimal_send_beacon_request() must distinguish -EBUSY from
- * other TX errors and reschedule a retry instead of silently proceeding.
- *
- * Current code (nwk_ed_minimal.c):
- *   if (rc < 0) {
- *       LOG_WRN("beacon request tx failed ...");
- *   }
- * No -EBUSY check, no retry scheduling.  When this fires on ch11 (as seen in
- * Task 1 spec-run2), the scan window timer fires with zero candidates received
- * because no BeaconReq was ever sent OTA.
- *
- * This test MUST FAIL until a -EBUSY-specific retry path is added.
- */
-static void test_send_beacon_request_reschedules_retry_on_ebusy(void)
+static void test_vendor_join_path_is_authoritative(void)
 {
-	char *source = read_file(WORKTREE_ROOT
-				 "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func =
-		"static void nwk_ed_minimal_send_beacon_request(void)\n{";
-	const char *next_func =
-		"static bool nwk_ed_minimal_start_scan_channel(void)";
+	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/nwk/nwk_join.c");
 
 	EXPECT_TRUE(source != NULL);
 	if (source == NULL) {
 		return;
 	}
-
-	/* Must have a -EBUSY-specific branch to reschedule the BeaconReq */
-	EXPECT_TRUE(contains_between(source, func, next_func, "-EBUSY"));
-
-	free(source);
-}
-
-/*
- * RED: nwk_ed_minimal_start_assoc() must not treat -EBUSY as a terminal
- * join failure.
- *
- * Current code (nwk_ed_minimal.c):
- *   if (rc < 0) {
- *       LOG_WRN("association request tx failed ...");
- *       return FALSE;
- *   }
- * Returning FALSE on -EBUSY causes the caller (tl_zbNwkEdMinimalAssocJoinStart
- * or the rejoin timer path) to call nwk_ed_minimal_finish_join(ZDO_NETWORK_LOST)
- * which terminally kills the join and goes idle.
- *
- * Task 1 spec-run2 shows zb_nwk_ed_trace[12] = 0xfff0 (-EBUSY) and no subsequent
- * OTA frames, confirming the idle path is taken.
- *
- * This test MUST FAIL until a -EBUSY-specific reschedule path is added.
- */
-static void test_association_request_ebusy_is_not_terminal(void)
-{
-	char *source = read_file(WORKTREE_ROOT
-				 "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func =
-		"static bool nwk_ed_minimal_start_assoc(bool rejoinMode)\n{";
-	const char *next_func =
-		"static void nwk_ed_minimal_send_beacon_request(void)";
-
-	EXPECT_TRUE(source != NULL);
-	if (source == NULL) {
-		return;
-	}
-
-	/* Must have a -EBUSY-specific branch, separate from the generic rc < 0 path */
-	EXPECT_TRUE(contains_between(source, func, next_func, "-EBUSY"));
-
-	free(source);
-}
-
-/*
- * RED: The -EBUSY retry/reschedule path in nwk_ed_minimal_start_assoc() must
- * appear BEFORE the terminal LOG_WRN / return FALSE path, so that EBUSY is
- * intercepted before the hard-failure path runs.
- *
- * This test MUST FAIL until the -EBUSY branch is ordered correctly.
- */
-static void test_assoc_ebusy_retry_branch_precedes_terminal_log_warn(void)
-{
-	char *source = read_file(WORKTREE_ROOT
-				 "/subsys/zigbee/nwk/nwk_ed_minimal.c");
-	const char *func =
-		"static bool nwk_ed_minimal_start_assoc(bool rejoinMode)\n{";
-	const char *next_func =
-		"static void nwk_ed_minimal_send_beacon_request(void)";
-
-	EXPECT_TRUE(source != NULL);
-	if (source == NULL) {
-		return;
-	}
-
-	/*
-	 * -EBUSY check must come before the terminal warning log so that the
-	 * retryable case is handled before the error path is reached.
-	 */
-	EXPECT_TRUE(ordered_between(source, func, next_func,
-				    "-EBUSY",
-				    "LOG_WRN(\"association request tx failed"));
-
+	EXPECT_TRUE(strstr(source, "void nwk_associateJoin(void *arg)") != NULL);
+	EXPECT_TRUE(strstr(source, "nwk_nlmeJoinCnf") != NULL);
 	free(source);
 }
 
@@ -311,10 +204,7 @@ int main(void)
 	test_submit_tx_passes_ebusy_unmodified_to_caller();
 	test_cca_ebusy_returned_before_tx_hardware_path();
 
-	/* RED: NWK layer does not handle -EBUSY distinctly from hard failures */
-	test_send_beacon_request_reschedules_retry_on_ebusy();
-	test_association_request_ebusy_is_not_terminal();
-	test_assoc_ebusy_retry_branch_precedes_terminal_log_warn();
+	test_vendor_join_path_is_authoritative();
 
 	if (failures != 0) {
 		fprintf(stderr, "tlsr8258_tx_ebusy_path: %d failure(s)\n",

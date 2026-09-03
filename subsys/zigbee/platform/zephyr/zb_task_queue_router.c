@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Zephyr-native replacement for libzigbee zb_task_queue.c, used
- * exclusively by the router build (CONFIG_ZIGBEE_ROUTER=y). The ED
- * build still uses zb_task_queue_zephyr.c which owns tl_zbTaskPost
- * for the lightweight nwk_ed_minimal path.
+ * Zephyr-native replacement for libzigbee zb_task_queue.c, used by
+ * all full-stack roles. The ED lifecycle adapter keeps the vendor
+ * ZDO polling path, while this queue owns layer-to-layer primitives
+ * for the common MAC/NWK/APS stack.
  *
  * The libzigbee runtime exchanges layer-to-layer primitives through
  * tl_zbPrimitivePost(layerQ, primitive, buf). Each post stamps the

@@ -18,10 +18,10 @@ extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
 
 #if defined(CONFIG_ZIGBEE_BDB)
 #if ZB_PLATFORM_BDB_ED_RESTORE
-extern void tl_zbNwkEdMinimalSetFixedJoinTarget(u8 channel, u16 panId, u16 shortAddr,
-						 const u8 *extPanId, const u8 *nwkKey,
-						 const u8 *tcAddr);
-extern void tl_zbNwkEdMinimalOperationAbort(void);
+extern void zb_ed_fixed_join_target(u8 channel, u16 panId, u16 shortAddr,
+					 const u8 *extPanId, const u8 *nwkKey,
+					 const u8 *tcAddr);
+extern void zb_ed_operation_abort(void);
 #endif
 extern void bdb_outgoingFrameCountUpdate(u8 repower);
 extern void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
@@ -185,7 +185,7 @@ static bool zb_platform_bdb_restore_joined_target(void)
 		nwkKey = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
 	}
 
-	tl_zbNwkEdMinimalSetFixedJoinTarget(g_zbMacPib.phyChannelCur,
+	zb_ed_fixed_join_target(g_zbMacPib.phyChannelCur,
 					    g_zbMacPib.panId,
 					    g_zbMacPib.coordShortAddress,
 					    g_zbNIB.extPANId,
@@ -215,7 +215,7 @@ static bool zb_platform_bdb_restore_joined_target(void)
 	 * arch_irq_lock window; RTT log captures end with "rejoin request sent
 	 * ..." and the chip resets ~1-3 s later). The Zephyr-side join chain
 	 * already defers persistence via the 15 s timer scheduled from
-	 * nwk_ed_minimal_complete_join() on a real interview completion, which
+	 * the ED join completion hook on a real interview completion, which
 	 * is the only point where saving a joined blob actually matters across
 	 * power cycles. Re-stamping the saved blob from the rejoin path was
 	 * never needed for re-restoring state because the blob persists across
@@ -268,7 +268,7 @@ void zb_platform_bdb_abandon_persistent_rejoin(void)
 	 * back-off state so the manager returns to IDLE.
 	 */
 	zdo_nwkRejoinWithBackOffStop();
-	tl_zbNwkEdMinimalOperationAbort();
+	zb_ed_operation_abort();
 
 	/*
 	 * Wipe the persisted joined context: it cannot be trusted (we never
@@ -307,7 +307,7 @@ static void zb_platform_bdb_apply_fixed_target(void)
 		tc_addr = zb_bootstrap_target.tc_addr;
 	}
 
-	tl_zbNwkEdMinimalSetFixedJoinTarget(zb_bootstrap_target.channel,
+	zb_ed_fixed_join_target(zb_bootstrap_target.channel,
 					    zb_bootstrap_target.pan_id,
 					    zb_bootstrap_target.short_addr,
 					    zb_bootstrap_target.ext_pan_id,
@@ -380,7 +380,7 @@ static bool zb_platform_bdb_router_has_valid_join_context(void)
  * Optional hook for the application to register endpoints and initialize
  * ZCL before BDB starts.  The zigbee_shell sample overrides this to call
  * app_profile_register(), giving real zcl_init / af_endpointRegister /
- * zcl_register wiring.  A no-op default allows the subsystem to compile
+ * zcl_register wiring.  An empty default allows the subsystem to compile
  * standalone without requiring the sample-layer symbols.
  */
 void __weak zb_platform_app_register_endpoints(void)
@@ -498,7 +498,8 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 		return 0xFFU;
 	}
 
-#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_ED)
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
+	defined(CONFIG_ZIGBEE_ED)
 	{
 		uint8_t scan_channel = (g_zbMacPib.phyChannelCur != 0U)
 			? g_zbMacPib.phyChannelCur
@@ -510,5 +511,33 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 
 	status = bdb_networkSteerStart();
 	return status;
+#endif
+}
+
+uint8_t zb_platform_bdb_network_formation_start(void)
+{
+#if !defined(CONFIG_ZIGBEE_BDB)
+	return 0xFFU;
+#else
+	uint8_t scan_channel;
+
+	if (zb_platform_bdb_init_default() != 0) {
+		LOG_ERR("zb bdb formation: init failed");
+		return 0xFFU;
+	}
+
+	scan_channel = (g_zbMacPib.phyChannelCur != 0U)
+		? g_zbMacPib.phyChannelCur
+		: (uint8_t)CONFIG_ZIGBEE_CHANNEL;
+	if (zb_platform_radio_start_on_channel(scan_channel) != 0) {
+		LOG_ERR("zb bdb formation: radio start failed on channel %u",
+			scan_channel);
+		return 0xFFU;
+	}
+
+	/* bdb_networkFormationStart() is the vendor BDB entry point.  It
+	 * schedules the real NWK formation primitive and lets the vendor state
+	 * machine select the channel, PAN and distributed address. */
+	return bdb_networkFormationStart();
 #endif
 }

@@ -41,9 +41,6 @@ struct native_sim_socket_config {
 
 struct native_sim_socket_data {
 	struct net_if *iface;
-	struct k_thread rx_thread;
-	k_thread_stack_t *rx_stack;
-	size_t rx_stack_size;
 	struct k_sem status_sem;
 	struct k_sem tx_status_sem;
 	struct zb_native_sim_socket_medium_peer peer;
@@ -55,7 +52,6 @@ struct native_sim_socket_data {
 	int tx_status_rc;
 	bool started;
 	bool cca_busy;
-	bool rx_thread_started;
 };
 
 static const char *cmd_server_host;
@@ -63,9 +59,6 @@ static unsigned int cmd_server_port;
 static unsigned int cmd_node_id;
 static bool cmd_server_port_set;
 static bool cmd_node_id_set;
-
-static K_KERNEL_STACK_DEFINE(native_sim_socket_rx_stack,
-			     CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_STACK_SIZE);
 
 static const char *native_sim_socket_msg_type_str(enum zb_native_sim_socket_medium_msg_type type)
 {
@@ -196,7 +189,6 @@ static void native_sim_socket_publish_state(const struct device *dev,
 		       native_sim_socket_msg_type_str(type), errno);
 	}
 
-	native_sim_socket_pump_rx(dev, 5);
 }
 
 static bool native_sim_socket_try_rx_once(const struct device *dev)
@@ -373,24 +365,7 @@ static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms)
 	}
 }
 
-static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
-{
-	const struct device *dev = p1;
-
-	ARG_UNUSED(p2);
-	ARG_UNUSED(p3);
-	printk("zb_sock_radio: rx thread start\n");
-
-	while (true) {
-		if (!native_sim_socket_try_rx_once(dev)) {
-			k_sleep(K_MSEC(1));
-			continue;
-		}
-
-		k_yield();
-	}
-}
-
+/* RX is polled by zb_platform_radio_rx_poll(); no worker thread is needed. */
 /*
  * The standalone rx_thread's k_sleep(1ms) poll loop is starved once this node
  * goes idle: the Zigbee thread is an intentional no-yield busy-loop (see
@@ -625,17 +600,10 @@ static int native_sim_socket_start(const struct device *dev)
 		       native_sim_socket_node_id(cfg));
 	}
 
-	if (!data->rx_thread_started) {
-		k_thread_create(&data->rx_thread, data->rx_stack, data->rx_stack_size,
-				native_sim_socket_rx_thread, (void *)dev, NULL, NULL,
-				K_PRIO_PREEMPT(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_THREAD_PRIO),
-				0, K_NO_WAIT);
-		k_thread_name_set(&data->rx_thread, "zb_sock_rx");
-		data->rx_thread_started = true;
-	}
-
-	/* Let the ZB main loop drain our socket every tick (zb_platform_radio_rx_poll),
-	 * so RX works even while this node is idle and the rx_thread is starved. */
+	/* The Zigbee port drains the socket from zb_platform_radio_rx_poll() and
+	 * from the synchronous TX/status paths. Keep a single socket consumer:
+	 * running the legacy polling thread concurrently with those paths races
+	 * recv(), the radio RX ring and the MAC handoff callback. */
 	rx_kick_dev = dev;
 
 	data->started = true;
@@ -677,8 +645,6 @@ static int native_sim_socket_init(const struct device *dev)
 
 	memset(data, 0, sizeof(*data));
 	data->iface = NULL;
-	data->rx_stack = native_sim_socket_rx_stack;
-	data->rx_stack_size = K_KERNEL_STACK_SIZEOF(native_sim_socket_rx_stack);
 	data->fd = -1;
 	data->tx_power_dbm = 0;
 	data->channel = 11U;

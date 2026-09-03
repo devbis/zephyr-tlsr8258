@@ -81,6 +81,11 @@ void nwk_startRouterCnfHandler(void *arg)
 #endif
         g_zbNwkCtx.router_started = 1;
         tl_zbNwkBeaconPayloadUpdate();
+		/* MLME-START makes this FFD eligible to answer beacon requests.
+		 * Keep the length in sync with the payload before the first MAC
+		 * command arrives; the vendor MAC intentionally ignores an empty
+		 * beacon payload. */
+		g_zbMacPib.beaconPayloadLen = (u8)sizeof(g_zbMacPib.beaconPayload);
         tl_zbNwkLinkStatusStart();
     }
 
@@ -248,7 +253,13 @@ void tl_zbMacMlmePollConfirmHandler(void *arg)
 
 void tl_zbMacMlmePollIndicationHandler(void *arg)
 {
-    u8 *pollInd = (u8 *)arg;
+	u8 *pollInd = (u8 *)arg;
+
+#if !defined(ZB_ROUTER_ROLE)
+	/* MLME-POLL.indication is a parent-side primitive. */
+	zb_buf_free((zb_buf_t *)arg);
+	return;
+#else
 
     if (!g_zbNwkCtx.joined ||
         (g_zbInfo.nwkNib.parentInfo & END_DEV_TIMEOUT_REQ_KEEPALIVE_BIT) == 0U) {
@@ -312,4 +323,5 @@ void tl_zbMacMlmePollIndicationHandler(void *arg)
             nwkLeaveReqSend(arg, &nwkHdr, &cmd, NWK_INTERNAL_LEAVE_REQ_CMD_INDIRECT_HANDLE);
         }
     }
+#endif
 }
