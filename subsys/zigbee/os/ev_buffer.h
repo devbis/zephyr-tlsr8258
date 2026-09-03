@@ -57,7 +57,7 @@
  * @brief Default buffer number in each group
  */
 #define BUFFER_NUM_IN_GROUP0    4
-#define BUFFER_NUM_IN_GROUP1    4
+#define BUFFER_NUM_IN_GROUP1    8
 #define BUFFER_NUM_IN_GROUP2    4
 #define BUFFER_NUM_IN_GROUP3    1
 

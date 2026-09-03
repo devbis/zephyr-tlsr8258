@@ -45,9 +45,6 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
 #define RF_TRX_MODE 0xe0u
 #define RF_TRX_OFF  0x45u
-#define RF_LL_MODE_TX  0u
-#define RF_LL_MODE_RX  1u
-#define RF_LL_MODE_OFF 3u
 
 #define RF_IRQ_RX          BIT(0)
 #define RF_IRQ_TX          BIT(1)
@@ -64,7 +61,8 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define DMA_CHN_RF_RX BIT(2)
 #define DMA_CHN_RF_TX BIT(3)
 
-#define TLSR8258_RX_BUF_SIZE 256u
+#define TLSR8258_RX_BUF_SIZE 144u
+#define TLSR8258_RX_DMA_SIZE 144u
 #define TLSR8258_TX_BUF_SIZE 132u
 #define TLSR8258_PAYLOAD_OFFSET 5u
 #define TLSR8258_PHY_MAX_PSDU 127u
@@ -82,11 +80,10 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
  * Stick with 150us — better to be slightly early than too late.  We use the
  * fast-path set_txmode_for_ack (no PLL reload) to keep total latency tight.
  *
- * 2026-06: switched to vendor mac_phy.c pattern — the prep timestamp is
- * captured immediately after switching to TX mode, matching the vendor's
- * txTime = clock_time() directly after ZB_SWITCH_TO_TXMODE(). Vendor uses
- * ZB_TX_WAIT_US = 120us measured from that point, so we mirror that
- * constant here.
+ * 2026-08: zigbee-rs anchors this settle window at RX completion, before
+ * clearing the RX event and parsing the frame.  The TX-mode switch and
+ * address/pending lookup happen inside that window; waiting a fresh 120us
+ * after the ISR enters TX makes the ACK miss macAckWaitDuration.
  */
 #define TLSR8258_ACK_TURNAROUND_US 120u
 /*
@@ -113,6 +110,7 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8258_RSSI_TO_LQI_MIN -87
 #define TLSR8258_RSSI_TO_LQI_SCALE 3
 #define TLSR8258_RX_SLOT_COUNT 16u
+
 struct tblcmdset {
 	uint16_t adr;
 	uint8_t dat;
@@ -198,6 +196,13 @@ struct tlsr8258_radio_data {
 	uint8_t rx_shadow[TLSR8258_RX_BUF_SIZE] __aligned(4);
 	uint8_t tx_buffer[TLSR8258_TX_BUF_SIZE] __aligned(4);
 	/*
+	 * MAC ACKs are emitted from the RX ISR while a normal TX may still be
+	 * completing in the RF/DMA state machine.  Keep their DMA descriptor in a
+	 * separate buffer: reusing tx_buffer here can replace an encrypted NWK
+	 * frame with the next frame's plaintext while DMA3 is still on it.
+	 */
+	uint8_t ack_buffer[TLSR8258_TX_BUF_SIZE] __aligned(4);
+	/*
 	 * Double-buffered RX (vendor mac_phy.c model). rx_active = the buffer the
 	 * RF DMA is currently filling; on each RX-done the ISR swaps the DMA to the
 	 * other of {rx_buffer, rx_shadow} BEFORE processing, so the next frame lands
@@ -223,9 +228,18 @@ struct tlsr8258_radio_data {
 	bool promiscuous;
 };
 
+/*
+ * The RF ISR runs from RAM while the TLSR8258 XIP/cache path is in a
+ * restricted state.  Do not make it dereference a Zephyr `struct device`
+ * argument: the device object is in flash, and the `dev->data` load can
+ * stall the core before the ISR has even recorded its diagnostics.  Pass
+ * this RAM object directly as the IRQ argument instead.
+ */
+static struct tlsr8258_radio_data tlsr8258_radio_data_0;
+
 static const struct tblcmdset tbl_rf_init[] = {
 	{0x12d2, 0x9b, 0xc3}, {0x12d3, 0x19, 0xc3}, {0x127b, 0x0e, 0xc3},
-	{0x1276, 0x50, 0xc3}, {0x1277, 0x73, 0xc3},
+	{0x1276, 0x50, 0xc3}, {0x1277, 0x73, 0xc3}, {0x0430, 0x3e, 0xc3},
 };
 
 static const struct tblcmdset tbl_rf_zigbee_250k[] = {
@@ -251,12 +265,19 @@ static const uint8_t rf_power_level_list[] = {
 
 static int tlsr8258_set_tx_payload(struct tlsr8258_radio_data *radio, const uint8_t *payload,
 				   uint8_t payload_len);
+static int tlsr8258_set_tx_payload_to(uint8_t *tx_buffer, const uint8_t *payload,
+					      uint8_t payload_len);
 static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 				       uint16_t snapshot_size,
 				       struct tlsr8258_radio_data *radio);
 static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio);
+static void tlsr8258_rf_irq_reenable(void);
+static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size);
+static void tlsr8258_rf_set_rxmode_vendor(void);
+static void tlsr8258_rf_rearm_idle_rx(struct tlsr8258_radio_data *radio);
+static bool tlsr8258_rf_recover_stuck_rx(struct tlsr8258_radio_data *radio);
 static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
-					  const struct tlsr8258_radio_data *radio);
+						  const struct tlsr8258_radio_data *radio);
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length);
 
 #if defined(CONFIG_IEEE802154_TLSR8258_RETAINED_DEBUG)
@@ -363,6 +384,15 @@ static inline void tlsr8258_radio_promiscuous_set(struct tlsr8258_radio_data *ra
 		promiscuous ? 1u : 0u;
 }
 
+/* ack_tx_pending is written by the RF ISR and read by the Zigbee thread.
+ * Keep this read volatile and offset-based: the TC32 LLVM backend has already
+ * demonstrated bad codegen for scalar members in this driver structure. */
+static inline bool tlsr8258_ack_tx_pending_get(struct tlsr8258_radio_data *radio)
+{
+	return *((volatile uint8_t *)((volatile uint8_t *)&radio->op +
+					 offsetof(struct tlsr8258_radio_op, ack_tx_pending))) != 0u;
+}
+
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *radio)
 {
@@ -382,6 +412,17 @@ static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
 static uint8_t tlsr8258_filter_pan_id_shadow[TLSR8258_PAN_ID_SIZE] = {0xffu, 0xffu};
 static uint8_t tlsr8258_filter_short_addr_shadow[TLSR8258_SHORT_ADDR_SIZE] = {0xffu, 0xffu};
 static uint8_t tlsr8258_filter_ieee_addr_shadow[TLSR8258_IEEE_ADDR_SIZE];
+/*
+ * Keep the logical channel outside radio_data as well.  A late device_init()
+ * fallback clears radio_data with memset(); restoring the hard-coded channel
+ * 11 there leaves the joined router deaf while the MAC PIB still says 25.
+ */
+#if defined(CONFIG_ZIGBEE_CHANNEL) && (CONFIG_ZIGBEE_CHANNEL >= 11) && \
+	(CONFIG_ZIGBEE_CHANNEL <= 26)
+static uint16_t tlsr8258_channel_shadow = (uint16_t)CONFIG_ZIGBEE_CHANNEL;
+#else
+static uint16_t tlsr8258_channel_shadow = 11u;
+#endif
 
 static inline struct tlsr8258_radio_data *tlsr8258_zigbee_radio_data_get(void)
 {
@@ -418,6 +459,115 @@ void tlsr8258_zigbee_update_filters(uint16_t pan_id, uint16_t short_addr,
 	}
 }
 
+/*
+ * RX is armed once at radio start and is restored only at real RX/TX
+ * ownership handoffs.  Do not periodically write the RF state registers from
+ * the Zigbee thread: on TLSR8258 that creates an artificial TX/RX window and
+ * can reset the LL state machine while a coordinator frame is arriving.
+ *
+ * Keep normal continuously-armed RX untouched here.  The guard repairs the
+ * CPU interrupt mask if a TX handoff/arch IRQ path dropped ZB_RT, and only
+ * resets RX DMA when the impossible tuple (RF_RX pending, no CPU source) is
+ * observed.  This is the same CPU-side recovery contract as zigbee-rs, with
+ * an additional hardware-latch escape hatch for the C port.
+ */
+void tlsr8258_zigbee_idle_rx_guard(void)
+{
+	struct tlsr8258_radio_data *radio = tlsr8258_zigbee_radio_data_get();
+	uint8_t irq_en;
+	static uint8_t stuck_tx_checks;
+
+	if (radio == NULL) {
+		return;
+	}
+
+	/*
+	 * TLSR8258 can leave the RF completion latch asserted while its parent CPU
+	 * source is masked.  Recover that specific impossible state below.  Do not
+	 * periodically re-arm based only on an unchanged RX counter: register
+	 * 0x0c26 (reg_dma_rx_rdy0) reads as 0x04 while RX DMA is armed, so treating
+	 * it as a pending completion causes a reset/re-arm every 250 ms and creates
+	 * the very idle-deaf window this guard is meant to repair.
+	 */
+	/* The MAC can issue TRX_OFF during the join/interview handoff after the
+	 * RF start path has already armed RX.  In that narrow path the PHY remains
+	 * active, but the driver's software `started` bit is cleared; subsequent
+	 * API TX calls then return -ENETDOWN and the router becomes receive-only.
+	 * Recover only this coherent hardware/software mismatch. */
+	if (!tlsr8258_radio_started_get(radio) &&
+	    TLSR_REG8(0x0f02) != RF_TRX_OFF &&
+	    (TLSR_REG8(0x0c20) & DMA_CHN_RF_RX) != 0u) {
+		tlsr8258_radio_started_set(radio, true);
+	}
+	if ((TLSR_REG32(0x0640) & BIT(TLSR8258_IRQ_ZB_RT)) == 0u) {
+		tlsr8258_rf_irq_reenable();
+	}
+
+	/*
+	 * The RF vector clears the chip-level IRQ gate (0x800643) on entry.
+	 * Normally tlsr8258_rf_irq_reenable() restores it from the ISR, but a
+	 * TX/RX handoff can leave the RF/DMA mask valid while the global gate is
+	 * still clear.  In that state RF completion remains pending forever and
+	 * the router is deaf even though the radio is visibly in RX mode.  This
+	 * guard runs from the normal Zigbee thread, outside an irq_lock() critical
+	 * section, so restoring the gate here is safe and does not reset the RF
+	 * state machine.
+	 */
+	irq_en = TLSR_REG8(0x0643);
+	if ((irq_en & BIT(0)) == 0u) {
+		TLSR_REG8(0x0643) = irq_en | BIT(0);
+	}
+
+	/*
+	 * A TLSR8258 RX completion can survive after the RF ISR has cleared the
+	 * parent CPU source.  In that state 0x0f20 says RX is pending, DMA2 is
+	 * still enabled, but no new CPU vector can be generated; the router then
+	 * hears beacons only intermittently until reboot.  Recover only this
+	 * inconsistent tuple.  A normal armed RX has either no RF completion or a
+	 * live CPU source, and is left completely untouched.
+	 */
+	if (tlsr8258_rf_recover_stuck_rx(radio)) {
+		tlsr8258_rf_irq_reenable();
+	}
+
+	/*
+	 * A completed TX can leave the 8258 TRX state latched at TX-enable
+	 * (0x0f02 == 0x55) without a pending RF or DMA interrupt.  There is then
+	 * no ISR edge which could execute the normal TX->RX handoff, so the router
+	 * remains deaf indefinitely.  This was observed after a successful
+	 * interview: the coordinator's remove/read requests were not even
+	 * MAC-ACKed, while the software operation was COMPLETE_OK.
+	 *
+	 * Do not reset the RF while a real stack TX is in flight.  The
+	 * ack_tx_pending bit is intentionally not an exclusion here: if the RF
+	 * completion edge was lost, that bit is exactly the stale software state
+	 * which prevents the router from recovering.  Require two consecutive 1 ms
+	 * loop observations of the impossible state so a normal short ACK handoff
+	 * is left alone.  The recovery is deliberately conditional and does not
+	 * periodically re-enable RX during normal idle operation.
+	 */
+	if (tlsr8258_radio_started_get(radio) &&
+	    TLSR_REG8(0x0f02) == (RF_TRX_OFF | BIT(4)) &&
+	    TLSR_REG16(0x0f20) == 0u &&
+	    (TLSR_REG8(0x0c20) & DMA_CHN_RF_RX) != 0u &&
+	    radio->op.state != TLSR8258_RADIO_OP_TX_PENDING &&
+	    radio->op.state != TLSR8258_RADIO_OP_WAITING_POST_TX_RX &&
+	    !radio->op.ack_pending) {
+		if (stuck_tx_checks < UINT8_MAX) {
+			stuck_tx_checks++;
+		}
+		if (stuck_tx_checks >= 2u) {
+			tlsr8258_rf_rearm_idle_rx(radio);
+			/* The corresponding TX completion IRQ was lost, so no later ISR
+			 * can clear this ACK-only software latch for us. */
+			radio->op.ack_tx_pending = false;
+			stuck_tx_checks = 0u;
+		}
+	} else {
+		stuck_tx_checks = 0u;
+	}
+}
+
 static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
 {
 	for (size_t i = 0; i < len; i++) {
@@ -429,44 +579,37 @@ static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
 	}
 }
 
-static void tlsr8258_rf_set_channel_offset(uint8_t chn)
+/* Match the hardware-proven SDK/Rust PHY channel sequence. */
+static void tlsr8258_rf_set_channel(uint16_t channel)
 {
-	int16_t ch = (int16_t)chn + 0x960;
-	uint8_t vco_cap_step = 0u;
-	uint32_t rf_chn_word;
+    uint16_t physical;
+    uint16_t freq_mhz;
+    uint16_t modem_val;
+    uint8_t band;
 
-	if (ch <= 0x09f5) {
-		vco_cap_step = 4u;
-	}
-	if (ch <= 0x09d7) {
-		vco_cap_step = 8u;
-	}
-	if (ch <= 0x09be) {
-		vco_cap_step = 12u;
-	}
-	if (ch <= 0x09a0) {
-		vco_cap_step = 16u;
-	}
-	if (ch <= 0x0982) {
-		vco_cap_step = 20u;
-	}
-	if (ch <= 0x0964) {
-		vco_cap_step = 28u;
-	}
-	if (ch <= 0x094b) {
-		vco_cap_step = 24u;
-	}
+    if (channel < 11u || channel > 26u) {
+        return;
+    }
 
-	rf_chn_word = (uint32_t)(uint16_t)ch << 17;
-	TLSR_REG8(0x1244) = (uint8_t)(((rf_chn_word >> 15) | 1u) & 0xffu);
-	TLSR_REG8(0x1245) = (uint8_t)((TLSR_REG8(0x1245) & 0xc0u) |
-				      ((rf_chn_word >> 23) & 0x3fu));
-	TLSR_REG8(0x1229) = (uint8_t)((TLSR_REG8(0x1229) & 0xc3u) | vco_cap_step);
-}
+    physical = (uint16_t)(channel - 10u) * 5u;
+    freq_mhz = (uint16_t)(2400u + physical);
+    band = (freq_mhz > 2464u) ? 0x0cu :
+           (freq_mhz > 2434u) ? 0x10u : 0x14u;
 
-static uint8_t tlsr8258_rf_channel_from_logical(uint16_t channel)
-{
-	return (uint8_t)((channel - 10u) * 5u);
+    /* set_trx_off() in zigbee-rs: stop LL activity before retuning, but
+     * leave the PHY mode sequence itself to set_rxmode_vendor() below. */
+    TLSR_REG8(0x0f02) = RF_TRX_OFF;
+    TLSR_REG8(0x040d) = (uint8_t)physical;
+    TLSR_REG16(0x04d6) = freq_mhz;
+    modem_val = (uint16_t)((freq_mhz << 2) | 1u);
+    TLSR_REG8(0x1244) = (uint8_t)modem_val;
+    TLSR_REG8(0x1245) = (uint8_t)((TLSR_REG8(0x1245) & 0xc0u) |
+                                  ((modem_val >> 8) & 0x3fu));
+    TLSR_REG8(0x1229) = (uint8_t)((TLSR_REG8(0x1229) & 0xc3u) | band);
+
+    for (uint32_t i = 0u; i < 2000u; i++) {
+        __asm__ volatile("nop");
+    }
 }
 
 static void tlsr8258_rf_set_power_level(uint8_t level)
@@ -489,6 +632,7 @@ static void tlsr8258_rf_set_power_level(uint8_t level)
 static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size)
 {
 	uintptr_t addr = (uintptr_t)buffer;
+	ARG_UNUSED(size);
 
 	/*
 	 * Vendor-verified RX re-arm (libdrivers_8258.a rf_rx_irq_handler /
@@ -505,44 +649,116 @@ static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size)
 	 * once at init and never again; toggle it here so every RX re-arm resets
 	 * the channel exactly like the vendor.
 	 */
+	/*
+	 * Match the proven 8258 PHY rearm sequence.  RF status alone is not
+	 * sufficient: the DMA channel and the CPU RF source have their own
+	 * latched completion bits.  Leaving either latched makes the next RX
+	 * look like an already-consumed DMA transaction and eventually leaves
+	 * the router idle-deaf.
+	 */
+	TLSR_REG8(0x0f20) = RF_IRQ_RX;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_RX;
 	TLSR_REG8(0x0c20) &= (uint8_t)~DMA_CHN_RF_RX;
 	TLSR_REG16(0x0c08) = (uint16_t)addr;
 	TLSR_REG8(0x0c42) = (uint8_t)((addr >> 16) & 0x0fu);
-	TLSR_REG8(0x0c0a) = (uint8_t)(size >> 4);
+	TLSR_REG8(0x0c0a) = (uint8_t)(TLSR8258_RX_DMA_SIZE >> 4);
 	TLSR_REG8(0x0c0b) = 1u;
 	TLSR_REG8(0x0c20) |= DMA_CHN_RF_RX;
+}
+
+static bool tlsr8258_rf_recover_stuck_rx(struct tlsr8258_radio_data *radio)
+{
+	const uint32_t cpu_rx_sources = BIT(4) | BIT(TLSR8258_IRQ_ZB_RT);
+	bool rf_rx_pending = (TLSR_REG16(0x0f20) & RF_IRQ_RX) != 0u;
+	bool global_irq_disabled = (TLSR_REG8(0x0643) & BIT(0)) == 0u;
+
+	/*
+	 * A pending RF completion with a live CPU source is normally left alone:
+	 * the IRQ vector will consume it.  There is one important exception: the
+	 * TLSR global IRQ gate can be cleared by the RF vector while the source
+	 * remains asserted.  In that state the source is technically "live", but
+	 * no vector can run, so the old source-absent test never repaired it.  This
+	 * is the post-join failure mode: the radio reads RX/ DMA-enabled over SWS,
+	 * yet the coordinator's unicast retries receive no MAC ACK.
+	 */
+	if (radio == NULL || !rf_rx_pending ||
+	    ((TLSR_REG32(0x0648) & cpu_rx_sources) != 0u && !global_irq_disabled)) {
+		return false;
+	}
+
+	/* RF/DMA completion is latched but its parent CPU source is gone. Clear the
+	 * originating module status and arm a fresh buffer; the caller re-enables
+	 * the CPU sources after this reset-free recovery. */
+	TLSR_REG8(0x0643) = 0u;
+	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_RX;
+	radio->rx_active[0] = 0u;
+	radio->rx_active[4] = 0u;
+	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
+	tlsr8258_rf_set_rxmode_vendor();
+	return true;
+}
+
+static inline void tlsr8258_rf_tx_status_clear(void)
+{
+	/* RF TX-done, DMA3 completion, and the shared RF CPU source. */
+	/* RF_IRQ_TX_DS is bit 8.  An 8-bit write silently discarded it and
+	 * could leave the TX completion latch asserted after a software MAC ACK,
+	 * blocking the next always-RX interrupt. */
+	TLSR_REG16(0x0f20) = RF_IRQ_TX | RF_IRQ_TX_DS;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_TX;
+}
+
+static inline void tlsr8258_rf_cpu_irq_sources_clear(void)
+{
+	/* 0x0648-0x64a are IRQ source readbacks, not W1C registers.  The
+	 * level-triggered CPU sources deassert only after their modules are clear. */
+	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_RX | DMA_CHN_RF_TX;
+}
+
+__attribute__((noinline, section(".ram_code")))
+static void tlsr8258_rf_irq_reenable(void)
+{
+	uint8_t global_irq = TLSR_REG8(0x0643);
+	uint32_t irq_mask;
+
+	/*
+	 * RF IRQ entry clears reg_irq_en on this silicon.  irq_enable() only
+	 * updates reg_irq_mask, and arch_irq_unlock() would restore the already
+	 * cleared value, leaving the CPU deaf after the first RF event.  Keep the
+	 * whole handoff in one masked sequence, as in the updated zigbee-rs
+	 * always-RX path.
+	 *
+	 * Do not clear a source if a new RX completion arrived while this ISR was
+	 * processing the previous frame: preserving it lets the just-rearmed DMA
+	 * buffer trigger the next vector.
+	 */
+	TLSR_REG8(0x0643) = 0u;
+	if ((TLSR_REG16(0x0f20) & RF_IRQ_RX_EVENTS) == 0u) {
+		tlsr8258_rf_cpu_irq_sources_clear();
+	}
+	irq_mask = TLSR_REG32(0x0640);
+	/* zigbee-rs CPU_RX_IRQ_MASK = DMA completion (bit4) plus the
+	 * baseband ZB_RT source (bit13). Enabling only ZB_RT leaves RF
+	 * auto-ACKs working while software RX completions never vector. */
+	TLSR_REG32(0x0640) = irq_mask | BIT(4) | BIT(TLSR8258_IRQ_ZB_RT);
+	compiler_barrier();
+	TLSR_REG8(0x0643) = global_irq | BIT(0);
 }
 
 static void tlsr8258_rf_tx_pkt(uint8_t *packet)
 {
 	uintptr_t addr = (uintptr_t)packet;
 
-	TLSR_REG8(0x0c43) = (uint8_t)((addr >> 16) & 0x0fu);
+	/* Exact libdrivers_8258.a::rf_tx_pkt sequence from the original asm.
+	 * The vendor sets both TX DMA ready latches.  Leaving reg_dma_tx_rdy1
+	 * (0x0c5b) untouched lets the API report a completed TX while the PSDU
+	 * never reaches the air after an RX/TX handoff. */
+	TLSR_REG8(0x0c43) = 0x04u;
 	TLSR_REG16(0x0c0c) = (uint16_t)addr;
+	TLSR_REG8(0x0c5b) |= DMA_CHN_RF_TX;
 	TLSR_REG8(0x0c24) |= DMA_CHN_RF_TX;
-}
-
-static inline void tlsr8258_rf_ll_mode_set(uint8_t mode)
-{
-	TLSR_REG8(0x0f16) = (uint8_t)((TLSR_REG8(0x0f16) & 0xfcu) | (mode & 0x03u));
-}
-
-static void tlsr8258_rf_set_rxmode(struct tlsr8258_radio_data *radio)
-{
-	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
-	TLSR_REG8(0x0428) = RF_TRX_MODE | BIT(0);
-	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);
-	/*
-	 * NOTE: the vendor SRX auto state machine (rf_start_srx) was tried
-	 * in 3 variants — armed-once (IRQ storm), armed-once+per-frame-buffer-clear
-	 * (under-receive), and re-armed-per-RX-done+clear+inline-filter (fix #7,
-	 * under-receive ~6/s, scan broke). None reproduced the vendor's clean
-	 * continuous RX; the exact vendor RX-ISR sequence/timing isn't in the libs
-	 * we have (mac_phy.c is app-side). NOT called; see the memory note.
-	 */
 }
 
 /*
@@ -565,9 +781,8 @@ static void tlsr8258_rf_set_rxmode_fast(void) __maybe_unused;
 static void tlsr8258_rf_set_rxmode_fast(void)
 {
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	TLSR_REG8(0x0428) = RF_TRX_MODE | BIT(0);
+	TLSR_REG8(0x0428) = (uint8_t)(TLSR_REG8(0x0428) | BIT(0));
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);
 }
 
 /*
@@ -587,18 +802,53 @@ static void tlsr8258_rf_set_rxmode_fast(void)
  */
 static void tlsr8258_rf_set_rxmode_vendor(void)
 {
+	/* Exact libzigbee/sdk/platform/chip_8258/rf_drv.h::rf_set_rxmode().
+	 * The state-machine reset and channel/PLL programming belong to the
+	 * explicit TX/RX-off and channel-change paths, not to the idle RX handoff.
+	 * Keeping this two-write sequence is what makes the router continuously
+	 * receivable immediately after an ACK or normal TX completion. */
 	TLSR_REG8(0x0428) = RF_TRX_MODE | BIT(0);
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(5);
-	tlsr8258_rf_ll_mode_set(RF_LL_MODE_RX);
+}
+
+/* Restore always-RX after a synchronous TX timeout. */
+static void tlsr8258_rf_rearm_idle_rx(struct tlsr8258_radio_data *radio)
+{
+	radio->rx_active[0] = 0u;
+	radio->rx_active[4] = 0u;
+	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
+	tlsr8258_rf_set_rxmode_vendor();
+	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 }
 
 static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
 {
+	ARG_UNUSED(radio);
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
-	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
-	/* Vendor rf_set_txmode leaves 0x0f16 at its fixed active value 0x29. */
+	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
+}
+
+/*
+ * Match zigbee-rs::send_mac_frame() before every ordinary TX.  The
+ * association poll has its own copy of this sequence; ordinary ZDP/ZCL TX
+ * used to skip it and relied on whatever RF/DMA state the preceding RX or
+ * MAC-ACK left behind.  That was sufficient immediately after join but made
+ * the first response after a long always-RX idle window disappear while the
+ * software TX API still reported success.
+ */
+static void tlsr8258_rf_prepare_normal_tx(void)
+{
+	/* Stop the link-layer RX state without using the RF power-off command. */
+	TLSR_REG8(0x0f16) = 0x29u;
+	TLSR_REG8(0x0428) = RF_TRX_MODE;
+	TLSR_REG8(0x0f02) = RF_TRX_OFF;
+
+	/* Clear the TX RF and DMA completion latches owned by this operation. */
+	TLSR_REG16(0x0f20) = RF_IRQ_TX | RF_IRQ_TX_DS;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_TX;
+	TLSR_REG8(0x0c0e) = (uint8_t)(TLSR8258_TX_BUF_SIZE >> 4);
+	TLSR_REG8(0x0c0f) = 0u;
 }
 
 /*
@@ -609,9 +859,11 @@ static void tlsr8258_rf_set_txmode(struct tlsr8258_radio_data *radio)
  */
 static void tlsr8258_rf_set_txmode_for_ack(void)
 {
+	/* Match libdrivers_8258.a::rf_trx_state_set(RF_MODE_TX): reset the
+	 * RF state machine, enable TX, and disable the RX gate. */
 	TLSR_REG8(0x0f02) = RF_TRX_OFF;
 	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
-	TLSR_REG8(0x0428) &= (uint8_t)~BIT(1);
+	TLSR_REG8(0x0428) &= (uint8_t)~BIT(0);
 }
 
 static uint16_t tlsr8258_snapshot_rx_frame(struct tlsr8258_radio_data *radio, uint8_t *dst,
@@ -729,10 +981,16 @@ static void tlsr8258_rf_off(void)
 
 static void tlsr8258_rf_init(void)
 {
+	/* Required clock/reset release from the hardware-proven PHY init. */
+	TLSR_REG8(0x0065) = 0xffu;
+	TLSR_REG8(0x0060) = 0u;
+	TLSR_REG8(0x0061) = 0u;
+	TLSR_REG8(0x0062) = 0u;
+	TLSR_REG8(0x0063) = 0xffu;
+	TLSR_REG8(0x0064) = 0xffu;
+
 	tlsr8258_load_tbl(tbl_rf_init, ARRAY_SIZE(tbl_rf_init));
 	tlsr8258_load_tbl(tbl_rf_zigbee_250k, ARRAY_SIZE(tbl_rf_zigbee_250k));
-
-	TLSR_REG8(0x0c20) |= DMA_CHN_RF_RX | DMA_CHN_RF_TX;
 }
 
 /* rx_length_ok / rx_crc_ok are used by the RX ISR (tlsr8258_rx_capture_common)
@@ -814,6 +1072,34 @@ static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *pa
 	}
 }
 
+/*
+ * Association Response is the one valid inbound frame that can be addressed
+ * to our IEEE while the radio's PAN/short filters still describe the previous
+ * network (or the pre-association state).  The hardware already ACKs it, so
+ * the software receive filter must not ACK-and-drop it before MLME sees it.
+ */
+static bool tlsr8258_assoc_resp_for_us(const struct tlsr8258_radio_data *radio,
+					       const uint8_t *payload, uint8_t length)
+{
+	uint16_t fcf;
+	uint8_t hdr_len;
+
+	if ((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) != 0x03u ||
+	    (payload[TLSR8258_DEST_ADDR_TYPE_OFFSET] & TLSR8258_DEST_ADDR_TYPE_MASK) !=
+		TLSR8258_DEST_ADDR_TYPE_IEEE) {
+		return false;
+	}
+
+	fcf = sys_get_le16(payload);
+	hdr_len = tlsr8258_mac_hdr_size(fcf, length);
+
+	return hdr_len != 0u && (uint16_t)(hdr_len + 4u) <= length &&
+	       payload[hdr_len] == 0x02u && /* MAC_CMD_ASSOCIATION_RESPONSE */
+	       payload[hdr_len + 3u] == 0x00u && /* MAC_SUCCESS */
+	       memcmp(&payload[TLSR8258_DEST_ADDR_OFFSET], radio->filter_ieee_addr,
+		       TLSR8258_IEEE_ADDR_SIZE) == 0;
+}
+
 static uint8_t tlsr8258_lqi_from_rssi(int8_t rssi)
 {
 	int32_t lqi;
@@ -848,6 +1134,7 @@ static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length)
 
 static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 					bool tx_prepared, uint32_t tx_prepared_at_cycles,
+					uint32_t rx_complete_at_cycles,
 					struct tlsr8258_radio_data *radio)
 {
 	/*
@@ -857,8 +1144,8 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	 *   - ACK PSDU is built from a 3-byte template (frame-control + seq);
 	 *     only the seq byte changes per ACK, so writing it inline avoids the
 	 *     stack copy that the previous local array forced.
-	 *   - Turnaround is measured in cycles, not microseconds, so the busy
-	 *     wait does not pay for k_cyc_to_us_floor32()'s software divide.
+	 *   - Settle is measured from the RX-completion timestamp, matching
+	 *     zigbee-rs; only the remaining part of the 120us window is spun.
 	 *   - All radio->debug stores have moved out of the timing-critical
 	 *     window; they only run after the ACK is on air.
 	 */
@@ -866,9 +1153,22 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	uint32_t elapsed_cyc;
 	uint16_t waited = 0u;
 
-	if (!tlsr8258_filter_match_for_ack(payload, radio)) {
+	/*
+	 * During association the PAN/short filter still contains the invalid
+	 * pre-join tuple (normally 0xffff/0xffff), while the coordinator's
+	 * successful Association Response is addressed to our IEEE address.
+	 * It is already accepted by the RX software filter below; it must also
+	 * be ACKed here, otherwise the coordinator keeps retransmitting the
+	 * response and never queues the Transport-Key burst.
+	 */
+	bool ack_filter_match = tlsr8258_filter_match_for_ack(payload, radio);
+#if !defined(CONFIG_IEEE802154_RAW_MODE)
+	ack_filter_match = ack_filter_match ||
+		tlsr8258_assoc_resp_for_us(radio, payload, length);
+#endif
+	if (!ack_filter_match) {
 		if (tx_prepared) {
-			tlsr8258_rf_set_rxmode(radio);
+			tlsr8258_rf_set_rxmode_vendor();
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		}
 		return;
@@ -877,9 +1177,10 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	ack_psdu[0] = 0x02u;
 	ack_psdu[1] = 0x00u;
 	ack_psdu[2] = payload[2];
-	if (tlsr8258_set_tx_payload(radio, ack_psdu, sizeof(ack_psdu)) < 0) {
+	if (tlsr8258_set_tx_payload_to(radio->ack_buffer, ack_psdu,
+				       sizeof(ack_psdu)) < 0) {
 		if (tx_prepared) {
-			tlsr8258_rf_set_rxmode(radio);
+			tlsr8258_rf_set_rxmode_vendor();
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 		}
 		return;
@@ -901,12 +1202,13 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	}
 
 	/*
-	 * Cycle-domain busy-wait. We deliberately spin on k_cycle_get_32()
-	 * instead of calling k_busy_wait(N) so the loop body has zero function
-	 * call overhead and the wait targets the exact cycle deadline.
+	 * Cycle-domain busy-wait. The timestamp is taken at RX completion (the
+	 * ISR-entry timestamp is the closest available C equivalent), not after
+	 * the TX handoff or frame parsing. This is the same remaining-settle
+	 * calculation used by zigbee-rs::send_ack_fast().
 	 */
 	do {
-		elapsed_cyc = k_cycle_get_32() - tx_prepared_at_cycles;
+		elapsed_cyc = k_cycle_get_32() - rx_complete_at_cycles;
 	} while (elapsed_cyc < TLSR8258_ACK_TURNAROUND_CYC);
 
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
@@ -919,24 +1221,35 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 		radio->debug->wait_duration_us =
 			(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
 	}
-	tlsr8258_rf_tx_pkt(radio->tx_buffer);
+	tlsr8258_rf_tx_pkt(radio->ack_buffer);
 
 	/*
-	 * Step 2 — defer the post-ACK busy-wait out of the ISR. The
-	 * aTurnaroundTime spin above is real-time-mandatory (IEEE 802.15.4
-	 * forbids missing the turnaround window) and stays in ISR context.
-	 * The original 300 × k_busy_wait(1) poll for RF_IRQ_TX_DS used to
-	 * live here too; it added up to 300 µs of ISR occupancy per ACK
-	 * and was the second-largest source of RX-worker starvation
-	 * (zephyr-docs/router-rx-queue-starvation-2026-06-20.md).
+	 * Complete the MAC-ACK handoff before leaving this RX ISR, matching
+	 * libzigbee/platform/chip_8258/rf_drv.h::rf_rx_irq_handler().  The
+	 * TLSR8258 does not reliably generate a follow-up TX-done CPU edge for
+	 * this short, software-triggered ACK.  Deferring the wait therefore
+	 * leaves the RF state machine in TX (0x0f02 == 0x55), and the next
+	 * coordinator request arrives while the router is deaf.  The old
+	 * deferred version relied on the idle guard to repair that state, but
+	 * the repair is necessarily too late for the next unicast.
 	 *
-	 * Instead: set radio->op.ack_tx_pending, return from ISR
-	 * immediately. The next RF ISR (which fires on RF_IRQ_TX_DS /
-	 * CMD_DONE) sees the flag and switches the radio back to RX
-	 * via tlsr8258_rf_set_rxmode in its normal `has_tx` branch
-	 * (already wired at the top of tlsr8258_rf_isr).
+	 * Keep the wait bounded.  A normal three-byte ACK completes well below
+	 * this limit; on a lost completion latch we still clear the TX status
+	 * and force the reset-free vendor TX->RX transition before returning.
+	 * RX DMA is re-armed by the caller after this function returns.
 	 */
-	radio->op.ack_tx_pending = true;
+	uint32_t ack_wait_start = k_cycle_get_32();
+	uint32_t ack_wait_budget =
+		(uint32_t)CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 2000u; /* 500 us */
+
+	while ((TLSR_REG16(0x0f20) & (RF_IRQ_TX | RF_IRQ_TX_DS)) == 0u &&
+	       (k_cycle_get_32() - ack_wait_start) < ack_wait_budget) {
+		k_busy_wait(1u);
+	}
+
+	tlsr8258_rf_tx_status_clear();
+	tlsr8258_rf_set_rxmode_vendor();
+	radio->op.ack_tx_pending = false;
 	(void)waited;
 }
 
@@ -988,12 +1301,36 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	 * noise. Re-arm RX and drop, exactly as the vendor does. rx_active/rx_proc were
 	 * already swapped by the caller, so the DMA stays armed for the next frame.
 	 */
-	if (!tlsr8258_rx_length_ok(rx) || !tlsr8258_rx_crc_ok(rx)) {
-		tlsr8258_rf_set_rxmode(radio);
+	if (!tlsr8258_rx_length_ok(rx)) {
+		tlsr8258_rf_set_rxmode_vendor();
 		return;
+	}
+	if (!tlsr8258_rx_crc_ok(rx)) {
+		/* The 8258 RF RX latch is CRC-gated.  With the TB03F active
+		 * 0x0f03 profile, the trailer/status byte does not match the old
+		 * vendor macro even though RF_IRQ_RX is asserted and the frame is
+		 * successfully ACKed.  Treat the hardware RX event as authoritative;
+		 * only a CRC2-only event is a real CRC failure. */
+		if ((irq_status & RF_IRQ_RX) == 0u) {
+			tlsr8258_rf_set_rxmode_vendor();
+			return;
+		}
 	}
 
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
+	uint32_t ack_prepared_at_cycles = 0u;
+	bool ack_mode_prepared = false;
+	bool ack_requested_early = tlsr8258_ack_requested(payload, length);
+
+	/* Match zigbee-rs take_completed_rx(): leave RX and enter TX before any
+	 * header/debug/filter work.  AssocResp is only valid for a very short ACK
+	 * turnaround window; doing this below the parser made the ACK intermittent
+	 * and the coordinator retransmit the response. */
+	if (ack_requested_early) {
+		tlsr8258_rf_set_txmode_for_ack();
+		ack_prepared_at_cycles = k_cycle_get_32();
+		ack_mode_prepared = true;
+	}
 	struct tlsr8258_core_filter_ctx ack_filter_ctx = {
 		.pan_id = radio->filter_pan_id,
 		.short_addr = radio->filter_short_addr,
@@ -1011,7 +1348,7 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	bool ack_requested = ack_decision.ack_requested;
 
 	if (self_originated) {
-		tlsr8258_rf_set_rxmode(radio);
+		tlsr8258_rf_set_rxmode_vendor();
 		if (radio->debug != NULL) {
 			radio->debug->rx_capture_debug_count++;
 			radio->debug->rx_capture_irq_debug = irq_status;
@@ -1032,8 +1369,10 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	 * aTurnaroundTime window).
 	 */
 	if (ack_requested) {
-		tlsr8258_rf_set_txmode_for_ack();
-		uint32_t ack_prepared_at_cycles = k_cycle_get_32();
+		if (!ack_mode_prepared) {
+			tlsr8258_rf_set_txmode_for_ack();
+			ack_prepared_at_cycles = k_cycle_get_32();
+		}
 		if (radio->debug != NULL) {
 			radio->debug->ack_capture_cyc = ack_prepared_at_cycles;
 			uint32_t delta =
@@ -1043,7 +1382,31 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 				(uint16_t)((delta > 0xffffu) ? 0xffffu : delta);
 		}
 		tlsr8258_send_ack_if_needed(payload, length, true,
-					    ack_prepared_at_cycles, radio);
+					    ack_prepared_at_cycles, isr_entry_cycles, radio);
+	}
+
+	/* The Zigbee sink bypasses Zephyr's net-stack receive path, so the
+	 * ordinary tlsr8258_filter_match() in rx_dispatch() is not reached there.
+	 * Apply the same PAN/address filter before consuming one of the 16 deferred
+	 * RX slots. Otherwise broadcasts and unrelated unicast traffic can fill the
+	 * FIFO while the ISR still emits MAC ACKs, leaving the coordinator's next
+	 * interview request ACKed but never delivered to the stack. Keep ACK frames
+	 * only while a stack TX is waiting for that ACK; idle ACKs have no Zigbee
+	 * payload and only waste a deferred slot. */
+	if ((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x02u) {
+		if ((radio->op.state != TLSR8258_RADIO_OP_TX_PENDING) &&
+		    (radio->op.state != TLSR8258_RADIO_OP_WAITING_POST_TX_RX)) {
+			tlsr8258_rf_set_rxmode_vendor();
+			return;
+		}
+	} else {
+#if !defined(CONFIG_IEEE802154_RAW_MODE)
+		if (!tlsr8258_filter_match(radio, payload) &&
+		    !tlsr8258_assoc_resp_for_us(radio, payload, length)) {
+			tlsr8258_rf_set_rxmode_vendor();
+			return;
+		}
+#endif
 	}
 
 	/*
@@ -1108,6 +1471,8 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 					    rx_rssi_dbm);
 }
 
+/* Keep the worker-side sink handoff as a real call boundary. */
+__attribute__((noinline))
 static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 				 const struct tlsr8258_rx_frame *frame)
 {
@@ -1154,7 +1519,9 @@ static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 		return;
 	}
 
-	if (!tlsr8258_filter_match(radio, (uint8_t *)&rx[TLSR8258_PAYLOAD_OFFSET])) {
+	if (!tlsr8258_filter_match(radio, (uint8_t *)&rx[TLSR8258_PAYLOAD_OFFSET]) &&
+	    !tlsr8258_assoc_resp_for_us(radio, (uint8_t *)&rx[TLSR8258_PAYLOAD_OFFSET],
+					 length)) {
 		return;
 	}
 
@@ -1253,9 +1620,25 @@ static void tlsr8258_rf_isr(const void *arg)
 	 * stable even if the compiler reorders the prologue.
 	 */
 	uint32_t isr_entry_cyc = k_cycle_get_32();
-	const struct device *dev = arg;
-	struct tlsr8258_radio_data *radio = dev->data;
+	struct tlsr8258_radio_data *radio = (struct tlsr8258_radio_data *)arg;
 	uint16_t irq = TLSR_REG16(0x0f20);
+	/* On this silicon the RF RX latch can vector before DMA2 has written
+	 * the length byte and trailer.  Do not swap/re-arm the active buffer in
+	 * that window: doing so discards the just-received long unicast (most
+	 * visibly the indirect Association Response).  A valid frame normally
+	 * becomes coherent immediately; the bounded wait is only on the invalid
+	 * transient path and remains inside the MAC ACK deadline. */
+	if ((irq & RF_IRQ_RX_EVENTS) != 0u &&
+	    (!tlsr8258_rx_length_ok(radio->rx_active) ||
+	     !tlsr8258_rx_crc_ok(radio->rx_active))) {
+		for (uint32_t spin = 0u; spin < 40u; spin++) {
+			if (tlsr8258_rx_length_ok(radio->rx_active) &&
+			    tlsr8258_rx_crc_ok(radio->rx_active)) {
+				break;
+			}
+			k_busy_wait(1u);
+		}
+	}
 	uint16_t effective_irq =
 		tlsr8258_rf_irq_effective_status(irq, radio->rx_active, TLSR8258_RX_BUF_SIZE);
 	uint8_t dma_len = radio->rx_active[0];
@@ -1313,6 +1696,15 @@ static void tlsr8258_rf_isr(const void *arg)
 	 */
 	if (!has_rx && (irq & RF_IRQ_RX_EVENTS) != 0u) {
 		TLSR_REG16(0x0f20) = RF_IRQ_RX_EVENTS;
+		/* A raw RX completion can be transient/invalid before the DMA header
+		 * is coherent.  Clearing only RF_IRQ_RX leaves DMA2 in its completed
+		 * state and makes this the last ISR forever.  zigbee-rs still consumes
+		 * that completion through take_completed_rx(), which clears DMA2 and
+		 * arms the next buffer; mirror that behavior here. */
+		radio->rx_active[0] = 0u;
+		radio->rx_active[4] = 0u;
+		tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
+		tlsr8258_rf_set_rxmode_vendor();
 		if (debug != NULL) {
 			debug->rf_irq_ack_debug = RF_IRQ_RX_EVENTS;
 		}
@@ -1335,6 +1727,7 @@ static void tlsr8258_rf_isr(const void *arg)
 			debug->rf_branch_debug = has_rx ? 6u : 2u;
 			debug->rf_irq_ack_debug = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		}
+		tlsr8258_rf_tx_status_clear();
 		TLSR_REG16(0x0f20) = effective_irq & (RF_IRQ_TX | RF_IRQ_TX_DS);
 		tlsr8258_radio_tx_count_inc(radio);
 		{
@@ -1418,32 +1811,67 @@ static void tlsr8258_rf_isr(const void *arg)
 	}
 
 	if (has_rx) {
-		struct tlsr8258_core_rx_dma_result rx_dma_result;
+		uint8_t rx_pass;
+
+		/*
+		 * Match the updated zigbee-rs always-RX vector: a second packet can
+		 * complete while the first one is being ACKed/copied.  Drain only a
+		 * bounded pair here; if the latch is still asserted afterward, leave
+		 * it pending for the next CPU vector instead of spinning in the ISR.
+		 */
+		for (rx_pass = 0u; rx_pass < 2u; rx_pass++) {
+			struct tlsr8258_core_rx_dma_result rx_dma_result;
+
+			if (rx_pass != 0u) {
+				irq = TLSR_REG16(0x0f20);
+				effective_irq = tlsr8258_rf_irq_effective_status(
+					irq, radio->rx_active, TLSR8258_RX_BUF_SIZE);
+				if (!tlsr8258_rf_irq_has_rx_event(effective_irq)) {
+					break;
+				}
+			}
 
 		if (debug != NULL) {
-			debug->rf_branch_debug = has_tx ? 7u : 1u;
-			debug->rf_isr_rx_event_count++;
-		}
-		/*
-		 * Double-buffer swap (vendor mac_phy.c rf_rx_irq_handler): the RF DMA
-		 * just filled rx_active. Hand that buffer to rx_proc for processing and
-		 * point the DMA at the OTHER of {rx_buffer, rx_shadow} so the NEXT frame
-		 * — notably the coordinator's ASSOCIATION-RESPONSE arriving a few ms
-		 * after our own ACK-requested poll — lands in a fresh buffer instead of
-		 * being missed/overwritten. rf_rx_buffer_reconfig = write reg 0x0c08
-		 * (low 16b of addr); both buffers share the same high address bits.
-		 */
-		tlsr8258_core_handle_rx_dma(radio->rx_active, radio->rx_buffer,
-					    radio->rx_shadow, &rx_dma_result);
-		radio->rx_proc = rx_dma_result.rx_proc;
-		radio->rx_active = rx_dma_result.next_rx_active;
-		if (rx_dma_result.rearm_rx_buffer) {
-			radio->rx_active[0] = 0u;
-			radio->rx_active[4] = 0u;
-			tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_BUF_SIZE);
-		}
+				debug->rf_branch_debug = has_tx ? 7u : 1u;
+				debug->rf_isr_rx_event_count++;
+			}
+			/*
+			 * Double-buffer swap (vendor mac_phy.c rf_rx_irq_handler): the RF DMA
+			 * just filled rx_active. Hand that buffer to rx_proc for processing and
+			 * point the DMA at the OTHER of {rx_buffer, rx_shadow} BEFORE parsing or
+			 * ACKing, so the next frame lands in a fresh buffer.
+			 */
+			tlsr8258_core_handle_rx_dma(radio->rx_active, radio->rx_buffer,
+							radio->rx_shadow, &rx_dma_result);
+			radio->rx_proc = rx_dma_result.rx_proc;
+			radio->rx_active = rx_dma_result.next_rx_active;
+			if (rx_dma_result.rearm_rx_buffer) {
+				/*
+				 * Keep DMA2 disabled while rx_capture_common() performs
+				 * the MAC-ACK/parse/queue handoff.  Re-enabling it before
+				 * clearing the current RF completion lets this TLSR8258
+				 * latch the same completion again; on hardware that becomes
+				 * an ISR storm (thousands of dispatches for one frame) and
+				 * starves the actual Zigbee traffic.  The vendor path updates
+				 * the next address first and enables RX only after consuming
+				 * the completed buffer.
+				 */
+				radio->rx_active[0] = 0u;
+				radio->rx_active[4] = 0u;
+				TLSR_REG8(0x0c20) &= (uint8_t)~DMA_CHN_RF_RX;
+			}
 
-		tlsr8258_rx_capture_isr(effective_irq, radio);
+			tlsr8258_rx_capture_isr(effective_irq, radio);
+			if (rx_dma_result.rearm_rx_buffer) {
+				tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_BUF_SIZE);
+				/* A MAC ACK is kicked from rx_capture_common() and its
+				 * TX-done ISR owns the TX->RX transition.  Do not switch
+				 * the RF state machine underneath that pending ACK. */
+				if (!radio->op.ack_tx_pending) {
+					tlsr8258_rf_set_rxmode_vendor();
+				}
+			}
+		}
 		if (has_tx) {
 			uint16_t residual_irq =
 				effective_irq & ~(RF_IRQ_TX | RF_IRQ_TX_DS | RF_IRQ_RX_EVENTS);
@@ -1453,26 +1881,33 @@ static void tlsr8258_rf_isr(const void *arg)
 			}
 		} else if (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING) {
 			/*
-			 * Some TX completions on this chip arrive as RX_EVENT only
-			 * (the ACK reception that auto-follows a frame with the
-			 * ACK_REQUEST bit set), with neither RF_IRQ_TX nor RF_IRQ_TX_DS
-			 * asserted in the same ISR. Without a fallback, tx() times out
-			 * with -EAGAIN even though the frame was transmitted and ACKed
-			 * (sniffer confirms). Treat any RX-while-TX_PENDING as a
-			 * successful TX completion — the seq-match check earlier proved
-			 * too strict on this silicon (the rx_buffer is sometimes already
-			 * advanced to the next frame by the time we read it), and
-			 * conservatively unblocking the synchronous tx() caller is
-			 * preferable to a 10 ms timeout that ends with no progress.
+			 * Some TX completions on this chip arrive as RX_EVENT only (the
+			 * MAC ACK reception that auto-follows a frame with the ACK_REQUEST
+			 * bit set), with neither RF_IRQ_TX nor RF_IRQ_TX_DS asserted in the
+			 * same ISR.  The RX event is not, by itself, proof of TX completion:
+			 * a coordinator retry or an unrelated beacon can arrive while our
+			 * TX is pending.  Complete only when the completed DMA buffer is the
+			 * MAC ACK for the exact sequence number of this TX.
 			 */
 			bool tx_complete;
 			uint32_t key;
 			struct tlsr8258_core_rx_only_tx_result rx_only_tx_result;
+			bool ack_for_tx = false;
+
+			if (radio->op.expect_ack && radio->rx_proc != NULL) {
+				const uint8_t *psdu = &radio->rx_proc[TLSR8258_PAYLOAD_OFFSET];
+				uint8_t psdu_len = tlsr8258_dma_payload_len_get(
+					radio->rx_proc, radio->rx_proc[0] + 4u);
+
+				ack_for_tx = tlsr8258_psdu_is_ack_for_seq(psdu, psdu_len,
+									radio->op.tx_seq);
+			}
 
 			tlsr8258_core_handle_rx_only_tx_completion(false,
-								 radio->op.state ==
-									 TLSR8258_RADIO_OP_TX_PENDING,
-								 &rx_only_tx_result);
+									 radio->op.state ==
+										 TLSR8258_RADIO_OP_TX_PENDING,
+									 ack_for_tx,
+									 &rx_only_tx_result);
 			key = irq_lock();
 			tx_complete = rx_only_tx_result.complete_stack_tx &&
 				      tlsr8258_radio_op_on_tx_success(&radio->op);
@@ -1501,7 +1936,7 @@ static void tlsr8258_rf_isr(const void *arg)
 			debug->rf_irq_ack_debug = effective_irq;
 		}
 		TLSR_REG16(0x0f20) = effective_irq;
-		tlsr8258_rf_set_rxmode(radio);
+		tlsr8258_rf_rearm_idle_rx(radio);
 		key = irq_lock();
 		if (radio->op.state == TLSR8258_RADIO_OP_TX_PENDING ||
 		    radio->op.state == TLSR8258_RADIO_OP_WAITING_POST_TX_RX) {
@@ -1518,9 +1953,9 @@ static void tlsr8258_rf_isr(const void *arg)
 			if (has_tx) {
 				ack &= ~(RF_IRQ_TX | RF_IRQ_TX_DS);
 			}
-			if (ack == 0u) {
-				return;
-			}
+				if (ack == 0u) {
+					goto irq_reenable;
+				}
 
 			if (debug != NULL && !has_tx) {
 				debug->rf_branch_debug = (effective_irq != 0u) ? 4u : 5u;
@@ -1528,6 +1963,18 @@ static void tlsr8258_rf_isr(const void *arg)
 			}
 		TLSR_REG16(0x0f20) = ack;
 	}
+
+	/*
+	 * TLSR8258 clears the global IRQ-enable latch on entry to the RF
+	 * interrupt.  The Rust/vendor IRQ vector explicitly sets it again before
+	 * returning; without the matching re-enable here the first RF event is
+	 * handled, then no further RX/TX interrupt can arrive.  That presents as
+	 * an idle-deaf radio (0x0f02 falls back to RF_TRX_OFF) and also prevents
+	 * the MAC-ACK path from keeping the coordinator's retry window alive.
+	 */
+irq_reenable:
+	(void)tlsr8258_rf_recover_stuck_rx(radio);
+	tlsr8258_rf_irq_reenable();
 }
 
 static void tlsr8258_iface_init(struct net_if *iface)
@@ -1589,13 +2036,19 @@ static int tlsr8258_set_channel(const struct device *dev, uint16_t channel)
 		return -EINVAL;
 	}
 
+	/* Update the persistent shadow even when the live value already matches. */
+	tlsr8258_channel_shadow = channel;
+
 	if (tlsr8258_radio_current_channel_get(radio) == channel) {
 		return -EALREADY;
 	}
 
 	tlsr8258_radio_current_channel_set(radio, channel);
 	if (tlsr8258_radio_started_get(radio)) {
-		tlsr8258_rf_set_rxmode(radio);
+		tlsr8258_rf_set_channel(channel);
+		/* Channel changes must return directly to RX.  The resetful helper
+		 * creates the same idle-deaf window as the old TX->RX path. */
+		tlsr8258_rf_set_rxmode_vendor();
 	}
 
 	return 0;
@@ -1655,30 +2108,67 @@ static int tlsr8258_start(const struct device *dev)
 		return -EALREADY;
 	}
 
+	/* Full SDK/Rust PHY bring-up order. */
+	TLSR_REG8(0x0f00) = 0x80u;
+	TLSR_REG8(0x0f16) = 0x29u;
+	TLSR_REG8(0x0428) = RF_TRX_MODE;
+	TLSR_REG8(0x0f02) = RF_TRX_OFF;
+	TLSR_REG8(0x0f01) = 0x3fu;
+	TLSR_REG8(0x0f01) = 0u;
+	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	TLSR_REG16(0x0f1c) = 0u;
+	TLSR_REG8(0x0f15) = 0x10u;
+	TLSR_REG16(0x0f04) = 149u;
+	tlsr8258_rf_init();
+	tlsr8258_rf_set_channel(tlsr8258_radio_current_channel_get(radio));
+
+	/* Keep the TLSR8258 Zigbee receive profile that was validated by the
+	 * Zephyr router interview on hardware.  Bit7 of 0x0405 is required by the
+	 * 8258 RX access-code path for IEEE-unicast frames; without it the radio
+	 * still receives beacons/broadcasts but drops the coordinator's long-
+	 * addressed AssocResp before DMA2.  The active-session LL/settle values
+	 * below are the matching vendor profile (0xf0/113), not the newer generic
+	 * Rust PHY defaults (0x10/150) which are not interchangeable here.
+	 */
 	TLSR_REG8(0x0401) = 0u;
 	TLSR_REG8(0x0404) &= (uint8_t)~BIT(5);
-	TLSR_REG8(0x0405) |= BIT(7);
+	TLSR_REG8(0x0405) = 0x84u;
 	TLSR_REG8(0x0f15) = 0xf0u;
 	TLSR_REG16(0x0f04) = 113u;
 	TLSR_REG8(0x0f03) &= (uint8_t)~BIT(2);
 	tlsr8258_rf_debug_reset(radio);
 	radio->rx_active = radio->rx_buffer;
 	radio->rx_proc = radio->rx_buffer;
-	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_BUF_SIZE);
+	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
 	radio->rx_buffer[0] = 0u;
 	radio->rx_buffer[4] = 0u;
 	radio->rx_shadow[0] = 0u;
 	radio->rx_shadow[4] = 0u;
+	TLSR_REG8(0x0c20) |= DMA_CHN_RF_RX | DMA_CHN_RF_TX;
 	/* 0 dBm (rf_power_level_list[30] = 0xa9). TX power is not the interview-
 	 * reliability factor; use a clean standard 0 dBm. */
 	tlsr8258_rf_set_power_level(rf_power_level_list[30]);
-	TLSR_REG8(0x0c21) &= (uint8_t)~(DMA_CHN_RF_RX | DMA_CHN_RF_TX);
+	TLSR_REG8(0x0c26) = 0x0cu;
+	TLSR_REG8(0x0c21) = 0x04u;
+	/* The vendor headers label bit 5 as BLE NESN-init and do not set it for
+	 * Zigbee.  On this TB03F, however, the live PHY loses all MAC-ACK/RX
+	 * activity after the idle handoff unless the RX latch is asserted here;
+	 * the A/B test is unambiguous (0x1a: no ACK, 0x3a: ACK).  Keep this
+	 * board-specific workaround until the underlying 8258 RF blob behaviour
+	 * is replaceable.  Bit 2 remains cleared as in vendor rf_drv.h. */
+	TLSR_REG8(0x0f03) |= BIT(5);
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	TLSR_REG16(0x0f1c) = 0u;
 	TLSR_REG16(0x0f1c) = runtime_irq_mask;
 	TLSR_REG8(0x0430) |= BIT(1);
-	tlsr8258_rf_set_rxmode(radio);
-	irq_enable(TLSR8258_IRQ_ZB_RT);
+	/* Match zigbee-rs set_rx_mode(): no RF_TRX_OFF reset here.  The radio is
+	 * already stopped by the ordered bring-up above; this is the first and
+	 * only RX arm for the idle router. */
+	tlsr8258_rf_set_rxmode_vendor();
+	/* RF IRQ entry clears the global CPU gate on TLSR8258.  Use the same
+	 * atomic mask/source/global restore as the updated zigbee-rs driver even
+	 * for the initial RX arm; irq_enable() only changes REG_IRQ_MASK. */
+	tlsr8258_rf_irq_reenable();
 	tlsr8258_radio_started_set(radio, true);
 
 	return 0;
@@ -1704,29 +2194,47 @@ static int tlsr8258_stop(const struct device *dev)
 static int tlsr8258_set_tx_payload(struct tlsr8258_radio_data *radio, const uint8_t *payload,
 				   uint8_t payload_len)
 {
+	uint8_t *tx_buffer;
+	int ret;
+
+	if (payload_len > (TLSR8258_PHY_MAX_PSDU - TLSR8258_FCS_LENGTH)) {
+		return -EINVAL;
+	}
+
+	/* Keep multiple DMA-owned packets alive. The zigbee-rs reference uses a
+	 * TX FIFO for the same reason: RF_IRQ_TX can complete before DMA3 has
+	 * released the descriptor, while the next stack request is already
+	 * preparing another encrypted frame. */
+	tx_buffer = radio->tx_buffer;
+	ret = tlsr8258_set_tx_payload_to(tx_buffer, payload, payload_len);
+
+	return ret;
+}
+
+static int tlsr8258_set_tx_payload_to(uint8_t *tx_buffer, const uint8_t *payload,
+					      uint8_t payload_len)
+{
 	uint32_t dma_len;
 
 	if (payload_len > (TLSR8258_PHY_MAX_PSDU - TLSR8258_FCS_LENGTH)) {
 		return -EINVAL;
 	}
 
-	/*
-	 * Direct-register TLSR8258 implementations program the TX DMA header as
-	 * a 32-bit transfer length: rf_len (1 byte) + payload + auto-appended CRC.
-	 */
-	/*
-	 * The validated 8258 Zigbee TX path expects the DMA header to carry
-	 * a plain byte length of (PSDU + length field). The PHY length at
-	 * byte 4 still includes the auto-generated FCS.
-	 */
+	/* MCU_CORE_8258's vendor path uses a raw DMA byte count here.  The
+	 * rf_tx_packet_dma_len() word/remainder encoding belongs to B91/8278,
+	 * not this 8258 RF block. */
 	dma_len = (uint32_t)payload_len + 1u;
-	radio->tx_buffer[0] = (uint8_t)dma_len;
-	radio->tx_buffer[1] = (uint8_t)(dma_len >> 8);
-	radio->tx_buffer[2] = (uint8_t)(dma_len >> 16);
-	radio->tx_buffer[3] = (uint8_t)(dma_len >> 24);
-	radio->tx_buffer[4] = payload_len + TLSR8258_FCS_LENGTH;
-	memcpy(&radio->tx_buffer[TLSR8258_PAYLOAD_OFFSET], payload, payload_len);
-
+	tx_buffer[0] = (uint8_t)dma_len;
+	tx_buffer[1] = (uint8_t)(dma_len >> 8);
+	tx_buffer[2] = (uint8_t)(dma_len >> 16);
+	tx_buffer[3] = (uint8_t)(dma_len >> 24);
+	tx_buffer[4] = payload_len + TLSR8258_FCS_LENGTH;
+	/* The DMA header makes the payload destination unaligned by five bytes.
+	 * Use an explicit byte copy; the TC32 memcpy path can leave the final MIC
+	 * byte stale on this boundary. */
+	for (uint8_t i = 0U; i < payload_len; i++) {
+		tx_buffer[TLSR8258_PAYLOAD_OFFSET + i] = payload[i];
+	}
 	return 0;
 }
 
@@ -1761,11 +2269,37 @@ static int tlsr8258_tx_sync_assoc_poll(struct tlsr8258_radio_data *radio, uint8_
 	uint32_t waited_us = 0u;
 	bool tx_done = false;
 
-	irq_disable(TLSR8258_IRQ_ZB_RT);
+	/*
+	 * Own the complete radio operation, including DMA2's CPU source.  The
+	 * generic irq_disable() call only masked ZB_RT; an RX-DMA completion could
+	 * otherwise vector in the middle of this handoff and consume the buffer
+	 * while the poll still owns the RF state machine.  This is the same
+	 * CPU_RX_IRQ_MASK critical section used by the current zigbee-rs PHY.
+	 */
+	TLSR_REG8(0x0643) = 0u;
+	TLSR_REG32(0x0640) &= ~(BIT(4) | BIT(TLSR8258_IRQ_ZB_RT));
+	compiler_barrier();
 	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, true, false);
-	tlsr8258_rf_set_txmode(radio);
-	k_busy_wait(120);
-	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+	/* C's lightweight CCA does not run the Rust perform_csma_ca() teardown.
+	 * Reproduce its set_trx_off() explicitly so the RX gate cannot remain
+	 * active while DMA3 is being handed to the LL TX state machine. */
+	TLSR_REG8(0x0f16) = 0x29u;
+	TLSR_REG8(0x0428) = RF_TRX_MODE;
+	TLSR_REG8(0x0f02) = RF_TRX_OFF;
+
+	/* Match zigbee-rs send_mac_frame(): prepare RX DMA before changing the
+	 * LL to TX, then clear only the TX/DMA3 latches owned by this operation. */
+	radio->rx_active[0] = 0u;
+	radio->rx_active[4] = 0u;
+	radio->rx_proc = radio->rx_active;
+	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
+	TLSR_REG8(0x0c0e) = (uint8_t)(TLSR8258_RX_DMA_SIZE >> 4);
+	TLSR_REG8(0x0c0f) = 0u;
+	TLSR_REG16(0x0f20) = RF_IRQ_TX | RF_IRQ_TX_DS;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_TX;
+	TLSR_REG8(0x0f02) = RF_TRX_OFF | BIT(4);
+	/* PHY settle delay used by the updated zigbee-rs TLSR8258 path. */
+	k_busy_wait(250);
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
 
 	while (waited_us < TLSR8258_SYNC_POLL_TX_DONE_TIMEOUT_US) {
@@ -1776,17 +2310,21 @@ static int tlsr8258_tx_sync_assoc_poll(struct tlsr8258_radio_data *radio, uint8_
 		k_busy_wait(TLSR8258_SYNC_POLL_TX_DONE_STEP_US);
 		waited_us += TLSR8258_SYNC_POLL_TX_DONE_STEP_US;
 	}
+	/* Match zigbee-rs tx_done_clear(): clear RF TX and DMA3 completion before
+	 * exposing the already-armed DMA2 buffer to the RX state machine. */
 	TLSR_REG16(0x0f20) = RF_IRQ_TX | RF_IRQ_TX_DS;
+	TLSR_REG8(0x0c26) = DMA_CHN_RF_TX;
 
-	/*
-	 * Immediate turnaround: re-point + re-arm the RX DMA buffer FIRST, then
-	 * switch to RX (this order produced the first-ever AssocResp reception on
-	 * HW; the reverse regressed to zero handoffs).
-	 */
+	/* Re-arm DMA2 after TX-done, even though it was prepared before TX. On
+	 * TLSR8258 the coordinator's MAC ACK can complete DMA2 during the TX/RX
+	 * handoff and leave the channel's completion latch set; merely switching
+	 * the LL back to RX then misses the indirect AssocResp a few milliseconds
+	 * later. Re-point/re-arm first, then use the reset-free RX mode switch.
+	 * Avoid RF_TRX_OFF here: it reopens the deaf window after an idle poll. */
 	radio->rx_active[0] = 0u;
 	radio->rx_active[4] = 0u;
 	radio->rx_proc = radio->rx_active;
-	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_BUF_SIZE);
+	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
 	tlsr8258_rf_set_rxmode_vendor();
 
 	if (tx_done) {
@@ -1795,7 +2333,9 @@ static int tlsr8258_tx_sync_assoc_poll(struct tlsr8258_radio_data *radio, uint8_
 		tlsr8258_radio_op_on_timeout(&radio->op);
 	}
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
-	irq_enable(TLSR8258_IRQ_ZB_RT);
+	/* The sync poll owns the TX->RX handoff; restore the CPU RF source
+	 * explicitly before the coordinator's indirect AssocResp arrives. */
+	tlsr8258_rf_irq_reenable();
 	return tlsr8258_radio_op_result_errno(&radio->op);
 }
 
@@ -1847,6 +2387,26 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	if (expect_post_tx_followup && expect_ack) {
 		return tlsr8258_tx_sync_assoc_poll(radio, tx_seq);
 	}
+
+	/*
+	 * A software MAC-ACK is kicked from the RX ISR and owns the RF TX state
+	 * until its TX-done interrupt returns the chip to RX.  Do not reset the
+	 * shared radio-op for a stack TX in that interval: doing so lets the ACK's
+	 * completion wake the new operation before its own DMA transfer, which
+	 * presents as a successful API call with no frame on air.
+	 */
+	for (uint32_t wait_us = 0u;
+	     tlsr8258_ack_tx_pending_get(radio) && wait_us < 2000u;
+	     wait_us += 50u) {
+		k_busy_wait(50u);
+	}
+	if (tlsr8258_ack_tx_pending_get(radio)) {
+		/* Lost ACK-TX completion: restore the always-RX invariant, then let the
+		 * upper MAC retry this stack frame instead of corrupting the handoff. */
+		tlsr8258_rf_rearm_idle_rx(radio);
+		radio->op.ack_tx_pending = false;
+		return -EAGAIN;
+	}
 	/*
 	 * Under the Zigbee async RX sink, keep tx() short and let the upper
 	 * layer consume Data Request follow-up traffic asynchronously.
@@ -1861,8 +2421,11 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	irq_disable(TLSR8258_IRQ_ZB_RT);
 	k_sem_reset(&radio->tx_wait);
 	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, expect_ack, expect_post_tx_rx);
+	tlsr8258_rf_prepare_normal_tx();
 	tlsr8258_rf_set_txmode(radio);
-	k_busy_wait(120);
+	/* Rust keeps the TX DMA state stable for ~250 us after the mode switch
+	 * before asserting the DMA-ready bit. */
+	k_busy_wait(250);
 	if (session_irq_mask != saved_irq_mask) {
 		TLSR_REG16(0x0f1c) = 0u;
 		TLSR_REG16(0x0f1c) = session_irq_mask;
@@ -1873,7 +2436,8 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	TLSR_REG16(0x0f20) = tlsr8258_tx_irq_start_clear_mask(expect_post_tx_followup);
 	tlsr8258_tx_diag_put(radio, (0x10u << 24) | ((uint32_t)tx_seq << 16) | (uint32_t)mode);
 	tlsr8258_rf_tx_pkt(radio->tx_buffer);
-	irq_enable(TLSR8258_IRQ_ZB_RT);
+	/* irq_enable() updates only REG_IRQ_MASK; restore the global gate too. */
+	tlsr8258_rf_irq_reenable();
 
 	ret = k_sem_take(&radio->tx_wait, wait_timeout);
 	if (session_irq_mask != saved_irq_mask) {
@@ -1926,7 +2490,6 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 			} else {
 				(void)tlsr8258_radio_op_on_tx_success(&radio->op);
 			}
-			tlsr8258_rf_set_rxmode(radio);
 			/*
 			 * This poll completed OUTSIDE the RF ISR (TX_DS masked for
 			 * the session), so the ISR double-buffer swap never ran. If
@@ -1942,8 +2505,10 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 				radio->rx_active[0] = 0u;
 				radio->rx_active[4] = 0u;
 				tlsr8258_rf_rx_buffer_set(radio->rx_active,
-							  TLSR8258_RX_BUF_SIZE);
+							  TLSR8258_RX_DMA_SIZE);
 			}
+			/* Reference order: DMA first, then reset-free RX mode. */
+			tlsr8258_rf_set_rxmode_vendor();
 			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 			return tlsr8258_radio_op_result_errno(&radio->op);
 		}
@@ -1959,8 +2524,7 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 						 ((uint32_t)tx_seq << 16) |
 						 pending_irq);
 			tlsr8258_radio_op_on_tx_error(&radio->op, -EIO);
-			tlsr8258_rf_set_rxmode(radio);
-			TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+			tlsr8258_rf_rearm_idle_rx(radio);
 			return tlsr8258_radio_op_result_errno(&radio->op);
 		}
 
@@ -1982,8 +2546,7 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		 */
 		tlsr8258_rf_off();
 		k_busy_wait(50);
-		tlsr8258_rf_set_rxmode(radio);
-		TLSR_REG16(0x0f20) = RF_IRQ_ALL;
+		tlsr8258_rf_rearm_idle_rx(radio);
 		return tlsr8258_radio_op_result_errno(&radio->op);
 	}
 
@@ -2043,12 +2606,23 @@ static const struct ieee802154_radio_api tlsr8258_radio_api = {
 
 static void tlsr8258_irq_config(const struct device *dev)
 {
-	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, DEVICE_DT_INST_GET(0), 0);
+	/*
+	 * rf_irq_reenable() enables both the RF ZB_RT source (IRQ 13) and
+	 * the RF DMA completion source (IRQ 4).  IRQ 4 must have a real
+	 * vector: leaving it at Zephyr's default z_irq_spurious handler makes
+	 * a normal RX/TX DMA completion fatal under interview traffic.
+	 * The RF ISR clears both latched sources, so use the same handler for
+	 * the two hardware sources.  The TC32 IRQ dispatcher services IRQ 13
+	 * first when both are pending and will enter here again for IRQ 4 if
+	 * the DMA latch remains set.
+	 */
+	IRQ_CONNECT(TLSR8258_IRQ_DMA, 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
+	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
+	irq_disable(TLSR8258_IRQ_DMA);
 	irq_disable(TLSR8258_IRQ_ZB_RT);
 	ARG_UNUSED(dev);
 }
 
-static struct tlsr8258_radio_data tlsr8258_radio_data_0;
 /* Set true once tlsr8258_init() has run rx_queue_init; gates the zb_thread
  * RX-poll drain so it never touches an uninitialized k_fifo. */
 static bool tlsr8258_hw_inited;
@@ -2097,7 +2671,7 @@ static int tlsr8258_init(const struct device *dev)
 	       TLSR8258_SHORT_ADDR_SIZE);
 	memcpy(radio->filter_ieee_addr, tlsr8258_filter_ieee_addr_shadow,
 	       TLSR8258_IEEE_ADDR_SIZE);
-	tlsr8258_radio_current_channel_set(radio, 11u);
+	tlsr8258_radio_current_channel_set(radio, tlsr8258_channel_shadow);
 
 	tlsr8258_rx_queue_init(&radio->rx_queue, radio->rx_slots, TLSR8258_RX_SLOT_COUNT);
 	k_sem_init(&radio->tx_wait, 0, 1);
@@ -2107,9 +2681,6 @@ static int tlsr8258_init(const struct device *dev)
 	 * consumer, no zb_buf race, no cooperative-starvation) — there is no
 	 * separate RX worker thread.
 	 */
-	tlsr8258_rf_init();
-	tlsr8258_rf_set_channel_offset(
-		tlsr8258_rf_channel_from_logical(tlsr8258_radio_current_channel_get(radio)));
 	config->irq_config_func(dev);
 	tlsr8258_hw_inited = true;
 

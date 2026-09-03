@@ -4,54 +4,94 @@
 
 #include <string.h>
 
+enum tlsr8258_rx_slot_state {
+	TLSR8258_RX_SLOT_FREE = 0u,
+	TLSR8258_RX_SLOT_READY = 1u,
+	TLSR8258_RX_SLOT_INFLIGHT = 2u,
+};
+
 void tlsr8258_rx_queue_init(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slots,
 			    uint8_t slot_count)
 {
-	k_fifo_init(&queue->free_fifo);
-	k_fifo_init(&queue->ready_fifo);
-	atomic_clear(&queue->drop_count);
+	queue->slots = slots;
+	queue->slot_count = slot_count;
+	queue->head = 0u;
+	queue->tail = 0u;
+	queue->pending = 0u;
+	queue->drop_count = 0u;
 
 	for (uint8_t i = 0u; i < slot_count; i++) {
-		slots[i].fifo_reserved = NULL;
 		slots[i].len = 0u;
 		slots[i].rssi_dbm = 0;
-		k_fifo_put(&queue->free_fifo, &slots[i]);
+		slots[i].queued = false;
+		slots[i].state = TLSR8258_RX_SLOT_FREE;
 	}
 }
 
 bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_t *dma, uint8_t len,
 				   int8_t rssi_dbm)
 {
-	struct tlsr8258_rx_slot *slot;
+	struct tlsr8258_rx_slot *slot = NULL;
+	uint8_t index;
 
-	if (dma == NULL) {
+	/* A malformed producer call is not queue overflow. */
+	if ((queue == NULL) || (dma == NULL) || (queue->slot_count == 0u)) {
 		return false;
 	}
 
-	slot = k_fifo_get(&queue->free_fifo, K_NO_WAIT);
+	/*
+	 * The producer is the RF ISR and the consumer is the ZB loop.  A lost
+	 * consumer pass (or an interrupt arriving between the consumer's head
+	 * update and slot release) can leave tail pointing at a busy slot while a
+	 * later slot is free.  The old single-slot check then drops every frame
+	 * until reboot, even though the queue is not full.  Find the next free slot
+	 * and keep tail immediately after it; the normal path still takes the first
+	 * iteration and remains FIFO.
+	 */
+	for (uint8_t offset = 0u; offset < queue->slot_count; offset++) {
+		index = (uint8_t)((queue->tail + offset) % queue->slot_count);
+		if (queue->slots[index].state == TLSR8258_RX_SLOT_FREE) {
+			slot = &queue->slots[index];
+			queue->tail = (uint8_t)((index + 1u) % queue->slot_count);
+			break;
+		}
+	}
 	if (slot == NULL) {
-		atomic_inc(&queue->drop_count);
+		queue->drop_count++;
 		return false;
 	}
 
 	memcpy(slot->dma, dma, len);
 	slot->len = len;
 	slot->rssi_dbm = rssi_dbm;
-	k_fifo_put(&queue->ready_fifo, slot);
+	/* The RF ISR is the sole producer.  Publish the payload before READY. */
+	slot->state = TLSR8258_RX_SLOT_READY;
+	slot->queued = true;
+	queue->pending++;
 
 	return true;
 }
 
-static bool tlsr8258_rx_queue_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
-				      k_timeout_t timeout)
+bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue,
+					struct tlsr8258_rx_frame *frame)
 {
-	struct tlsr8258_rx_slot *slot;
+	struct tlsr8258_rx_slot *slot = NULL;
 
-	if (frame == NULL) {
+	if ((queue == NULL) || (frame == NULL) || (queue->slot_count == 0u)) {
 		return false;
 	}
 
-	slot = k_fifo_get(&queue->ready_fifo, timeout);
+	/* Recover from a stale head left by an interrupted producer/consumer
+	 * handoff.  Search in FIFO order; under normal operation offset is zero. */
+	for (uint8_t offset = 0u; offset < queue->slot_count; offset++) {
+		uint8_t index = (uint8_t)((queue->head + offset) % queue->slot_count);
+
+		if (queue->slots[index].state == TLSR8258_RX_SLOT_READY) {
+			slot = &queue->slots[index];
+			queue->head = (uint8_t)((index + 1u) % queue->slot_count);
+			break;
+		}
+	}
 	if (slot == NULL) {
 		return false;
 	}
@@ -60,31 +100,27 @@ static bool tlsr8258_rx_queue_dequeue(struct tlsr8258_rx_queue *queue, struct tl
 	frame->dma = slot->dma;
 	frame->len = slot->len;
 	frame->rssi_dbm = slot->rssi_dbm;
+	slot->state = TLSR8258_RX_SLOT_INFLIGHT;
+	slot->queued = false;
+	if (queue->pending != 0u) {
+		queue->pending--;
+	}
 
 	return true;
 }
 
-bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame)
-{
-	return tlsr8258_rx_queue_dequeue(queue, frame, K_NO_WAIT);
-}
-
-bool tlsr8258_rx_queue_wait_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
-				    k_timeout_t timeout)
-{
-	return tlsr8258_rx_queue_dequeue(queue, frame, timeout);
-}
-
 void tlsr8258_rx_queue_release(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slot)
 {
+	(void)queue;
+
 	if (slot == NULL) {
 		return;
 	}
 
-	k_fifo_put(&queue->free_fifo, slot);
+	slot->state = TLSR8258_RX_SLOT_FREE;
 }
 
 uint32_t tlsr8258_rx_queue_drop_count(const struct tlsr8258_rx_queue *queue)
 {
-	return (uint32_t)atomic_get(&queue->drop_count);
+	return (queue != NULL) ? queue->drop_count : 0u;
 }
