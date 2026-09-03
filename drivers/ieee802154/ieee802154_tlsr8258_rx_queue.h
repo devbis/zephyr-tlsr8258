@@ -3,8 +3,6 @@
 #ifndef ZEPHYR_DRIVERS_IEEE802154_TLSR8258_RX_QUEUE_H_
 #define ZEPHYR_DRIVERS_IEEE802154_TLSR8258_RX_QUEUE_H_
 
-#include <zephyr/kernel.h>
-
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -20,16 +18,23 @@ struct tlsr8258_rx_frame {
 };
 
 struct tlsr8258_rx_slot {
-	void *fifo_reserved;
 	uint8_t dma[TLSR8258_RX_SLOT_DMA_SIZE];
 	uint8_t len;
 	int8_t rssi_dbm;
+	volatile bool queued;
+	/* FREE -> READY -> INFLIGHT -> FREE.  The producer is the RF ISR and
+	 * the consumer is the Zigbee thread; keeping this state in the slot makes
+	 * the ownership handoff explicit and avoids a kernel FIFO in the ISR. */
+	volatile uint8_t state;
 };
 
 struct tlsr8258_rx_queue {
-	struct k_fifo free_fifo;
-	struct k_fifo ready_fifo;
-	atomic_t drop_count;
+	struct tlsr8258_rx_slot *slots;
+	uint8_t slot_count;
+	uint8_t head;
+	uint8_t tail;
+	volatile uint8_t pending;
+	volatile uint32_t drop_count;
 };
 
 /*
@@ -51,8 +56,6 @@ bool tlsr8258_rx_queue_try_enqueue(struct tlsr8258_rx_queue *queue, const uint8_
  * before the slot is enqueued again.
  */
 bool tlsr8258_rx_queue_try_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame);
-bool tlsr8258_rx_queue_wait_dequeue(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_frame *frame,
-				    k_timeout_t timeout);
 void tlsr8258_rx_queue_release(struct tlsr8258_rx_queue *queue, struct tlsr8258_rx_slot *slot);
 uint32_t tlsr8258_rx_queue_drop_count(const struct tlsr8258_rx_queue *queue);
 

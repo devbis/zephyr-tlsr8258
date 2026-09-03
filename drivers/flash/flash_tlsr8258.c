@@ -339,12 +339,17 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, siz
 {
 	uint8_t key = tlsr8258_flash_irq_disable();
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
-	uint32_t start;
 
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
 	tlsr8258_mspi_high();
-	start = TLSR8258_REG_SYSTEM_TICK;
-	while ((uint32_t)(TLSR8258_REG_SYSTEM_TICK - start) <= TLSR8258_SYS_TICKS_PER_US) {
+	/*
+	 * This path is used by NVS before the Zephyr system timer is started.
+	 * Do not wait on REG_SYSTEM_TICK here: on a cold boot it can remain at
+	 * zero indefinitely and trap the CPU in this loop.  A short bounded
+	 * CPU delay is sufficient for MSPI CS setup and is safe before clocks/
+	 * interrupts are fully initialised.
+	 */
+	for (volatile uint32_t delay = 0u; delay < 8u; delay++) {
 	}
 	tlsr8258_mspi_low();
 	tlsr8258_mspi_write(0x03u);
@@ -429,11 +434,13 @@ static bool tlsr8258_flash_range_valid(const struct tlsr8258_flash_config *confi
 	       len <= (config->size - (size_t)offset);
 }
 
-static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *data,
-			       size_t len)
+static TLSR8258_FLASH_ENTRY int tlsr8258_flash_read(const struct device *dev,
+							   off_t offset, void *data,
+							   size_t len)
 {
 	const struct tlsr8258_flash_config *config = dev->config;
 	struct tlsr8258_flash_data *dev_data = dev->data;
+	int ret;
 
 	if (!tlsr8258_flash_range_valid(config, offset, len)) {
 		return -EINVAL;
@@ -445,15 +452,17 @@ static int tlsr8258_flash_read(const struct device *dev, off_t offset, void *dat
 
 	k_sem_take(&dev_data->lock, K_FOREVER);
 	/*
-	 * Normal flash reads are safe through the TLSR8258 XIP mapping and
-	 * avoid the fragile early-boot manual MSPI read sequence. Keep the
-	 * RAM-only path for write/erase, where flash must be driven with
-	 * instruction fetches detached from XIP.
+	 * Do not read through the XIP mapping here.  NVS can erase/program a
+	 * sector through MSPI and the debugger can do the same while the CPU is
+	 * halted; the TLSR8258 XIP line can then retain the pre-erase contents.
+	 * That made an erased NVS partition appear to contain an old joined blob
+	 * after reboot.  The manual MSPI transaction is in RAM and observes the
+	 * current flash contents.
 	 */
-	memcpy(data, (const void *)(config->base + (uintptr_t)offset), len);
+	ret = tlsr8258_flash_read_ram((uint32_t)offset, data, len);
 	k_sem_give(&dev_data->lock);
 
-	return 0;
+	return ret;
 }
 
 /* Non-static wrapper called directly by tlsr8258_flash_write_pages
