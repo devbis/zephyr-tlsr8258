@@ -55,6 +55,7 @@ static void test_enqueue_dequeue_round_trip(void)
 	EXPECT_EQ(frame.len, sizeof(payload));
 	EXPECT_EQ(frame.rssi_dbm, -42);
 	EXPECT_EQ(memcmp(frame.dma, payload, sizeof(payload)), 0);
+	tlsr8258_rx_queue_release(&queue, frame.slot);
 }
 
 static void test_overflow_increments_drop_count_without_mutating_queue(void)
@@ -79,6 +80,7 @@ static void test_overflow_increments_drop_count_without_mutating_queue(void)
 	EXPECT_EQ(frame.len, sizeof(first_payload));
 	EXPECT_EQ(frame.rssi_dbm, -7);
 	EXPECT_EQ(memcmp(frame.dma, first_payload, sizeof(first_payload)), 0);
+	tlsr8258_rx_queue_release(&queue, frame.slot);
 }
 
 static void test_invalid_enqueue_does_not_increment_drop_count(void)
@@ -162,6 +164,7 @@ static void test_wraparound_preserves_fifo_order_and_state(void)
 	EXPECT_FALSE(slots[0].queued);
 	EXPECT_TRUE(slots[1].queued);
 	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+	tlsr8258_rx_queue_release(&queue, frame.slot);
 
 	EXPECT_TRUE(tlsr8258_rx_queue_try_enqueue(&queue, payload_c, sizeof(payload_c), -3));
 	EXPECT_EQ(queue.head, 1u);
@@ -197,6 +200,7 @@ static void test_wraparound_preserves_fifo_order_and_state(void)
 	EXPECT_EQ(queue.tail, 1u);
 	EXPECT_EQ(queue.pending, 0u);
 	EXPECT_EQ(tlsr8258_rx_queue_drop_count(&queue), 0u);
+	tlsr8258_rx_queue_release(&queue, frame.slot);
 }
 
 int main(void)

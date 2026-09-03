@@ -98,9 +98,10 @@ void fake_phy_run_script(struct fake_phy_backend *phy, uint8_t tx_seq,
 			result->rx_dma_handoff_count++;
 			break;
 		case FAKE_PHY_STEP_RX_ONLY_TX_COMPLETE:
-			tlsr8258_core_handle_rx_only_tx_completion(step->has_rx != 0,
-								   step->op_state_is_tx_pending != 0,
-								   &result->last_rx_only_tx);
+			tlsr8258_core_handle_rx_only_tx_completion(false,
+									   step->op_state_is_tx_pending != 0,
+									   step->ack_for_tx != 0,
+									   &result->last_rx_only_tx);
 			if (result->last_rx_only_tx.complete_stack_tx) {
 				result->stack_tx_complete_count++;
 				result->rx_only_tx_complete_count++;
