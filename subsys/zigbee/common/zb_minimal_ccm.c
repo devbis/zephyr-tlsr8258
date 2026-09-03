@@ -112,9 +112,6 @@ u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len,
 	zb_minimal_ccm_add_msg(key, mac_state, msg, msg_len);
 
 	zb_minimal_ccm_ctr_block(key, nonce, 0U, s0);
-	for (u8 i = 0U; i < mic_len; i++) {
-		mic_out[i] = mac_state[i] ^ s0[i];
-	}
 
 	while (off < msg_len) {
 		u8 blk_len = MIN((u8)16U, (u8)(msg_len - off));
@@ -124,6 +121,14 @@ u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len,
 			msg[off + i] ^= stream[i];
 		}
 		off += blk_len;
+	}
+
+	/* Match the vendor aes_ccmAuthTran()+aes_ccmEncTran() ordering:
+	 * finish in-place payload encryption before publishing the MIC.  The
+	 * radio DMA can observe a carrier while the stack is preparing it; writing
+	 * MIC first exposed a transient plaintext+valid-MIC frame on air. */
+	for (u8 i = 0U; i < mic_len; i++) {
+		mic_out[i] = mac_state[i] ^ s0[i];
 	}
 
 	return (u8)(msg_len + mic_len);
