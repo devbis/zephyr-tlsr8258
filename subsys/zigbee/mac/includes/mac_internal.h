@@ -51,7 +51,8 @@ typedef struct _attribute_packed_ {
 /*
  * Scratch overlay on the HEAD of an indirect-pending TX buffer (zb_buf_t.buf[]).
  * The built PSDU for the queued frame lives at the TAIL of buf[]
- * (tl_bufInitalloc returns &buf[ZB_BUF_SIZE - size]), so the head is free to
+ * (tl_bufInitalloc returns the vendor-aligned tail at
+ * `ZB_BUF_SIZE - (size + 8)`), so the head is free to
  * stash the payload pointer + its length until a matching DataRequest pulls it.
  * Using a real pointer field (rather than a hard-coded byte offset) keeps the
  * length correctly positioned right after the pointer on both 32-bit (TC32,
@@ -82,6 +83,7 @@ extern u8 tl_zbMacTx(zb_buf_t *buf, u8 *txData, u8 psduLen, u8 ackRequired, void
 extern u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode);
 #endif
 extern void *tl_phyRxBufTozbBuf(u8 *rxBuf);
+extern u8 zb_buf_rx_free_count(void);
 extern u8 tl_zbUserTaskQNum(void);
 extern u8 ZB_TASKQ_USERUSE_SIZE;
 extern void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status);
@@ -98,6 +100,9 @@ extern mac_timer_evt_t g_macTimerEvt;
 extern void *associationReqOrigBuffer;
 extern volatile u8 mac_assoc_resp_success_seen;
 extern void mac_assoc_cancel_wait_timer_from_rx(void);
+extern void tl_zbSchedulePostAssociationPull(void);
+extern void tl_zbPostAssociationPullNow(void);
+extern void tl_zbPostAssociationPollStatus(u8 status);
 
 extern void mac_trxTask(void *arg);
 extern void mac_trxInit(void);

@@ -8,6 +8,10 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
+#if defined(ZB_ROUTER_ROLE)
+extern void zdo_router_join_latch_clear(void);
+#endif
+
 LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZB_PERSIST_BLOB_VERSION 2U
@@ -52,6 +56,19 @@ static void zb_persist_normalize_nwk_ctx(nwk_ctx_t *ctx)
 	ctx->is_factory_new = ctx->joined ? 0U : 1U;
 }
 
+static bool zb_persist_has_live_network(const zb_info_t *info)
+{
+	if (info == NULL ||
+	    info->macPib.panId == MAC_INVALID_PANID ||
+	    info->macPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+	    info->nwkNib.panId != info->macPib.panId ||
+	    info->nwkNib.nwkAddr != info->macPib.shortAddress) {
+		return false;
+	}
+
+	return true;
+}
+
 int zb_platform_restore_persistent_state(void)
 {
 	zb_persist_blob_t blob;
@@ -70,6 +87,17 @@ int zb_platform_restore_persistent_state(void)
 
 	g_zbInfo = blob.zb_info;
 	g_zbNwkCtx = blob.nwk_ctx;
+	/*
+	 * joined is transient in the vendor NWK context. A stale failure/reset can
+	 * persist a blob with joined==0 after MAC/NWK association has already
+	 * committed a complete network tuple. Restoring that split state as a
+	 * fresh router starts a new association, loses the parent pointer, and
+	 * leaves the device ACK-only. Explicit leave clears the tuple and removes
+	 * this blob, so a complete tuple is the safe restore criterion here.
+	 */
+	if (!g_zbNwkCtx.joined && zb_persist_has_live_network(&g_zbInfo)) {
+		g_zbNwkCtx.joined = 1U;
+	}
 	zb_persist_normalize_nwk_ctx(&g_zbNwkCtx);
 	/*
 	 * Restore the radio filter from the same joined PIB that was just
@@ -105,6 +133,16 @@ int zb_platform_clear_persistent_state(void)
 	g_zbNwkCtx.joinAccept = 0U;
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.user_state = NLME_IDLE;
+#if defined(ZB_ROUTER_ROLE)
+	zdo_router_join_latch_clear();
+#endif
+	/* These fields are the router's in-RAM proof that secure joining
+	 * completed. Clear them with the network so a stale callback cannot
+	 * resurrect a network explicitly removed by the user. */
+	g_bdbCtx.edRuntimeReady = 0U;
+	g_bdbCtx.tcLinkKeyReady = 0U;
+	g_bdbCtx.factoryNew = 1U;
+	g_bdbCtx.state = BDB_STATE_IDLE;
 
 	g_zbMacPib.panId = MAC_INVALID_PANID;
 	g_zbMacPib.shortAddress = MAC_SHORT_ADDR_BROADCAST;
@@ -117,6 +155,20 @@ int zb_platform_clear_persistent_state(void)
 	g_zbNIB.depth = 0U;
 	g_zbNIB.parentInfo = 0U;
 	memset(g_zbNIB.extPANId, 0, sizeof(g_zbNIB.extPANId));
+	/* g_zbInfo is the compatibility snapshot consumed by the vendor-port
+	 * MAC/NWK code.  Keep it in lockstep with the cleared PIB/NIB; otherwise
+	 * a remove appears successful to Z2M but a later local path can still use
+	 * the old PAN/short tuple and persist it again. */
+	g_zbInfo.macPib.panId = MAC_INVALID_PANID;
+	g_zbInfo.macPib.shortAddress = MAC_SHORT_ADDR_BROADCAST;
+	g_zbInfo.macPib.coordShortAddress = MAC_SHORT_ADDR_NONE;
+	g_zbInfo.macPib.associatedPanCoord = 0U;
+	ZB_IEEE_ADDR_ZERO(g_zbInfo.macPib.coordExtAddress);
+	g_zbInfo.nwkNib.panId = MAC_INVALID_PANID;
+	g_zbInfo.nwkNib.nwkAddr = NWK_BROADCAST_RESERVED;
+	g_zbInfo.nwkNib.depth = 0U;
+	g_zbInfo.nwkNib.parentInfo = 0U;
+	memset(g_zbInfo.nwkNib.extPANId, 0, sizeof(g_zbInfo.nwkNib.extPANId));
 
 	memset(ss_ib.nwkSecurMaterialSet, 0, sizeof(ss_ib.nwkSecurMaterialSet));
 	ss_ib.securityLevel = 0U;

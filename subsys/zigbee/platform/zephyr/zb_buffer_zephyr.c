@@ -16,7 +16,10 @@
 
 #include "zb_common_stub.h"
 
-#define ZB_BUF_RX_SNAPSHOT_SIZE 200U
+/* 127-byte PSDU + 5-byte TLSR DMA header is the complete 802.15.4 frame.
+ * Keep a little alignment/headroom without spending 200 bytes in every one
+ * of the 36 router buffers. */
+#define ZB_BUF_RX_SNAPSHOT_SIZE 128U
 
 typedef struct {
 	zb_buf_t zb;
@@ -25,6 +28,41 @@ typedef struct {
 
 K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
 			 __alignof__(zb_buf_t));
+
+/* Track slab ownership so an invalid or duplicate free cannot corrupt the
+ * slab free list. */
+static volatile u32 zb_buf_in_use[2];
+
+static bool zb_buf_index(const zb_buf_t *buf, u32 *index)
+{
+	uintptr_t addr = (uintptr_t)buf;
+	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
+	size_t span = (size_t)zb_buf_slab.info.num_blocks *
+		      zb_buf_slab.info.block_size;
+
+	if (buf == NULL || addr < base || addr >= base + span ||
+	    ((addr - base) % zb_buf_slab.info.block_size) != 0U) {
+		return false;
+	}
+
+	*index = (u32)((addr - base) / zb_buf_slab.info.block_size);
+	return *index < ZB_BUF_POOL_NUM;
+}
+
+static inline bool zb_buf_owned(u32 index)
+{
+	return (zb_buf_in_use[index >> 5] & BIT(index & 31U)) != 0U;
+}
+
+static inline void zb_buf_mark_owned(u32 index)
+{
+	zb_buf_in_use[index >> 5] |= BIT(index & 31U);
+}
+
+static inline void zb_buf_mark_free(u32 index)
+{
+	zb_buf_in_use[index >> 5] &= ~BIT(index & 31U);
+}
 
 zb_buf_t *zb_buf_allocate(void)
 {
@@ -35,6 +73,12 @@ zb_buf_t *zb_buf_allocate(void)
 	}
 
 	memset(block, 0, sizeof(zb_buf_t));
+	{
+		u32 index;
+		if (zb_buf_index((zb_buf_t *)block, &index)) {
+			zb_buf_mark_owned(index);
+		}
+	}
 	return (zb_buf_t *)block;
 }
 
@@ -42,6 +86,17 @@ void zb_buf_free(zb_buf_t *buf)
 {
 	if (buf == NULL) {
 		return;
+	}
+	{
+		u32 index;
+		if (!zb_buf_index(buf, &index)) {
+			return;
+		}
+		if (!zb_buf_owned(index)) {
+			/* A second free would make k_mem_slab's free-list cyclic. */
+			return;
+		}
+		zb_buf_mark_free(index);
 	}
 	k_mem_slab_free(&zb_buf_slab, buf);
 }
@@ -74,7 +129,12 @@ void *tl_bufInitalloc(zb_buf_t *p, u8 size)
 	if (p == NULL || size > ZB_BUF_SIZE) {
 		return NULL;
 	}
-	return &p->buf[ZB_BUF_SIZE - size];
+
+	/* Keep the vendor's eight-byte tail reservation and 4-byte alignment.
+	 * Ported MAC/NWK/security code prepends headers and appends security
+	 * material after this allocation; the reservation keeps that growth away
+	 * from zb_buf_t::hdr at the fixed vendor offsets 0xc0..0xc3. */
+	return &p->buf[((u8)(ZB_BUF_SIZE - (u8)(size + 8U))) & (u8)~3U];
 }
 
 /*
@@ -88,6 +148,11 @@ void *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
 	ARG_UNUSED(rxBuf);
 	return zb_buf_allocate();
+}
+
+u8 zb_buf_rx_free_count(void)
+{
+	return (u8)k_mem_slab_num_free_get(&zb_buf_slab);
 }
 
 u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)

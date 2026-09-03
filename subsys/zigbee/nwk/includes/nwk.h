@@ -178,6 +178,8 @@ typedef enum {
     NWK_INTERNAL_ROUTE_RECORD_CMD_HANDLE,
     NWK_INTERNAL_ENDDEVTIMEOUT_REQ_CMD_HANDLE,
     NWK_INTERNAL_ENDDEVTIMEOUT_RSP_CMD_HANDLE,
+    /* Reserved for the response-before-self-leave handoff. */
+    NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE = 0xD0,
     //MAC_HANDLE_MIN = 0xDF,
 } nwk_internal_handle_t;
 
@@ -438,6 +440,7 @@ typedef struct {
 
     u32 rxTime;
     u16 srcMacAddr;
+    s8 rssi;
 } nlde_data_ind_t;
 
 /***************************************************************************

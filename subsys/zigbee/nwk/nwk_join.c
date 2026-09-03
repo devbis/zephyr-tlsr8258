@@ -13,6 +13,7 @@
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_internal.h"
 #include "nwk/includes/nwk_neighbor.h"
+
 #include "ss/security_service.h"
 #include "ss/ss_internal.h"
 #include <zephyr/zigbee/zb_radio_port.h>
@@ -27,6 +28,14 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
 
 u8 rejoinRespPollCnt;
 ev_timer_event_t *rejoinRespTimeoutEvt;
+
+/*
+ * The association response can be delivered after a stale reset/join
+ * callback has cleared the transient NWK context. Keep the selected parent
+ * outside g_zbNwkCtx until the deferred ASSOCIATE.confirm is consumed.
+ */
+static tl_zb_addition_neighbor_entry_t nwk_assoc_parent_snapshot;
+static bool nwk_assoc_parent_snapshot_valid;
 
 void nwk_rejoinReq(void *arg);
 
@@ -78,7 +87,6 @@ void nwk_nlmeJoinCnf(void *arg, u16 nwkAddr, u8 status, u8 channel)
     (void)channel;
 
     cnf->status = status;
-
     if (status == NWK_STATUS_SUCCESS) {
         cnf->activeChannel = g_zbInfo.macPib.phyChannelCur;
         cnf->nwkAddr = g_zbInfo.nwkNib.nwkAddr;
@@ -134,9 +142,21 @@ tl_zb_addition_neighbor_entry_t *tl_zbNwkParentChoose(extPANId_t extPanId, bool 
                 continue;
             }
         } else {
+#if defined(ZB_ROUTER_ROLE) && ZB_ROUTER_ROLE
+            /*
+             * Some Ember non-beacon coordinators leave the MAC beacon's
+             * associationPermit bit clear even while centralized permit-join
+             * is open.  The beacon still identifies a valid parent; the
+             * coordinator's Association Response is the final authority.
+             */
+            if (!entry->potentialParent) {
+                continue;
+            }
+#else
             if (!entry->permitJoining || !entry->potentialParent) {
                 continue;
             }
+#endif
         }
 
         if (best == NULL || best->lqi <= entry->lqi) {
@@ -231,6 +251,8 @@ void nwk_associateJoin(void *arg)
     }
 
     nwk_store_parent_neighbor_ptr(&g_zbNwkCtx.join.pAssocJoinParent, parent);
+	memcpy(&nwk_assoc_parent_snapshot, parent, sizeof(nwk_assoc_parent_snapshot));
+	nwk_assoc_parent_snapshot_valid = true;
     g_zbInfo.nwkNib.panId = parent->panId;
     /*
      * Set macPib.panId here too — the IEEE 802.15.4 DATA-REQUEST that
@@ -344,6 +366,13 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
     tl_zb_addition_neighbor_entry_t *parent = g_zbNwkCtx.join.pAssocJoinParent;
     u16 selfRef = 0;
     u16 parentRef = 0;
+
+	if (parent == NULL && nwk_assoc_parent_snapshot_valid &&
+	    nwk_assoc_parent_snapshot.panId == g_zbInfo.macPib.panId &&
+	    nwk_assoc_parent_snapshot.shortAddr == g_zbInfo.macPib.coordShortAddress) {
+		parent = &nwk_assoc_parent_snapshot;
+		nwk_store_parent_neighbor_ptr(&g_zbNwkCtx.join.pAssocJoinParent, parent);
+	}
 
     if (cnf->status != MAC_SUCCESS) {
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
