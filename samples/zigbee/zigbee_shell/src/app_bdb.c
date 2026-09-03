@@ -75,7 +75,7 @@ extern void zb_router_enable_parenting(uint8_t permit_duration);
 	static const uint8_t app_bdb_fixed_ext_pan_id[8] = {
 		0x3b, 0x09, 0x9d, 0x06, 0x4f, 0x8f, 0xee, 0x70,
 	};
-#define APP_BDB_FIXED_CHANNEL 11U
+#define APP_BDB_FIXED_CHANNEL CONFIG_ZIGBEE_CHANNEL
 #define APP_BDB_FIXED_PAN_ID  0x5b27U
 #ifndef APP_BDB_FIXED_PARENT
 #define APP_BDB_FIXED_PARENT  0x0000U
@@ -303,6 +303,14 @@ void app_bdb_bootstrap_ready(void)
 			if (joined && idle && APP_BDB_ROLE_ED) {
 				app_bdb_activate_poll_rate();
 			}
+			#if APP_BDB_ROLE_ROUTER
+			/* A restored router is already an always-on FFD.  Do not send it
+			 * through the ED persistent-rejoin path; announce the restored
+			 * short address and keep RX open for the coordinator interview. */
+			if (joined && idle) {
+				zb_router_enable_parenting(0xffU);
+			}
+			#endif
 			zb_nwk_ed_trace[11] = 0xA1B00001U |
 					       ((uint32_t)(joined ? 1U : 0U) << 8) |
 					       ((uint32_t)(idle ? 1U : 0U) << 9);
