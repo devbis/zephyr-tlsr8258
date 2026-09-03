@@ -94,7 +94,7 @@
 #define	MAC_CAP_GET_RXON_WHEN_IDLE(c)	((c >> 3) & 1)
 
 #if ZB_ROUTER_ROLE
-#define	TX_QUEUE_BN                     32
+#define	TX_QUEUE_BN                     8
 #else
 #define	TX_QUEUE_BN                     16
 #endif

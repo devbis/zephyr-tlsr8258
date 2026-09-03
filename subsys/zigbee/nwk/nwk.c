@@ -470,7 +470,6 @@ void tl_zbNwkTaskProc(void)
 
     if (task != NULL && task->data != NULL) {
         u8 primitive = ((zb_buf_t *)task->data)->hdr.id;
-
         switch (primitive) {
         case NWK_NLDE_DATA_REQ:
             tl_zbNwkNldeDataRequestHandler(task->data);
@@ -509,6 +508,7 @@ void tl_zbNwkTaskProc(void)
             tl_zbNwkNlmeRouteDiscRequestHandler(task->data);
             break;
         default:
+			zb_buf_free((zb_buf_t *)task->data);
             break;
         }
     }
@@ -561,6 +561,7 @@ void tl_zbNwkTaskProc(void)
         tl_zbMacMlmePollIndicationHandler(task->data);
         break;
     default:
+		zb_buf_free((zb_buf_t *)task->data);
         break;
     }
 }

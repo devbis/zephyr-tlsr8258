@@ -18,7 +18,6 @@
 #include "nwk/includes/nwk_neighbor.h"
 #include "mac/includes/mac_internal.h"
 
-
 static inline u8 *phy_ind_raw_get(void *arg)
 {
     return *(u8 **)((u8 *)arg + 4);
@@ -176,6 +175,7 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     u8 *mhr = (u8 *)raw;
     u8 *payload = phy_ind_raw_get(arg);
     u16 assignedShort = (u16)payload[1] | ((u16)payload[2] << 8);
+
     const u8 *origReq = (const u8 *)associationReqOrigBuffer;
     /*
      * Snapshot the fields we need out of the original AssocReq buffer NOW.
@@ -249,6 +249,14 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     ((u8 *)buf)[10] = payload[3];
 
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
+    if (payload[3] == MAC_SUCCESS) {
+        /* The coordinator may already have the NWK Transport-Key queued as
+         * indirect data.  Kick the first poll in this same ZB-thread turn;
+         * the timer-driven bounded retries below cover lost Frame-Pending
+         * indications and later coordinator delivery. */
+        tl_zbPostAssociationPullNow();
+        tl_zbSchedulePostAssociationPull();
+    }
 }
 
 void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
@@ -264,8 +272,34 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
 
     payload = phy_ind_raw_get(arg);
     cmdId = payload[0];
+	/*
+	 * The TLSR RX path deliberately delivers the Association Response from
+	 * the radio queue after the MAC wait timer / deferred task may already have
+	 * moved g_zbMacCtx.status back to NORMAL and cleared
+	 * associationReqOrigBuffer.  Those are bookkeeping state, not proof that
+	 * this frame is unsolicited: the frame itself carries the authoritative
+	 * successful association result.  On TC32 the old state-dependent branch
+	 * could therefore ACK every AssocResp yet discard all of them before the
+	 * MAC->NWK associate confirm was posted.
+	 *
+	 * Handle a successful AssocResp unconditionally.  The handler is
+	 * idempotent for coordinator retries and performs the required short/PAN
+	 * handoff before posting the confirm and post-association pull.
+	 */
+	if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE && payload[3] == MAC_SUCCESS) {
+		tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
+		return;
+	}
 
-    if (g_zbMacCtx.status == 5U) {
+	/*
+	 * The radio RX fast-handoff cancels the association wait timer and may
+     * leave MAC in NORMAL before this deferred indication runs.  In that
+     * case associationReqOrigBuffer is already gone, but the successful
+     * AssocResp is still the pending join completion.  Do not discard it:
+     * the MAC_MLME_ASSOCIATE_CNF is what lets NWK start waiting for the
+     * coordinator's Transport-Key.
+     */
+    if (g_zbMacCtx.status == 5U || mac_assoc_resp_success_seen != 0U) {
         if (cmdId == MAC_CMD_ASSOCIATION_RESPONSE) {
             tl_zbMlmeCmdAssociateRespRecvd(arg, raw);
             return;

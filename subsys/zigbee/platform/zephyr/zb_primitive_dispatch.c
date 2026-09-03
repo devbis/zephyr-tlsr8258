@@ -26,6 +26,8 @@
 
 #include "zb_common_stub.h"
 #include "mac/includes/mac_internal.h"
+
+#include "af/zb_af.h"
 #include "../../zcl/zcl_include.h"
 #include <zephyr/zigbee/zb_bootstrap.h>
 
@@ -295,7 +297,6 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 	if (arg == NULL) {
 		return;
 	}
-
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
 		/* ZDP request — only handle non-response cluster IDs (bit 15 clear). */
 		if ((ad->cluster_id & 0x8000U) != 0U) {
@@ -306,10 +307,12 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 		case NODE_DESC_REQ_CLID:
 		case POWER_DESC_REQ_CLID:
 		case SIMPLE_DESC_REQ_CLID:
-			zdo_descriptorsIndicate(arg);
-			return;
 		case ACTIVE_EP_REQ_CLID:
-			zdo_activeEpIndicate(arg);
+			if (ad->cluster_id == ACTIVE_EP_REQ_CLID) {
+				zdo_activeEpIndicate(arg);
+				return;
+			}
+			zdo_descriptorsIndicate(arg);
 			return;
 		case MATCH_DESC_REQ_CLID:
 			zdo_matchDescriptorIndicate(arg);
@@ -373,18 +376,33 @@ __attribute__((weak)) void af_aps_data_entry(void *arg)
 			}
 
 			TL_SETSTRUCTCONTENT(dst, 0);
-			dst.profileId = ad->profile_id;
-			dst.dstEp = ad->src_ep;
+			/* Snapshot every field used after releasing the RX carrier.  `ad`
+			 * aliases `buf`; reading it after zb_buf_free() is a use-after-free
+			 * and can feed the TX request with recycled slab metadata. */
+			u8 tx_src_ep = ad->dst_ep;
+			u8 tx_dst_ep = ad->src_ep;
+			u16 tx_profile = ad->profile_id;
+			u16 tx_cluster = ad->cluster_id;
+			u16 tx_dst_short = ad->src_short_addr;
+
+			dst.profileId = tx_profile;
+			dst.dstEp = tx_dst_ep;
 			dst.radius = 30U;
 			dst.txOptions = APS_TX_OPT_ACK_TX;
 			dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-			dst.dstAddr.shortAddr = ad->src_short_addr;
+			dst.dstAddr.shortAddr = tx_dst_short;
 
-			if (af_dataSend(ad->dst_ep, &dst, ad->cluster_id, rsp_len,
-					rsp, &aps_cnt) == APS_STATUS_SUCCESS) {
-				zb_buf_free(buf);
-				return;
+			/* Match the vendor zdo_send_req() ownership order: the RX
+			 * indication carrier is no longer needed after all request fields
+			 * and the response payload have been copied.  af_dataSend() needs a
+			 * separate TX carrier, and keeping this one live can exhaust the
+			 * shared slab at the exact post-idle read boundary. */
+			zb_buf_free(buf);
+			{
+				u8 tx_status = af_dataSend(tx_src_ep, &dst, tx_cluster, rsp_len,
+								 rsp, &aps_cnt);
 			}
+			return;
 		}
 
 		/* Application endpoint — find descriptor by ep, invoke cb_rx. */

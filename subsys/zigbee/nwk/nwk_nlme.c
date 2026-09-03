@@ -6,6 +6,10 @@
  * + os/ev_timer.h + mac/includes).
  */
 #include "zb_common_stub.h"
+
+#if defined(ZB_ROUTER_ROLE)
+extern void zdo_router_join_latch_set(void);
+#endif
 #include "os/ev_timer.h"
 #include "mac/includes/tl_zb_mac.h"
 #include "nwk/includes/nwk.h"
@@ -72,6 +76,9 @@ void nwk_startRouterCnfHandler(void *arg)
 
     if (status == MAC_SUCCESS) {
         g_zbNwkCtx.joined = 1;
+#if defined(ZB_ROUTER_ROLE)
+        zdo_router_join_latch_set();
+#endif
         g_zbNwkCtx.router_started = 1;
         tl_zbNwkBeaconPayloadUpdate();
         tl_zbNwkLinkStatusStart();

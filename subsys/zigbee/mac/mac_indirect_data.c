@@ -262,6 +262,7 @@ void tl_zbMacDataRequestStatusCheck(zb_buf_t *buf, u8 status)
     u8 savedStatus = ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1];
 
     if (savedStatus == MAC_STA_NO_ACK) {
+        tl_zbPostAssociationPollStatus(status);
         zb_buf_free(buf);
         tl_zbMacAssocPollConfirm(status);
         return;
@@ -313,7 +314,7 @@ u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8
 
         ((u8 *)buf)[OFFSETOF(zb_buf_t, hdr) + 1] = status;
 
-#if defined(CONFIG_ZIGBEE_ED)
+#if defined(CONFIG_ZIGBEE_ED) || defined(CONFIG_ZIGBEE_ROUTER)
         /*
          * Tag this MAC data-request/poll so tl_zbMaxTxConfirmCb routes its TX
          * confirm to tl_zbMacDataRequestStatusCheck (the poll/assoc-poll path

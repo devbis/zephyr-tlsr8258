@@ -487,7 +487,12 @@ void rf802154_tx_ready(u8 *buf, u8 len)
     ZB_RADIO_DMA_HDR_BUILD(rf_tx_buf, len);
 
     rf_tx_buf[4] = len + 2;
-    memcpy(rf_tx_buf + 5, buf, len);
+    /* TC32's optimized memcpy is not safe for this unaligned DMA payload
+     * destination: the last byte of secured PSDUs can retain stale data.
+     * Keep the MAC->radio handoff byte-exact. */
+    for (u8 i = 0U; i < len; i++) {
+        rf_tx_buf[5U + i] = buf[i];
+    }
 }
 
 void rf802154_tx(void)

@@ -50,12 +50,29 @@ extern volatile u32 zb_nwk_ed_trace[];
 
 static bool nwk_router_minimal_started;
 static bool nwk_router_minimal_announce_sent;
+static ev_timer_event_t *nwk_router_persist_save_evt;
 
 static int nwk_router_minimal_deferred_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
+	nwk_router_persist_save_evt = NULL;
 	zb_info_save(NULL);
 	return -1; /* one-shot */
+}
+
+void zb_router_schedule_persistence_save(void)
+{
+	if (nwk_router_persist_save_evt != NULL || !g_zbNwkCtx.joined ||
+	    g_zbMacPib.panId == MAC_INVALID_PANID ||
+	    g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		return;
+	}
+
+	/* Flash writes mask RF interrupts on TLSR8258. Wait until the
+	 * association/interview traffic has drained before saving the joined
+	 * PIB, but make sure the learned short address survives reboot. */
+	nwk_router_persist_save_evt = TL_ZB_TIMER_SCHEDULE(
+		nwk_router_minimal_deferred_save_timer, NULL, 15000U);
 }
 
 static int nwk_router_minimal_deferred_announce_timer(void *arg)
@@ -249,8 +266,7 @@ uint8_t zb_routerStart(void)
 		 * fix: 47c59f7f6 "drop synchronous zb_info_save from
 		 * rejoin restore").
 		 */
-		(void)TL_ZB_TIMER_SCHEDULE(nwk_router_minimal_deferred_save_timer,
-					   NULL, 15000U);
+		zb_router_schedule_persistence_save();
 	}
 
 	/* Restore can bypass the BDB joined callback entirely. Announce after

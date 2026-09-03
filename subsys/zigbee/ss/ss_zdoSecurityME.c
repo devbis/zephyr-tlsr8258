@@ -155,6 +155,11 @@ void ss_zdoTransportKeyIndHandle(void *arg)
              * (Reproduced + verified on native_sim.)
             */
             aps_ib.aps_authenticated = 1;
+            /* The Transport-Key can arrive before the deferred association
+             * confirm.  Keep the secure-startup completion latched so the
+             * authentication callback performs the same announce/parent
+             * handoff that the normal confirm path performs. */
+            zdo_secure_startup_pending = true;
             zdo_nwk_authentication_complete();
             zb_buf_free((zb_buf_t *)arg);
             return;

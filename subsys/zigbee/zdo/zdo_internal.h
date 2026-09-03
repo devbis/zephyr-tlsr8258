@@ -36,8 +36,15 @@ extern u8 zdo_mgmt_nwk_flag;
 extern const addrExt_t g_zero_addr;
 extern const addrExt_t g_invalid_addr;
 extern void zdo_nwk_authentication_complete(void);
+extern bool zdo_live_join_context(void);
+#if defined(ZB_ROUTER_ROLE)
+extern void zdo_router_join_latch_set(void);
+extern void zdo_router_join_latch_clear(void);
+extern bool zdo_router_join_latch_is_set(void);
+#endif
 
 extern zdo_status_t zdo_nlmeNwkDiscReq(void *arg);
+extern bool zdo_secure_startup_pending;
 extern zdo_status_t zdo_nlme_edScan(void *arg);
 extern zdo_status_t zdo_nlmeEdScanReq(u32 scanChannels, u8 scanDuration, u8 scanCount);
 extern zdo_status_t zdo_nlmeLeaveReq(void *arg);

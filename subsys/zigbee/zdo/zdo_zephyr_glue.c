@@ -49,8 +49,6 @@
  */
 #define AF_APS_DATA_HDR_LEN  8U
 
-extern volatile u32 zb_nwk_ed_trace[];
-
 static u8 zdo_router_minimal_seq;
 
 /*
@@ -65,8 +63,6 @@ u8 zb_zdoSendDevAnnance(void)
 	epInfo_t dst;
 	u8 capability = 0U;
 	u8 status;
-
-	zb_nwk_ed_trace[48]++;
 
 	/* Give the coordinator time to finish the association exchange. */
 	k_sleep(K_MSEC(40));
@@ -92,7 +88,6 @@ u8 zb_zdoSendDevAnnance(void)
 
 	status = af_dataSend(ZDO_EP, &dst, DEVICE_ANNCE_CLID,
 			     sizeof(payload), payload, NULL);
-	zb_nwk_ed_trace[(status == ZDO_SUCCESS) ? 49U : 50U]++;
 	return status;
 }
 
@@ -161,7 +156,10 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	req->radius = (pDstEpInfo->radius != 0U) ? pDstEpInfo->radius : 30U;
 	req->discoverRoute = broadcast ? 0U : 1U;
 	req->securityEnable = (ss_ib.securityLevel != 0U) ? 1U : 0U;
-	req->ndsuHandle = NWK_INTERNAL_NSDU_HANDLE; /* fire-and-forget: buf freed on cnf */
+	/* Leave response completion is the handoff point for the subsequent local
+	 * leave. Other internal sends remain fire-and-forget. */
+	req->ndsuHandle = (clusterId == MGMT_LEAVE_RSP_CLID) ?
+		NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE : NWK_INTERNAL_NSDU_HANDLE;
 	req->nsdu = aps;
 	req->nsduLen = (u8)(AF_APS_DATA_HDR_LEN + cmdPldLen);
 	req->useAlias = pDstEpInfo->useAlias;

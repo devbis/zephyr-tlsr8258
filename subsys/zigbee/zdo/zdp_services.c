@@ -16,6 +16,8 @@
 #include "zdo/zdo_api.h"
 #include "zdo/zdp.h"
 #include "zdo/zdo_internal.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
+
 
 /* Decl mirrors gp/dGP_stub.h::gpDeviceAnnounceCheckCb_t without
  * pulling in the full GP stub header (which has a cyclic include
@@ -85,6 +87,7 @@ static u8 remainChildListNum_8733 __asm__("remainChildListNum.8733") = 0;
 static zdo_nwk_update_req_state_t zdo_nur;
 static u8 zdp_txSeqNo = 0;
 static u8 zdpCblWptr = 0;
+static zb_buf_t *zdo_mgmt_leave_pending;
 ev_timer_event_t *zdo_bind_timer_event = NULL;
 static void *ent_8732 __asm__("ent.8732") = NULL;
 zdp_cb_info_t zdp_cbl[ZDP_CB_MAX];
@@ -254,8 +257,33 @@ static u8 zdo_assoc_child_rsp_count(u8 startIndex)
 
 _attribute_no_inline_ static int zdoMgmtLeaveCmdProcessCb(void *arg)
 {
-    tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_LEAVE_REQ, arg);
-    return -1;
+	/* This is the local-router half of remove-without-force.  The vendor
+	 * implementation invokes the NWK leave handler directly from this timer;
+	 * queueing it once more loses the only completion path because a local
+	 * broadcast leave has no NLME-LEAVE.confirm. */
+	tl_zbNwkNlmeLeaveRequestHandler(arg);
+
+	/* nwkLeaveReqStart() has already built and submitted the leave frame from
+	 * the old joined state.  Now make the removal terminal locally: otherwise
+	 * Z2M deletes its database entry while this router persists and restores
+	 * the old PAN/short address. */
+	(void)zb_platform_clear_persistent_state();
+	zb_platform_app_network_left();
+	return -1;
+}
+
+void zdo_mgmt_leave_response_confirm(void *arg, u8 status)
+{
+    zb_buf_t *leave_buf = zdo_mgmt_leave_pending;
+
+    zdo_mgmt_leave_pending = NULL;
+    zb_buf_free((zb_buf_t *)arg);
+
+    if (leave_buf != NULL) {
+        /* The response has completed its radio transaction. Match the
+         * vendor's short post-confirm handoff without a pre-confirm race. */
+        ev_timer_taskPost(zdoMgmtLeaveCmdProcessCb, leave_buf, 100);
+    }
 }
 
 _attribute_no_inline_ static int zdo_change_channel_cb(void *arg)
@@ -331,6 +359,36 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
 {
     epInfo_t dstEpInfo;
     u8 apsCnt = 0;
+	u8 payload[ZB_BUF_SIZE];
+	zb_buf_t *owned_buf;
+	u16 cluster_id;
+	u8 zdu_len;
+	u8 dst_addr_mode;
+	u16 dst_nwk_addr;
+	addrExt_t dst_ext_addr;
+	zdo_callback rsp_cb;
+	u8 rsp_seq;
+
+	if (req == NULL || req->zdu == NULL || req->zduLen > sizeof(payload)) {
+		return ZDO_INVALID_REQUEST;
+	}
+	/* Snapshot every request field before releasing the RX carrier.  In the
+	 * normal indication path `req` itself lives in that carrier. */
+	cluster_id = req->cluster_id;
+	zdu_len = req->zduLen;
+	dst_addr_mode = req->dst_addr_mode;
+	dst_nwk_addr = req->dst_nwk_addr;
+	memcpy(dst_ext_addr, req->st_ext_addr, EXT_ADDR_LEN);
+	rsp_cb = req->zdoRspReceivedIndCb;
+	rsp_seq = req->zdpSeqNum;
+	memcpy(payload, req->zdu, req->zduLen);
+	/* The response was built in the RX indication's slab block. Release that
+	 * block before af_dataSend allocates the separate TX carrier. Callers must
+	 * not free req->buff_addr again after this point. */
+	owned_buf = (zb_buf_t *)req->buff_addr;
+	if (owned_buf != NULL) {
+		zb_buf_free(owned_buf);
+	}
 
 
     memset(&dstEpInfo, 0, sizeof(dstEpInfo));
@@ -338,16 +396,16 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
     dstEpInfo.dstEp = ZDO_EP;
     dstEpInfo.profileId = ZDO_PROFILE_ID;
 
-    if (req->dst_addr_mode == SHORT_ADDR_MODE) {
-        dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-        memcpy(&dstEpInfo.dstAddr, &req->dst_nwk_addr, sizeof(req->dst_nwk_addr));
-    } else {
-        dstEpInfo.dstAddrMode = APS_LONG_DSTADDR_WITHEP;
-        memcpy(&dstEpInfo.dstAddr, req->st_ext_addr, EXT_ADDR_LEN);
-    }
+	if (dst_addr_mode == SHORT_ADDR_MODE) {
+		dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+		memcpy(&dstEpInfo.dstAddr, &dst_nwk_addr, sizeof(dst_nwk_addr));
+	} else {
+		dstEpInfo.dstAddrMode = APS_LONG_DSTADDR_WITHEP;
+		memcpy(&dstEpInfo.dstAddr, dst_ext_addr, EXT_ADDR_LEN);
+	}
 
-    if (req->cluster_id == DEVICE_ANNCE_CLID) {
-        u16 announceAddr = (u16)req->zdu[1] | ((u16)req->zdu[2] << 8);
+	if (cluster_id == DEVICE_ANNCE_CLID) {
+        u16 announceAddr = (u16)payload[1] | ((u16)payload[2] << 8);
 
         if (announceAddr != g_zbNIB.nwkAddr) {
             dstEpInfo.useAlias = TRUE;
@@ -356,14 +414,13 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
         }
     }
 
-	 af_dataSend(ZDO_EP, &dstEpInfo, req->cluster_id, req->zduLen, req->zdu,
-			&apsCnt);
+	    (void)af_dataSend(ZDO_EP, &dstEpInfo, cluster_id, zdu_len,
+	                      payload, &apsCnt);
+	    if (rsp_cb != NULL) {
+	        zdp_cb_info_t *entry = &zdp_cbl[zdpCblWptr++ & (ZDP_CB_MAX - 1U)];
 
-    if (req->zdoRspReceivedIndCb != NULL) {
-        zdp_cb_info_t *entry = &zdp_cbl[zdpCblWptr++ & (ZDP_CB_MAX - 1U)];
-
-        entry->cb = req->zdoRspReceivedIndCb;
-        entry->seq = req->zdpSeqNum;
+	        entry->cb = rsp_cb;
+	        entry->seq = rsp_seq;
         entry->used = 1;
         entry->active = 1;
     }
@@ -384,7 +441,6 @@ _attribute_no_inline_ static void zdo_end_device_bind_resp_send(void *arg, zdo_s
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = dstNwkAddr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 _attribute_no_inline_ static int zdo_end_device_bind_timeout_cb(void *arg)
@@ -478,7 +534,6 @@ _attribute_no_inline_ static int zdo_ieeeAddrReqDelayCb(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 
     return -1;
 }
@@ -559,7 +614,6 @@ _attribute_no_inline_ static int zdo_nwkAddrReqDelayCb(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 
     return -1;
 }
@@ -641,9 +695,11 @@ _attribute_no_inline_ static int zdo_parentAnnounceIndicateDelay(void *arg)
         zzr.dst_addr_mode = SHORT_ADDR_MODE;
         zzr.dst_nwk_addr = ad->src_short_addr;
         zdo_send_req(&zzr);
+    } else {
+		zb_buf_free(buf);
     }
 
-    zb_buf_free(buf);
+    /* zdo_send_req() owns and releases buf when a response is sent. */
 
     if (overflowNum != 0U) {
         return 0;
@@ -720,7 +776,6 @@ void zdo_devAnnce(u16 nwkAddr, const addrExt_t ieeeAddr, u8 capability)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = NWK_BROADCAST_RX_ON_WHEN_IDLE;
     zdo_send_req(&zzr);
-    zb_buf_free(buf);
 }
 
 void zdo_device_announce_send(void)
@@ -789,7 +844,6 @@ void zdo_parent_announce_send(void)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = NWK_BROADCAST_ROUTER_COORDINATOR;
     zdo_send_req(&zzr);
-    zb_buf_free(buf);
 
     if (remainChildListNum_8733 != 0) {
         zdo_apsParentAnnceTimerStart();
@@ -937,7 +991,6 @@ void zdo_mgmtPermitJoinIndicate(void *arg)
         zzr.dst_addr_mode = SHORT_ADDR_MODE;
         zzr.dst_nwk_addr = ad->src_short_addr;
         zdo_send_req(&zzr);
-        zb_buf_free(buf);
     }
 
     ((nlme_permitJoining_req_t *)arg)->permitDuration = req.permitDuration;
@@ -1029,56 +1082,76 @@ void zdo_descriptorsIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_activeEpIndicate(void *arg)
 {
-    aps_data_ind_t *ad = (aps_data_ind_t *)arg;
-    const u8 *payload = ad->asdu;
-    u8 seqNum = payload[0];
-    u16 nwkAddrReq = rd_le16(payload + 1);
-    zdo_status_t status;
-    u8 epNum = af_availableEpNumGet();
-    zdo_zdp_req_t zzr;
+	aps_data_ind_t *ad = (aps_data_ind_t *)arg;
+	const u8 *payload = ad->asdu;
+	u8 seqNum = payload[0];
+	u16 nwkAddrReq = rd_le16(payload + 1);
+	zdo_status_t status;
+	u8 epNum = af_availableEpNumGet();
+	u8 response[5U + MAX_ACTIVE_EP_NUMBER] = {0};
+	u8 responseLen = 5U;
+	zdo_zdp_req_t zzr;
 
     if (is_short_broadcast(ad->dst_addr)) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
 
-    memset(&zzr, 0, sizeof(zzr));
-    TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, (u8)(5 + epNum), zzr.zdu, u8 *);
+	/* A router exposes one application endpoint (1) in this build.  Keep the
+	 * wire response bounded and explicitly serialized: this avoids sending
+	 * stale bytes if an endpoint descriptor is transiently unavailable and
+	 * makes the response independent of packed-struct/pointer arithmetic. */
+	if (epNum > MAX_ACTIVE_EP_NUMBER) {
+		epNum = MAX_ACTIVE_EP_NUMBER;
+	}
+	response[0] = seqNum;
+	response[1] = ZDO_SUCCESS;
+	response[2] = LO_UINT16(nwkAddrReq);
+	response[3] = HI_UINT16(nwkAddrReq);
+	response[4] = 0U;
 
-    u8 *ptr = zzr.zdu;
-    *ptr++ = seqNum;
+	if (nwkAddrReq != zb_info_short_addr()) {
+		status = (af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) ? ZDO_INVALID_REQUEST : ZDO_DEVICE_NOT_FOUND;
+		response[1] = status;
+	} else {
+		af_endpoint_descriptor_t *epDesc = af_epDescriptorGet();
 
-    if (nwkAddrReq != zb_info_short_addr()) {
-        status = (af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) ? ZDO_INVALID_REQUEST : ZDO_DEVICE_NOT_FOUND;
-        *ptr++ = status;
-        *ptr++ = LO_UINT16(nwkAddrReq);
-        *ptr++ = HI_UINT16(nwkAddrReq);
-        *ptr++ = 0;
-    } else {
-        af_endpoint_descriptor_t *epDesc = af_epDescriptorGet();
+		for (u8 i = 0U; i < epNum; i++) {
+			u8 ep = epDesc[i].ep;
+			bool duplicate = FALSE;
 
-        *ptr++ = ZDO_SUCCESS;
-        *ptr++ = LO_UINT16(nwkAddrReq);
-        *ptr++ = HI_UINT16(nwkAddrReq);
-        *ptr++ = epNum;
+			if (ep == 0U || ep > 240U) {
+				continue;
+			}
+			for (u8 j = 0U; j < response[4]; j++) {
+				if (response[5U + j] == ep) {
+					duplicate = TRUE;
+					break;
+				}
+			}
+			if (!duplicate && response[4] < MAX_ACTIVE_EP_NUMBER) {
+				response[5U + response[4]] = ep;
+				response[4]++;
+			}
+		}
+	}
+	responseLen = (u8)(5U + response[4]);
 
-        for (u8 i = 0; i < epNum; i++) {
-            *ptr++ = epDesc[i].ep;
-        }
-    }
+	memset(&zzr, 0, sizeof(zzr));
+	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, responseLen, zzr.zdu, u8 *);
+	memcpy(zzr.zdu, response, responseLen);
 
-    zzr.cluster_id = ACTIVE_EP_RSP_CLID;
-    zzr.zduLen = (u8)(ptr - zzr.zdu);
+	zzr.cluster_id = ACTIVE_EP_RSP_CLID;
+	zzr.zduLen = responseLen;
     zzr.buff_addr = (u8 *)arg;
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
-    zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
+
+	zdo_send_req(&zzr);
 }
 
 void zdo_matchDescriptorIndicate(void *arg)
@@ -1200,7 +1273,6 @@ void zdo_matchDescriptorIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_SysServerDiscoveryIndicate(void *arg)
@@ -1234,7 +1306,6 @@ void zdo_SysServerDiscoveryIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 u8 zdo_bind_unbind_req(const zdo_bind_req_t *req, zdo_zdp_req_t *zzr, bool bind)
 {
@@ -1498,7 +1569,6 @@ void zdo_bindOrUnbindIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_endDeviceBindIndicate(void *arg)
@@ -1597,7 +1667,6 @@ void zdo_nwkUpdateNotifyRespSend(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = zdo_nur.srcAddr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_mgmtNwkUpdateIndicate(void *arg)
@@ -1665,9 +1734,9 @@ void zdo_mgmtNwkUpdateIndicate(void *arg)
         zzr.dst_addr_mode = SHORT_ADDR_MODE;
         zzr.dst_nwk_addr = ad->src_short_addr;
         zdo_send_req(&zzr);
+    } else {
+		zb_buf_free((zb_buf_t *)arg);
     }
-
-    zb_buf_free((zb_buf_t *)arg);
 }
 void zdo_mgmtBindIndicate(void *arg)
 {
@@ -1738,7 +1807,6 @@ void zdo_mgmtBindIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_mgmtLqiIndicate(void *arg)
@@ -1809,7 +1877,6 @@ void zdo_mgmtLqiIndicate(void *arg)
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = ad->src_short_addr;
     zdo_send_req(&zzr);
-    zb_buf_free((zb_buf_t *)arg);
 }
 
 void zdo_mgmtLeaveIndicate(void *arg)
@@ -1817,6 +1884,8 @@ void zdo_mgmtLeaveIndicate(void *arg)
     aps_data_ind_t *ad = (aps_data_ind_t *)arg;
     zdo_mgmt_leave_req_t req;
     zdo_status_t status = ZDO_SUCCESS;
+    u16 parent_short;
+    u16 coord_short;
 
     if (ad->asduLength != 10U) {
         zb_buf_free((zb_buf_t *)arg);
@@ -1824,7 +1893,17 @@ void zdo_mgmtLeaveIndicate(void *arg)
     }
 
     memcpy(&req, ad->asdu + 1, sizeof(req));
-    if (ad->srcMacAddr != tl_zbNeighborParentShortAddrGet()) {
+    /* A router normally keeps the coordinator in the neighbor table as its
+     * parent.  After a rejoin, however, the address map/MAC PIB can already
+     * contain the current coordinator while the normal neighbor entry has
+     * not been restored yet.  Rejecting that valid source here makes Z2M's
+     * non-force remove look like a silent timeout.  Keep both checks: the
+     * source must still be either the recorded parent or the current
+     * coordinator, never an arbitrary unicast sender. */
+    parent_short = tl_zbNeighborParentShortAddrGet();
+    coord_short = g_zbInfo.macPib.coordShortAddress;
+    if (ad->srcMacAddr != parent_short &&
+        (coord_short == MAC_SHORT_ADDR_NONE || ad->srcMacAddr != coord_short)) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -1840,9 +1919,9 @@ void zdo_mgmtLeaveIndicate(void *arg)
         ((ad->security_status & SECURITY_IN_APSLAYER) == 0U)) {
         status = ZDO_NOT_AUTHORIZED;
     }
-
     if (!is_short_broadcast(ad->dst_addr)) {
         zdo_zdp_req_t zzr;
+        u8 tx_status;
 
         memset(&zzr, 0, sizeof(zzr));
         TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 2, zzr.zdu, u8 *);
@@ -1853,8 +1932,7 @@ void zdo_mgmtLeaveIndicate(void *arg)
         zzr.buff_addr = (u8 *)arg;
         zzr.dst_addr_mode = SHORT_ADDR_MODE;
         zzr.dst_nwk_addr = ad->src_short_addr;
-        zdo_send_req(&zzr);
-        zb_buf_free((zb_buf_t *)arg);
+        tx_status = zdo_send_req(&zzr);
     } else {
         zb_buf_free((zb_buf_t *)arg);
     }
@@ -1866,7 +1944,10 @@ void zdo_mgmtLeaveIndicate(void *arg)
             memcpy(buf, req.device_addr, EXT_ADDR_LEN);
             ((u8 *)buf)[8] = req.lr_bitfields.remove_children;
             ((u8 *)buf)[9] = req.lr_bitfields.rejoin;
-            ev_timer_taskPost(zdoMgmtLeaveCmdProcessCb, buf, 100);
+            /* zdo_send_req() queues the leave response asynchronously. Keep
+             * the leave request pending and let NWK confirmation perform the
+             * response-then-leave handoff. */
+            zdo_mgmt_leave_pending = buf;
         }
     }
 }

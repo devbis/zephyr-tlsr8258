@@ -1094,9 +1094,13 @@ _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
         pCmd->attrCmd = (void *)pReadCmd;
     }
 
-    if (!pCmd->msg->indInfo.security_status) {
-        return ZCL_STA_FAILURE;
-    }
+    /*
+     * A ZCL Read does not require APS-layer encryption.  The coordinator
+     * commonly sends it with NWK security only; security_status reports the
+     * APS security bit and is therefore zero in that valid case.  Rejecting
+     * it here suppresses the Read Response after the radio/NWK path has
+     * already accepted the frame.
+     */
 
     /* Build Read Response Command */
     u16 len = sizeof(zclReadRspCmd_t) + (pReadCmd->numAttr * sizeof(zclReadRspStatus_t));
