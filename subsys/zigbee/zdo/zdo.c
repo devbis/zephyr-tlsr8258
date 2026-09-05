@@ -206,6 +206,16 @@ void zdo_startupAttrCfg(zdo_startup_attr_t *startupAttr)
 
 void zdo_init(void)
 {
+    /* TLSR soft reboot does not clear SRAM.  The vendor image starts with
+     * zero-initialized ZDO globals, while the Zephyr reset path can re-enter
+     * here with timer pointers from the previous image instance.  Reusing a
+     * stale pollEvt/authEvt/discEvt pointer makes the ED appear joined but
+     * leaves it without a live poll timer, so indirect Transport-Key and ZDP
+     * requests are never fetched.  These are all transient operation state;
+     * persistent network credentials live in the platform NV adapter. */
+    memset(&g_zdo_nwk_manager, 0, sizeof(g_zdo_nwk_manager));
+    zdo_mgmt_nwk_flag = 0U;
+    zdo_secure_startup_pending = false;
     zdp_init();
     memcpy(&zdo_cfg_attributes, &zdoCfgAttrDefault, sizeof(zdo_cfg_attributes));
     /* Single-shot scan so bdb_nwkDiscCnfCb fires after the first scan
