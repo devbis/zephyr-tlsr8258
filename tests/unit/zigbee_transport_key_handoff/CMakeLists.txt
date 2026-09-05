@@ -8,6 +8,10 @@ add_executable(zigbee_transport_key_handoff
     main.c
 )
 
+target_include_directories(zigbee_transport_key_handoff PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../subsys/zigbee"
+)
+
 target_compile_definitions(zigbee_transport_key_handoff PRIVATE
     WORKTREE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../../.."
 )

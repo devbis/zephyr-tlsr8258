@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "zdo/zdo_join_confirm_guard.h"
+
 static int failures;
 
 static char *read_file(const char *path)
@@ -91,15 +93,107 @@ static void test_transport_key_decrypt_uses_vendor_security_service(void)
 static void test_association_starts_native_poll_and_secure_handoff(void)
 {
 	char *source = read_file(WORKTREE_ROOT "/subsys/zigbee/zdo/zdo_nwk_manager.c");
+	char *security = read_file(WORKTREE_ROOT "/subsys/zigbee/ss/ss_zdoSecurityME.c");
 
 	EXPECT_TRUE(source != NULL);
-	if (source == NULL) {
+	EXPECT_TRUE(security != NULL);
+	if (source == NULL || security == NULL) {
+		free(security);
+		free(source);
 		return;
 	}
 	EXPECT_TRUE(strstr(source, "zdo_set_pollRate(500U);") != NULL);
 	EXPECT_TRUE(strstr(source, "zdo_secure_startup_pending = true;") != NULL);
 	EXPECT_TRUE(strstr(source, "void zdo_nwk_authentication_complete(void)") != NULL);
+	EXPECT_TRUE(contains_between(source, "void zdo_nwk_authentication_complete(void)",
+				     "void zdo_nlmeForgetDev", "zdo_set_pollRate(500U);"));
+	EXPECT_TRUE(contains_between(security, "if (zdo_nwk_mngr()->authEvt == NULL)",
+				     "if (zdo_nwk_mngr()->savedBuf != NULL)",
+				     "build_join_confirm(arg);"));
+	EXPECT_TRUE(contains_between(security, "if (zdo_nwk_mngr()->authEvt == NULL)",
+				     "if (zdo_nwk_mngr()->savedBuf != NULL)",
+				     "tl_zbTaskPost(zdo_nlme_join_confirm, arg);"));
+	EXPECT_TRUE(strstr(source, "zdo_join_confirm_is_duplicate") != NULL);
+	EXPECT_TRUE(strstr(source, "zdo_join_confirm_handled = true;") != NULL);
+	EXPECT_TRUE(strstr(source, "zdo_join_confirm_cycle_start();") != NULL);
+	free(security);
 	free(source);
+}
+
+struct join_confirm_model {
+	bool completion_handled;
+	bool active_join_state;
+	unsigned bdb_handoffs;
+	unsigned startup_confirms;
+};
+
+static bool model_join_confirm(struct join_confirm_model *model, bool success)
+{
+	if (zdo_join_confirm_is_duplicate(model->completion_handled,
+					 model->active_join_state, success)) {
+		return false;
+	}
+
+	if (!model->active_join_state) {
+		if (!success) {
+			return false;
+		}
+		/* This is the retained late-success adoption path. */
+		model->active_join_state = true;
+	}
+
+	if (!success) {
+		return false;
+	}
+
+	model->completion_handled = true;
+	model->bdb_handoffs++;
+	model->startup_confirms++;
+	model->active_join_state = false;
+	return true;
+}
+
+static void test_early_transport_key_does_not_replay_join_completion(void)
+{
+	struct join_confirm_model model = {
+		.active_join_state = true,
+	};
+
+	/* Synthetic confirm posted by the early Transport-Key path. */
+	EXPECT_TRUE(model_join_confirm(&model, true));
+	EXPECT_TRUE(model.completion_handled);
+	EXPECT_TRUE(model.bdb_handoffs == 1U);
+	EXPECT_TRUE(model.startup_confirms == 1U);
+
+	/* Deferred real MLME-ASSOCIATE.confirm after zdo_startDeviceCnf(). */
+	EXPECT_FALSE(model_join_confirm(&model, true));
+	EXPECT_TRUE(model.bdb_handoffs == 1U);
+	EXPECT_TRUE(model.startup_confirms == 1U);
+}
+
+static void test_unhandled_late_success_is_still_adopted(void)
+{
+	struct join_confirm_model model = {0};
+
+	/* Preserve the separate recovery needed after a premature NO_DATA timeout. */
+	EXPECT_TRUE(model_join_confirm(&model, true));
+	EXPECT_TRUE(model.bdb_handoffs == 1U);
+	EXPECT_TRUE(model.startup_confirms == 1U);
+	EXPECT_FALSE(model_join_confirm(&model, false));
+	EXPECT_TRUE(model.bdb_handoffs == 1U);
+}
+
+static void test_new_join_cycle_can_complete_after_duplicate_is_dropped(void)
+{
+	struct join_confirm_model model = {
+		.completion_handled = true,
+	};
+
+	/* Association/rejoin/direct-join start resets this per-cycle flag. */
+	model.completion_handled = false;
+	model.active_join_state = true;
+	EXPECT_TRUE(model_join_confirm(&model, true));
+	EXPECT_TRUE(model.bdb_handoffs == 1U);
 }
 
 static void test_bdb_handoffs_keep_transport_key_wait_separate(void)
@@ -127,6 +221,9 @@ int main(void)
 	test_node_descriptor_response_requests_transport_key();
 	test_transport_key_decrypt_uses_vendor_security_service();
 	test_association_starts_native_poll_and_secure_handoff();
+	test_early_transport_key_does_not_replay_join_completion();
+	test_unhandled_late_success_is_still_adopted();
+	test_new_join_cycle_can_complete_after_duplicate_is_dropped();
 	test_bdb_handoffs_keep_transport_key_wait_separate();
 
 	if (failures != 0) {
