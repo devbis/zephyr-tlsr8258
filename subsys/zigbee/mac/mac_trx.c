@@ -58,6 +58,21 @@ STATIC_ASSERT(sizeof(mac_trx_vars_t) == 12);
 
 int mac_pendingWaitTimerCb(void *arg);
 
+static ev_timer_event_t *mac_ed_poll_rx_window_evt;
+
+static int mac_ed_poll_rx_window_close(void *arg)
+{
+    (void)arg;
+
+    mac_ed_poll_rx_window_evt = NULL;
+    if (g_zbInfo.macPib.rxOnWhenIdle == 0U) {
+        zb_radio_port_set_legacy_state(RF_STATE_OFF,
+                                        g_zbMacPib.phyChannelCur);
+    }
+
+    return -1;
+}
+
 static inline void timer_evt_cb_set(ev_timer_callback_t cb)
 {
     g_macTimerEvt.cb = cb;
@@ -245,7 +260,7 @@ void mac_rxDataParse(void *arg)
     u8 len = pending->payloadLen;
     u8 frameType;
     u8 hdrSize;
-    tl_zb_mac_mhr_t mhr;
+	tl_zb_mac_mhr_t mhr;
 
     /*
      * Keep RX RSSI in the buffer header.  `raw` points at the dedicated
@@ -255,7 +270,7 @@ void mac_rxDataParse(void *arg)
      */
     buf->hdr.rssi = rssi;
     frameType = raw[0] & 0x07U;
-    hdrSize = tl_zbMacHdrParse(&mhr, raw);
+	hdrSize = tl_zbMacHdrParse(&mhr, raw);
 
     /* The ED-scan state normally suppresses queued RX frames.  A successful
      * Association Response is an exception: the coordinator can deliver it
@@ -474,9 +489,24 @@ void mac_sendTxCnf(tx_data_queue *entry)
     }
 
     if (g_zbInfo.macPib.rxOnWhenIdle == 0U &&
-        (g_zbMacCtx.status | needPendingWait) == 0U) {
+        (g_zbMacCtx.status | needPendingWait) == 0U &&
+        handle != 0xe9U) {
         zb_radio_port_set_legacy_state(RF_STATE_OFF,
                                         g_zbMacPib.phyChannelCur);
+    }
+
+    /* A sleepy ED must remain in RX briefly after a successful Data Request:
+     * the parent's indirect payload is sent after the MAC ACK, while the
+     * generic TX confirmation arrives immediately.  The vendor PHY keeps this
+     * receive window open; closing it here drops the Transport-Key and every
+     * later indirect ZDO response. */
+    if (handle == 0xe9U && g_zbInfo.macPib.rxOnWhenIdle == 0U &&
+        status == MAC_SUCCESS) {
+        if (mac_ed_poll_rx_window_evt != NULL) {
+            ev_timer_taskCancel(&mac_ed_poll_rx_window_evt);
+        }
+        mac_ed_poll_rx_window_evt = ev_timer_taskPost(mac_ed_poll_rx_window_close,
+                                                      NULL, 100U);
     }
 
 #if defined(ZB_ROUTER_ROLE)
@@ -795,8 +825,25 @@ u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList
  */
 #define MAC_RX_DUP_CACHE_SIZE 4U
 
+/*
+ * A coordinator that never sees an application-level reply to a queued
+ * indirect frame (e.g. our ZDP response was lost) re-delivers the SAME
+ * undelivered request on a later poll, byte-for-byte identical (Ember does
+ * not bump the NWK frame counter for that re-queue). Without an expiry this
+ * cache treats that legitimate redelivery as a duplicate of itself forever,
+ * silently black-holing the request on every subsequent poll -- confirmed on
+ * hardware: Z2M interview deterministically stalled on Simple_Desc_req (ZDO
+ * "can not get active endpoints" / 15s timeout) every attempt. Bound the
+ * match to a short window
+ * that still covers the ~15ms intra-burst MAC-level retransmissions of a
+ * single delivery (observed 3-4x per poll), but expires well before the next
+ * poll cycle (~1s later) so a genuinely re-queued retry gets a fresh chance.
+ */
+#define MAC_RX_DUP_WINDOW_MS 150U
+
 struct mac_rx_dup_entry {
 	u32 hash;
+	u32 timestamp_ms;
 	u8 len;
 	u8 valid;
 };
@@ -826,6 +873,7 @@ static bool mac_rx_is_local_short_unicast(const u8 *data, u8 len)
 static bool mac_rx_is_exact_duplicate(const u8 *data, u8 len)
 {
 	u32 hash = 2166136261U;
+	u32 now_ms = k_uptime_get_32();
 
 	if (data == NULL || len < 3U) {
 		return false;
@@ -845,12 +893,20 @@ static bool mac_rx_is_exact_duplicate(const u8 *data, u8 len)
 		if (mac_rx_dup_cache[i].valid != 0U &&
 		    mac_rx_dup_cache[i].len == len &&
 		    mac_rx_dup_cache[i].hash == hash) {
-			return true;
+			if ((u32)(now_ms - mac_rx_dup_cache[i].timestamp_ms) < MAC_RX_DUP_WINDOW_MS) {
+				return true;
+			}
+			/* Stale match: treat as a fresh redelivery attempt and
+			 * refresh the slot below instead of leaving it expired
+			 * for another MAC_RX_DUP_CACHE_SIZE receptions. */
+			mac_rx_dup_cache[i].valid = 0U;
+			break;
 		}
 	}
 
 	mac_rx_dup_cache[mac_rx_dup_wptr] = (struct mac_rx_dup_entry){
 		.hash = hash,
+		.timestamp_ms = now_ms,
 		.len = len,
 		.valid = 1U,
 	};
@@ -905,11 +961,12 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 
 void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
 {
-    zb_buf_t *buf;
-    zb_mac_rx_pending_meta_t *meta;
-    u8 *owned_payload;
+	 zb_buf_t *buf;
+	 zb_mac_rx_pending_meta_t *meta;
+	 u8 *owned_payload;
+	 bool assoc_resp_success = false;
 
-    if (ackPkt != 0U) {
+	if (ackPkt != 0U) {
         /* ACKs never enter the Zigbee RX pipeline. Do not allocate a stack
          * buffer for them: joining generates several matching ACKs and a
          * leaked slab block here eventually starves all data RX allocations. */
@@ -952,6 +1009,27 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 		return;
 	}
 
+	/*
+	 * An association response is the one RX primitive whose completion
+	 * deadline is coupled to the MAC association wait timer.  The radio has
+	 * already sent the MAC ACK before this function is called, so handling a
+	 * successful response synchronously here cannot extend the ACK turnaround.
+	 * Queueing it behind the generic RX FIFO lets the wait timer win on a busy
+	 * ED boot: the coordinator sees an ACK, but the deferred MAC->NWK confirm
+	 * is never posted and the ED starts a second association.  Keep the
+	 * vendor's immediate MAC primitive handoff for this frame; all data and
+	 * other MAC commands retain the bounded RX queue path below.
+	 */
+	if (data != NULL && len >= 4U) {
+		u16 frame_ctrl = (u16)data[0] | ((u16)data[1] << 8);
+		u8 hdr_len = tl_zbMacHdrSize(frame_ctrl);
+
+		assoc_resp_success = (hdr_len != 0U &&
+				      (u16)(hdr_len + 4U) <= len &&
+				      (data[hdr_len] == MAC_CMD_ASSOCIATION_RESPONSE) &&
+				      (data[hdr_len + 3U] == MAC_SUCCESS));
+	}
+
 	buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
 	if (buf == NULL) {
 		return;
@@ -980,9 +1058,13 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 	 * generic task lane lets timer/TX callbacks consume the whole queue while
 	 * the RF ISR continues to MAC-ACK coordinator retries; the packet is then
 	 * acknowledged on air but never reaches NWK/ZDP. */
+	if (assoc_resp_success) {
+		mac_rxDataParse(buf);
+		return;
+	}
+
 	if (tl_zbRxTaskPost(mac_rxDataParse, buf) != RET_OK) {
 		zb_buf_free(buf);
-	} else {
 	}
 }
 
