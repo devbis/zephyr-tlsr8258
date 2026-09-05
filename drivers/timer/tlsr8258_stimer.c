@@ -96,7 +96,7 @@ static void tlsr8258_stimer_irq(const void *unused)
 	sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ? elapsed_ticks : 1u);
 }
 
-void sys_clock_set_timeout(int32_t ticks, bool idle)
+void sys_clock_set_timeout(uint32_t ticks, bool idle)
 {
 	ARG_UNUSED(idle);
 
@@ -104,11 +104,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 		return;
 	}
 
-	if (ticks == K_TICKS_FOREVER) {
-		ticks = MAX_TICKS;
-	}
-
-	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
+	ticks = CLAMP(ticks, 1, MAX_TICKS) - 1;
 
 	uint32_t key = irq_lock();
 	uint32_t now = TLSR8258_REG_SYSTEM_TICK;
