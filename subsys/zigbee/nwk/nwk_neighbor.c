@@ -607,4 +607,50 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(tl_zb_normal_neighbor_en
 	return freeEntry;
 }
 
+/*
+ * Ported from libzigbee/src/nwk_neighbor.c: walk the child (end-device)
+ * neighbor entries starting at startIdx and fill in up to
+ * ZBHCI_CHILD_LIST_NUM_MAX (extAddr, nwkAddr) pairs. Declared in
+ * nwk_neighbor.h and used by the ZBHCI GET_CHILD_NODES command
+ * (platform/zephyr/zb_zbhci_cmd.c) but was never implemented in this port.
+ */
+/*
+ * __attribute__((used)): native_sim's two-stage link (partial `-r` relink
+ * then --gc-sections) can drop this section even though it is referenced
+ * from platform/zephyr/zb_zbhci_cmd.c, the same class of issue documented
+ * for zb_dbg_* diagnostics elsewhere in this port. Pin it.
+ */
+__attribute__((used)) void tl_childNodesListGet(u8 startIdx, nwk_childTableInfo_t *t)
+{
+	tl_zb_normal_neighbor_entry_t *entry = NULL;
+	u8 skipped = 0;
+
+	if (t == NULL) {
+		return;
+	}
+
+	memset(t, 0, sizeof(*t));
+	t->info.status = 0;
+	t->info.totalChildNodesNum = tl_zbNeighborTableChildEDNumGet();
+	t->info.startIdx = startIdx;
+
+	while ((entry = tl_zbNeighborTabSearchForChildEndDev(entry)) != NULL) {
+		u8 outIdx;
+
+		if (skipped < startIdx) {
+			skipped++;
+			continue;
+		}
+
+		outIdx = t->info.childNodesNum;
+		tl_zbExtAddrByIdx(entry->addrmapIdx, t->list[outIdx].extAddr);
+		t->list[outIdx].nwkAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
+		t->info.childNodesNum++;
+
+		if (t->info.childNodesNum >= ZBHCI_CHILD_LIST_NUM_MAX) {
+			break;
+		}
+	}
+}
+
 #endif /* ZB_ROUTER_ROLE */
