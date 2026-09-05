@@ -33,7 +33,6 @@
 #endif
 
 enum {
-    ZBINFO_ACTIVE_CHANNEL_OFFSET = 70,
     ZDP_CB_MAX = 4,
     ZDP_ADDR_REQ_DELAY_MS = 200,
     ZDP_ASSOC_LIST_LIMIT = 15,
