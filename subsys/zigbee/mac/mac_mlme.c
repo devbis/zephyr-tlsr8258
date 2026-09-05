@@ -248,6 +248,18 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
                                  g_zbInfo.macPib.extAddress);
     ((u8 *)buf)[10] = payload[3];
 
+    /*
+     * mac_assoc_resp_success_seen only needs to survive the race window
+     * between the wait-timer moving g_zbMacCtx.status off 5 and this deferred
+     * indication running for that same response (see the comments above and
+     * at its check in tl_zbPhyMlmeIndicate). This response is now fully
+     * consumed, so clear it: leaving it set would permanently suppress
+     * tl_zbPhyMlmeIndicate's general dispatch table for this device, and a
+     * router/coordinator needs that table for the rest of its life to answer
+     * BEACON_REQUEST/ASSOCIATION_REQUEST from devices joining through it.
+     */
+    mac_assoc_resp_success_seen = 0U;
+
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
 }
 
