@@ -223,6 +223,17 @@ zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
         return ZDO_INSUFFICIENT_SPACE;
     }
 
+#if defined(ZB_COORDINATOR_ROLE)
+    /*
+     * A centralized-network coordinator always takes the reserved NWK
+     * address 0x0000 (nwk_formation.c forces this when distributedNetwork
+     * is false). Only distributed networks -- routers forming without a
+     * coordinator -- pick or restore a random address, below.
+     */
+    ARG_UNUSED(nwkAddr);
+    req->distributedNetwork = 0;
+    req->distributedNwkAddr = 0;
+#else
     req->distributedNetwork = 1;
     req->distributedNwkAddr = nwkAddr;
 
@@ -237,6 +248,7 @@ zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
         zb_buf_free((zb_buf_t *)req);
         return 0x84;
     }
+#endif
 
     req->scanChannels = scanChannels;
     req->batteryLifeExt = 0;
