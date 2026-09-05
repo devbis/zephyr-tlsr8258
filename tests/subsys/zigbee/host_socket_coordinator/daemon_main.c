@@ -26,6 +26,7 @@
 #define ZB_COORD_RX_LQI              255U
 #define ZB_MEDIUM_MAX_PEERS          8U
 #define ZB_MEDIUM_MAX_PENDING        16U
+#define ZB_MEDIUM_MAX_BLOCKED_LINKS  8U
 
 enum pending_delivery_kind {
 	PENDING_DELIVERY_RX = 0,
@@ -37,6 +38,9 @@ struct daemon_config {
 	const char *model_id;
 	uint16_t bind_port;
 	bool permit_join;
+	bool relay_only;
+	uint16_t blocked_links[ZB_MEDIUM_MAX_BLOCKED_LINKS][2];
+	size_t blocked_link_count;
 };
 
 struct medium_peer_entry {
@@ -136,7 +140,8 @@ static void usage(FILE *stream, const char *argv0)
 {
 	fprintf(stream,
 		"Usage: %s [--bind-host ip] [--bind-port port] [--model-id str]\n"
-		"          [--permit-join|--deny-join] [--help]\n",
+		"          [--permit-join|--deny-join] [--relay-only]\n"
+		"          [--block-link <node_id>:<node_id>]... [--help]\n",
 		argv0);
 }
 
@@ -156,6 +161,36 @@ static int parse_u16(const char *value, uint16_t *out)
 	}
 
 	*out = (uint16_t)parsed;
+	return 0;
+}
+
+static int parse_node_id_pair(const char *value, uint16_t *node_a, uint16_t *node_b)
+{
+	const char *sep;
+	char lhs[16];
+	size_t lhs_len;
+
+	if (value == NULL || node_a == NULL || node_b == NULL) {
+		return -EINVAL;
+	}
+
+	sep = strchr(value, ':');
+	if (sep == NULL || sep == value) {
+		return -EINVAL;
+	}
+
+	lhs_len = (size_t)(sep - value);
+	if (lhs_len >= sizeof(lhs)) {
+		return -EINVAL;
+	}
+
+	memcpy(lhs, value, lhs_len);
+	lhs[lhs_len] = '\0';
+
+	if (parse_u16(lhs, node_a) < 0 || parse_u16(sep + 1, node_b) < 0) {
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -182,6 +217,20 @@ static int parse_args(int argc, char **argv, struct daemon_config *cfg)
 			cfg->permit_join = true;
 		} else if (strcmp(arg, "--deny-join") == 0) {
 			cfg->permit_join = false;
+		} else if (strcmp(arg, "--relay-only") == 0) {
+			cfg->relay_only = true;
+		} else if (strcmp(arg, "--block-link") == 0) {
+			uint16_t node_a;
+			uint16_t node_b;
+
+			if (++i >= argc ||
+			    parse_node_id_pair(argv[i], &node_a, &node_b) < 0 ||
+			    cfg->blocked_link_count >= ZB_MEDIUM_MAX_BLOCKED_LINKS) {
+				return -EINVAL;
+			}
+			cfg->blocked_links[cfg->blocked_link_count][0] = node_a;
+			cfg->blocked_links[cfg->blocked_link_count][1] = node_b;
+			cfg->blocked_link_count++;
 		} else if (strcmp(arg, "--help") == 0) {
 			usage(stdout, argv[0]);
 			return 1;
@@ -564,15 +613,31 @@ static int handle_status_request(int fd, const struct sockaddr_in *peer_addr,
 	return send_output(fd, peer_addr, &output);
 }
 
+static bool link_is_blocked(const struct daemon_config *cfg, uint16_t node_a, uint16_t node_b)
+{
+	for (size_t i = 0; i < cfg->blocked_link_count; i++) {
+		uint16_t a = cfg->blocked_links[i][0];
+		uint16_t b = cfg->blocked_links[i][1];
+
+		if ((a == node_a && b == node_b) || (a == node_b && b == node_a)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static int schedule_peer_fanout(struct pending_delivery *pending, size_t pending_count,
 				const struct medium_peer_entry *peers, size_t peer_count,
 				const struct sockaddr_in *sender_addr,
 				const struct zb_native_sim_socket_medium_msg *input,
-				uint64_t input_start_us, uint64_t input_end_us)
+				uint64_t input_start_us, uint64_t input_end_us,
+				const struct daemon_config *cfg)
 {
 	struct zb_native_sim_socket_medium_msg output;
 
-	if (pending == NULL || peers == NULL || sender_addr == NULL || input == NULL) {
+	if (pending == NULL || peers == NULL || sender_addr == NULL || input == NULL ||
+	    cfg == NULL) {
 		return -EINVAL;
 	}
 
@@ -584,6 +649,10 @@ static int schedule_peer_fanout(struct pending_delivery *pending, size_t pending
 		if (peers[i].peer.channel != input->channel ||
 		    !zb_native_sim_socket_medium_peer_accepts_psdu(&peers[i].peer,
 								   input->psdu, input->psdu_len)) {
+			continue;
+		}
+
+		if (link_is_blocked(cfg, input->node_id, peers[i].peer.node_id)) {
 			continue;
 		}
 
@@ -715,8 +784,10 @@ int main(int argc, char **argv)
 	zb_native_sim_socket_medium_model_init(&medium);
 	coord.permit_join = cfg.permit_join;
 
-	fprintf(stderr, "socket coordinator: listening on %s:%u model-id=%s permit-join=%s\n",
-		cfg.bind_host, cfg.bind_port, cfg.model_id, cfg.permit_join ? "on" : "off");
+	fprintf(stderr,
+		"socket coordinator: listening on %s:%u model-id=%s permit-join=%s mode=%s blocked-links=%zu\n",
+		cfg.bind_host, cfg.bind_port, cfg.model_id, cfg.permit_join ? "on" : "off",
+		cfg.relay_only ? "relay-only" : "coordinator", cfg.blocked_link_count);
 
 	for (;;) {
 		struct pollfd pfd = {
@@ -812,8 +883,14 @@ int main(int argc, char **argv)
 			 * owns the short address we recorded from the router's
 			 * Update-Device, release the deferred Tunnel(Transport-Key)
 			 * to the relaying router — the child is finally addressable.
+			 *
+			 * relay-only mode has no coordinator application logic (no
+			 * pending tunnels are ever recorded), so this is skipped
+			 * there — the real coordinator now lives on its own
+			 * native_sim peer and handles tunneling itself.
 			 */
-			if (zb_host_socket_coord_take_ready_tunnel(&coord, input.short_addr,
+			if (!cfg.relay_only &&
+			    zb_host_socket_coord_take_ready_tunnel(&coord, input.short_addr,
 								   input.rx_on, &output,
 								   &tunnel_router_node) > 0) {
 				struct medium_peer_entry *router =
@@ -872,55 +949,64 @@ int main(int argc, char **argv)
 
 			rc = schedule_peer_fanout(pending, ZB_MEDIUM_MAX_PENDING,
 						peers, ZB_MEDIUM_MAX_PEERS, &peer_addr,
-						&input, input_start_us, input_end_us);
+						&input, input_start_us, input_end_us, &cfg);
 			if (rc < 0) {
 				fprintf(stderr, "socket coordinator: fanout scheduling failed (%d)\n",
 					-rc);
 				break;
 			}
 
-			rc = zb_host_socket_coord_process(&coord, &input, &output);
-			if (rc >= 0) {
-				uint64_t last_reply_end_us = input_end_us;
+			/*
+			 * relay-only mode has no coordinator application logic:
+			 * the frame is already fanned out to peers above, so
+			 * there is nothing further to answer here (the real
+			 * coordinator, on its own native_sim peer, generates
+			 * its own replies as an ordinary fanout recipient).
+			 */
+			if (!cfg.relay_only) {
+				rc = zb_host_socket_coord_process(&coord, &input, &output);
+				if (rc >= 0) {
+					uint64_t last_reply_end_us = input_end_us;
 
-				if (rc > 0) {
-					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
-							    &medium, &peer_addr, &output,
-							    input_end_us);
+					if (rc > 0) {
+						rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
+								    &medium, &peer_addr, &output,
+								    input_end_us);
+						if (rc < 0) {
+							fprintf(stderr,
+								"socket coordinator: reply scheduling failed (%d)\n",
+								-rc);
+							break;
+						}
+						last_reply_end_us = input_end_us +
+							ZB_COORD_RX_TX_TURNAROUND_US +
+							zb_native_sim_socket_medium_airtime_us(output.psdu_len);
+					}
+
+					/*
+					 * Drain any frames the coord queued for
+					 * unsolicited delivery (router joiners with
+					 * rx-on-when-idle). This must also run when
+					 * coord_process() consumed an inbound frame
+					 * without an immediate reply (for example
+					 * Device_annce -> queued Node_Desc_req).
+					 */
+					while (zb_host_socket_coord_drain_unsolicited(&coord, &output) > 0) {
+						rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
+								    &medium, &peer_addr, &output,
+								    last_reply_end_us);
+						if (rc < 0) {
+							fprintf(stderr,
+								"socket coordinator: unsolicited reply scheduling failed (%d)\n",
+								-rc);
+							break;
+						}
+						last_reply_end_us += ZB_COORD_RX_TX_TURNAROUND_US +
+							zb_native_sim_socket_medium_airtime_us(output.psdu_len);
+					}
 					if (rc < 0) {
-						fprintf(stderr,
-							"socket coordinator: reply scheduling failed (%d)\n",
-							-rc);
 						break;
 					}
-					last_reply_end_us = input_end_us +
-						ZB_COORD_RX_TX_TURNAROUND_US +
-						zb_native_sim_socket_medium_airtime_us(output.psdu_len);
-				}
-
-				/*
-				 * Drain any frames the coord queued for
-				 * unsolicited delivery (router joiners with
-				 * rx-on-when-idle). This must also run when
-				 * coord_process() consumed an inbound frame
-				 * without an immediate reply (for example
-				 * Device_annce -> queued Node_Desc_req).
-				 */
-				while (zb_host_socket_coord_drain_unsolicited(&coord, &output) > 0) {
-					rc = schedule_reply(pending, ZB_MEDIUM_MAX_PENDING,
-							    &medium, &peer_addr, &output,
-							    last_reply_end_us);
-					if (rc < 0) {
-						fprintf(stderr,
-							"socket coordinator: unsolicited reply scheduling failed (%d)\n",
-							-rc);
-						break;
-					}
-					last_reply_end_us += ZB_COORD_RX_TX_TURNAROUND_US +
-						zb_native_sim_socket_medium_airtime_us(output.psdu_len);
-				}
-				if (rc < 0) {
-					break;
 				}
 			}
 
@@ -941,7 +1027,7 @@ int main(int argc, char **argv)
 						-rc);
 					break;
 				}
-			} else {
+			} else if (!cfg.relay_only) {
 				rc = zb_host_socket_coord_process(&coord, &input, &output);
 				if (rc > 0) {
 					rc = send_output(fd, &peer_addr, &output);
@@ -954,7 +1040,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if (coord.interview_complete) {
+		if (!cfg.relay_only && coord.interview_complete) {
 			char model_id[sizeof(coord.observed_model_id)];
 
 			zb_host_socket_coord_observed_model_id(&coord, model_id, sizeof(model_id));
