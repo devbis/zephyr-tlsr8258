@@ -4,6 +4,9 @@
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_types.h>
+#if defined(CONFIG_ZIGBEE_ZBHCI_UART)
+#include <zephyr/zigbee/zb_zbhci.h>
+#endif
 #include <string.h>
 #include "zb_radio_smoke.h"
 #include "drv_hw.h"
@@ -643,6 +646,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	 * during idle (~1 ms granularity is fine for this thread).
 	 */
 	while (1) {
+		#if defined(CONFIG_ZIGBEE_ZBHCI_UART)
+		zb_zbhci_uart_poll();
+		#endif
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
 			ev_timer_process();

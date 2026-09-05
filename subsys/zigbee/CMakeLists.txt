@@ -179,6 +179,10 @@ endif()
 
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c bdb/bdb_base.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZBHCI_UART
+    platform/zephyr/zb_zbhci_uart.c
+    platform/zephyr/zb_zbhci_cmd.c
+)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_GP
     gp/cGP_stub.c gp/dGP_stub.c
