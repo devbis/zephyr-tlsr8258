@@ -266,9 +266,6 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	bool broadcast;
 	u8 apsCounter;
 
-	if (srcEp > 240U) {
-		return APS_STATUS_NOT_SUPPORTED;
-	}
 	if (pDstEpInfo == NULL || (cmdPld == NULL && cmdPldLen != 0U)) {
 		return APS_STATUS_INVALID_PARAMETER;
 	}
