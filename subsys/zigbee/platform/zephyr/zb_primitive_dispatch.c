@@ -29,10 +29,12 @@
 /*
  * GreenPower hook — zdp_services.c::zdo_deviceAnnounceIndicate consults
  * this callback to suppress dev_annce for proxy-table entries that GP
- * has already claimed. Our router build doesn't include the GP subsystem,
- * so provide a NULL fallback (zdp_services already null-checks it).
+ * has already claimed. gpDeviceAnnounceCheckCb_t comes from
+ * gp/dGP_stub.h (pulled in unconditionally via zb_common_stub.h); this
+ * weak NULL fallback covers builds where gp_sinkTab.c never overrides it
+ * (CONFIG_ZIGBEE_GP=n, or GP without the sink role) — zdp_services.c
+ * null-checks it before calling.
  */
-typedef bool (*gpDeviceAnnounceCheckCb_t)(u16 nwkAddr, const u8 *ieeeAddr);
 gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb __attribute__((weak)) = NULL;
 
 /*

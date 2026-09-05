@@ -40,6 +40,15 @@ zephyr_library_compile_definitions(
     ZCL_REPORTING_TABLE_NUM=2
 )
 
+# Vendor zb_config.h ties GP_SUPPORT_ENABLE to ZB_ROUTER_ROLE alone; this
+# port gates it behind its own CONFIG_ZIGBEE_GP instead so GP stays off by
+# default even on router builds. ZCL_GP_SUPPORT is the matching app-level
+# opt-in that zcl_config.h turns into ZCL_GREEN_POWER, gating
+# zcl_greenPower.c (the ZCL command (de)serializers gp/*.c calls into).
+zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_GP
+    GP_SUPPORT_ENABLE=1
+    ZCL_GP_SUPPORT=1
+)
 
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(

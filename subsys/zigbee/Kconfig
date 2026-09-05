@@ -60,7 +60,17 @@ config ZIGBEE_ZCL
 
 config ZIGBEE_GP
 	bool "Green Power"
+	depends on ZIGBEE_ROUTER
 	default n
+	help
+	  Green Power proxy support (vendor GP_SUPPORT_ENABLE, router-only:
+	  the GP proxy relays GPDFs on behalf of GPDs, the sink role is not
+	  wired in here). The GP endpoint (242) registers and interviews
+	  correctly against Zigbee2MQTT, but no actual Green Power device
+	  has been tested against it, so GPDF relaying itself is unverified.
+	  On the tlsr8258_tb03f router build this adds ~17 KB flash and
+	  ~0.6 KB RAM on top of an already tight RAM budget (~96.6% ->
+	  ~97.8%).
 
 config ZIGBEE_OTA
 	bool "OTA firmware update"

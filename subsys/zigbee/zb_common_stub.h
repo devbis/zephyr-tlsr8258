@@ -189,6 +189,7 @@ extern sys_diagnostics_t g_sysDiags;
 #include "common/utility.h"
 
 #define EXT_ADDR_LEN                    8
+#define SRC_ID_LEN                      4
 #define TL_SETSTRUCTCONTENT(s, v)       (memset((u8 *)&(s), (v), sizeof(s)))
 #define COPY_U16TOBUFFER(buf, data)     do { \
 	(((u8 *)(buf))[0]) = (u8)(data); \
@@ -196,6 +197,11 @@ extern sys_diagnostics_t g_sysDiags;
 } while (0)
 #define COPY_BUFFERTOU16(data, buf)     do { \
 	(data) = ((buf)[0]) + (((buf)[1]) << 8); \
+} while (0)
+#define COPY_U24TOBUFFER(buf, data)     do { \
+	(((u8 *)(buf))[0]) = (u8)(data); \
+	(((u8 *)(buf))[1]) = (u8)((data) >> 8); \
+	(((u8 *)(buf))[2]) = (u8)((data) >> 16); \
 } while (0)
 #define COPY_U32TOBUFFER(buf, data)     do { \
 	(((u8 *)(buf))[0]) = (u8)(data); \
@@ -238,6 +244,8 @@ extern const u8 g_null_securityKey[];
 #define ZB_IEEE_ADDR_ZERO               ZB_64BIT_ADDR_ZERO
 #define ZB_IEEE_ADDR_IS_INVALID         ZB_IS_64BIT_ADDR_INVALID
 #define ZB_IEEE_ADDR_IS_ZERO            ZB_IS_64BIT_ADDR_ZERO
+#define ZB_IEEE_ADDR_CMP                ZB_64BIT_ADDR_CMP
+#define ZB_SEC_KEY_IS_NULL              ZB_IS_16BYTE_SECURITY_KEY_ZERO
 extern const addrExt_t g_invalid_addr;
 extern const addrExt_t g_zero_addr;
 
@@ -301,6 +309,8 @@ typedef struct apsdeDataInd_s {
 #include "zbapi/zb_api.h"
 #include "bdb/includes/bdb.h"
 #include "zcl/zll_commissioning/zcl_touchlink_attr.h"
+#include "gp/cGP_stub.h"
+#include "gp/dGP_stub.h"
 
 enum {
 	REJOIN_INSECURITY,
