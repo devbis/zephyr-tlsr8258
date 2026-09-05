@@ -212,6 +212,8 @@ do {                                                                    \
 #define Z_MACHO_SEC__net_l2 znetl2
 #define Z_MACHO_SEC__net_pkt_alloc_stats_slab znpkast
 #define Z_MACHO_SEC__eth_bridge zethbr
+#define Z_MACHO_SEC__k_kernel_init_pre_entry zkinipre
+#define Z_MACHO_SEC__k_kernel_init_post_entry zkinipst
 #define Z_MACHO_SEC__k_timer zktimer
 #define Z_MACHO_SEC__k_timer_observer zktimobs
 #define Z_MACHO_SEC__k_mem_slab zkmslab

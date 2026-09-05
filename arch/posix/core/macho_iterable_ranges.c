@@ -16,6 +16,10 @@
 
 MACHO_ALIAS(__static_thread_data_list_start, "section$start$__DATA$zthrdat");
 MACHO_ALIAS(__static_thread_data_list_end, "section$end$__DATA$zthrdat");
+MACHO_ALIAS(_k_kernel_init_pre_entry_list_start, "section$start$__DATA$zkinipre");
+MACHO_ALIAS(_k_kernel_init_pre_entry_list_end, "section$end$__DATA$zkinipre");
+MACHO_ALIAS(_k_kernel_init_post_entry_list_start, "section$start$__DATA$zkinipst");
+MACHO_ALIAS(_k_kernel_init_post_entry_list_end, "section$end$__DATA$zkinipst");
 MACHO_ALIAS(_k_mem_slab_list_start, "section$start$__DATA$zkmslab");
 MACHO_ALIAS(_k_mem_slab_list_end, "section$end$__DATA$zkmslab");
 MACHO_ALIAS(_net_buf_pool_list_start, "section$start$__DATA$znbpool");
