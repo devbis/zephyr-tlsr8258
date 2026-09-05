@@ -762,7 +762,13 @@ void zdo_devAnnce(u16 nwkAddr, const addrExt_t ieeeAddr, u8 capability)
     }
 
     memset(&zzr, 0, sizeof(zzr));
-    TL_BUF_INITIAL_ALLOC(buf, sizeof(zdo_device_annce_req_t), zzr.zdu, u8 *);
+    /* zdu includes the ZDP transaction sequence byte in addition to the
+     * device-announcement structure.  The vendor allocator happened to
+     * provide an implicit byte through its request path; Zephyr's
+     * zdo_send_req() forwards zduLen exactly, so using sizeof(struct) here
+     * truncated the capability field and made Z2M ignore the announcement. */
+    TL_BUF_INITIAL_ALLOC(buf, (u8)(1U + sizeof(zdo_device_annce_req_t)),
+                         zzr.zdu, u8 *);
 
     zzr.zdu[0] = zdp_txSeqNo++;
     zzr.zdu[1] = LO_UINT16(nwkAddr);
@@ -771,7 +777,7 @@ void zdo_devAnnce(u16 nwkAddr, const addrExt_t ieeeAddr, u8 capability)
     zzr.zdu[11] = capability;
 
     zzr.cluster_id = DEVICE_ANNCE_CLID;
-    zzr.zduLen = sizeof(zdo_device_annce_req_t);
+    zzr.zduLen = (u8)(1U + sizeof(zdo_device_annce_req_t));
     zzr.buff_addr = (u8 *)buf;
     zzr.dst_addr_mode = SHORT_ADDR_MODE;
     zzr.dst_nwk_addr = NWK_BROADCAST_RX_ON_WHEN_IDLE;
