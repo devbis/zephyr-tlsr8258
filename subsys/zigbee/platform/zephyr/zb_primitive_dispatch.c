@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Layer-queue primitive dispatch shim.
+ * Layer-queue primitive dispatch shim and AF callback bridge.
  *
  * The Zigbee SDK / libzigbee runtime moves MLME / NLDE / NLME
  * primitives between layers via tl_zbPrimitivePost(layerQ, primitive,
@@ -13,7 +13,9 @@
  * primitives that are not represented by a dedicated Zephyr work item,
  * while the vendor-derived MAC/NWK/APS/ZDO handlers remain authoritative.
  *
- * It also hosts the small AF dispatch bridge needed by the Zephyr worker.
+ * ZDP request dispatch is kept in zdo/zdo_zephyr_glue.c, where the vendor
+ * request table and restricted-mode status contract are preserved. This file
+ * hosts only the AF dispatch bridge needed by the Zephyr worker.
  */
 
 #include <zephyr/zigbee/zb_bootstrap.h>
@@ -179,83 +181,15 @@ void af_aps_data_entry(void *arg)
 		return;
 	}
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
-		if ((ad->cluster_id & 0x8000U) != 0U) {
-			af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
+		/* ZDP owns the complete vendor request/response dispatch table. */
+		af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
 
-			if (zdo_ep != NULL && zdo_ep->cb_rx != NULL) {
-				zdo_ep->cb_rx(arg);
-			} else {
-				zb_buf_free(buf);
-			}
-			return;
+		if (zdo_ep != NULL && zdo_ep->cb_rx != NULL) {
+			zdo_ep->cb_rx(arg);
+		} else {
+			zb_buf_free(buf);
 		}
-		/* ZDP request — dispatch through the vendor-derived handlers. */
-		switch (ad->cluster_id) {
-		case NODE_DESC_REQ_CLID:
-		case POWER_DESC_REQ_CLID:
-		case SIMPLE_DESC_REQ_CLID:
-		case ACTIVE_EP_REQ_CLID:
-			if (ad->cluster_id == ACTIVE_EP_REQ_CLID) {
-				zdo_activeEpIndicate(arg);
-				return;
-			}
-			zdo_descriptorsIndicate(arg);
-			return;
-		case MATCH_DESC_REQ_CLID:
-			zdo_matchDescriptorIndicate(arg);
-			return;
-		case NWK_ADDR_REQ_CLID:
-			zdo_nwkAddrIndicate(arg);
-			return;
-		case IEEE_ADDR_REQ_CLID:
-			zdo_ieeeAddrIndicate(arg);
-			return;
-		case DEVICE_ANNCE_CLID:
-		#if defined(ZB_ROUTER_ROLE)
-			zdo_deviceAnnounceIndicate(arg);
-			return;
-		#else
-			zb_buf_free(buf);
-			return;
-		#endif
-		case MGMT_LEAVE_REQ_CLID:
-			zdo_mgmtLeaveIndicate(arg);
-			return;
-		case MGMT_PERMIT_JOINING_REQ_CLID:
-		#if defined(ZB_ROUTER_ROLE)
-			zdo_mgmtPermitJoinIndicate(arg);
-			return;
-		#else
-			zb_buf_free(buf);
-			return;
-		#endif
-		case MGMT_LQI_REQ_CLID:
-			zdo_mgmtLqiIndicate(arg);
-			return;
-		case MGMT_BIND_REQ_CLID:
-			zdo_mgmtBindIndicate(arg);
-			return;
-		case MGMT_NWK_UPDATE_REQ_CLID:
-			zdo_mgmtNwkUpdateIndicate(arg);
-			return;
-		case BIND_REQ_CLID:
-		case UNBIND_REQ_CLID:
-			zdo_bindOrUnbindIndicate(arg);
-			return;
-		case SYSTEM_SERVER_DISCOVERY_REQ_CLID:
-			zdo_SysServerDiscoveryIndicate(arg);
-			return;
-		case PARENT_ANNCE_CLID:
-		#if defined(ZB_ROUTER_ROLE)
-			zdo_parentAnnounceIndicate(arg);
-			return;
-		#else
-			zb_buf_free(buf);
-			return;
-		#endif
-		default:
-			break;
-		}
+		return;
 	} else {
 		if (ad->profile_id == HA_PROFILE_ID && ad->cluster_id == ZCL_CLUSTER_GEN_BASIC &&
 		    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
