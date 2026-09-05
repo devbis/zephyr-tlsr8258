@@ -16,6 +16,7 @@
 #include "zdo/zdo_api.h"
 #include "zdo/zdp.h"
 #include "zdo/zdo_internal.h"
+#include "zdo/zdo_join_confirm_guard.h"
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 #if defined(ZB_ROUTER_ROLE)
@@ -44,6 +45,14 @@ typedef enum {
 u8 zdo_mgmt_nwk_flag = 0;
 zdo_nwk_manager_t g_zdo_nwk_manager = {0};
 bool zdo_secure_startup_pending;
+/* Set once a successful join confirm has entered the completion chain. */
+static bool zdo_join_confirm_handled;
+
+static void zdo_join_confirm_cycle_start(void)
+{
+	zdo_join_confirm_handled = false;
+}
+
 #if defined(ZB_ROUTER_ROLE)
 static volatile bool zdo_router_join_latched;
 
@@ -287,6 +296,7 @@ zdo_status_t zdo_nwkRejoinReqSend(void *arg)
         return ZDO_INSUFFICIENT_SPACE;
     }
 
+    zdo_join_confirm_cycle_start();
     zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_REJOIN;
     tl_zbAdditionNeighborReset();
 
@@ -482,18 +492,25 @@ void zdo_set_pollRate(u32 rate)
         return;
     }
 
-    if (zdo_af_get_syn_rate() == rate) {
-        if (rate == 0U) {
-            if (zdo_nwk_mngr()->pollEvt != NULL) {
-                ev_timer_taskCancel(&zdo_nwk_mngr()->pollEvt);
-            }
+    /* The vendor implementation treats the configuration value and the
+     * live timer as one piece of state.  The Zephyr bootstrap can restore or
+     * reinitialize the configuration while the event pointer is NULL, so an
+     * equal-rate request must still create the timer.  Without this guard an
+     * ED can have pollRate==500 with no poll event at all and will never fetch
+     * an indirect Transport-Key or ZDP interview request. */
+    if (rate == 0U) {
+        zdo_af_set_syn_rate(0U);
+        if (zdo_nwk_mngr()->pollEvt != NULL) {
+            ev_timer_taskCancel(&zdo_nwk_mngr()->pollEvt);
         }
-
         return;
     }
 
-    zdo_af_set_syn_rate(rate);
-    if (rate != 0U) {
+    if (zdo_af_get_syn_rate() != rate) {
+        zdo_af_set_syn_rate(rate);
+    }
+
+    {
         ev_timer_event_t *evt = zdo_nwk_mngr()->pollEvt;
 
         if (evt != NULL) {
@@ -503,10 +520,6 @@ void zdo_set_pollRate(u32 rate)
             zdo_nwk_mngr()->pollEvt = evt;
         }
         return;
-    }
-
-    if (zdo_nwk_mngr()->pollEvt != NULL) {
-        ev_timer_taskCancel(&zdo_nwk_mngr()->pollEvt);
     }
 }
 
@@ -679,6 +692,15 @@ void zdo_nwk_authentication_complete(void)
         g_zbNwkCtx.joined_pro = 0U;
         g_zbNwkCtx.is_factory_new = 0U;
         g_zbNwkCtx.user_state = NLME_IDLE;
+
+#if !defined(ZB_ROUTER_ROLE)
+        /* The early Transport-Key path can complete before the deferred
+         * ASSOCIATE.confirm reaches zdo_nlme_join_confirm().  Keep the
+         * vendor ED polling contract in that ordering as well; otherwise
+         * Device_annce is sent but the sleepy device never polls for the
+         * coordinator's interview requests. */
+        zdo_set_pollRate(500U);
+#endif
     }
 
     if (!zdo_secure_startup_pending) {
@@ -769,7 +791,19 @@ void zdo_nwkAuthTimeoutStart(void *arg)
     }
 
     zdo_nwk_mngr()->savedBuf = arg;
-    zdo_nwk_mngr()->authEvt = ev_timer_taskPost(zdo_auth_check_timer_cb, NULL, TRANSPORT_NETWORK_KEY_WAIT_TIME);
+    /* A TLSR8258 ED fetches the key through the parent's indirect queue.
+     * Association response delivery is deferred through the Zephyr task
+     * queues and the parent may need several polls before the TC's key is
+     * released. Keep the vendor default for other roles, but give an rx-off
+     * ED enough time to complete that asynchronous exchange. */
+#if defined(ZB_ED_ROLE)
+    zdo_nwk_mngr()->authEvt = ev_timer_taskPost(zdo_auth_check_timer_cb, NULL,
+                                                MAX(TRANSPORT_NETWORK_KEY_WAIT_TIME,
+                                                    10000U));
+#else
+    zdo_nwk_mngr()->authEvt = ev_timer_taskPost(zdo_auth_check_timer_cb, NULL,
+                                                TRANSPORT_NETWORK_KEY_WAIT_TIME);
+#endif
 }
 
 zdo_status_t zdo_nwkAssocJoinStart(void)
@@ -803,6 +837,7 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
     }
 
     g_zbNwkCtx.joined = 0;
+    zdo_join_confirm_cycle_start();
     zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_ASSOC_JOIN;
 
     ((u8 *)buf)[12] = 0;
@@ -963,6 +998,7 @@ zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
     }
 
     g_zbNwkCtx.joined = 0;
+    zdo_join_confirm_cycle_start();
     zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_DIRECT_JOIN;
     zdo_nwk_mngr()->scanChannels = scanChannels;
     zdo_nwk_mngr()->scanDuration = scanDuration;
@@ -1055,20 +1091,20 @@ void zdo_nlme_status_indication(void *arg)
 
     zb_buf_free((zb_buf_t *)arg);
 
-#if defined(ZB_ROUTER_ROLE)
     /*
-     * An always-on router must not abandon a valid network context because
-     * of a short burst of parent no-ACKs.  zdo_nwkDirectJoinStart() clears
-     * g_zbNwkCtx.joined and starts commissioning from scratch; that is
-     * appropriate for a sleepy device, but it makes a router disappear
-     * after an otherwise recoverable RF/link hiccup.  Keep the joined state
-     * and let the continuous RX path recover the parent link.
+     * A device (router OR sleepy ED) must not abandon a valid network
+     * context because of a short burst of parent no-ACKs.
+     * zdo_nwkDirectJoinStart() clears g_zbNwkCtx.joined and starts
+     * commissioning from scratch, which is only appropriate once the
+     * network context is actually gone.  zdo_live_join_context() already
+     * covers both roles (it only has a router-specific fallback block
+     * internally; its core PAN/short-addr/security checks are role-neutral),
+     * so route both through it instead of only protecting routers here.
      */
-    if (g_zbNwkCtx.joined != 0U) {
+    if (zdo_live_join_context()) {
         zdo_nwk_mngr()->linkRetryCnt = 0;
         return;
     }
-#endif
 
     if (zdo_af_get_link_retry_threshold() == 0U) {
         zdo_nwk_mngr()->linkRetryCnt = 0;
@@ -1081,17 +1117,62 @@ void zdo_nlme_status_indication(void *arg)
         return;
     }
 
+#if defined(ZB_ROUTER_ROLE)
     if (zdo_nwkDirectJoinStart(1UL << g_zbInfo.macPib.phyChannelCur,
                                zdo_cfg_attributes.config_nwk_scan_duration) == ZDO_SUCCESS) {
         zdo_set_pollRate(0);
         zdo_nwk_mngr()->linkRetryCnt = 0;
     }
+#else
+    /*
+     * The network context is genuinely gone (zdo_live_join_context()
+     * returned false) after exhausting the retry budget.  Prefer the
+     * cheaper NLME-REJOIN (reuses the existing NWK key / short address)
+     * over a full re-association cycle, mirroring the sibling ED recovery
+     * path in nwkEndDevTimeoutRejoin() (nwk_endDev_timeout.c).
+     *
+     * Deliberately do NOT zdo_set_pollRate(0) here.  The vendor pattern
+     * (mirrored from the router's zdo_nwkDirectJoinStart() branch above)
+     * disables polling and relies on the eventual NLME-REJOIN/JOIN confirm
+     * (zdo_nlme_join_confirm() -> zdo_set_pollRate(500U)) to re-arm it. On
+     * this HW that confirm is frequently lost to RX unreliability, which
+     * permanently strands the ED with no poll timer at all -- confirmed on
+     * real hardware: after this branch fired, g_zdo_nwk_manager.pollEvt
+     * stayed NULL and the device sent zero MAC data-request polls for 45s+
+     * while still reporting joined=1, so it could never fetch a queued
+     * interview response or Transport-Key again. Leaving the existing poll
+     * timer running keeps the device responsive to the rejoin outcome (and
+     * to any indirect data in the meantime) regardless of whether that
+     * confirm ever arrives.
+     */
+    if (zdo_nwkRejoinStart(1UL << g_zbInfo.macPib.phyChannelCur,
+                           zdo_cfg_attributes.config_nwk_scan_duration) == ZDO_SUCCESS) {
+        zdo_nwk_mngr()->linkRetryCnt = 0;
+    }
+#endif
 }
 
 void zdo_nlme_join_confirm(void *arg)
 {
     u8 state = zdo_nwk_mngr()->state;
     u8 status = ((u8 *)arg)[2];
+    bool active_join_state =
+        state == ZDO_NWK_MGR_STATE_ASSOC_JOIN ||
+        state == ZDO_NWK_MGR_STATE_REJOIN ||
+        state == ZDO_NWK_MGR_STATE_DIRECT_JOIN;
+
+    if (zdo_join_confirm_is_duplicate(zdo_join_confirm_handled,
+                                      active_join_state,
+                                      status == ZDO_SUCCESS)) {
+        /*
+         * The early Transport-Key path may already have completed the
+         * synthetic confirm and moved the manager to IDLE.  The real
+         * deferred MLME confirm still owns this buffer, but it must not
+         * repeat BDB handoff, poll setup, or Device_annce.
+         */
+        zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
 
 #if defined(ZB_ROUTER_ROLE)
     /*
@@ -1118,9 +1199,7 @@ void zdo_nlme_join_confirm(void *arg)
     }
 #endif
 
-    if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN &&
-        state != ZDO_NWK_MGR_STATE_REJOIN &&
-        state != ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
+    if (!active_join_state) {
         /*
          * Late-success CNF arrived after the NWK-side NO_DATA retry
          * already aborted the cycle to IDLE. On TLSR8258 this is the
@@ -1140,10 +1219,16 @@ void zdo_nlme_join_confirm(void *arg)
         if (status == 0U) {
             zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_ASSOC_JOIN;
             state = ZDO_NWK_MGR_STATE_ASSOC_JOIN;
+            active_join_state = true;
         } else {
             zb_buf_free((zb_buf_t *)arg);
             return;
         }
+    }
+
+    if (status == ZDO_SUCCESS) {
+        /* Mark before callbacks can post/process the deferred real confirm. */
+        zdo_join_confirm_handled = true;
     }
 
     if (state == ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
