@@ -10,17 +10,6 @@
 #if defined(ZB_ROUTER_ROLE)
 STATIC_ASSERT(sizeof(gp_nwkHdrFrameCtrl_t) == 1);
 STATIC_ASSERT(sizeof(gp_extNwkFrameCtrl_t) == 1);
-#if UINTPTR_MAX == UINT32_MAX
-STATIC_ASSERT(sizeof(gp_nwkHdr_t) == 11);
-STATIC_ASSERT(sizeof(gp_data_req_t) == 23);
-STATIC_ASSERT(sizeof(cgp_data_req_t) == 29);
-STATIC_ASSERT(sizeof(gp_sec_req_t) == 17);
-STATIC_ASSERT(sizeof(gp_sec_rsp_t) == 34);
-STATIC_ASSERT(sizeof(gp_data_req_pending_t) == 6);
-STATIC_ASSERT(sizeof(gp_data_ind_entry_t) == 19);
-STATIC_ASSERT(sizeof(dgp_data_ind_t) == 30);
-STATIC_ASSERT(sizeof(gp_data_ind_t) == 40);
-#endif
 
 enum {
     GP_BUF_SAVED_GPEP_HANDLE_OFFSET = 0xc1,

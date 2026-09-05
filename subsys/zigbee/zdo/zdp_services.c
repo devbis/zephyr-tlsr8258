@@ -19,11 +19,9 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 
-/* Decl mirrors gp/dGP_stub.h::gpDeviceAnnounceCheckCb_t without
- * pulling in the full GP stub header (which has a cyclic include
- * with the broader Zigbee header set).
+/* gpDeviceAnnounceCheckCb_t comes from gp/dGP_stub.h, pulled in
+ * unconditionally via zb_common_stub.h above.
  */
-typedef bool (*gpDeviceAnnounceCheckCb_t)(u16 sinkNwkAddr, addrExt_t sinkIeeeAddr);
 
 #ifndef _always_inline
 #define _always_inline inline __attribute__((always_inline))
@@ -1058,7 +1056,7 @@ void zdo_descriptorsIndicate(void *arg)
             ptr += sizeof(power_descriptor_t);
             break;
         case SIMPLE_DESC_REQ_CLID:
-            if ((payload[3] == 0) || (payload[3] > 240)) {
+            if (payload[3] == 0) {
                 zzr.zdu[1] = ZDO_INVALID_EP;
                 *ptr++ = payload[3];
                 break;
@@ -1132,7 +1130,12 @@ void zdo_activeEpIndicate(void *arg)
 			u8 ep = epDesc[i].ep;
 			bool duplicate = FALSE;
 
-			if (ep == 0U || ep > 240U) {
+			/* ep 0 is ZDO's own reserved endpoint, handled separately
+			 * via zdo_epDesc rather than aed[]; every other registered
+			 * endpoint is reported, including the Green Power endpoint
+			 * (242) when CONFIG_ZIGBEE_GP registers it.
+			 */
+			if (ep == 0U) {
 				continue;
 			}
 			for (u8 j = 0U; j < response[4]; j++) {

@@ -37,6 +37,15 @@ LOG_MODULE_REGISTER(app_profile);
 #include "zcl/general/zcl_basic.h"
 #include "zcl/general/zcl_identify.h"
 void zcl_rx_handler(void *p);
+#if defined(CONFIG_ZIGBEE_GP)
+/* gp/gp.h needs SEC_KEY_LEN (zb_common_stub.h) and the gpSwitchInfo_t/
+ * zcl_gp_*Cmd_t types (zcl_greenPower.h) that the piecemeal ZCL includes
+ * above do not pull in; gp.c itself gets them via the full zcl_include.h.
+ */
+#include "zb_common_stub.h"
+#include "zcl/general/zcl_greenPower.h"
+#include "gp/gp.h"
+#endif
 #endif /* __ZEPHYR__ */
 
 /* ------------------------------------------------------------------ */
@@ -172,6 +181,13 @@ void app_profile_register(void)
 void zb_platform_app_register_endpoints(void)
 {
 	app_profile_register();
+
+#if defined(CONFIG_ZIGBEE_GP)
+	/* Vendor ordering (tl_zigbee_sdk apps/sampleGW/sampleGateway.c):
+	 * gp_init() runs after the app's own endpoint/cluster registration.
+	 */
+	gp_init(APP_PROFILE_ENDPOINT);
+#endif
 }
 
 /*
