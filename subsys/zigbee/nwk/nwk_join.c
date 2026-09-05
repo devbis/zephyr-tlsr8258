@@ -19,6 +19,7 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 #include <zephyr/sys/printk.h>
 
+extern volatile u8 mac_assoc_resp_success_seen;
 
 extern void zdo_nlme_join_confirm(void *arg);
 extern void zdo_nlme_join_indication(void *arg);
@@ -375,6 +376,16 @@ void tl_zbMacMlmeAssociateConfirmHandler(void *arg)
 	}
 
     if (cnf->status != MAC_SUCCESS) {
+        /* A deferred NO_DATA confirm can be queued by the association wait
+         * timer just before the RX worker commits a successful AssocResp.
+         * The success path has already installed the new short address and
+         * posted its own MAC_MLME_ASSOCIATE_CNF; restarting association here
+         * races that confirm and keeps an ED in an endless AssocReq loop. */
+        if (mac_assoc_resp_success_seen != 0U) {
+            zb_buf_free((zb_buf_t *)arg);
+            return;
+        }
+
         nlme_join_req_t *req = (nlme_join_req_t *)arg;
 
         memset(req, 0, sizeof(nlme_join_req_t));
