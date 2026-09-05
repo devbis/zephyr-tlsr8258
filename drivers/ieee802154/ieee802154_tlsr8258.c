@@ -16,6 +16,7 @@
 #include <zephyr/linker/section_tags.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154.h>
+#include <zephyr/net/ieee802154_frame.h>
 #include <zephyr/net/ieee802154_pkt.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
@@ -1145,7 +1146,7 @@ static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *pa
 	}
 
 	frame_type = payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u;
-	if (frame_type == 0x00u) { /* IEEE 802.15.4 beacon frame */
+	if (frame_type == IEEE802154_FRAME_TYPE_BEACON) {
 		/*
 		 * Beacon frames carry no destination addressing, so the normal
 		 * short/IEEE destination filter below would reject every active
