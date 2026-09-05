@@ -47,6 +47,17 @@ static const uint8_t real_coord_to_us[] = {
 	0x04, 0x50, 0x00, 0x00, 0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16,
 };
 
+/*
+ * Captured successful Association Response to our IEEE (a4:c1:38:e0:50:02:00:0c),
+ * with stale PAN/short filters.  During this frame we do not own the assigned
+ * short yet, so the ACK decision must use the exact IEEE destination.
+ * FCF=0xcc63: MAC command, ACK requested, extended dst/src, PAN compressed.
+ */
+static const uint8_t assoc_resp_to_us[] = {
+	0x63, 0xcc, 0x7f, 0x62, 0x1a, 0x0c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1,
+	0xa4, 0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16, 0xa7, 0x20, 0x02, 0x5a, 0x22, 0x00,
+};
+
 static void test_real_coord_req_gets_acked(void)
 {
 	struct tlsr8258_core_filter_ctx f = {.pan_id = pan, .short_addr = our_short,
@@ -73,6 +84,31 @@ static void test_same_req_before_join_not_ours(void)
 	CHECK(d.ack_requested, "ack-request bit still set");
 	CHECK(!d.filter_match, "dst 0x38d9 != our (unassigned) short -> no match");
 	CHECK(!d.should_ack, "must not ACK a unicast to a short we do not own");
+}
+
+static void test_assoc_resp_to_ieee_is_acked_with_stale_short(void)
+{
+	const uint8_t stale_pan[2] = {0x34, 0x12};
+	const uint8_t stale_short[2] = {0xc0, 0xc4};
+	struct tlsr8258_core_filter_ctx f = {.pan_id = stale_pan, .short_addr = stale_short,
+					     .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+	struct tlsr8258_core_rx_result rx;
+
+	tlsr8258_core_rx_ack_decision(assoc_resp_to_us, sizeof(assoc_resp_to_us), &f, &d);
+
+	CHECK(!d.self_originated, "coordinator Association Response is not our own command");
+	CHECK(d.ack_requested, "Association Response requests a MAC ACK");
+	CHECK(d.assoc_resp_to_ieee, "Association Response is addressed to our IEEE");
+	CHECK(d.filter_match, "association handoff must bypass stale short filter");
+	CHECK(d.should_ack, "we MUST MAC-ACK our Association Response");
+
+	/* The same exception must wake the synchronous Data-Request follow-up
+	 * state machine; otherwise the ED ACKs the response but retries AssocReq. */
+	tlsr8258_core_handle_rx_frame(assoc_resp_to_us, sizeof(assoc_resp_to_us), 0x7fu, &f, &rx);
+	CHECK(rx.assoc_resp_to_ieee, "RX classifier recognizes our Association Response");
+	CHECK(rx.ack_eligible, "Association Response is an eligible pending response");
+	CHECK(rx.is_pending_response, "Association Response completes poll follow-up");
 }
 
 static void test_unicast_to_other_short_not_acked(void)
@@ -134,6 +170,7 @@ int main(void)
 {
 	test_real_coord_req_gets_acked();
 	test_same_req_before_join_not_ours();
+	test_assoc_resp_to_ieee_is_acked_with_stale_short();
 	test_unicast_to_other_short_not_acked();
 	test_broadcast_matches_filter();
 	test_own_data_request_is_self_originated();
