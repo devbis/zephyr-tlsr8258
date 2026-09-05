@@ -16,11 +16,6 @@
 #include "mac/includes/mac_internal.h"
 
 
-enum {
-    BUF_SAVED_HANDLE_OFFSET = 0xc1,
-    BUF_SAVED_LQI_OFFSET = 0xc2,
-};
-
 /* Vendor build pinned these offsets to the wire-packed layout. The
  * Zephyr build leaves the shared types naturally aligned so the
  * assertions do not hold; see the matching note in nwk_data.c.
@@ -77,7 +72,7 @@ void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status)
     ((u8 *)buf)[10] = (u8)macDstAddr;
     ((u8 *)buf)[11] = (u8)(macDstAddr >> 8);
     ((zb_mscp_data_conf_t *)buf)->msdu = ((zb_mscp_data_req_t *)buf)->msdu;
-    ((u8 *)buf)[12] = ((u8 *)buf)[BUF_SAVED_LQI_OFFSET];
+    ((u8 *)buf)[12] = (u8)buf->hdr.rssi;
     ((u8 *)buf)[13] = rf_getLqi((s8)((u8 *)buf)[12]);
 
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MCPS_DATA_CNF, buf);
@@ -132,7 +127,7 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
     }
 
     hdrSize = tl_zbMacHdrSize(mhr.frameCtrl);
-    ((u8 *)buf)[BUF_SAVED_HANDLE_OFFSET] = req->msduHandle;
+    buf->hdr.handle = req->msduHandle;
     psduLen = (u8)(hdrSize + req->msduLength);
     /*
      * txData must stay at the FRAME START (the MAC header) — native_sim's

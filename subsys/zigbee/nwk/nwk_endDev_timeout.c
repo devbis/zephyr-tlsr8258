@@ -33,10 +33,6 @@ extern void zb_buf_clear(zb_buf_t *buf);
  * ev_buf_* come from os/ev_buffer.h.
  */
 
-enum {
-	NWK_CTX_FLAGS0_OFFSET = 45,
-};
-
 typedef struct {
 	u32 timeout;
 	addrExt_t extAddr;

@@ -28,7 +28,6 @@
 extern void zdo_nlme_network_discovery_confirm_cb(void *arg);
 
 enum {
-	NWK_CTX_STATE_OFFSET = 47,
 	NWK_CTX_DISC_MASK = 0x0f,
 	NWK_CTX_DISC_STATE = 0x30,
 };
