@@ -57,32 +57,148 @@ static const af_simple_descriptor_t zdo_simple_desc = {
 	.app_out_cluster_lst = (u16 *)zdo_out_clusters,
 };
 
-static void zdo_zdp_data_indication(void *arg)
+typedef void (*zdp_func_cb_t)(void *ind);
+
+typedef struct {
+	u16 cluster_id;
+	bool restricted;
+	zdp_func_cb_t func;
+} zdp_func_entry_t;
+
+/* Keep the vendor ZDP request table as the single dispatch authority.  The
+ * previous Zephyr shim had a partial switch in zb_primitive_dispatch.c; it
+ * omitted END_DEVICE_BIND and did not implement the vendor restricted-mode
+ * or unknown-request response contract. */
+static const zdp_func_entry_t zdp_client_func[] = {
+	{ NWK_ADDR_REQ_CLID,                false, zdo_nwkAddrIndicate },
+	{ IEEE_ADDR_REQ_CLID,               false, zdo_ieeeAddrIndicate },
+	{ NODE_DESC_REQ_CLID,               false, zdo_descriptorsIndicate },
+	{ POWER_DESC_REQ_CLID,              false, zdo_descriptorsIndicate },
+	{ SIMPLE_DESC_REQ_CLID,             false, zdo_descriptorsIndicate },
+	{ ACTIVE_EP_REQ_CLID,               false, zdo_activeEpIndicate },
+	{ MATCH_DESC_REQ_CLID,              false, zdo_matchDescriptorIndicate },
+#if defined(ZB_ROUTER_ROLE)
+	{ DEVICE_ANNCE_CLID,                false, zdo_deviceAnnounceIndicate },
+	{ PARENT_ANNCE_CLID,                false, zdo_parentAnnounceIndicate },
+#endif
+	{ SYSTEM_SERVER_DISCOVERY_REQ_CLID, false, zdo_SysServerDiscoveryIndicate },
+	{ END_DEVICE_BIND_REQ_CLID,         false, zdo_endDeviceBindIndicate },
+	{ BIND_REQ_CLID,                    true,  zdo_bindOrUnbindIndicate },
+	{ UNBIND_REQ_CLID,                  true,  zdo_bindOrUnbindIndicate },
+	{ MGMT_LQI_REQ_CLID,                false, zdo_mgmtLqiIndicate },
+	{ MGMT_BIND_REQ_CLID,               false, zdo_mgmtBindIndicate },
+	{ MGMT_LEAVE_REQ_CLID,              true,  zdo_mgmtLeaveIndicate },
+#if defined(ZB_ROUTER_ROLE)
+	{ MGMT_PERMIT_JOINING_REQ_CLID,     false, zdo_mgmtPermitJoinIndicate },
+#endif
+	{ MGMT_NWK_UPDATE_REQ_CLID,         false, zdo_mgmtNwkUpdateIndicate },
+};
+
+static void zdp_server_cmd_handler(void *arg)
 {
-	aps_data_ind_t *aps_ind = (aps_data_ind_t *)arg;
+	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	zdo_zdpDataInd_t *zdp_ind = (zdo_zdpDataInd_t *)arg;
 
-	if (aps_ind == NULL || aps_ind->asdu == NULL || aps_ind->asduLength < 2U) {
+#if defined(ZB_ROUTER_ROLE)
+	if (ind->cluster_id == PARENT_ANNCE_RSP_CLID) {
+		zdo_parentAnnounceNotify(arg);
+		zb_buf_free((zb_buf_t *)arg);
+		return;
+	}
+	if (ind->cluster_id == NWK_ADDR_RSP_CLID ||
+	    ind->cluster_id == IEEE_ADDR_RSP_CLID) {
+		zdo_remoteAddrNotify(arg);
+	}
+#endif
+
+	/* zdp_cb_process() and the application callbacks expect the vendor-shaped
+	 * zdo_zdpDataInd_t at the beginning of the same carrier. */
+	zdp_ind->zpdu = ind->asdu;
+	zdp_ind->src_addr = ind->src_short_addr;
+	zdp_ind->clusterId = ind->cluster_id;
+	zdp_ind->seq_num = ind->asdu[0];
+	zdp_ind->status = ind->asdu[1];
+	zdp_ind->length = ind->asduLength;
+	zdp_cb_process(zdp_ind->seq_num, arg);
+	zb_buf_free((zb_buf_t *)arg);
+}
+
+static void zdp_client_cmd_handler(void *arg)
+{
+	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
+	zdo_status_t status = ZDO_NOT_SUPPORTED;
+
+	for (size_t i = 0; i < ARRAY_SIZE(zdp_client_func); i++) {
+		if (zdp_client_func[i].cluster_id != ind->cluster_id) {
+			continue;
+		}
+
+		if (zdp_client_func[i].restricted &&
+		    aps_ib.aps_zdo_restricted_mode &&
+		    (ind->src_short_addr != g_zbInfo.nwkNib.managerAddr ||
+		     (ind->security_status & SECURITY_IN_APSLAYER) == 0U)) {
+			status = ZDO_NOT_AUTHORIZED;
+			break;
+		}
+
+		zdp_client_func[i].func(arg);
+		return;
+	}
+
+	/* Vendor behavior: unknown requests are ignored when broadcast, otherwise
+	 * answered with the matching response cluster and status. zdo_send_req()
+	 * owns the indication carrier in the Zephyr port. */
+	if (ind->dst_addr_mode == APS_SHORT_DSTADDR_WITHEP &&
+	    ZB_NWK_IS_ADDRESS_BROADCAST(ind->dst_addr)) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	/* zdp_cb_process() consumes the vendor-shaped zdo_zdpDataInd_t overlay
-	 * synchronously, so the RX carrier can be released immediately after it. */
-	zdp_ind->zpdu = aps_ind->asdu;
-	zdp_ind->src_addr = aps_ind->src_short_addr;
-	zdp_ind->clusterId = aps_ind->cluster_id;
-	zdp_ind->seq_num = aps_ind->asdu[0];
-	zdp_ind->status = aps_ind->asdu[1];
-	zdp_ind->length = aps_ind->asduLength;
-	zdp_cb_process(zdp_ind->seq_num, arg);
-	zb_buf_free((zb_buf_t *)arg);
+	zdo_zdp_req_t response;
+	u8 *payload;
+
+	TL_SETSTRUCTCONTENT(response, 0);
+	payload = (u8 *)tl_bufInitalloc((zb_buf_t *)arg, 2U);
+	if (payload == NULL) {
+		zb_buf_free((zb_buf_t *)arg);
+		return;
+	}
+	payload[0] = ind->asdu[0];
+	payload[1] = (u8)status;
+	response.zdu = payload;
+	response.zduLen = 2U;
+	response.cluster_id = (u16)(ind->cluster_id | 0x8000U);
+	response.buff_addr = arg;
+	response.dst_addr_mode = SHORT_ADDR_MODE;
+	response.dst_nwk_addr = ind->src_short_addr;
+	(void)zdo_send_req(&response);
+}
+
+static void zdp_rx_data_indication(void *arg)
+{
+	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
+
+	if (ind->asdu == NULL || ind->asduLength < 2U) {
+		zb_buf_free((zb_buf_t *)arg);
+		return;
+	}
+
+	if ((ind->cluster_id & BIT(15)) != 0U) {
+		zdp_server_cmd_handler(arg);
+	} else {
+		zdp_client_cmd_handler(arg);
+	}
+}
+
+static void zdo_zdp_data_indication(void *arg)
+{
+	zdp_rx_data_indication(arg);
 }
 
 void zdp_init(void)
 {
 	(void)af_endpointRegister(ZDO_EP, (af_simple_descriptor_t *)&zdo_simple_desc,
-				 zdo_zdp_data_indication, NULL);
+					 zdo_zdp_data_indication, NULL);
 }
 
 /*
