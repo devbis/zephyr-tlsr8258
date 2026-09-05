@@ -355,6 +355,10 @@ void aps_indPrimBuild(void *arg)
         out->dst_addr = src.dstAddr;
     }
 
+    /* ss_apsDecryptFrame() advances nsdu by the auxiliary-header length but
+     * deliberately leaves the parsed APS header length in the overlay.  Add
+     * hdrLen here, just as the vendor implementation does, so the pointer
+     * lands on the decrypted ASDU rather than in the retained aux header. */
     out->asdu = nsduPtr + srcHdr.apsHdrLen;
     out->asduLength = (u16)(nsduLen - srcHdr.apsHdrLen);
 
@@ -1048,20 +1052,14 @@ if (!g_zbNwkCtx.joined) {
         return;
     }
 
-	/* This function already runs in the Zigbee worker after NWK security.
-	 * On TLSR8258 the extra callback FIFO can be drained without invoking
-	 * the stored TC32 function pointer (the MAC ACK still goes out), leaving
-	 * an ACKed ZDP/ZCL request with no response.  Keep the router's complete
-	 * RX -> APS -> ZDP/ZCL handoff inline; this is also the vendor's effective
-	 * ordering at this boundary and preserves the RX-on-when-idle policy.
-	 * The ED path retains the queued handoff used by its polling model. */
-#if defined(ZB_ROUTER_ROLE)
-	af_aps_data_entry(arg);
-#else
-	if (tl_zbRxTaskPost(af_aps_data_entry, arg) != RET_OK) {
-		zb_buf_free((zb_buf_t *)arg);
-	}
-#endif
+    /* This function already runs in the Zigbee worker after NWK security.
+     * Keep the complete RX -> APS -> AF/ZDP/ZCL handoff in this same worker
+     * for every role.  The ED used to queue this final step separately; its
+     * poll RX window could close before the callback FIFO was serviced, so a
+     * coordinator frame could be MAC-ACKed and decrypted but never produce
+     * the ZDP/ZCL response.  The vendor path is synchronous at this boundary,
+     * and the callback receives the still-owned indication carrier. */
+    af_aps_data_entry(arg);
 }
 void aps_interPanDataIndCb(void *arg)
 {
