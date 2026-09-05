@@ -155,13 +155,17 @@ void ss_zdoTransportKeyIndHandle(void *arg)
              * (Reproduced + verified on native_sim.)
             */
             aps_ib.aps_authenticated = 1;
-            /* The Transport-Key can arrive before the deferred association
-             * confirm.  Keep the secure-startup completion latched so the
-             * authentication callback performs the same announce/parent
-             * handoff that the normal confirm path performs. */
-            zdo_secure_startup_pending = true;
-            zdo_nwk_authentication_complete();
-            zb_buf_free((zb_buf_t *)arg);
+            /* Keep the vendor completion chain intact even when the key
+             * arrives before ASSOCIATE.confirm.  The normal path builds the
+             * join confirm on this buffer and lets zdo_nlme_join_confirm()
+             * enter zdo_startDeviceCnf(), which invokes the BDB secure-join
+             * handoff and arms the regular ED poll contract.  Calling only
+             * zdo_nwk_authentication_complete() here announces the device
+             * but bypasses BDB, leaving the ED dependent on the temporary
+             * quick-poll timer and never starting the interview lifecycle.
+             */
+            build_join_confirm(arg);
+            tl_zbTaskPost(zdo_nlme_join_confirm, arg);
             return;
         }
 
