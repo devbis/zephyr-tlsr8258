@@ -43,6 +43,84 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TCMD_MASK     0x3fu
 #define TCMD_WRITE    0x03u
 
+/*
+ * TLSR825x hardware watchdog (timer2-based), per
+ * ../tl_zigbee_sdk/platform/chip_8258/watchdog.h and register.h
+ * (reg_tmr_ctrl=0x620, reg_tmr_sta=0x623, reg_tmr2_tick=0x638;
+ * FLD_TMR2_EN=BIT6, FLD_TMR_WD_CAPT=BIT_RNG(9,22), FLD_TMR_WD_EN=BIT23,
+ * FLD_TMR_STA_WD=BIT3). This project has repeatedly hit ZB-thread hangs
+ * that are plain infinite loops or a stuck hardware bus access rather than
+ * a CPU fault/exception -- k_sys_fatal_error_handler() never runs for
+ * those, so it cannot self-heal them. Feeding this watchdog once per
+ * zb_thread main-loop pass converts ANY such hang (root cause found or
+ * not) into a hardware-forced reboot instead of a permanent silent death;
+ * the existing boot-time bootstrap (zb_core_bootstrap_once() / zdo_init())
+ * already knows how to resume a retained-joined ED/router after a reset.
+ */
+#define TLSR_REG_TMR_CTRL   0x0620u
+#define TLSR_REG_TMR_STA    0x0623u
+#define TLSR_REG_TMR2_TICK  0x0638u
+#define TLSR_FLD_TMR2_EN     BIT(6)
+#define TLSR_FLD_TMR_WD_EN   BIT(23)
+#define TLSR_FLD_TMR_STA_WD  BIT(3)
+
+/* system_clk_mHz for TLSR825x is fixed at 16 (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC
+ * = 16000000). period_ms*1000*16 >> 18, then placed at bits[9:22] (14 bits,
+ * max ~16.7s). Use a generous window: long enough that no legitimate
+ * blocking operation in the loop (flash NV writes, etc.) ever comes close,
+ * short enough to recover promptly from a real hang. */
+#define TLSR_WATCHDOG_PERIOD_MS 8000u
+
+/*
+ * A watchdog-triggered reset on this SoC does not clear the watchdog's own
+ * enable bit or its running tick -- the same peripheral-state retention this
+ * project has already documented for SRAM across a soft reset. Left armed,
+ * the just-fired watchdog immediately resumes counting from a stale tick
+ * value close to (or past) the period threshold, re-firing again within a
+ * fraction of the configured period on the very next boot -- a crash loop
+ * that never gets far enough into bootstrap to reach tlsr8258_watchdog_init()
+ * below. Call this as the very first thing at boot, before anything else,
+ * to guarantee a clean slate; tlsr8258_watchdog_init() re-arms it once
+ * bootstrap actually completes.
+ */
+void tlsr8258_watchdog_disable(void)
+{
+	TLSR_REG32(TLSR_REG_TMR_CTRL) &= ~(TLSR_FLD_TMR2_EN | TLSR_FLD_TMR_WD_EN);
+	TLSR_REG32(TLSR_REG_TMR2_TICK) = 0u;
+	TLSR_REG8(TLSR_REG_TMR_STA) = (uint8_t)TLSR_FLD_TMR_STA_WD;
+}
+
+void tlsr8258_watchdog_init(void)
+{
+	uint32_t period_field = ((uint64_t)TLSR_WATCHDOG_PERIOD_MS * 1000u * 16u) >> 18;
+	uint32_t ctrl;
+
+	tlsr8258_watchdog_disable();
+
+	ctrl = TLSR_REG32(TLSR_REG_TMR_CTRL);
+	ctrl &= ~(0x3fffu << 9);
+	ctrl |= (period_field & 0x3fffu) << 9;
+	TLSR_REG32(TLSR_REG_TMR_CTRL) = ctrl;
+	TLSR_REG32(TLSR_REG_TMR2_TICK) = 0u;
+	TLSR_REG32(TLSR_REG_TMR_CTRL) |= TLSR_FLD_TMR2_EN | TLSR_FLD_TMR_WD_EN;
+}
+
+void tlsr8258_watchdog_feed(void)
+{
+	/*
+	 * Re-assert the enable bits on every feed, not just at init. Confirmed
+	 * on hardware: reg_tmr_ctrl's TMR2_EN/WD_EN bits were found cleared
+	 * (whole register read back as 0) partway through a normal run that
+	 * had clearly gotten past tlsr8258_watchdog_init() (hundreds of loop
+	 * passes in) -- nothing else in this codebase writes reg_tmr_ctrl, so
+	 * treat however that happens as unexplained and just make every feed
+	 * self-healing instead of a bare status-clear that silently does
+	 * nothing once disarmed. Setting already-set bits is a no-op.
+	 */
+	TLSR_REG32(TLSR_REG_TMR_CTRL) |= TLSR_FLD_TMR2_EN | TLSR_FLD_TMR_WD_EN;
+	TLSR_REG8(TLSR_REG_TMR_STA) = (uint8_t)TLSR_FLD_TMR_STA_WD;
+}
+
 #define RF_TRX_MODE 0xe0u
 #define RF_TRX_OFF  0x45u
 
@@ -272,11 +350,12 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 				       struct tlsr8258_radio_data *radio);
 static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio);
 static void tlsr8258_rf_irq_reenable(void);
+static void tlsr8258_rf_irq_reenable_thread_ctx(void);
 static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size);
 static void tlsr8258_rf_set_rxmode_vendor(void);
 static void tlsr8258_rf_rearm_idle_rx(struct tlsr8258_radio_data *radio);
 static bool tlsr8258_rf_recover_stuck_rx(struct tlsr8258_radio_data *radio);
-static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
+static bool tlsr8258_filter_match_for_ack(const uint8_t *payload, uint8_t length,
 						  const struct tlsr8258_radio_data *radio);
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length);
 
@@ -393,13 +472,11 @@ static inline bool tlsr8258_ack_tx_pending_get(struct tlsr8258_radio_data *radio
 					 offsetof(struct tlsr8258_radio_op, ack_tx_pending))) != 0u;
 }
 
-#if !defined(CONFIG_IEEE802154_RAW_MODE)
 static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *radio)
 {
 	return *tlsr8258_radio_u8_field(radio,
 					offsetof(struct tlsr8258_radio_data, promiscuous)) != 0u;
 }
-#endif
 
 static tlsr8258_zigbee_rx_sink_t tlsr8258_zigbee_rx_sink;
 
@@ -500,7 +577,7 @@ void tlsr8258_zigbee_idle_rx_guard(void)
 		tlsr8258_radio_started_set(radio, true);
 	}
 	if ((TLSR_REG32(0x0640) & BIT(TLSR8258_IRQ_ZB_RT)) == 0u) {
-		tlsr8258_rf_irq_reenable();
+		tlsr8258_rf_irq_reenable_thread_ctx();
 	}
 
 	/*
@@ -527,7 +604,7 @@ void tlsr8258_zigbee_idle_rx_guard(void)
 	 * live CPU source, and is left completely untouched.
 	 */
 	if (tlsr8258_rf_recover_stuck_rx(radio)) {
-		tlsr8258_rf_irq_reenable();
+		tlsr8258_rf_irq_reenable_thread_ctx();
 	}
 
 	/*
@@ -717,8 +794,12 @@ static inline void tlsr8258_rf_cpu_irq_sources_clear(void)
 	TLSR_REG8(0x0c26) = DMA_CHN_RF_RX | DMA_CHN_RF_TX;
 }
 
-__attribute__((noinline, section(".ram_code")))
-static void tlsr8258_rf_irq_reenable(void)
+/*
+ * Shared body, force-inlined into both callers below so each gets its own
+ * complete, independent copy in its own section -- no cross-section call
+ * or return between them.
+ */
+static inline __attribute__((always_inline)) void tlsr8258_rf_irq_reenable_body(void)
 {
 	uint8_t global_irq = TLSR_REG8(0x0643);
 	uint32_t irq_mask;
@@ -745,6 +826,34 @@ static void tlsr8258_rf_irq_reenable(void)
 	TLSR_REG32(0x0640) = irq_mask | BIT(4) | BIT(TLSR8258_IRQ_ZB_RT);
 	compiler_barrier();
 	TLSR_REG8(0x0643) = global_irq | BIT(0);
+}
+
+/* ISR-context callers: keep this resident in RAM so the tight ACK-turnaround
+ * window is never exposed to a flash cache-miss stall mid-sequence. */
+__attribute__((noinline, section(".ram_code")))
+static void tlsr8258_rf_irq_reenable(void)
+{
+	tlsr8258_rf_irq_reenable_body();
+}
+
+/*
+ * Thread-context caller (tlsr8258_zigbee_idle_rx_guard(), polled every
+ * zb_thread loop pass -- not interrupt/timing-critical). Give it its own
+ * plain-flash copy instead of jumping into the ISR's .ram_code copy from
+ * ordinary flash-resident code: this project has already hit a documented
+ * LLVM/TC32 defect where a flash->ram_code call from outside the expected
+ * ISR calling context does not reliably return (see the historical
+ * _attribute_ram_code_ / __ramfunc wedge). Confirmed on hardware: the whole
+ * ZB thread loop can freeze forever (no CPU fault, just stops advancing)
+ * while repeatedly polling idle_rx_guard() during an interview retry storm --
+ * exactly the access pattern this call site has and the ISR call sites do
+ * not. Two independent inlined copies cost a few dozen bytes of flash to
+ * avoid ever making that cross-section call from thread context again.
+ */
+__attribute__((noinline))
+static void tlsr8258_rf_irq_reenable_thread_ctx(void)
+{
+	tlsr8258_rf_irq_reenable_body();
 }
 
 static void tlsr8258_rf_tx_pkt(uint8_t *packet)
@@ -1019,7 +1128,13 @@ static bool tlsr8258_rx_crc_ok(const uint8_t *rx)
 	return (rx[rx[0] + 3u] & 0x51u) == 0x10u;
 }
 
-#if !defined(CONFIG_IEEE802154_RAW_MODE)
+/*
+ * This filter is also used before the Zigbee RX sink is called.  The TLSR
+ * sample enables CONFIG_IEEE802154_RAW_MODE because it bypasses Zephyr's
+ * net_pkt path, but that does not make the Zigbee sink promiscuous: unrelated
+ * frames must not consume the deferred RX slots while a joining ED is waiting
+ * for its Association Response.
+ */
 static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *payload)
 {
 	uint16_t filter_pan;
@@ -1030,7 +1145,7 @@ static bool tlsr8258_filter_match(struct tlsr8258_radio_data *radio, uint8_t *pa
 	}
 
 	frame_type = payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u;
-	if (frame_type == IEEE802154_FRAME_TYPE_BEACON) {
+	if (frame_type == 0x00u) { /* IEEE 802.15.4 beacon frame */
 		/*
 		 * Beacon frames carry no destination addressing, so the normal
 		 * short/IEEE destination filter below would reject every active
@@ -1112,19 +1227,23 @@ static uint8_t tlsr8258_lqi_from_rssi(int8_t rssi)
 	return (uint8_t)MIN(lqi, 0xff);
 }
 
-#endif /* !CONFIG_IEEE802154_RAW_MODE */
-
 /*
  * Thin wrappers over the pure, host-testable decision logic in
  * ieee802154_tlsr8258_ack_filter.h. Keep the actual matching rules THERE so
  * tests/unit/zigbee_ack_filter_match covers exactly what runs on hardware.
  */
-static bool tlsr8258_filter_match_for_ack(const uint8_t *payload,
+static bool tlsr8258_filter_match_for_ack(const uint8_t *payload, uint8_t length,
 					  const struct tlsr8258_radio_data *radio)
 {
-	return tlsr8258_ackf_dst_matches_filter(payload, radio->filter_pan_id,
-						radio->filter_short_addr,
-						radio->filter_ieee_addr);
+	struct tlsr8258_core_filter_ctx filter = {
+		.pan_id = radio->filter_pan_id,
+		.short_addr = radio->filter_short_addr,
+		.ieee_addr = radio->filter_ieee_addr,
+	};
+
+	return tlsr8258_ackf_dst_matches_filter(payload, filter.pan_id, filter.short_addr,
+						filter.ieee_addr) ||
+		tlsr8258_core_assoc_resp_to_ieee(payload, length, &filter);
 }
 
 static bool tlsr8258_ack_requested(const uint8_t *payload, uint8_t length)
@@ -1161,11 +1280,7 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length,
 	 * be ACKed here, otherwise the coordinator keeps retransmitting the
 	 * response and never queues the Transport-Key burst.
 	 */
-	bool ack_filter_match = tlsr8258_filter_match_for_ack(payload, radio);
-#if !defined(CONFIG_IEEE802154_RAW_MODE)
-	ack_filter_match = ack_filter_match ||
-		tlsr8258_assoc_resp_for_us(radio, payload, length);
-#endif
+	bool ack_filter_match = tlsr8258_filter_match_for_ack(payload, length, radio);
 	if (!ack_filter_match) {
 		if (tx_prepared) {
 			tlsr8258_rf_set_rxmode_vendor();
@@ -1396,6 +1511,16 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	if ((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x02u) {
 		if ((radio->op.state != TLSR8258_RADIO_OP_TX_PENDING) &&
 		    (radio->op.state != TLSR8258_RADIO_OP_WAITING_POST_TX_RX)) {
+			tlsr8258_rf_set_rxmode_vendor();
+			return;
+		}
+	} else if (tlsr8258_zigbee_rx_sink != NULL) {
+		/* RAW_MODE only selects the Zephyr L2 delivery ABI.  Once the
+		 * Zigbee sink is installed, retain the normal address filter so
+		 * broadcast traffic and unrelated unicast traffic cannot fill the
+		 * ISR-to-Zigbee queue and evict join/interview frames. */
+		if (!tlsr8258_filter_match(radio, payload) &&
+		    !tlsr8258_assoc_resp_for_us(radio, payload, length)) {
 			tlsr8258_rf_set_rxmode_vendor();
 			return;
 		}

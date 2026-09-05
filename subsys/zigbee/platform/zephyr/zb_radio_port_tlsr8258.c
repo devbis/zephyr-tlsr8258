@@ -142,3 +142,18 @@ void zb_radio_port_idle_rx_guard(void)
 {
 	tlsr8258_zigbee_idle_rx_guard();
 }
+
+void zb_radio_port_watchdog_disable(void)
+{
+	tlsr8258_watchdog_disable();
+}
+
+void zb_radio_port_watchdog_init(void)
+{
+	tlsr8258_watchdog_init();
+}
+
+void zb_radio_port_watchdog_feed(void)
+{
+	tlsr8258_watchdog_feed();
+}

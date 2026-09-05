@@ -134,3 +134,15 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 void zb_radio_port_idle_rx_guard(void)
 {
 }
+
+void zb_radio_port_watchdog_disable(void)
+{
+}
+
+void zb_radio_port_watchdog_init(void)
+{
+}
+
+void zb_radio_port_watchdog_feed(void)
+{
+}
