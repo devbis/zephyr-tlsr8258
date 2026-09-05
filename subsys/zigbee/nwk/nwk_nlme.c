@@ -33,8 +33,6 @@ extern void tl_zbNwkNibInit(u8 coldReset);
 extern int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
 
 enum {
-    NWK_CTX_FLAGS0_OFFSET = 45,
-    NWK_CTX_STATE_OFFSET = 47,
     UNKNOWN_ENDDEV_ADDR_INIT = 0xfffe,
 };
 

@@ -181,11 +181,6 @@ STATIC_ASSERT(OFFSETOF(nwkCmd_t, nwkUpdate) == 4);
 STATIC_ASSERT(OFFSETOF(nwkCmd_t, endDevTimeoutRsp) == 4);
 #endif /* vendor-packed STATIC_ASSERT block disabled in Zephyr port */
 
-enum {
-    BUF_SAVED_HANDLE_OFFSET = 0xc1,
-    BUF_FLAGS_OFFSET = 0xc3,
-};
-
 static inline u8 nwk_user_state(void)
 {
     return g_zbNwkCtx.user_state;
@@ -334,14 +329,23 @@ void tl_zbMacInterPanDataHandle(void *arg)
 
 void tl_zbMacMcpsDataConfirmHandler(void *arg)
 {
+    /*
+     * NWK_CONFIRM_NWK_HDR_OFFSET mirrors the vendor-packed byte offset of
+     * zb_mscp_data_conf_t.msdu (a u8 * field); nwkHdrParse() needs the raw
+     * frame bytes it points at, not a struct field, so this one stays a
+     * manual copy+offset. handle/status/short-address used to be read the
+     * same way, but those ARE named fields of zb_mscp_data_conf_t below;
+     * the raw offsets no longer even match the field they were named
+     * after once the struct is naturally aligned (e.g. msduHandle moves
+     * from byte 8 to byte 16 on a 64-bit build), so read them through the
+     * struct instead.
+     */
     enum {
         NWK_CONFIRM_COPY_LEN = 14,
         NWK_CONFIRM_NWK_HDR_OFFSET = 4,
-        NWK_CONFIRM_HANDLE_OFFSET = 8,
-        NWK_CONFIRM_STATUS_OFFSET = 9,
-        NWK_CONFIRM_SHORT_ADDR_OFFSET = 10,
     };
 
+    zb_mscp_data_conf_t *conf = (zb_mscp_data_conf_t *)arg;
     nwk_hdr_t nwkHdr;
     u8 confirm[NWK_CONFIRM_COPY_LEN] = {0};
     u8 handle;
@@ -350,15 +354,14 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
     memcpy(confirm, arg, sizeof(confirm));
     nwkHdrParse(&nwkHdr, confirm + NWK_CONFIRM_NWK_HDR_OFFSET);
 
-    status = confirm[NWK_CONFIRM_STATUS_OFFSET];
+    status = conf->status;
 
     if (g_zbInfo.macPib.rxOnWhenIdle == 0U) {
         if (AUTO_QUICK_DATA_POLL_ENABLE && status == MAC_STA_FRAME_PENDING) {
             endDevMacDataPoll();
         }
     } else {
-        u16 shortAddr = (u16)confirm[NWK_CONFIRM_SHORT_ADDR_OFFSET] |
-                        ((u16)confirm[NWK_CONFIRM_SHORT_ADDR_OFFSET + 1] << 8);
+        u16 shortAddr = conf->macDstAddr;
         tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
 
         if (entry != NULL &&
@@ -372,7 +375,7 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
         }
     }
 
-    handle = confirm[NWK_CONFIRM_HANDLE_OFFSET];
+    handle = conf->msduHandle;
     if (handle <= 0xbfU) {
         nwkNldeDataCnf(arg, status, handle);
         return;
@@ -427,7 +430,7 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 ack, u8 *payload,
     if (buf == NULL || pNwkHdr == NULL || payload == NULL) {
         return;
     }
-    savedHandle = ((u8 *)buf)[BUF_SAVED_HANDLE_OFFSET];
+    savedHandle = buf->hdr.handle;
     /*
      * Reserve the NWK auxiliary security header (NWK_SEC_AUX_HDR_LEN = 14:
      * secCtrl + frameCnt(4) + srcExtAddr(8) + keySeqNum) BETWEEN the NWK header

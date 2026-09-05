@@ -11,10 +11,6 @@
 STATIC_ASSERT(sizeof(gp_nwkHdrFrameCtrl_t) == 1);
 STATIC_ASSERT(sizeof(gp_extNwkFrameCtrl_t) == 1);
 
-enum {
-    GP_BUF_SAVED_GPEP_HANDLE_OFFSET = 0xc1,
-};
-
 extern gp_data_req_pending_t gpTxQueue;
 
 _attribute_no_inline_ void gpDataIndSend(gp_data_ind_entry_t *pEntry);
@@ -222,7 +218,7 @@ void gp_gpdfGenerate(gp_data_req_pending_t *pEntry, u8 frameType)
     }
     *((u8 *)&pCgpDataReq->txOptions) = cgpTxOptions;
 
-    ((u8 *)pGpDataReq)[GP_BUF_SAVED_GPEP_HANDLE_OFFSET] = gpepHandle;
+    pGpDataReq->gpepHandle = gpepHandle;
     ev_timer_taskPost(cGp_dataReq, pGpDataReq, GP_TX_OFFSET);
 }
 
