@@ -100,9 +100,6 @@ extern mac_timer_evt_t g_macTimerEvt;
 extern void *associationReqOrigBuffer;
 extern volatile u8 mac_assoc_resp_success_seen;
 extern void mac_assoc_cancel_wait_timer_from_rx(void);
-extern void tl_zbSchedulePostAssociationPull(void);
-extern void tl_zbPostAssociationPullNow(void);
-extern void tl_zbPostAssociationPollStatus(u8 status);
 
 extern void mac_trxTask(void *arg);
 extern void mac_trxInit(void);

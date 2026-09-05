@@ -249,14 +249,6 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
     ((u8 *)buf)[10] = payload[3];
 
     tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
-    if (payload[3] == MAC_SUCCESS) {
-        /* The coordinator may already have the NWK Transport-Key queued as
-         * indirect data.  Kick the first poll in this same ZB-thread turn;
-         * the timer-driven bounded retries below cover lost Frame-Pending
-         * indications and later coordinator delivery. */
-        tl_zbPostAssociationPullNow();
-        tl_zbSchedulePostAssociationPull();
-    }
 }
 
 void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
