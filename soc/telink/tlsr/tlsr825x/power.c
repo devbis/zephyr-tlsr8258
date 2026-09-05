@@ -66,6 +66,7 @@ extern void start_suspend(void);
 #define TLSR8258_FLD_IRQ_TMR1_EN       BIT(1)
 #define TLSR8258_FLD_IRQ_ZB_RT_EN      BIT(13)
 #define TLSR8258_FLD_PWDN_CTRL_SLEEP   BIT(7)
+#define TLSR8258_FLD_PWDN_CTRL_REBOOT  BIT(5)
 
 #define TLSR8258_WAKEUP_STATUS_COMPARATOR BIT(0)
 #define TLSR8258_WAKEUP_STATUS_TIMER      BIT(1)
@@ -83,7 +84,9 @@ extern void start_suspend(void);
 #define TLSR8258_AREG_0X26           0x26u
 #define TLSR8258_AREG_0X2B           0x2bu
 #define TLSR8258_AREG_0X2C           0x2cu
+#define TLSR8258_AREG_0X3C           0x3cu
 #define TLSR8258_AREG_0X7E           0x7eu
+#define TLSR8258_DEEP2_SLEEP_FLAG    BIT(1)
 #define TLSR8258_AREG_WAKEUP_STATUS  0x44u
 #define TLSR8258_AREG_PM_STATUS      0x7fu
 
@@ -129,7 +132,6 @@ static volatile enum tlsr8258_pm_wakeup_reason tlsr8258_pm_last_reason =
 	TLSR8258_PM_WAKEUP_NONE;
 static volatile uint32_t tlsr8258_pm_last_raw_status;
 static volatile uint32_t tlsr8258_pm_gpio_wakeup_mask;
-static volatile bool tlsr8258_pm_idle_allowed;
 
 static void tlsr8258_pm_vendor_clock_dly(uint32_t cycles)
 {
@@ -355,13 +357,26 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 	return TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM;
 }
 
-static uint32_t tlsr8258_pm_suspend_rc32k(uint32_t wakeup_tick, uint32_t wakeup_src)
+static void TC32_BOOT_RAM_MIRROR_CODE tlsr8258_pm_soft_reboot_delay(void)
+{
+	/* ~13ms busy-wait at 24MHz RC, matching the vendor
+	 * soft_reboot_dly13ms_use24mRC() -- lets the clock settle back onto
+	 * the internal RC oscillator before the reboot register write below
+	 * takes effect.
+	 */
+	for (volatile uint32_t i = 0u; i <= 0x3c8bu; i++) {
+	}
+}
+
+static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
+					uint32_t wakeup_tick, uint32_t wakeup_src)
 {
 	unsigned int irq_key = arch_irq_lock();
 	uint32_t t0 = TLSR8258_REG_SYSTEM_TICK;
 	bool timer_wakeup = (wakeup_src & TLSR8258_PM_WAKEUP_TIMER_BITS) != 0u;
 	uint8_t wakeup_src_u8 = (uint8_t)wakeup_src;
 	uint16_t calib = TLSR8258_PM_TICK_32K_CALIB;
+	bool deep = (sleep_mode == TLSR8258_PM_SLEEP_DEEP);
 
 	if (timer_wakeup) {
 		uint32_t dt = wakeup_tick - t0;
@@ -393,8 +408,9 @@ static uint32_t tlsr8258_pm_suspend_rc32k(uint32_t wakeup_tick, uint32_t wakeup_
 	tlsr8258_pm_tick_cur = TLSR8258_REG_SYSTEM_TICK + (0x8cu << 2);
 	tlsr8258_pm_tick_32k_cur = tlsr8258_pm_get_32k_tick();
 
-	uint32_t target =
-		wakeup_tick - ((uint32_t)tlsr8258_pm_early_wakeup.suspend << 4);
+	uint16_t early_wakeup_us =
+		deep ? tlsr8258_pm_early_wakeup.deep : tlsr8258_pm_early_wakeup.suspend;
+	uint32_t target = wakeup_tick - ((uint32_t)early_wakeup_us << 4);
 	uint8_t bak66 = TLSR8258_REG_CLK_SEL;
 	uint32_t d = target - tlsr8258_pm_tick_cur;
 	uint32_t wake_tick;
@@ -403,15 +419,39 @@ static uint32_t tlsr8258_pm_suspend_rc32k(uint32_t wakeup_tick, uint32_t wakeup_
 	tlsr8258_pm_analog_write(TLSR8258_AREG_WAKEUP_STATUS, TLSR8258_WAKEUP_STATUS_ALL);
 	TLSR8258_REG_CLK_SEL = 0u;
 
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X04, 0x48u);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X7E, 0x00u);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X2B, 0x5eu);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X2C,
-				 (uint8_t)(0x96u | 0x16u | (timer_wakeup ? 1u : 0u)));
-	tlsr8258_pm_analog_write(TLSR8258_AREG_LDO_SETTING1,
-				 (tlsr8258_pm_analog_read(TLSR8258_AREG_LDO_SETTING1) &
-				  (uint8_t)~0x07u) |
-					 4u);
+	if (deep) {
+		/* Mark a genuine (non-retention) deep sleep in progress; cleared
+		 * again below once tlsr8258_pm_sleep_start() returns, right
+		 * before the software-triggered reboot. This analog register
+		 * survives the reboot (vendor doc: "reset only by power cycle"),
+		 * so a future warm-boot path could consult it -- unused today.
+		 */
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X3C,
+					 tlsr8258_pm_analog_read(TLSR8258_AREG_0X3C) |
+						 TLSR8258_DEEP2_SLEEP_FLAG);
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2B, 0xdeu);
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2C,
+					 (uint8_t)(0x16u | 0xc0u | (timer_wakeup ? 1u : 0u)));
+		tlsr8258_pm_analog_write(TLSR8258_AREG_LDO_SETTING1,
+					 (tlsr8258_pm_analog_read(TLSR8258_AREG_LDO_SETTING1) &
+					  (uint8_t)~0x07u) |
+						 5u);
+	} else {
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X04, 0x48u);
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2B, 0x5eu);
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2C,
+					 (uint8_t)(0x96u | 0x16u | (timer_wakeup ? 1u : 0u)));
+		tlsr8258_pm_analog_write(TLSR8258_AREG_LDO_SETTING1,
+					 (tlsr8258_pm_analog_read(TLSR8258_AREG_LDO_SETTING1) &
+					  (uint8_t)~0x07u) |
+						 4u);
+	}
+	tlsr8258_pm_analog_write(TLSR8258_AREG_0X7E, (uint8_t)sleep_mode);
+	/* Both modes implemented here are non-retention: disable the SRAM
+	 * retention path (0x08) and mark "about to enter PM" for the analog
+	 * domain. DEEPSLEEP_MODE_RET_SRAM_LOW32K would skip this -- see
+	 * power.h's tlsr8258_pm_sleep_mode doc comment.
+	 */
 	TLSR8258_REG_PM_RET_SRAM_CTRL = 0x08u;
 	tlsr8258_pm_analog_write(TLSR8258_AREG_PM_STATUS, 1u);
 	tlsr8258_pm_analog_write(TLSR8258_AREG_0X20,
@@ -441,6 +481,24 @@ static uint32_t tlsr8258_pm_suspend_rc32k(uint32_t wakeup_tick, uint32_t wakeup_
 	if (tlsr8258_pm_wake_gate_ready(
 		    tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS))) {
 		tlsr8258_pm_sleep_start();
+	}
+
+	if (deep) {
+		/*
+		 * Matches the vendor sequence: reboot unconditionally here,
+		 * even if the gate above rejected actually powering down (a
+		 * wake condition was already latched before sleep_start()
+		 * could run). The analog domain has already been reconfigured
+		 * for a non-retention deep sleep at this point, so a clean
+		 * reboot is safer than trying to unwind that state and return
+		 * normally -- this call never returns.
+		 */
+		tlsr8258_pm_analog_write(TLSR8258_AREG_0X3C,
+					 tlsr8258_pm_analog_read(TLSR8258_AREG_0X3C) &
+						 (uint8_t)~TLSR8258_DEEP2_SLEEP_FLAG);
+		tlsr8258_pm_soft_reboot_delay();
+		TLSR8258_REG_PWDN_CTRL = TLSR8258_FLD_PWDN_CTRL_REBOOT;
+		CODE_UNREACHABLE;
 	}
 
 	{
@@ -480,7 +538,8 @@ static uint32_t tlsr8258_pm_suspend_rc32k(uint32_t wakeup_tick, uint32_t wakeup_
 static int tlsr8258_pm_enter_suspend_to_idle(void)
 {
 	uint32_t wakeup_tick = TLSR8258_REG_SYSTEM_TICK_IRQ;
-	uint32_t status = tlsr8258_pm_suspend_rc32k(wakeup_tick, tlsr8258_pm_current_wakeup_sources());
+	uint32_t status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_SUSPEND, wakeup_tick,
+						 tlsr8258_pm_current_wakeup_sources());
 
 	tlsr8258_pm_last_raw_status = status;
 	tlsr8258_pm_last_reason = tlsr8258_pm_reason_from_status(status);
@@ -494,9 +553,21 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 
 	switch (state) {
 	case PM_STATE_SUSPEND_TO_IDLE:
-		if (tlsr8258_pm_idle_allowed) {
-			(void)tlsr8258_pm_enter_suspend_to_idle();
-		}
+		/*
+		 * Zephyr's PM subsystem (idle loop + policy, driven by
+		 * DT power-states' min-residency-us/exit-latency-us) already
+		 * decides when it is worth calling this -- no separate
+		 * driver-level gate needed. sys_clock_set_timeout() has
+		 * already armed TLSR8258_REG_SYSTEM_TICK_IRQ before this
+		 * runs; tlsr8258_pm_enter_sleep() keeps that same free-running
+		 * tick register continuous across the sleep (see its comments
+		 * on TLSR8258_REG_SYSTEM_TICK_MODE), so that compare fires
+		 * normally once IRQs are unmasked again in
+		 * pm_state_exit_post_ops() below and drives
+		 * tlsr8258_stimer.c's usual sys_clock_announce() path --
+		 * no explicit resync is needed here.
+		 */
+		(void)tlsr8258_pm_enter_suspend_to_idle();
 		break;
 	default:
 		break;
@@ -529,14 +600,32 @@ int tlsr8258_pm_deep_retention_for_ms(uint32_t duration_ms)
 {
 	ARG_UNUSED(duration_ms);
 
+	/* Needs a warm-resume mechanism through the reset vector; not
+	 * implemented yet. See the tlsr8258_pm_sleep_mode doc comment in
+	 * power.h for the design and the exact hook point.
+	 */
 	return -ENOTSUP;
 }
 
 int tlsr8258_pm_shutdown_for_ms(uint32_t duration_ms)
 {
-	ARG_UNUSED(duration_ms);
+	uint32_t wakeup_tick = TLSR8258_REG_SYSTEM_TICK +
+				(MAX(duration_ms, 1u) * 1000u * TLSR8258_PM_SYS_TICK_PER_US);
+	uint32_t status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_DEEP, wakeup_tick,
+						 tlsr8258_pm_current_wakeup_sources());
 
-	return -ENOTSUP;
+	/*
+	 * A successful sleep never returns here: TLSR8258_PM_SLEEP_DEEP has no
+	 * SRAM retention, so wake always forces a full chip reboot (execution
+	 * resumes at the reset vector, not at this call site -- all RAM state,
+	 * including this function's own stack frame, is gone). Reaching this
+	 * line at all means entry was rejected before power-down, e.g. a
+	 * wakeup condition was already latched.
+	 */
+	tlsr8258_pm_last_raw_status = status;
+	tlsr8258_pm_last_reason = tlsr8258_pm_reason_from_status(status);
+
+	return ((status & TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM) != 0u) ? -EIO : 0;
 }
 
 int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low, bool enable)
@@ -594,7 +683,6 @@ static int tlsr8258_pm_init(void)
 	TLSR8258_REG_SYSTEM_32K_TICK_RD = 0u;
 	TLSR8258_REG_GPIO_WAKEUP_IRQ |=
 		(TLSR8258_FLD_GPIO_CORE_WAKEUP_EN | TLSR8258_FLD_GPIO_CORE_INTERRUPT_EN);
-	tlsr8258_pm_idle_allowed = false;
 	tlsr8258_pm_last_raw_status =
 		tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
 		TLSR8258_WAKEUP_STATUS_ALL;
