@@ -25,8 +25,24 @@ void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
 {
 	ARG_UNUSED(reason);
 	ARG_UNUSED(esf);
+
+	/*
+	 * Spinning forever here turns any assert/fault into a permanent,
+	 * silent death: the radio stops responding, but the device still
+	 * reports joined=1 in retained SRAM, so nothing -- not Z2M, not an
+	 * external observer -- can tell it apart from a live, merely-quiet
+	 * sleepy end device. Confirmed on hardware: after a successful
+	 * interview, the whole ev_timer engine (and therefore the poll timer)
+	 * stopped advancing entirely -- consistent with the ZB thread having
+	 * hit this handler and spun here silently instead of recovering.
+	 * Reboot instead: the boot-time bootstrap already knows how to resume
+	 * a retained-joined ED (zb_core_bootstrap_once() / zdo_init() in this
+	 * file and zdo.c), so a reboot has a real chance of self-healing back
+	 * onto the network instead of requiring a manual power cycle.
+	 */
+	SYSTEM_RESET();
 	for (;;) {
-		/* spin on fatal error rather than rebooting */
+		/* SYSTEM_RESET() should not return; keep CPU parked if it does. */
 	}
 }
 
@@ -40,7 +56,7 @@ extern void tl_zbMacTaskProc(void);
 
 static const addrExt_t zb_fixed_ieee_addr = {
 	/*
-	 * Experimental: bump to ...05 to bypass cached Ember NCP child-table
+	 * Use a new ED identity to bypass cached Ember NCP child-table
 	 * state for our previous IEEE.  SWS dump showed Z2M sending NWK-encrypted
 	 * frames to us right after AssocResp success — i.e. the coordinator
 	 * thought we were already joined with an NWK key, so it skipped sending
@@ -57,31 +73,18 @@ static const addrExt_t zb_fixed_ieee_addr = {
 	 * same medium with a distinct IEEE. */
 	CONFIG_ZIGBEE_NATIVE_SIM_IEEE_LOW, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #else
-	/* Bumped ...06 -> ...08 -> ...0c -> ...0d: a brand-new IEEE looks like a fresh
-	 * joiner to the Z2M/Ember TC, which caches a known IEEE as "already joined" and
-	 * stops sending the unsolicited Transport-Key. Sniffer 2026-06-29 confirmed
-	 * ...08 now stuck in assoc-SUCCESS-but-no-TK loop (Ember NVRAM still had it
-	 * even after a Z2M device delete); ...0c later re-interviewed as a phantom
-	 * all-zero IEEE after a rejoin, so bump again to a fresh value. ...0d then
-	 * got cached by the Ember TC after its first join (rejoin/re-interview then
-	 * blocked), so ...0e for a fresh diagnostic join. ...0f = next fresh IEEE
-	 * for the no-flash-write diagnostic (...0e now Ember-cached). ...10 = fresh
-	 * IEEE for the RX-path re-interview instrumentation (...0f now cached).
-	 * ...11 = fresh IEEE for the clean secure-join retry after ...10 was cached.
-	 * ...12 = fresh
-	 * IEEE for the min-TX-power brownout test. ...13 = fresh IEEE to verify the
-	 * vendor RX CRC/length validation fix (drop garbage frames before parse).
-	 * ...14 = fresh IEEE for the HANDS-OFF (no -s halting) fix verification.
-	 * ...15 = fresh IEEE for the ZDP response-TX instrumentation.
-	 * ...16 = fresh IEEE to verify the router zb_buf pool fix (18->36).
-	 * ...17 = fresh IEEE for the MAC-TX-confirm (response delivery) measurement.
-	 * ...18 = fresh IEEE to verify the RX-buf reserve fix (stable re-interview).
-	 * ...19 = fresh IEEE to verify the vendor apsDataRequest af_dataSend fix.
-	 * Bumped across the 2026-08-03/04 HW test cycles so each fresh IEEE
-	 * dodges the Ember TC "already joined" cache. ...0f is the current
-	 * identity for the post-remove clean-join verification. ...12 is now used
-	 * because the coordinator still caches ...11. */
-	0x12, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	/* Keep hardware identities separate by role.  The low byte is the
+	 * role namespace: routers use 0x20..0x7f and sleepy end devices use
+	 * 0x80..0xaf.  The first fixed identity in each namespace is used by
+	 * the corresponding reference image, avoiding accidental reuse of a
+	 * router IEEE by an ED test. */
+#if defined(CONFIG_ZIGBEE_ROUTER)
+	0x20, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#elif defined(CONFIG_ZIGBEE_ED)
+	0x83, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#else
+	0x00, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#endif
 #endif
 };
 
@@ -179,6 +182,16 @@ bool __weak zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile
 
 static void zb_core_bootstrap_once(void)
 {
+	/* TLSR MCU reboot/external reset may retain SRAM, including these static
+	 * guards.  If the compatibility PIB was not rebuilt for this image, do
+	 * not let retained flags bypass the complete stack bootstrap. */
+	if ((zb_core_init_done || zb_bootstrap_done) &&
+	    memcmp(g_zbInfo.macPib.extAddress, zb_fixed_ieee_addr,
+		   EXT_ADDR_LEN) != 0) {
+		zb_core_init_done = false;
+		zb_bootstrap_done = false;
+	}
+
 	if (zb_bootstrap_done) {
 		return;
 	}
@@ -370,6 +383,25 @@ static void zb_core_bootstrap_once(void)
 		zb_commissioning_pending = true;
 	}
 
+	/*
+	 * DISABLED: three attempts at arming this hardware watchdog (timer2-
+	 * based, see ieee802154_tlsr8258.c) each produced a WORSE, faster,
+	 * unrecoverable early-boot crash loop on real hardware than not having
+	 * a watchdog at all -- every variant tried (arm-once-at-boot,
+	 * disable-then-arm-at-boot-entry, disable-then-arm-here-in-bootstrap,
+	 * self-healing re-arm-on-every-feed) reproduced the same result: the
+	 * device re-resets within seconds of boot, before zb_thread_fn's loop
+	 * can even get going, and never recovers. This means my understanding
+	 * of this SoC's timer2/watchdog register semantics (period-field
+	 * scaling, whether reg_tmr2_tick is actually resettable by software,
+	 * whatever ties the observed near-instant re-fire) is wrong in some
+	 * way I have not been able to pin down from the datasheet-less
+	 * register.h alone, without a working live debugger for this target.
+	 * Do not re-enable until that is actually understood and verified --
+	 * a watchdog that fires immediately is strictly worse than no
+	 * watchdog, since it turns a recoverable hang (external reset still
+	 * works) into a device that never boots far enough to do anything.
+	 */
 	zb_bootstrap_done = true;
 }
 
