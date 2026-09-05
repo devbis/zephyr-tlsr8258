@@ -38,10 +38,21 @@ config TLSR8258_PM_DEEP_RETENTION
 	bool "Enable deep-retention PM API surface"
 	default y
 	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Reserved for tlsr8258_pm_deep_retention_for_ms(). Not implemented
+	  yet: unlike suspend/deep-sleep, resuming from a deep sleep with
+	  SRAM retention re-enters the reset vector instead of returning from
+	  a function call, which needs a warm-resume mechanism this port does
+	  not have. tlsr8258_pm_deep_retention_for_ms() always returns
+	  -ENOTSUP.
 
 config TLSR8258_PM_SHUTDOWN
 	bool "Enable shutdown PM API surface"
 	default y
 	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Enables tlsr8258_pm_shutdown_for_ms(), a non-retention deep sleep:
+	  on wake the chip always does a full reboot (all RAM state is lost),
+	  so a successful call never returns to its caller.
 
 endif # SOC_SERIES_TLSR825X
