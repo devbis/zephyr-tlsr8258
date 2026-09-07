@@ -42,7 +42,7 @@ Supported Features
    * - Flash driver
      - not implemented
    * - Power management
-     - experimental explicit suspend-to-idle via RC32K timer wake
+     - suspend-to-idle via RC32K timer wake when the radio is stopped
    * - Radio
      - not implemented
 
@@ -220,6 +220,6 @@ Known Limitations
    * - Flash
      - no Zephyr flash driver yet
    * - Power management
-     - explicit suspend-to-idle is experimental; automatic idle PM, deep retention, and shutdown are not wired yet
+     - automatic suspend-to-idle is blocked while the radio is active; deep retention and shutdown are not wired yet
    * - Debug
      - ``west flash`` defaults to ``probe-rs``; the SWS probe selector must still be supplied explicitly

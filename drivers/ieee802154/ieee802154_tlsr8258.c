@@ -26,6 +26,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <tlsr825x/irq.h>
+#include <tlsr825x/power.h>
 
 #include "ieee802154_tlsr8258_tx_irq.h"
 #include "ieee802154_tlsr8258_radio_op.h"
@@ -455,6 +456,11 @@ static inline void tlsr8258_radio_started_set(struct tlsr8258_radio_data *radio,
 {
 	*tlsr8258_radio_u8_field(radio, offsetof(struct tlsr8258_radio_data, started)) =
 		started ? 1u : 0u;
+}
+
+bool tlsr8258_pm_radio_can_suspend(void)
+{
+	return !tlsr8258_radio_started_get(&tlsr8258_radio_data_0);
 }
 
 static inline void tlsr8258_radio_promiscuous_set(struct tlsr8258_radio_data *radio,

@@ -36,7 +36,7 @@ config TLSR8258_PM_GPIO_WAKEUP
 
 config TLSR8258_PM_DEEP_RETENTION
 	bool "Enable deep-retention PM API surface"
-	default y
+	default n
 	depends on SOC_SERIES_TLSR825X_PM
 	help
 	  Reserved for tlsr8258_pm_deep_retention_for_ms(). Not implemented
@@ -48,11 +48,10 @@ config TLSR8258_PM_DEEP_RETENTION
 
 config TLSR8258_PM_SHUTDOWN
 	bool "Enable shutdown PM API surface"
-	default y
+	default n
 	depends on SOC_SERIES_TLSR825X_PM
 	help
-	  Enables tlsr8258_pm_shutdown_for_ms(), a non-retention deep sleep:
-	  on wake the chip always does a full reboot (all RAM state is lost),
-	  so a successful call never returns to its caller.
+	  Reserved for the TLSR8258 Shutdown mode. Not implemented yet:
+	  tlsr8258_pm_shutdown_for_ms() always returns -ENOTSUP.
 
 endif # SOC_SERIES_TLSR825X
