@@ -79,9 +79,12 @@ int zb_platform_restore_persistent_state(void)
 
 	st = nv_flashReadNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
 	if (st != NV_SUCC) {
+		LOG_WRN("Zigbee persistence restore failed: item unavailable (%d)", st);
 		return -ENOENT;
 	}
 	if (blob.version != ZB_PERSIST_BLOB_VERSION) {
+		LOG_WRN("Zigbee persistence restore failed: unsupported version %u",
+			blob.version);
 		return -EINVAL;
 	}
 

@@ -6,6 +6,9 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#include <tlsr825x/power.h>
+#endif
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
@@ -403,6 +406,17 @@ int zb_platform_bdb_init_default(void)
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
+	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+	if (tlsr8258_pm_deep_sleep_wake_pending()) {
+		if (tlsr8258_pm_get_retained_frame_counter(&frameCounter) == 0) {
+			ss_ib.outgoingFrameCounter = frameCounter;
+			LOG_INF("zb bdb: restored frame counter from deep-sleep retention: %u",
+				(unsigned int)frameCounter);
+		} else {
+			LOG_WRN("zb bdb: deep-sleep frame counter retention invalid");
+		}
+	}
+	#endif
 	#if defined(ZB_ROUTER_ROLE)
 	/*
 	 * A previous interrupted join can persist the MAC/NWK tuple without the

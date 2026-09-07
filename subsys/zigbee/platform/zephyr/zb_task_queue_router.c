@@ -118,6 +118,17 @@ u8 tl_zbUserTaskQNum(void)
 	return (u8)k_msgq_num_used_get(&zb_taskq_high2nwk);
 }
 
+bool zb_taskq_layer_queues_empty(void)
+{
+	for (size_t i = 0U; i < ARRAY_SIZE(zb_taskq_per_layer); i++) {
+		if (k_msgq_num_used_get(zb_taskq_per_layer[i]) != 0U) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /*
  * Vendor zb_task_queue.c also defines tl_zbTaskPost (a single-shot
  * callback enqueue) and tl_zbTaskProcedure (drain loop). The
