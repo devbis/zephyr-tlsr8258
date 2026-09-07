@@ -54,6 +54,19 @@ config ZIGBEE_BDB
 	bool "Base Device Behavior"
 	default y
 
+config ZIGBEE_ED_DEEP_SLEEP
+	bool "Automatic sleepy end-device deep sleep"
+	depends on ZIGBEE_ED
+	depends on ZIGBEE_BDB
+	depends on ZIGBEE_RADIO_PORT_TLSR8258
+	depends on SOC_SERIES_TLSR825X_PM
+	default y
+	help
+	  Allow a joined sleepy end device to enter TLSR8258 deep sleep when
+	  the Zigbee stack is idle. Wakeup uses the configured 32 kHz timer and
+	  optional GPIO wake source. Routers and coordinators never use this
+	  policy.
+
 config ZIGBEE_ZCL
 	bool "Zigbee Cluster Library"
 	default y

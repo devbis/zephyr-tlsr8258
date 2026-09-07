@@ -201,6 +201,33 @@ ev_timer_event_t *ev_timer_nearestGet(void)
 	return ev_timer_ctrl.timer_nearest;
 }
 
+bool ev_timer_has_other_than(const ev_timer_event_t *allowed)
+{
+	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
+
+	for (u32 walk = 0U; timer_evt != NULL && walk < EV_TIMER_MAX_WALK; walk++) {
+		if (timer_evt != allowed) {
+			return true;
+		}
+		timer_evt = timer_evt->next;
+	}
+
+	/*
+	 * A non-NULL pointer here means the walk hit the safety bound. Treat it
+	 * as pending work so a corrupt timer list cannot enable deep sleep.
+	 */
+	return timer_evt != NULL;
+}
+
+u32 ev_timer_timeout_get(const ev_timer_event_t *allowed)
+{
+	if ((allowed == NULL) || !ev_timer_exist((ev_timer_event_t *)allowed)) {
+		return 0U;
+	}
+
+	return allowed->timeout;
+}
+
 bool ev_timer_enough(void)
 {
 	return true;

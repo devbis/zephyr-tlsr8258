@@ -147,6 +147,15 @@ void zb_taskq_run_pending_for_test(void)
 	zb_taskq_drain();
 }
 
+bool zb_taskq_is_empty(void)
+{
+	k_spinlock_key_t key = k_spin_lock(&task_lock);
+	bool empty = (task_count == 0U) && (rx_task_count == 0U);
+
+	k_spin_unlock(&task_lock, key);
+	return empty;
+}
+
 static int zb_taskq_init(void)
 {
 	ev_on_poll(EV_POLL_HCI, zb_taskq_drain);

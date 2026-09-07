@@ -16,6 +16,11 @@
 #include "ev_buffer.h"
 #include "zb_common_stub.h"
 #include "zdo/zdo_api.h"
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#include "zb_ed_sleep.h"
+#include "zdo/zdo_internal.h"
+#include <tlsr825x/power.h>
+#endif
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
@@ -302,6 +307,14 @@ static void zb_core_bootstrap_once(void)
 						     MAC_SHORT_ADDR_BROADCAST,
 						     g_zbMacPib.extAddress);
 		}
+		#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+		if (tlsr8258_pm_deep_sleep_wake_pending()) {
+			tlsr8258_pm_recover_after_wake();
+			LOG_INF("TLSR8258 deep-sleep wake: reason=%u raw=0x%08x",
+				(unsigned int)tlsr8258_pm_get_wakeup_reason(),
+				(unsigned int)tlsr8258_pm_get_wakeup_raw_status());
+		}
+		#endif
 		rf_init();
 		drv_enable_irq();
 		zb_core_init_done = true;
@@ -369,12 +382,37 @@ static void zb_core_bootstrap_once(void)
 	#endif
 
 	#if !defined(ZB_ROUTER_ROLE)
+	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+	if (tlsr8258_pm_deep_sleep_wake_pending()) {
+		if (zb_platform_bdb_init_default() != 0) {
+			LOG_ERR("TLSR8258 deep-sleep wake: BDB restore init failed");
+		}
+		if (g_zbNwkCtx.joined && (g_zbMacPib.phyChannelCur >= 11U) &&
+		    (g_zbMacPib.phyChannelCur <= 26U)) {
+			uint32_t poll_rate = zdo_af_get_syn_rate();
+
+			if (poll_rate == 0U) {
+				poll_rate = 500U;
+			}
+			zdo_set_pollRate(poll_rate);
+			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
+				LOG_ERR("TLSR8258 deep-sleep wake: radio recovery failed");
+			}
+		} else {
+			LOG_WRN("TLSR8258 deep-sleep wake: no valid joined state");
+		}
+		tlsr8258_pm_deep_sleep_wake_clear();
+	} else {
+	#endif
 	if (zb_platform_bdb_service_persistent_rejoin()) {
 		uint32_t started = k_uptime_get_32();
 
 		zb_persistent_rejoin_in_progress = true;
 		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 	}
+	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+	}
+	#endif
 	#endif
 
 	if (zb_platform_app_enable_radio_smoke_probe()) {
@@ -714,6 +752,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			k_busy_wait(1000);
 			continue;
 		}
+		#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+		zb_ed_sleep_maybe();
+		#endif
 
 		if (k_sem_take(&zb_ev_sem, K_NO_WAIT) == 0) {
 			continue;

@@ -95,6 +95,26 @@ void ev_timer_process(void);
 ev_timer_event_t *ev_timer_nearestGet(void);
 
 /**
+ * @brief Check for a timer other than an explicitly allowed timer.
+ *
+ * @param allowed Timer that may remain armed, or NULL to allow none.
+ *
+ * @retval true A different timer is armed.
+ * @retval false No different timer is armed.
+ */
+bool ev_timer_has_other_than(const ev_timer_event_t *allowed);
+
+/**
+ * @brief Get the remaining time for the allowed timer.
+ *
+ * @param allowed Timer that may remain armed, or NULL to allow none.
+ *
+ * @retval 0 No allowed timer is armed.
+ * @retval >0 Remaining time in milliseconds.
+ */
+u32 ev_timer_timeout_get(const ev_timer_event_t *allowed);
+
+/**
  * @brief       Check whether a specified timer exist or not
  *
  * @param[in]   evt  - The specified timer event

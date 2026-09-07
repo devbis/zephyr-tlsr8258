@@ -930,6 +930,15 @@ u8 mac_getTrxState(void)
     return mac_trx_vars.state;
 }
 
+bool mac_tx_queue_empty(void)
+{
+	u32 irq_key = drv_disable_irq();
+	bool empty = (tx_fifo_rptr == tx_fifo_wptr);
+
+	drv_restore_irq(irq_key);
+	return empty;
+}
+
 bool tl_zbMacStateBusy(void)
 {
     if ((u8)(g_zbMacCtx.status - ZB_MAC_STATE_ACTIVE_SCAN) <= 1U) {

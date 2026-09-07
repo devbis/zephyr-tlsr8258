@@ -221,5 +221,6 @@ void zb_macDataSendHandler(void);
 u8 tl_zbMacHdrSize(u16 frameCtrl);
 bool tl_zbMacStateBusy(void);
 u8 mac_getTrxState(void);
+bool mac_tx_queue_empty(void);
 
 #endif	/* MAC_TRX_API_H */
