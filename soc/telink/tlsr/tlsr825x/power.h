@@ -32,7 +32,7 @@ enum tlsr8258_pm_gpio_port {
  * Vendor sleep-mode byte (written to analog reg 0x7e). Only SUSPEND and DEEP
  * are implemented today -- both return via the normal suspend/wake sequence
  * (SUSPEND resumes in place; DEEP always forces a full chip reboot on wake,
- * see tlsr8258_pm_shutdown_for_ms()). The DEEPSLEEP_MODE_RET_SRAM_* variants
+ * see tlsr8258_pm_deep_sleep_for_ms()). The DEEPSLEEP_MODE_RET_SRAM_* variants
  * exist in the vendor SDK and the tlsr82xx-hal Rust port
  * (../../../tlsr82xx/tlsr82xx-hal/src/pm.rs) but are NOT implemented here:
  * unlike SUSPEND/DEEP, resuming from a retention sleep re-enters the reset
@@ -54,9 +54,11 @@ enum tlsr8258_pm_sleep_mode {
 };
 
 int tlsr8258_pm_suspend_for_ms(uint32_t duration_ms);
+int tlsr8258_pm_deep_sleep_for_ms(uint32_t duration_ms);
 int tlsr8258_pm_deep_retention_for_ms(uint32_t duration_ms);
 int tlsr8258_pm_shutdown_for_ms(uint32_t duration_ms);
 int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low, bool enable);
+bool tlsr8258_pm_radio_can_suspend(void);
 enum tlsr8258_pm_wakeup_reason tlsr8258_pm_get_wakeup_reason(void);
 uint32_t tlsr8258_pm_get_wakeup_raw_status(void);
 

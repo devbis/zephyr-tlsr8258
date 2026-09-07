@@ -133,6 +133,11 @@ static volatile enum tlsr8258_pm_wakeup_reason tlsr8258_pm_last_reason =
 static volatile uint32_t tlsr8258_pm_last_raw_status;
 static volatile uint32_t tlsr8258_pm_gpio_wakeup_mask;
 
+__weak bool tlsr8258_pm_radio_can_suspend(void)
+{
+	return true;
+}
+
 static void tlsr8258_pm_vendor_clock_dly(uint32_t cycles)
 {
 	volatile uint32_t delay = 0u;
@@ -537,9 +542,15 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 
 static int tlsr8258_pm_enter_suspend_to_idle(void)
 {
+	uint32_t wakeup_src = tlsr8258_pm_current_wakeup_sources();
 	uint32_t wakeup_tick = TLSR8258_REG_SYSTEM_TICK_IRQ;
-	uint32_t status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_SUSPEND, wakeup_tick,
-						 tlsr8258_pm_current_wakeup_sources());
+	uint32_t status;
+
+	if (wakeup_src == 0u || !tlsr8258_pm_radio_can_suspend()) {
+		return -ENOTSUP;
+	}
+
+	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_SUSPEND, wakeup_tick, wakeup_src);
 
 	tlsr8258_pm_last_raw_status = status;
 	tlsr8258_pm_last_reason = tlsr8258_pm_reason_from_status(status);
@@ -555,9 +566,10 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 	case PM_STATE_SUSPEND_TO_IDLE:
 		/*
 		 * Zephyr's PM subsystem (idle loop + policy, driven by
-		 * DT power-states' min-residency-us/exit-latency-us) already
-		 * decides when it is worth calling this -- no separate
-		 * driver-level gate needed. sys_clock_set_timeout() has
+		 * DT power-states' min-residency-us/exit-latency-us) decides
+		 * when it is worth calling this. The SoC-specific radio hook
+		 * additionally blocks sleep while the TLSR8258 radio is active.
+		 * sys_clock_set_timeout() has
 		 * already armed TLSR8258_REG_SYSTEM_TICK_IRQ before this
 		 * runs; tlsr8258_pm_enter_sleep() keeps that same free-running
 		 * tick register continuous across the sleep (see its comments
@@ -584,6 +596,10 @@ void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 
 int tlsr8258_pm_suspend_for_ms(uint32_t duration_ms)
 {
+	if (!tlsr8258_pm_radio_can_suspend()) {
+		return -EBUSY;
+	}
+
 	uint32_t status = tlsr8258_pm_suspend_stall(duration_ms);
 
 	tlsr8258_pm_last_raw_status = status;
@@ -607,7 +623,7 @@ int tlsr8258_pm_deep_retention_for_ms(uint32_t duration_ms)
 	return -ENOTSUP;
 }
 
-int tlsr8258_pm_shutdown_for_ms(uint32_t duration_ms)
+int tlsr8258_pm_deep_sleep_for_ms(uint32_t duration_ms)
 {
 	uint32_t wakeup_tick = TLSR8258_REG_SYSTEM_TICK +
 				(MAX(duration_ms, 1u) * 1000u * TLSR8258_PM_SYS_TICK_PER_US);
@@ -626,6 +642,13 @@ int tlsr8258_pm_shutdown_for_ms(uint32_t duration_ms)
 	tlsr8258_pm_last_reason = tlsr8258_pm_reason_from_status(status);
 
 	return ((status & TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM) != 0u) ? -EIO : 0;
+}
+
+int tlsr8258_pm_shutdown_for_ms(uint32_t duration_ms)
+{
+	ARG_UNUSED(duration_ms);
+
+	return -ENOTSUP;
 }
 
 int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low, bool enable)

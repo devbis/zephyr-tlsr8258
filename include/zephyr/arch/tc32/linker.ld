@@ -245,16 +245,4 @@ SECTIONS
 	PROVIDE(_ictag_end_ = _ictag_start_ + 0x100);
 	PROVIDE(_tc32_boot_mirror_runtime_min_ = _tc32_boot_copy_size_align_256_ + TC32_BOOT_ICACHE_SCRATCH_SIZE);
 	ASSERT(_tc32_boot_mirror_runtime_min_ <= TC32_BOOT_MIRROR_SIZE, "TC32 boot mirror reserve is too small for XIP bootstrap + icache scratch")
-
-#if defined(CONFIG_TLSR8258_PM_DEEP_RETENTION)
-	/*
-	 * CONFIG_TLSR8258_PM_DEEP_RETENTION sleeps via
-	 * DEEPSLEEP_MODE_RET_SRAM_LOW32K, which only keeps the low 32K of
-	 * SRAM powered; anything the image places above that address loses
-	 * its contents on every such sleep. Catch an image that has grown
-	 * past the retained window at link time instead of as an
-	 * intermittent-looking data-corruption bug on real hardware.
-	 */
-	ASSERT((_end - RAM_BASE) <= 0x8000, "TLSR8258: image extends past the 32K deep-sleep retention window (_end - RAM_BASE > 0x8000); CONFIG_TLSR8258_PM_DEEP_RETENTION would silently lose data above RAM_BASE+0x8000 on wake")
-#endif
 }
