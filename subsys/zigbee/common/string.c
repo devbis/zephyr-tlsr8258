@@ -46,7 +46,7 @@ char *strchr(const char *s, int c)
     return 0;
 }
 
-int memcmp(const void *m1, const void *m2, unsigned int n)
+int memcmp(const void *m1, const void *m2, size_t n)
 {
     unsigned char *s1 = (unsigned char *)m1;
     unsigned char *s2 = (unsigned char *)m2;
@@ -61,7 +61,7 @@ int memcmp(const void *m1, const void *m2, unsigned int n)
     return 0;
 }
 
-void *memchr(register const void *src_void, int c, unsigned int length)
+void *memchr(register const void *src_void, int c, size_t length)
 {
     const unsigned char *src = (const unsigned char *)src_void;
 
@@ -74,7 +74,7 @@ void *memchr(register const void *src_void, int c, unsigned int length)
     return NULL;
 }
 
-void *memmove(void *dest, const void *src, unsigned int n)
+void *memmove(void *dest, const void *src, size_t n)
 {
     char *d = (char *)dest;
     char *s = (char *)src;
@@ -115,7 +115,7 @@ static void bcopy_(register char *src, register char *dest, int len)
 }
 
 #if 1
-void *memset(void *dest, int val, unsigned int len)
+void *memset(void *dest, int val, size_t len)
 {
     if (dest == NULL) {
         ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_MEM_ACCESS);
@@ -133,7 +133,7 @@ void *memset(void *dest, int val, unsigned int len)
     return dest;
 }
 
-void *memcpy(void *out, const void *in, unsigned int length)
+void *memcpy(void *out, const void *in, size_t length)
 {
     if (length == 0) {
         return out;
@@ -227,7 +227,7 @@ void memcpy4(void *d, const void *s, unsigned int length)
     }
 }
 
-unsigned int strlen(const char *str)
+size_t strlen(const char *str)
 {
     unsigned int len = 0;
 
@@ -255,7 +255,7 @@ int strcmp(const char *firstString, const char *secondString)
     return 1;
 }
 
-char *strncpy(char *s, const char *t, unsigned int n)
+char *strncpy(char *s, const char *t, size_t n)
 {
     char *p = s;
     unsigned int i = 0;
