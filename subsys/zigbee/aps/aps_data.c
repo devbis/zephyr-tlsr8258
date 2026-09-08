@@ -33,7 +33,7 @@ void aps_nwk_data_confirm_cb(void *arg);
 int aps_data_fragment_delay(void *arg);
 void aps_data_fragment(void *arg);
 void aps_data_request(void *arg);
-u8 aps_hdr_parse(u8 *data, void *parsed);
+u8 aps_hdr_parse(const u8 *data, size_t dataLen, void *parsed);
 u8 aps_get_handle(void);
 u8 ss_apsDecryptFrame(void *arg);
 void aps_command_handle(void *arg);
@@ -116,18 +116,6 @@ typedef struct _attribute_packed_ {
     u8 blockNum;
     u8 reserved14;
 } aps_rx_hdr_t;
-
-typedef struct _attribute_packed_ {
-    u8 apsHdrLen;
-    u8 flags;
-    u8 frameCounter;
-    u8 srcEp;
-    u16 asduLen;
-    u8 dstEp;
-    u8 apsCounter;
-    u16 clusterId;
-    u16 profileId;
-} aps_ind_prim_src_hdr_t;
 
 typedef struct _attribute_packed_ {
     u8 dstAddrMode;
@@ -320,21 +308,23 @@ void aps_indPrimBuild(void *arg)
      * is no longer needed for the local rebuild path.
      */
     u8 *buf = (u8 *)arg;
-    aps_ind_prim_src_hdr_t srcHdr;
+    aps_rx_hdr_t srcHdr;
     aps_data_ind_t *out = (aps_data_ind_t *)arg;
     nlde_data_ind_t src;
     u8 *nsduPtr;
     u16 nsduLen;
-    u8 srcHdrFlags;
 
     memcpy(&src, buf, sizeof(src));
     memcpy(&srcHdr, buf + APS_RX_HDR_OFFSET, sizeof(srcHdr));
 
     nsduPtr = src.nsdu;
     nsduLen = src.nsduLen;
-    srcHdrFlags = srcHdr.flags;
 
     memset(out, 0, sizeof(*out));
+
+    if (nsduPtr == NULL || nsduLen < srcHdr.hdrLen) {
+        return;
+    }
 
     out->cluster_id = srcHdr.clusterId;
     out->profile_id = srcHdr.profileId;
@@ -343,26 +333,26 @@ void aps_indPrimBuild(void *arg)
     out->src_addr_mode = APS_SHORT_SRCADDR_WITHEP;
     out->src_short_addr = src.srcAddr;
     out->srcMacAddr = src.srcMacAddr;
-    out->aps_counter = srcHdr.frameCounter;
-    out->lqi = srcHdr.apsCounter;
+    out->aps_counter = srcHdr.extHdr;
+    out->lqi = src.lqi;
     out->rssi = src.rssi;
 
-    if ((srcHdrFlags & 0x0cU) == 0x0cU) {
+    if ((srcHdr.frameCtrl & 0x0cU) == 0x0cU) {
         out->dst_addr_mode = APS_SHORT_GROUPADDR_NOEP;
-        out->dst_addr = srcHdr.dstEp;
     } else {
         out->dst_addr_mode = APS_SHORT_DSTADDR_WITHEP;
-        out->dst_addr = src.dstAddr;
     }
+    out->dst_addr = src.dstAddr;
 
     /* ss_apsDecryptFrame() advances nsdu by the auxiliary-header length but
-     * deliberately leaves the parsed APS header length in the overlay.  Add
+     * deliberately leaves the parsed APS header length in the receive
+     * header.  Add
      * hdrLen here, just as the vendor implementation does, so the pointer
      * lands on the decrypted ASDU rather than in the retained aux header. */
-    out->asdu = nsduPtr + srcHdr.apsHdrLen;
-    out->asduLength = (u16)(nsduLen - srcHdr.apsHdrLen);
+    out->asdu = nsduPtr + srcHdr.hdrLen;
+    out->asduLength = (u16)(nsduLen - srcHdr.hdrLen);
 
-    if ((srcHdrFlags & 0x20U) != 0U) {
+    if ((srcHdr.frameCtrl & 0x20U) != 0U) {
         out->security_status |= SECURITY_IN_APSLAYER;
     }
     if (src.securityUse) {
@@ -892,6 +882,7 @@ u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
 void aps_data_indication_process(void *arg)
 {
     u8 *buf = (u8 *)arg;
+    nlde_data_ind_t *nlde_ind = (nlde_data_ind_t *)arg;
     aps_rx_hdr_t *hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
     u8 frameType;
 
@@ -902,6 +893,11 @@ void aps_data_indication_process(void *arg)
             return;
         }
         hdr = (aps_rx_hdr_t *)(buf + APS_RX_HDR_OFFSET);
+    }
+
+    if (nlde_ind->nsdu == NULL || nlde_ind->nsduLen <= hdr->hdrLen) {
+        zb_buf_free((zb_buf_t *)arg);
+        return;
     }
 
     if ((hdr->frameCtrl & 0x40U) != 0U) {
@@ -1088,9 +1084,9 @@ void aps_interPanDataIndCb(void *arg)
         localInd.dst_addr = macInd->dstAddr.addr.shortAddr;
     }
 
-    hdrLen = aps_hdr_parse(apsPayload, hdr);
+    hdrLen = aps_hdr_parse(apsPayload, apsPayloadLen, hdr);
     hdr->hdrLen = hdrLen;
-    if (apsPayloadLen < hdrLen) {
+    if (hdrLen == 0U || apsPayloadLen <= hdrLen) {
         zb_buf_free((zb_buf_t *)arg);
         return;
     }
@@ -1293,11 +1289,17 @@ void aps_nwk_data_indication_cb(void *arg)
     u8 hdrLen;
 	bool profile_match;
 
-    hdrLen = aps_hdr_parse(ind->nsdu, hdr);
+    hdrLen = aps_hdr_parse(ind->nsdu, ind->nsduLen, hdr);
 
     hdr->hdrLen = hdrLen;
     hdr->srcShortAddr = ind->srcAddr;
-	profile_match = af_profileMatchedLocal(hdr->profileId, hdr->dstEp);
+
+    if (hdrLen == 0U || ind->nsduLen <= hdrLen) {
+        zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
+
+    profile_match = af_profileMatchedLocal(hdr->profileId, hdr->dstEp);
 
     /*
      * The NLDE-DATA.indication dstAddrMode is produced by nwk_data.c as
@@ -1317,11 +1319,6 @@ void aps_nwk_data_indication_cb(void *arg)
         hdr->frameCtrl = (u8)((hdr->frameCtrl & (u8)~0x0cU) | 0x0cU);
         COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
     } else {
-        if (ind->nsduLen <= hdrLen) {
-            zb_buf_free((zb_buf_t *)arg);
-            return;
-        }
-
         if ((hdr->frameCtrl & 0x03U) == 0U &&
             (hdr->frameCtrl & 0x0cU) != 0x0cU &&
 		    !profile_match) {

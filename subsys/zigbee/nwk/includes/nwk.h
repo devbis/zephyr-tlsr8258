@@ -1132,7 +1132,7 @@ void tl_zbNwkNlmeNwkStatusInd(void *arg, u16 nwkAddr, nwk_statusCode_t status);
 void tl_zbNwkInit(u8 coldReset);
 void tl_zbNwkTaskProc(void);
 
-u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu);
+u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, const u8 *msdu, u8 msduLen);
 u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr);
 u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr);
 
