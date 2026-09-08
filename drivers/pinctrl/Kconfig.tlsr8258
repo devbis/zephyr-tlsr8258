@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config PINCTRL_TELINK_TLSR8258
+	bool "Telink TLSR8258 pin controller"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_PINCTRL_ENABLED
+	help
+	  Enable pin configuration support for Telink TLSR8258.
