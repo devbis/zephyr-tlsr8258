@@ -1,0 +1,170 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Zigbee radio abstraction for Zephyr.
+ * Staged adapter integration: Task 1 keeps compile-safe shims while
+ * incrementally wiring runtime behavior to the ieee802154 TLSR8258 driver.
+ *
+ * Mirrors the MCU_CORE_8258 section of tl_zigbee_sdk/proj/drivers/drv_radio.h.
+ */
+#pragma once
+
+#include <zephyr/zigbee/zb_types.h>
+#include <zephyr/zigbee/zb_radio_port.h>
+
+/* RF trx mode constants (match SDK rf.h RF_TRX_MODE enum) */
+#define RF_MODE_TX     0
+#define RF_MODE_RX     1
+#define RF_MODE_AUTO   2
+#define RF_MODE_OFF    3
+
+/* TX/RX packet buffer layout (5-byte DMA header for TLSR8258) */
+#define ZB_RADIO_TX_HDR_LEN    5
+#define ZB_RADIO_RX_HDR_LEN    5
+
+/* TX wait (microseconds) — matches SDK ZB_TX_WAIT_US */
+#define ZB_TX_WAIT_US          120
+
+/* Default TX power index */
+#define ZB_RADIO_TX_0DBM       23
+#define ZB_DEFAULT_TX_POWER_IDX 23
+
+/* Channel conversion: logical (11-26) → physical offset (5 MHz steps) */
+#define LOGICCHANNEL_TO_PHYSICAL(p)   (((p) - 10) * 5)
+
+/* clock_time() — returns the vendor-style monotonic timer cycles timeline. */
+static inline u32 clock_time(void)
+{
+	return zb_radio_port_clock_time_us();
+}
+
+static inline bool clock_time_exceed(u32 ref, u32 span_us)
+{
+	return zb_radio_port_clock_time_exceed(ref, span_us);
+}
+
+static inline u32 clock_cycles_to_us(u32 cycles)
+{
+	return zb_radio_port_clock_delta_to_us(cycles);
+}
+
+/* ─── Zephyr radio adapter contract ─────────────────────────────── */
+void zb_radio_init(void);
+bool zb_radio_is_ready(void);
+void zb_radio_reset(void);
+void zb_radio_trx_switch(u8 mode, u8 phy_chn);
+void zb_radio_trx_off_auto_mode(void);
+void zb_radio_tx_power_set(u8 level);
+s8 zb_radio_rssi_get(void);
+void zb_radio_tx_start(u8 *tx_buf);
+u8 zb_radio_tx_done_get(void);
+void zb_radio_tx_done_clear(void);
+u8 zb_radio_rx_done_get(void);
+void zb_radio_rx_done_clear(void);
+u8 zb_radio_trx_state_get(void);
+void zb_radio_rx_buf_set(u8 *addr);
+u8 *zb_radio_next_rx_buf_get(void);
+u8 zb_radio_pkt_rssi_get(const u8 *p);
+
+#define ZB_RADIO_INIT()                       zb_radio_init()
+#define ZB_RADIO_RESET()                      zb_radio_reset()
+#define ZB_RADIO_TRX_SWITCH(mode, chn)        zb_radio_trx_switch((mode), (chn))
+#define ZB_RADIO_TRX_OFF_AUTO_MODE()          zb_radio_trx_off_auto_mode()
+#define ZB_RADIO_TX_POWER_SET(level)          zb_radio_tx_power_set(level)
+#define ZB_RADIO_RSSI_GET()                   zb_radio_rssi_get()
+#define ZB_RADIO_TX_START(txBuf)              zb_radio_tx_start(txBuf)
+#define ZB_RADIO_TX_DONE                      zb_radio_tx_done_get()
+#define ZB_RADIO_TX_DONE_CLR                  zb_radio_tx_done_clear()
+#define ZB_RADIO_RX_DONE                      zb_radio_rx_done_get()
+#define ZB_RADIO_RX_DONE_CLR                  zb_radio_rx_done_clear()
+#define ZB_RADIO_TRX_STA_GET()                zb_radio_trx_state_get()
+#define ZB_RADIO_RX_BUF_SET(addr)             zb_radio_rx_buf_set(addr)
+static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
+
+/* Legacy MAC hooks owned by the Zephyr radio adapter.  The normal Zephyr
+ * sink path performs these operations in the IEEE 802.15.4 driver before it
+ * calls zb_macDataRecvHandler(); the legacy IRQ entry points remain source
+ * compatible for the vendor MAC translation unit. */
+#define RF_DMA_BUSY()                         (0)
+#define ZB_RADIO_SRX_START(tick)              do { } while (0)
+#define ZB_RADIO_MODE_MAX_GAIN()              do { } while (0)
+#define ZB_RADIO_MODE_AUTO_GAIN()             do { } while (0)
+#define RFDMA_TX_ENABLE                       do { } while (0)
+#define RFDMA_TX_DISABLE                      do { } while (0)
+#define RFDMA_RX_ENABLE                       do { } while (0)
+#define RFDMA_RX_DISABLE                      do { } while (0)
+#define ZB_RADIO_TX_ENABLE                    RFDMA_TX_ENABLE
+#define ZB_RADIO_TX_DISABLE                   RFDMA_TX_DISABLE
+#define ZB_RADIO_RX_ENABLE                    RFDMA_RX_ENABLE
+#define ZB_RADIO_RX_DISABLE                   RFDMA_RX_DISABLE
+#define ZB_RADIO_IRQ_MASK_CLR                 do { } while (0)
+#define ZB_RADIO_IRQ_MASK_SET                 do { } while (0)
+#define ZB_RADIO_RX_MAX_LEN_SET(len)          do { } while (0)
+#define ZB_TIMESTAMP_ENABLE                   do { } while (0)
+#define ZB_TIMER_INIT()                       do { } while (0)
+
+#define ZB_RADIO_RX_BUF_CLEAR(p) do { \
+	(p)[0] = 0; \
+	(p)[4] = 0; \
+} while (0)
+
+#define ZB_RADIO_DMA_HDR_BUILD(pBuf, len) do { \
+	u8 *_p = (u8 *)(pBuf); \
+	_p[0] = (u8)((len) + 1); \
+	_p[1] = 0; \
+	_p[2] = 0; \
+	_p[3] = 0; \
+} while (0)
+
+/* Translate the vendor RF_STATE_* numbering (TX=0, RX=1, ED=2, OFF=3)
+ * without exposing the vendor RF entry points to functional MAC sources. */
+static inline enum zb_radio_port_trx_state
+zb_radio_port_legacy_state(u8 state)
+{
+	switch (state) {
+	case 0U:
+		return ZB_RADIO_PORT_TRX_TX;
+	case 1U:
+		return ZB_RADIO_PORT_TRX_RX;
+	case 2U:
+		return ZB_RADIO_PORT_TRX_ED;
+	default:
+		return ZB_RADIO_PORT_TRX_OFF;
+	}
+}
+
+static inline void zb_radio_port_set_legacy_state(u8 state, u8 channel)
+{
+	(void)zb_radio_port_set_trx_state(zb_radio_port_legacy_state(state), channel);
+}
+
+#define ZB_RADIO_TRX_CFG(size)                do { } while (0)
+
+/* Board-specific PA GPIOs are absent unless a board adapter supplies them. */
+#define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
+static inline void WaitUs(u32 us) { k_busy_wait(us); }
+
+/* Packet field accessors for the TLSR8258 DMA layout.  CRC validation is
+ * performed by the Zephyr IEEE 802.15.4 driver before the sink callback. */
+#define ZB_RADIO_ACTUAL_PAYLOAD_LEN(p)  ((p)[4])
+#define ZB_RADIO_CRC_OK(p)              (1)
+#define ZB_RADIO_PACKET_LENGTH_OK(p)    ((p)[4] >= 5 && (p)[4] <= 127)
+#define ZB_RADIO_TIMESTAMP_GET(p)       (0u)
+#define ZB_RADION_PKT_RSSI_GET(p)       zb_radio_pkt_rssi_get(p)
+
+/* RSSI → LQI conversion (same formula as SDK for 8258) */
+#define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi) do { \
+	(void)(mode); \
+	s16 _r = (s16)(rssi); \
+	s16 _min = -99, _max = -15; \
+	if (_r > _max) { _r = _max; } \
+	if (_r < _min) { _r = _min; } \
+	(lqi) = (u8)(255 * (_r - _min) / (_max - _min)); \
+} while (0)
+
+#define ZB_LQI_TO_PATH_COST(lqi, path_cost) do { \
+	if ((lqi) > 118)      { (path_cost) = 1; } \
+	else if ((lqi) > 94)  { (path_cost) = 2; } \
+	else if ((lqi) > 69)  { (path_cost) = 3; } \
+	else if ((lqi) > 45)  { (path_cost) = 5; } \
+	else                  { (path_cost) = 7; } \
+} while (0)
