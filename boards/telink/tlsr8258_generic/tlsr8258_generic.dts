@@ -1,0 +1,58 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <telink/tlsr8258.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Telink TLSR8258 Generic";
+	compatible = "telink,tlsr8258-generic";
+
+	aliases {
+		led0 = &led0;
+	};
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash;
+		zephyr,console = &uart0;
+		zephyr,code-partition = &app_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&flash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		app_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 0x0007e000>;
+		};
+
+		zigbee_nv_partition: partition@7e000 {
+			label = "zigbee_nv";
+			reg = <0x0007e000 0x00002000>;
+		};
+	};
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
