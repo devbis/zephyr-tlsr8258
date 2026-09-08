@@ -1,0 +1,13 @@
+sample:
+  name: TLSR8258 IRQ controller smoke
+tests:
+  sample.board.telink.tlsr8258_irq_controller:
+    build_only: true
+    platform_allow:
+      - tlsr8258_generic
+    integration_platforms:
+      - tlsr8258_generic
+    tags:
+      - telink
+      - tlsr8258
+      - irq

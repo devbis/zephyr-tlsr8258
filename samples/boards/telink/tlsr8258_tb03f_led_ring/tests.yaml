@@ -1,0 +1,10 @@
+sample:
+  name: TLSR8258 TB03F LED ring
+tests:
+  sample.boards.telink.tlsr8258_tb03f_led_ring:
+    platform_allow: tlsr8258_tb03f
+    tags:
+      - gpio
+      - printk
+      - rtt
+      - timer
