@@ -389,7 +389,9 @@ static void z_sys_init_run_level(enum init_level level)
 				result = do_device_init(dev);
 			}
 		} else {
-			result = entry->init_fn();
+			int (*init_fn)(void) = entry->init_fn;
+
+			result = init_fn();
 		}
 		sys_trace_sys_init_exit(entry, level, result);
 	}
