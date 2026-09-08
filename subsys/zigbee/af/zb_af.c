@@ -449,7 +449,8 @@ _CODE_AF_ bool af_endpointUnregister(u8 ep)
         if (aed[i].ep == ep) {
             TL_SETSTRUCTCONTENT(aed[i], 0);
             if ((i + 1) != available_active_ep_num) {
-                memcpy((u8 *)&aed[i], (u8 *)&aed[i + 1], sizeof(aed[i]) * (available_active_ep_num - i));
+                memmove((u8 *)&aed[i], (u8 *)&aed[i + 1],
+                        sizeof(aed[i]) * (available_active_ep_num - i - 1U));
             }
             available_active_ep_num--;
             return TRUE;
