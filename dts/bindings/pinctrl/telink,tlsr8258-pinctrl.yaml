@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 pin controller
+
+compatible: "telink,tlsr8258-pinctrl"
+
+include: base.yaml
+
+child-binding:
+  description: TLSR8258 pin control state
+
+  include:
+    - name: pincfg-node.yaml
+      property-allowlist:
+        - bias-disable
+        - bias-pull-down
+        - bias-pull-up
+        - input-enable
+        - output-enable
+
+  properties:
+    pinmux:
+      required: true
+      type: int
+      description: TLSR8258_PINMUX(pin, function) value.

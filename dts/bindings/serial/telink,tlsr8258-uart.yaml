@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 UART
+
+compatible: "telink,tlsr8258-uart"
+
+include: [uart-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
+
+  clock-frequency:
+    required: true
+
+  tx-pin:
+    type: int
+    required: true
+    description: Vendor GPIO pin value used for UART TX.
+
+  rx-pin:
+    type: int
+    description: Vendor GPIO pin value used for UART RX.
