@@ -1,0 +1,442 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include <errno.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/storage/flash_map.h>
+
+#define CONFIG_ZIGBEE_NV_SECTOR_COUNT 2
+
+#define MAX_FAKE_ENTRIES 64
+#define MAX_FAKE_VALUE_LEN 256
+
+struct fake_device {
+	int unused;
+};
+
+struct fake_nvs_entry {
+bool used;
+uint16_t id;
+size_t len;
+uint8_t data[MAX_FAKE_VALUE_LEN];
+};
+
+static struct fake_nvs_entry fake_entries[MAX_FAKE_ENTRIES];
+static struct fake_device fake_device;
+static struct flash_area fake_area = {
+.fa_id = 1,
+.fa_off = 0,
+.fa_size = 0x10000,
+.fa_dev = (const struct device *)&fake_device,
+};
+static struct flash_parameters fake_flash_parameters = {
+.erase_value = 0xff,
+};
+volatile uint32_t zb_nwk_ed_trace[16];
+
+#include "../../../subsys/zigbee/platform/zephyr/drv_nv_zephyr.c"
+
+static struct fake_nvs_entry *find_entry(uint16_t id)
+{
+for (size_t i = 0; i < ARRAY_SIZE(fake_entries); i++) {
+if (fake_entries[i].used && fake_entries[i].id == id) {
+return &fake_entries[i];
+}
+}
+
+return NULL;
+}
+
+static struct fake_nvs_entry *find_or_alloc_entry(uint16_t id)
+{
+struct fake_nvs_entry *entry = find_entry(id);
+
+if (entry != NULL) {
+return entry;
+}
+
+for (size_t i = 0; i < ARRAY_SIZE(fake_entries); i++) {
+if (!fake_entries[i].used) {
+fake_entries[i].used = true;
+fake_entries[i].id = id;
+return &fake_entries[i];
+}
+}
+
+return NULL;
+}
+
+int flash_area_open(uint8_t id, const struct flash_area **fa)
+{
+ARG_UNUSED(id);
+*fa = &fake_area;
+return 0;
+}
+
+void flash_area_close(const struct flash_area *fa)
+{
+ARG_UNUSED(fa);
+}
+
+const struct device *flash_area_get_device(const struct flash_area *fa)
+{
+return fa->fa_dev;
+}
+
+const struct device *test_fixed_partition_device(void)
+{
+	return fake_area.fa_dev;
+}
+
+off_t test_fixed_partition_offset(void)
+{
+	return fake_area.fa_off;
+}
+
+size_t test_fixed_partition_size(void)
+{
+	return fake_area.fa_size;
+}
+
+bool device_is_ready(const struct device *dev)
+{
+	return dev == fake_area.fa_dev;
+}
+
+int flash_get_page_info_by_offs(const struct device *dev, off_t offs,
+			       struct flash_pages_info *info)
+{
+	ARG_UNUSED(offs);
+	if (dev != fake_area.fa_dev) {
+		return -ENODEV;
+	}
+
+	info->start_offset = 0;
+	info->size = 0x1000;
+	info->index = 0;
+	return 0;
+}
+
+const struct flash_parameters *flash_get_parameters(const struct device *dev)
+{
+	if (dev != fake_area.fa_dev) {
+		return NULL;
+	}
+
+	return &fake_flash_parameters;
+}
+
+int flash_read(const struct device *dev, off_t offs, void *dst, size_t len)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(offs);
+	memset(dst, 0xff, len);
+	return 0;
+}
+
+int flash_write(const struct device *dev, off_t offs, const void *src, size_t len)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(offs);
+	ARG_UNUSED(src);
+	return (int)len;
+}
+
+uint8_t crc8_ccitt(uint8_t seed, const void *src, size_t len)
+{
+	ARG_UNUSED(seed);
+	ARG_UNUSED(src);
+	ARG_UNUSED(len);
+	return 0;
+}
+
+int nvs_mount(struct nvs_fs *fs)
+{
+ARG_UNUSED(fs);
+return 0;
+}
+
+int nvs_clear(struct nvs_fs *fs)
+{
+ARG_UNUSED(fs);
+memset(fake_entries, 0, sizeof(fake_entries));
+return 0;
+}
+
+ssize_t nvs_write(struct nvs_fs *fs, uint16_t id, const void *data, size_t len)
+{
+ARG_UNUSED(fs);
+if (len > MAX_FAKE_VALUE_LEN) {
+return -ENOMEM;
+}
+
+struct fake_nvs_entry *entry = find_or_alloc_entry(id);
+if (entry == NULL) {
+return -ENOMEM;
+}
+
+entry->len = len;
+if (len > 0) {
+memcpy(entry->data, data, len);
+}
+
+return (ssize_t)len;
+}
+
+int nvs_delete(struct nvs_fs *fs, uint16_t id)
+{
+ARG_UNUSED(fs);
+struct fake_nvs_entry *entry = find_entry(id);
+
+if (entry == NULL) {
+return -ENOENT;
+}
+
+memset(entry, 0, sizeof(*entry));
+return 0;
+}
+
+ssize_t nvs_read(struct nvs_fs *fs, uint16_t id, void *data, size_t len)
+{
+ARG_UNUSED(fs);
+struct fake_nvs_entry *entry = find_entry(id);
+
+if (entry == NULL) {
+return -ENOENT;
+}
+
+if (data == NULL && len == 0U) {
+return (ssize_t)entry->len;
+}
+
+size_t copied_len = MIN(len, entry->len);
+if (copied_len > 0U) {
+memcpy(data, entry->data, copied_len);
+}
+
+return (ssize_t)copied_len;
+}
+
+static void setup_test(void)
+{
+memset(fake_entries, 0, sizeof(fake_entries));
+zb_nvs_ready = true;
+}
+
+#define EXPECT_TRUE(cond) do { \
+if (!(cond)) { \
+fprintf(stderr, "FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+return false; \
+} \
+} while (0)
+
+#define EXPECT_EQ(actual, expected) EXPECT_TRUE((actual) == (expected))
+
+static bool test_module_reset_isolated(void)
+{
+uint8_t ota_data[4] = { 1, 2, 3, 4 };
+uint8_t aps_data[4] = { 5, 6, 7, 8 };
+uint8_t readback[4] = { 0 };
+
+setup_test();
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE,
+ sizeof(ota_data), ota_data), NV_SUCC);
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB,
+ sizeof(aps_data), aps_data), NV_SUCC);
+
+EXPECT_EQ(nv_resetModule(NV_MODULE_OTA), NV_SUCC);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE,
+sizeof(readback), readback), NV_ITEM_NOT_FOUND);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB,
+sizeof(readback), readback), NV_SUCC);
+EXPECT_TRUE(memcmp(readback, aps_data, sizeof(readback)) == 0);
+
+return true;
+}
+
+static bool test_length_contract_rejects_short_registered_item(void)
+{
+uint8_t stored_data[8] = { 0 };
+uint8_t readback[16] = { 0 };
+
+setup_test();
+nv_itemLengthCheckAdd(NV_ITEM_ZCL_SCENE_TABLE, sizeof(readback));
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+ sizeof(stored_data), stored_data), NV_SUCC);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+sizeof(stored_data), readback), NV_DATA_CHECK_ERROR);
+
+return true;
+}
+
+static bool test_length_contract_rejects_short_requested_item(void)
+{
+uint8_t stored_data[8] = { 0 };
+uint8_t readback[16] = { 0 };
+
+setup_test();
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_ON_OFF,
+ sizeof(stored_data), stored_data), NV_SUCC);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_ON_OFF,
+sizeof(readback), readback), NV_DATA_CHECK_ERROR);
+
+return true;
+}
+
+static bool test_length_contract_rejects_registered_len_larger_than_request(void)
+{
+	uint8_t stored_data[16] = {
+		0, 1, 2, 3, 4, 5, 6, 7,
+		8, 9, 10, 11, 12, 13, 14, 15
+	};
+	uint8_t readback[16];
+	uint8_t untouched[sizeof(readback)];
+
+	setup_test();
+	memset(readback, 0xA5, sizeof(readback));
+	memset(untouched, 0xA5, sizeof(untouched));
+	nv_itemLengthCheckAdd(NV_ITEM_ZCL_SCENE_TABLE, sizeof(stored_data));
+	EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+				   sizeof(stored_data), stored_data), NV_SUCC);
+	EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE,
+				  8, readback), NV_DATA_CHECK_ERROR);
+	EXPECT_TRUE(memcmp(readback, untouched, sizeof(readback)) == 0);
+
+	return true;
+}
+
+static bool test_read_by_index_does_not_alias_other_item(void)
+{
+uint8_t value[4] = { 9, 9, 9, 9 };
+uint8_t readback[4] = { 0 };
+
+setup_test();
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+ sizeof(value), value), NV_SUCC);
+EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE,
+ 0, 1, sizeof(readback), readback), NV_ITEM_NOT_FOUND);
+
+return true;
+}
+
+static bool test_delete_by_index_does_not_alias_other_item(void)
+{
+uint8_t value[4] = { 1, 3, 5, 7 };
+uint8_t readback[4] = { 0 };
+
+setup_test();
+EXPECT_EQ(nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+ sizeof(value), value), NV_SUCC);
+EXPECT_EQ(nv_itemDeleteByIndex(NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE,
+ 0, 1), NV_ITEM_NOT_FOUND);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+sizeof(readback), readback), NV_SUCC);
+EXPECT_TRUE(memcmp(readback, value, sizeof(readback)) == 0);
+
+return true;
+}
+
+static bool test_read_delete_by_index_zero_behaves_like_item(void)
+{
+uint8_t value[4] = { 10, 11, 12, 13 };
+uint8_t readback[4] = { 0 };
+
+setup_test();
+EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+ sizeof(value), value), NV_SUCC);
+EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+ 0, 0, sizeof(readback), readback), NV_SUCC);
+EXPECT_TRUE(memcmp(readback, value, sizeof(readback)) == 0);
+EXPECT_EQ(nv_itemDeleteByIndex(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+ 0, 0), NV_SUCC);
+EXPECT_EQ(nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE,
+sizeof(readback), readback), NV_ITEM_NOT_FOUND);
+
+return true;
+}
+
+static bool test_indexed_records_keep_item_and_index_identity(void)
+{
+	uint8_t binding[] = { 0x10, 0x11, 0x12 };
+	uint8_t group[] = { 0x20, 0x21 };
+	uint8_t timeout[] = { 0x30, 0x31, 0x32, 0x33 };
+	uint8_t readback[sizeof(timeout)] = { 0 };
+	itemIfno_t info = { 0, 0 };
+
+	setup_test();
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_ED_TIMEOUT, sizeof(binding), binding), NV_SUCC);
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_APS_GROUP_TABLE, sizeof(group), group), NV_SUCC);
+	EXPECT_EQ(nv_flashWriteNew(0, NV_MODULE_ZB_INFO,
+				   NV_ITEM_ED_TIMEOUT, sizeof(timeout), timeout), NV_SUCC);
+
+	/* ITEM_FIELD_IDLE is the vendor enumeration operation: return the
+	 * latest physical indexed record, while preserving its item id/index. */
+	EXPECT_EQ(nv_flashReadNew(0, NV_MODULE_ZB_INFO, ITEM_FIELD_IDLE,
+				  sizeof(info), (uint8_t *)&info), NV_SUCC);
+	EXPECT_EQ(info.opSect, 0);
+	EXPECT_EQ(info.opIndex, 2);
+
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+				      info.opSect, info.opIndex,
+				      sizeof(readback), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, timeout, sizeof(timeout)) == 0);
+
+	memset(readback, 0, sizeof(readback));
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO,
+				      NV_ITEM_APS_GROUP_TABLE, 0, 1,
+				      sizeof(group), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, group, sizeof(group)) == 0);
+
+	EXPECT_EQ(nv_itemDeleteByIndex(NV_MODULE_ZB_INFO, NV_ITEM_APS_GROUP_TABLE,
+				       0, 1), NV_SUCC);
+	memset(readback, 0, sizeof(readback));
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+				      0, 2, sizeof(timeout), readback), NV_SUCC);
+	EXPECT_TRUE(memcmp(readback, timeout, sizeof(timeout)) == 0);
+	EXPECT_EQ(nv_flashReadByIndex(NV_MODULE_ZB_INFO,
+				      NV_ITEM_APS_GROUP_TABLE, 0, 1,
+				      sizeof(group), readback), NV_ITEM_NOT_FOUND);
+
+	return true;
+}
+
+int main(void)
+{
+struct {
+const char *name;
+bool (*fn)(void);
+} tests[] = {
+{ "module_reset_isolated", test_module_reset_isolated },
+{ "length_contract_registered", test_length_contract_rejects_short_registered_item },
+{ "length_contract_requested", test_length_contract_rejects_short_requested_item },
+{ "length_contract_registered_gt_requested",
+  test_length_contract_rejects_registered_len_larger_than_request },
+{ "read_by_index_no_alias", test_read_by_index_does_not_alias_other_item },
+{ "delete_by_index_no_alias", test_delete_by_index_does_not_alias_other_item },
+{ "index_zero_behavior", test_read_delete_by_index_zero_behaves_like_item },
+{ "indexed_record_identity", test_indexed_records_keep_item_and_index_identity },
+};
+
+int failed = 0;
+
+for (size_t i = 0; i < ARRAY_SIZE(tests); i++) {
+if (!tests[i].fn()) {
+failed++;
+fprintf(stderr, "Test failed: %s\n", tests[i].name);
+}
+}
+
+if (failed > 0) {
+fprintf(stderr, "%d test(s) failed\n", failed);
+return EXIT_FAILURE;
+}
+
+printf("All %zu tests passed\n", ARRAY_SIZE(tests));
+return EXIT_SUCCESS;
+}
