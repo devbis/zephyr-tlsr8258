@@ -172,11 +172,19 @@ void tl_zbNwkInit(u8 coldReset)
 #endif
 }
 
-u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu)
+u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, const u8 *msdu, u8 msduLen)
 {
     u16 fc;
 
+    if (pNwkHdr == NULL) {
+        return 0U;
+    }
+
     memset(pNwkHdr, 0, sizeof(*pNwkHdr));
+    if (msdu == NULL || msduLen < 8U) {
+        return 0U;
+    }
+
     fc = (u16)msdu[0] | ((u16)msdu[1] << 8);
     pNwkHdr->frameControl.frameType = (u8)(fc & 0x03U);
     pNwkHdr->frameControl.protocolVer = (u8)((fc >> 2) & 0x0fU);
@@ -194,10 +202,20 @@ u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu)
     pNwkHdr->frameHdrLen = 8;
 
     if (pNwkHdr->frameControl.dstIEEEAddr) {
+        if (msduLen < pNwkHdr->frameHdrLen ||
+            msduLen - pNwkHdr->frameHdrLen < EXT_ADDR_LEN) {
+            return 0U;
+        }
+
         memcpy(pNwkHdr->dstIeeeAddr, msdu + pNwkHdr->frameHdrLen, EXT_ADDR_LEN);
         pNwkHdr->frameHdrLen += EXT_ADDR_LEN;
     }
     if (pNwkHdr->frameControl.srcIEEEAddr) {
+        if (msduLen < pNwkHdr->frameHdrLen ||
+            msduLen - pNwkHdr->frameHdrLen < EXT_ADDR_LEN) {
+            return 0U;
+        }
+
         memcpy(pNwkHdr->srcIeeeAddr, msdu + pNwkHdr->frameHdrLen, EXT_ADDR_LEN);
         pNwkHdr->frameHdrLen += EXT_ADDR_LEN;
     }

@@ -256,6 +256,10 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
     ind.dstAddrMode = pNwkHdr->frameControl.multicastFlg ? 2U : 1U;
     ind.dstAddr = pNwkHdr->dstAddr;
     ind.srcAddr = pNwkHdr->srcAddr;
+    if (macInd->msduLength <= pNwkHdr->frameHdrLen) {
+        zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
     ind.nsduLen = (u8)(macInd->msduLength - pNwkHdr->frameHdrLen);
     ind.nsdu = macInd->msdu + pNwkHdr->frameHdrLen;
     ind.lqi = macInd->mpduLinkQuality;
@@ -352,7 +356,8 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
     u8 status;
 
     memcpy(confirm, arg, sizeof(confirm));
-    nwkHdrParse(&nwkHdr, confirm + NWK_CONFIRM_NWK_HDR_OFFSET);
+    (void)nwkHdrParse(&nwkHdr, confirm + NWK_CONFIRM_NWK_HDR_OFFSET,
+                      NWK_CONFIRM_COPY_LEN - NWK_CONFIRM_NWK_HDR_OFFSET);
 
     status = conf->status;
 
@@ -594,7 +599,10 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
     }
 
     memset(&nwkHdr, 0, sizeof(nwkHdr));
-    nwkHdrParse(&nwkHdr, ind->msdu);
+    if (nwkHdrParse(&nwkHdr, ind->msdu, ind->msduLength) == 0U) {
+        zb_buf_free(buf);
+        return;
+    }
 
     if (ind->msduLength <= nwkHdr.frameHdrLen) {
         zb_buf_free(buf);
@@ -694,6 +702,10 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 		zb_nwk_ed_trace[37]++;
         nwkHdr.frameHdrLen = (u8)(nwkHdr.frameHdrLen + NWK_SEC_AUX_HDR_LEN);
         ind->msduLength = (u8)(ind->msduLength - 4U);
+        if (ind->msduLength <= nwkHdr.frameHdrLen) {
+            zb_buf_free(buf);
+            return;
+        }
         payloadTotalLen = ind->msduLength;
     } else {
         payloadTotalLen = ind->msduLength;

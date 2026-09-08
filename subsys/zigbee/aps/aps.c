@@ -93,17 +93,25 @@ aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, u8 size)
     return APS_STATUS_SUCCESS;
 }
 
-u8 aps_hdr_parse(u8 *data, aps_hdr_parsed_t *parsed)
+u8 aps_hdr_parse(const u8 *data, size_t dataLen, aps_hdr_parsed_t *parsed)
 {
+    if (data == NULL || parsed == NULL || dataLen == 0U) {
+        return 0U;
+    }
+
     u8 frame_control = data[0];
     u8 delivery_mode = frame_control & 0x03U;
     u8 frame_type = frame_control & 0x0cU;
-    u8 *cursor = data + 1;
+    const u8 *cursor = data + 1;
 
     memset(parsed, 0, sizeof(*parsed));
     parsed->frame_control = frame_control;
 
     if (delivery_mode == 3U) {
+        if (dataLen < 5U) {
+            return 0U;
+        }
+
         u16 value = aps_u16_get(data + 1);
         parsed->field8 = (u8)value;
         parsed->field9 = (u8)(value >> 8);
@@ -117,12 +125,20 @@ u8 aps_hdr_parse(u8 *data, aps_hdr_parsed_t *parsed)
     }
 
     if ((frame_control & 0x80U) != 0U || delivery_mode == 1U) {
+        if (dataLen < 2U) {
+            return 0U;
+        }
+
         parsed->dst_endpoint = data[1];
         cursor = data + 2;
         return (u8)(cursor - data);
     }
 
     if (frame_type != 0U && frame_type != 0x08U) {
+        if (dataLen < 9U) {
+            return 0U;
+        }
+
         u16 value = aps_u16_get(data + 1);
         parsed->field6 = (u8)value;
         parsed->field7 = (u8)(value >> 8);
@@ -141,6 +157,10 @@ u8 aps_hdr_parse(u8 *data, aps_hdr_parsed_t *parsed)
     } else {
         u16 value;
 
+        if (dataLen < 8U) {
+            return 0U;
+        }
+
         parsed->field6 = data[1];
 
         value = aps_u16_get(data + 2);
@@ -157,13 +177,25 @@ u8 aps_hdr_parse(u8 *data, aps_hdr_parsed_t *parsed)
     }
 
     if ((frame_control & 0x80U) != 0U) {
+        if ((size_t)(cursor - data) >= dataLen) {
+            return 0U;
+        }
+
         parsed->aps_counter = *cursor++;
 
         if (parsed->aps_counter != 0U) {
+            if ((size_t)(cursor - data) >= dataLen) {
+                return 0U;
+            }
+
             parsed->ext_header = *cursor++;
         }
 
         if (delivery_mode == 2U) {
+            if ((size_t)(cursor - data) >= dataLen) {
+                return 0U;
+            }
+
             parsed->block_number = *cursor++;
         }
     }
