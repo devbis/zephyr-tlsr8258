@@ -16,7 +16,3 @@ endif()
 zephyr_library_sources(
   posix_core_nsi.c
 )
-
-if(CMAKE_HOST_APPLE)
-  zephyr_library_sources(macho_iterable_ranges.c)
-endif()

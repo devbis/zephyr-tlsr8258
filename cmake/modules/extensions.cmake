@@ -6470,6 +6470,99 @@ function(zephyr_iterable_section)
     SYMBOLS _${SECTION_NAME}_list_start _${SECTION_NAME}_list_end
     KEEP SORT NAME
   )
+
+  set_property(GLOBAL APPEND PROPERTY ZEPHYR_ITERABLE_SECTION_NAMES ${SECTION_NAME})
+endfunction()
+
+function(zephyr_generate_macho_iterable_sections)
+  if(NOT CMAKE_HOST_APPLE)
+    return()
+  endif()
+
+  set(single_args "TARGET;LINKER_SCRIPT")
+  cmake_parse_arguments(MACHO "" "${single_args}" "" ${ARGN})
+
+  if(NOT DEFINED MACHO_TARGET)
+    message(FATAL_ERROR "zephyr_generate_macho_iterable_sections() requires TARGET")
+  endif()
+
+  set(output_dir ${CMAKE_CURRENT_BINARY_DIR}/macho_iterable)
+  set(header_dir ${CMAKE_CURRENT_BINARY_DIR}/include/generated/zephyr)
+  set(input_file ${output_dir}/sections.txt)
+  set(header_file ${header_dir}/macho_iter_sections.h)
+  set(alias_file ${output_dir}/macho_iter_sections.c)
+  set(linker_file ${output_dir}/macho_iter_sections.ld)
+  set(alias_input_file ${output_dir}/aliases.txt)
+
+  file(MAKE_DIRECTORY ${output_dir} ${header_dir})
+
+  if(DEFINED MACHO_LINKER_SCRIPT)
+    file(READ ${MACHO_LINKER_SCRIPT} linker_script)
+    string(REGEX MATCHALL "_[A-Za-z0-9_]+_list_start[ \\t]*=" names "${linker_script}")
+    set(section_names)
+    foreach(name ${names})
+      string(REGEX REPLACE "^[ \\t]*_" "" name "${name}")
+      string(REGEX REPLACE "_list_start[ \\t]*=$" "" name "${name}")
+      list(APPEND section_names ${name})
+    endforeach()
+    set(alias_names ${section_names})
+  else()
+    get_property(section_names GLOBAL PROPERTY ZEPHYR_ITERABLE_SECTION_NAMES)
+    if(NOT section_names)
+      foreach(source_dir include kernel drivers subsys cmake/linker_script)
+        list(APPEND generator_args --source-dir ${ZEPHYR_BASE}/${source_dir})
+      endforeach()
+    endif()
+    # These boundaries are consumed by the native simulator runtime. Aliasing
+    # every inventory entry would reference absent Mach-O sections.
+    set(alias_names
+      _static_thread_data
+      eth_bridge
+      k_kernel_init_post_entry
+      k_kernel_init_pre_entry
+      k_mem_slab
+      net_buf_pool
+      net_if
+      net_if_dev
+      net_l2
+      net_pkt_alloc_stats_slab
+    )
+  endif()
+
+  list(REMOVE_DUPLICATES section_names)
+  list(APPEND section_names ${alias_names})
+  list(REMOVE_DUPLICATES section_names)
+  list(SORT section_names)
+  file(WRITE ${input_file} "")
+  foreach(name ${section_names})
+    file(APPEND ${input_file} "${name}\n")
+  endforeach()
+  file(WRITE ${alias_input_file} "")
+  foreach(name ${alias_names})
+    file(APPEND ${alias_input_file} "${name}\n")
+  endforeach()
+
+  execute_process(
+    COMMAND ${PYTHON_EXECUTABLE}
+            ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
+            --input ${input_file}
+            --alias-input ${alias_input_file}
+            ${generator_args}
+            --header ${header_file}
+            --aliases ${alias_file}
+            --linker ${linker_file}
+    RESULT_VARIABLE result
+  )
+  if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Failed to generate Mach-O iterable section metadata")
+  endif()
+
+  if(TARGET zephyr_interface)
+    zephyr_include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/generated)
+  else()
+    target_include_directories(${MACHO_TARGET} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include/generated)
+  endif()
+  target_sources(${MACHO_TARGET} PRIVATE ${alias_file})
 endfunction()
 
 #[=======================================================================[.rst:
