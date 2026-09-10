@@ -10,6 +10,8 @@ import hashlib
 import re
 from pathlib import Path
 
+from iter_sections import parse_tagged_items
+
 
 MAX_SECTION_NAME_LENGTH = 16
 
@@ -136,6 +138,8 @@ def parse_linker_script_names(paths):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path)
+    parser.add_argument("--struct-tags", type=Path)
+    parser.add_argument("--tag", default="__subsystem")
     parser.add_argument("--source", action="append", type=Path, default=[])
     parser.add_argument("--source-dir", action="append", type=Path, default=[])
     parser.add_argument("--linker-script", action="append", type=Path, default=[])
@@ -155,6 +159,8 @@ def main():
             for line in args.input.read_text(encoding="utf-8").splitlines()
             if line.strip()
         )
+    if args.struct_tags is not None:
+        names.extend(parse_tagged_items(args.struct_tags, args.tag)[0])
     names.extend(parse_source_names(args.source))
     source_files = [
         path
