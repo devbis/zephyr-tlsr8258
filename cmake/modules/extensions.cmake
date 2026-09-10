@@ -6479,7 +6479,7 @@ function(zephyr_generate_macho_iterable_sections)
     return()
   endif()
 
-  set(single_args "TARGET;LINKER_SCRIPT")
+  set(single_args "TARGET;LINKER_SCRIPT;STRUCT_TAGS")
   cmake_parse_arguments(MACHO "" "${single_args}" "" ${ARGN})
 
   if(NOT DEFINED MACHO_TARGET)
@@ -6542,19 +6542,53 @@ function(zephyr_generate_macho_iterable_sections)
     file(APPEND ${alias_input_file} "${name}\n")
   endforeach()
 
-  execute_process(
-    COMMAND ${PYTHON_EXECUTABLE}
-            ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
-            --input ${input_file}
-            --alias-input ${alias_input_file}
-            ${generator_args}
-            --header ${header_file}
-            --aliases ${alias_file}
-            --linker ${linker_file}
-    RESULT_VARIABLE result
-  )
-  if(NOT result EQUAL 0)
-    message(FATAL_ERROR "Failed to generate Mach-O iterable section metadata")
+  if(DEFINED MACHO_STRUCT_TAGS)
+    list(APPEND generator_args --struct-tags ${MACHO_STRUCT_TAGS})
+    string(MAKE_C_IDENTIFIER "${MACHO_TARGET}" macho_target_id)
+    set(macho_generation_target macho_iterable_sections_${macho_target_id})
+    add_custom_command(
+      OUTPUT ${header_file} ${alias_file} ${linker_file}
+      COMMAND ${PYTHON_EXECUTABLE}
+              ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
+              --input ${input_file}
+              --alias-input ${alias_input_file}
+              ${generator_args}
+              --header ${header_file}
+              --aliases ${alias_file}
+              --linker ${linker_file}
+      DEPENDS
+        ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
+        ${ZEPHYR_BASE}/scripts/build/iter_sections.py
+        ${input_file}
+        ${alias_input_file}
+        ${MACHO_STRUCT_TAGS}
+      VERBATIM
+    )
+    add_custom_target(${macho_generation_target}
+      DEPENDS ${header_file} ${alias_file} ${linker_file}
+    )
+    if(DEFINED DEVICE_API_LD_TARGET AND TARGET ${DEVICE_API_LD_TARGET})
+      add_dependencies(${macho_generation_target} ${DEVICE_API_LD_TARGET})
+    endif()
+    add_dependencies(${MACHO_TARGET} ${macho_generation_target})
+    if(TARGET zephyr_interface)
+      add_dependencies(zephyr_interface ${macho_generation_target})
+    endif()
+  else()
+    execute_process(
+      COMMAND ${PYTHON_EXECUTABLE}
+              ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
+              --input ${input_file}
+              --alias-input ${alias_input_file}
+              ${generator_args}
+              --header ${header_file}
+              --aliases ${alias_file}
+              --linker ${linker_file}
+      RESULT_VARIABLE result
+    )
+    if(NOT result EQUAL 0)
+      message(FATAL_ERROR "Failed to generate Mach-O iterable section metadata")
+    endif()
   endif()
 
   if(TARGET zephyr_interface)
