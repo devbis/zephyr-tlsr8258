@@ -104,9 +104,22 @@
 #define FUNC_ALIAS(real_func, new_alias, return_type) \
 	return_type new_alias(); \
 	__asm__(".globl _" #new_alias "\n_" #new_alias " = _" #real_func)
+#define Z_ALIAS_IMPL(return_type, name, args) \
+	return_type __noinline name args
+#define Z_ALIAS_IMPL_INLINE(return_type, name, args) \
+	return_type __noinline name args
+#define Z_ALIAS_DECL(real_func, new_alias, return_type, args) \
+	return_type new_alias args; \
+	__asm__(".globl _" #new_alias "\n_" #new_alias " = _" #real_func)
 #else
 #define FUNC_ALIAS(real_func, new_alias, return_type) \
 	return_type new_alias() ALIAS_OF(real_func)
+#define Z_ALIAS_IMPL(return_type, name, args) \
+	static return_type name args
+#define Z_ALIAS_IMPL_INLINE(return_type, name, args) \
+	static inline return_type name args
+#define Z_ALIAS_DECL(real_func, new_alias, return_type, args) \
+	return_type new_alias args ALIAS_OF(real_func)
 #endif
 
 #if TOOLCHAIN_GCC_VERSION < 40500

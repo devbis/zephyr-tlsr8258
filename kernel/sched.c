@@ -215,7 +215,7 @@ static struct _cpu *thread_active_elsewhere(struct k_thread *thread)
 	return NULL;
 }
 
-static inline void ready_thread(struct k_thread *thread)
+Z_ALIAS_IMPL_INLINE(void, ready_thread, (struct k_thread *thread))
 {
 #ifdef CONFIG_KERNEL_COHERENCE
 	__ASSERT_NO_MSG(sys_cache_is_mem_coherent(thread));
@@ -243,16 +243,10 @@ void z_ready_thread(struct k_thread *thread)
 	}
 }
 
-#if defined(__APPLE__)
-void z_sched_ready_locked(struct k_thread *thread)
-{
-	ready_thread(thread);
-}
-#else
-void z_sched_ready_locked(struct k_thread *thread) ALIAS_OF(ready_thread);
-#endif
+Z_ALIAS_DECL(ready_thread, z_sched_ready_locked, void,
+		(struct k_thread *thread));
 
-static void unready_thread(struct k_thread *thread)
+Z_ALIAS_IMPL(void, unready_thread, (struct k_thread *thread))
 {
 	if (z_is_thread_queued(thread)) {
 		/* Clear idle CPU coverage before removing the thread from the run queue. */
@@ -273,14 +267,8 @@ void z_unready_thread(struct k_thread *thread)
 }
 
 
-#if defined(__APPLE__)
-void z_sched_unready_locked(struct k_thread *thread)
-{
-	unready_thread(thread);
-}
-#else
-void z_sched_unready_locked(struct k_thread *thread) ALIAS_OF(unready_thread);
-#endif
+Z_ALIAS_DECL(unready_thread, z_sched_unready_locked, void,
+		(struct k_thread *thread));
 
 /* This routine only used for testing purposes */
 void z_yield_testing_only(void)
@@ -414,7 +402,8 @@ static inline bool need_swap(void)
 #endif /* CONFIG_SMP */
 }
 
-static void reschedule(struct k_spinlock *lock, k_spinlock_key_t key)
+Z_ALIAS_IMPL(void, reschedule,
+		(struct k_spinlock *lock, k_spinlock_key_t key))
 {
 	if (resched(key.key) && need_swap()) {
 		z_swap(lock, key);
@@ -427,7 +416,7 @@ static void reschedule(struct k_spinlock *lock, k_spinlock_key_t key)
 /**
  * Like reschedule(), but the scheduler's spinlock is known to be the lock.
  */
-static void reschedule_locked(k_spinlock_key_t key)
+Z_ALIAS_IMPL(void, reschedule_locked, (k_spinlock_key_t key))
 {
 	return reschedule(&_sched_spinlock, key);
 }
@@ -448,7 +437,8 @@ void z_sched_yield(void)
 }
 
 /* The scheduler's spinlock must be held */
-static void add_to_waitq_locked(struct k_thread *thread, _wait_q_t *wait_q)
+Z_ALIAS_IMPL(void, add_to_waitq_locked,
+		(struct k_thread *thread, _wait_q_t *wait_q))
 {
 	/* A thread must not already be on a wait queue when added to a new one. */
 	__ASSERT_NO_MSG(thread->base.pended_on == NULL);
@@ -464,15 +454,8 @@ static void add_to_waitq_locked(struct k_thread *thread, _wait_q_t *wait_q)
 	}
 }
 
-#if defined(__APPLE__)
-void z_sched_add_to_waitq_locked(struct k_thread *thread, _wait_q_t *wait_q)
-{
-	add_to_waitq_locked(thread, wait_q);
-}
-#else
-void z_sched_add_to_waitq_locked(struct k_thread *thread, _wait_q_t *wait_q)
-	ALIAS_OF(add_to_waitq_locked);
-#endif
+Z_ALIAS_DECL(add_to_waitq_locked, z_sched_add_to_waitq_locked, void,
+		(struct k_thread *thread, _wait_q_t *wait_q));
 
 static void pend_locked(struct k_thread *thread, _wait_q_t *wait_q,
 			k_timeout_t timeout)
@@ -661,21 +644,11 @@ bool z_thread_prio_set(struct k_thread *thread, int prio)
 	return need_sched;
 }
 
-#if defined(__APPLE__)
-void z_reschedule(struct k_spinlock *lock, k_spinlock_key_t key)
-{
-	reschedule(lock, key);
-}
+Z_ALIAS_DECL(reschedule, z_reschedule, void,
+		(struct k_spinlock *lock, k_spinlock_key_t key));
 
-void z_reschedule_locked(k_spinlock_key_t key)
-{
-	reschedule_locked(key);
-}
-#else
-void z_reschedule(struct k_spinlock *lock, k_spinlock_key_t key) ALIAS_OF(reschedule);
-
-void z_reschedule_locked(k_spinlock_key_t key) ALIAS_OF(reschedule_locked);
-#endif
+Z_ALIAS_DECL(reschedule_locked, z_reschedule_locked, void,
+		(k_spinlock_key_t key));
 
 void z_reschedule_irqlock(uint32_t key)
 {

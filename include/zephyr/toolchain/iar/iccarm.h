@@ -95,6 +95,13 @@
 #define FUNC_ALIAS(real_func, new_alias, return_type) \
 	return_type new_alias() ALIAS_OF(real_func)
 
+#define Z_ALIAS_IMPL(return_type, name, args) \
+	static return_type name args
+#define Z_ALIAS_IMPL_INLINE(return_type, name, args) \
+	static inline return_type name args
+#define Z_ALIAS_DECL(real_func, new_alias, return_type, args) \
+	return_type new_alias args ALIAS_OF(real_func)
+
 #define CODE_UNREACHABLE __builtin_unreachable()
 #define FUNC_NORETURN    __attribute__((__noreturn__))
 
