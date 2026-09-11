@@ -25,7 +25,6 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <net/if.h>
-#include <time.h>
 #include <inttypes.h>
 #include <nsi_tracing.h>
 
@@ -120,25 +119,6 @@ int eth_wait_data(int fd)
 	return -EAGAIN;
 }
 
-int eth_clock_gettime(uint64_t *second, uint32_t *nanosecond)
-{
-	struct timespec tp;
-	int ret;
-
-#ifdef __APPLE__
-	ret = clock_gettime(CLOCK_MONOTONIC, &tp);
-#else
-	ret = clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
-#endif
-	if (ret < 0) {
-		return -errno;
-	}
-
-	*second = (uint64_t)tp.tv_sec;
-	*nanosecond = (uint32_t)tp.tv_nsec;
-
-	return 0;
-}
 int eth_promisc_mode(const char *if_name, bool enable)
 {
 	return ssystem("ip link set dev %s promisc %s",
