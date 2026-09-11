@@ -251,6 +251,7 @@
 /* Check if a pointer is aligned enough for a particular data type. */
 #define IS_PTR_ALIGNED(ptr, type) IS_PTR_ALIGNED_BYTES(ptr, __alignof(type))
 
+/* Mach-O section names include the segment; ELF names use a leading dot. */
 /** @brief Tag a symbol (e.g. function) to be kept in the binary even though it is not used.
  *
  * It prevents symbol from being removed by the linker garbage collector. It
@@ -258,8 +259,14 @@
  *
  * @param symbol Symbol to keep.
  */
+#if defined(__APPLE__)
+#define LINKER_KEEP(symbol) \
+	static const void * const symbol##_ptr  __used \
+	__attribute__((__section__("__DATA,symbol_to_keep"))) = (void *)&symbol
+#else
 #define LINKER_KEEP(symbol) \
 	static const void * const symbol##_ptr  __used \
 	__attribute__((__section__(".symbol_to_keep"))) = (void *)&symbol
+#endif
 
 #endif /* ZEPHYR_INCLUDE_TOOLCHAIN_COMMON_H_ */
