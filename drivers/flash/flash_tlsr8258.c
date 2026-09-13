@@ -31,7 +31,6 @@
 #define TLSR8258_REG_MSPI_CTRL TLSR8258_REG8(0x0080000du)
 #define TLSR8258_REG_MSPI_MODE TLSR8258_REG8(0x0080000fu)
 #define TLSR8258_REG_TMR_CTRL  (*(volatile uint32_t *)0x00800620u)
-#define TLSR8258_REG_SYSTEM_TICK (*(volatile uint32_t *)0x00800740u)
 #define TLSR8258_REG_ANA_ADDR TLSR8258_REG8(0x008000b8u)
 #define TLSR8258_REG_ANA_DATA TLSR8258_REG8(0x008000b9u)
 #define TLSR8258_REG_ANA_CTRL TLSR8258_REG8(0x008000bau)
@@ -46,6 +45,7 @@
 #define TLSR8258_FLD_ANA_CYC0 BIT(6)
 #define TLSR8258_FLD_CLR_WD    BIT(27)
 #define TLSR8258_SYS_TICKS_PER_US 16u
+#define TLSR8258_MSPI_WAIT_MAX_SPINS 1000000u
 
 #define TLSR8258_AREG_FLASH_VOLTAGE 0x0cu
 
@@ -100,13 +100,16 @@ static ALWAYS_INLINE void tlsr8258_flash_debug_update(uint32_t phase)
 	tlsr8258_flash_debug_trace.irq_en = *TLSR8258_REG_IRQ_EN;
 }
 
-static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
+static ALWAYS_INLINE int tlsr8258_mspi_wait(void)
 {
 	uint32_t spins = 0u;
 
 	tlsr8258_flash_debug_update(0xF0010001u);
 	while ((TLSR8258_REG_MSPI_CTRL & TLSR8258_FLD_MSPI_BUSY) != 0u) {
 		spins++;
+		if (spins >= TLSR8258_MSPI_WAIT_MAX_SPINS) {
+			return -ETIMEDOUT;
+		}
 		if ((spins & 0xffffu) == 0u) {
 			tlsr8258_flash_debug_trace.wait_spins = spins;
 			tlsr8258_flash_debug_update(0xF0010002u);
@@ -114,6 +117,7 @@ static ALWAYS_INLINE void tlsr8258_mspi_wait(void)
 	}
 	tlsr8258_flash_debug_trace.wait_spins = spins;
 	tlsr8258_flash_debug_update(0xF0010003u);
+	return 0;
 }
 
 static ALWAYS_INLINE void tlsr8258_mspi_high(void)
@@ -155,49 +159,55 @@ static ALWAYS_INLINE void tlsr8258_flash_irq_restore(uint8_t key)
 	*TLSR8258_REG_IRQ_EN = key;
 }
 
-static ALWAYS_INLINE uint8_t tlsr8258_mspi_read(void)
-{
-	tlsr8258_mspi_write(0u);
-	tlsr8258_mspi_wait();
-	return tlsr8258_mspi_get();
-}
-
 static ALWAYS_INLINE void tlsr8258_watchdog_clear(void)
 {
 	TLSR8258_REG_TMR_CTRL |= TLSR8258_FLD_CLR_WD;
 }
 
-static ALWAYS_INLINE void tlsr8258_analog_wait(void)
+static ALWAYS_INLINE int tlsr8258_analog_wait(void)
 {
+	uint32_t spins = 0u;
+
 	while ((TLSR8258_REG_ANA_CTRL & TLSR8258_FLD_ANA_BUSY) != 0u) {
+		spins++;
+		if (spins >= TLSR8258_MSPI_WAIT_MAX_SPINS) {
+			return -ETIMEDOUT;
+		}
 	}
+
+	return 0;
 }
 
-static uint8_t tlsr8258_analog_read(uint8_t addr)
+static int tlsr8258_analog_read(uint8_t addr, uint8_t *value)
 {
 	unsigned int key = arch_irq_lock();
-	uint8_t value;
+	int ret;
 
 	TLSR8258_REG_ANA_ADDR = addr;
 	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0;
-	tlsr8258_analog_wait();
-	value = TLSR8258_REG_ANA_DATA;
+	ret = tlsr8258_analog_wait();
+	if (ret == 0) {
+		*value = TLSR8258_REG_ANA_DATA;
+	}
 	TLSR8258_REG_ANA_CTRL = 0u;
 	arch_irq_unlock(key);
 
-	return value;
+	return ret;
 }
 
-static void tlsr8258_analog_write(uint8_t addr, uint8_t value)
+static int tlsr8258_analog_write(uint8_t addr, uint8_t value)
 {
 	unsigned int key = arch_irq_lock();
+	int ret;
 
 	TLSR8258_REG_ANA_ADDR = addr;
 	TLSR8258_REG_ANA_DATA = value;
 	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0 | TLSR8258_FLD_ANA_RW;
-	tlsr8258_analog_wait();
+	ret = tlsr8258_analog_wait();
 	TLSR8258_REG_ANA_CTRL = 0u;
 	arch_irq_unlock(key);
+
+	return ret;
 }
 
 static bool tlsr8258_flash_vdd_calib_offset(size_t flash_size, uint32_t *offset)
@@ -223,7 +233,7 @@ static bool tlsr8258_flash_vdd_calib_offset(size_t flash_size, uint32_t *offset)
 	}
 }
 
-static void tlsr8258_flash_apply_vdd_calibration(const struct tlsr8258_flash_config *config)
+static int tlsr8258_flash_apply_vdd_calibration(const struct tlsr8258_flash_config *config)
 {
 	uint32_t calib_offset;
 	uint8_t calib_value;
@@ -235,29 +245,31 @@ static void tlsr8258_flash_apply_vdd_calibration(const struct tlsr8258_flash_con
 	 */
 	if (!tlsr8258_flash_vdd_calib_offset(config->size, &calib_offset) ||
 	    calib_offset >= config->size) {
-		return;
+		return 0;
 	}
 
 	calib_value = *(const volatile uint8_t *)(config->base + calib_offset);
 	if ((calib_value == 0xffu) || ((calib_value & 0xf8u) != 0u)) {
-		return;
+		return 0;
 	}
 
-	reg_value = tlsr8258_analog_read(TLSR8258_AREG_FLASH_VOLTAGE);
-	tlsr8258_analog_write(TLSR8258_AREG_FLASH_VOLTAGE,
-			      (reg_value & 0xf8u) | (calib_value & 0x07u));
+	if (tlsr8258_analog_read(TLSR8258_AREG_FLASH_VOLTAGE, &reg_value) != 0) {
+		return -ETIMEDOUT;
+	}
+
+	return tlsr8258_analog_write(TLSR8258_AREG_FLASH_VOLTAGE,
+				     (reg_value & 0xf8u) | (calib_value & 0x07u));
 }
 
 static TLSR8258_FLASH_EXEC void tlsr8258_flash_sleep_us(uint32_t us)
 {
-	uint32_t start = TLSR8258_REG_SYSTEM_TICK;
-	uint32_t ticks = us * TLSR8258_SYS_TICKS_PER_US;
-
-	while ((uint32_t)(TLSR8258_REG_SYSTEM_TICK - start) <= ticks) {
+	for (volatile uint32_t delay = 0u;
+	     delay < (us * TLSR8258_SYS_TICKS_PER_US);
+	     delay++) {
 	}
 }
 
-static TLSR8258_FLASH_EXEC void tlsr8258_flash_send_cmd(uint8_t cmd)
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_send_cmd(uint8_t cmd)
 {
 	tlsr8258_flash_debug_trace.last_cmd = cmd;
 	tlsr8258_flash_debug_update(0xF0020001u);
@@ -269,21 +281,31 @@ static TLSR8258_FLASH_EXEC void tlsr8258_flash_send_cmd(uint8_t cmd)
 	tlsr8258_flash_debug_update(0xF0020004u);
 	tlsr8258_mspi_write(cmd);
 	tlsr8258_flash_debug_update(0xF0020005u);
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		return -ETIMEDOUT;
+	}
 	tlsr8258_flash_debug_update(0xF0020006u);
+	return 0;
 }
 
-static TLSR8258_FLASH_EXEC void tlsr8258_flash_send_addr(uint32_t addr)
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_send_addr(uint32_t addr)
 {
 	tlsr8258_flash_debug_trace.last_addr = addr;
 	tlsr8258_flash_debug_update(0xF0030001u);
 	tlsr8258_mspi_write((uint8_t)(addr >> 16));
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		return -ETIMEDOUT;
+	}
 	tlsr8258_mspi_write((uint8_t)(addr >> 8));
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		return -ETIMEDOUT;
+	}
 	tlsr8258_mspi_write((uint8_t)addr);
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		return -ETIMEDOUT;
+	}
 	tlsr8258_flash_debug_update(0xF0030002u);
+	return 0;
 }
 
 static TLSR8258_FLASH_EXEC int tlsr8258_flash_wait_done(void)
@@ -292,7 +314,10 @@ static TLSR8258_FLASH_EXEC int tlsr8258_flash_wait_done(void)
 	tlsr8258_flash_debug_trace.last_status = 0xffffffffu;
 	tlsr8258_flash_debug_update(0xF0040001u);
 	tlsr8258_flash_sleep_us(100u);
-	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_STATUS);
+	if (tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_STATUS) != 0) {
+		tlsr8258_mspi_high();
+		return -ETIMEDOUT;
+	}
 	tlsr8258_flash_debug_update(0xF0040002u);
 
 	for (uint32_t iter = 0; iter < 10000000u; iter++) {
@@ -302,13 +327,17 @@ static TLSR8258_FLASH_EXEC int tlsr8258_flash_wait_done(void)
 		tlsr8258_flash_sleep_us(1u);
 		tlsr8258_mspi_write(0u);
 		tlsr8258_flash_debug_update(0xF0040011u);
-		tlsr8258_mspi_wait();
+		if (tlsr8258_mspi_wait() != 0) {
+			tlsr8258_mspi_high();
+			return -ETIMEDOUT;
+		}
 		tlsr8258_flash_debug_update(0xF0040012u);
 		status = tlsr8258_mspi_get();
 
 		tlsr8258_flash_debug_trace.wait_iters = iter;
 		tlsr8258_flash_debug_trace.last_status = status;
 		if ((iter & 0x3ffu) == 0u) {
+			tlsr8258_watchdog_clear();
 			tlsr8258_flash_debug_update(0xF0040013u);
 		}
 		if ((status & BIT(0)) == 0u) {
@@ -339,6 +368,7 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, siz
 {
 	uint8_t key = tlsr8258_flash_irq_disable();
 	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
+	int ret = 0;
 
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
 	tlsr8258_mspi_high();
@@ -353,29 +383,53 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_read_ram(uint32_t addr, uint8_t *buf, siz
 	}
 	tlsr8258_mspi_low();
 	tlsr8258_mspi_write(0x03u);
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
 
 	tlsr8258_mspi_write((uint8_t)(addr >> 16));
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
 	tlsr8258_mspi_write((uint8_t)(addr >> 8));
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
 	tlsr8258_mspi_write((uint8_t)addr);
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
 
 	tlsr8258_mspi_write(0u);
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
 	TLSR8258_REG_MSPI_CTRL = 0x0au;
-	tlsr8258_mspi_wait();
+	if (tlsr8258_mspi_wait() != 0) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+	for (volatile uint32_t delay = 0u; delay < 8u; delay++) {
+	}
 
 	for (size_t i = 0; i < len; i++) {
 		buf[i] = tlsr8258_mspi_get();
-		tlsr8258_mspi_wait();
+		if (tlsr8258_mspi_wait() != 0) {
+			ret = -ETIMEDOUT;
+			goto out;
+		}
 	}
 
+out:
 	tlsr8258_mspi_high();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
 	tlsr8258_flash_irq_restore(key);
-	return 0;
+	return ret;
 }
 
 TLSR8258_FLASH_EXEC int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8_t *buf,
@@ -387,17 +441,32 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_write_page_ram(uint32_t addr, const uint8
 	tlsr8258_flash_debug_trace.last_addr = addr;
 	tlsr8258_flash_debug_update(0xF0050001u);
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
-	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
-	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_PAGE_PROGRAM);
-	tlsr8258_flash_send_addr(addr);
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	if (ret != 0) {
+		goto out;
+	}
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_PAGE_PROGRAM);
+	if (ret != 0) {
+		goto out;
+	}
+	ret = tlsr8258_flash_send_addr(addr);
+	if (ret != 0) {
+		goto out;
+	}
 
 	for (size_t i = 0; i < len; i++) {
 		tlsr8258_mspi_write(buf[i]);
-		tlsr8258_mspi_wait();
+		ret = tlsr8258_mspi_wait();
+		if (ret != 0) {
+			goto out;
+		}
 	}
 
 	tlsr8258_mspi_high();
 	ret = tlsr8258_flash_wait_done();
+
+out:
+	tlsr8258_mspi_high();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
 	tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
 	tlsr8258_flash_debug_update(0xF0050002u);
@@ -412,15 +481,27 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_erase_sector_ram(uint32_t addr)
 	tlsr8258_flash_debug_trace.last_addr = addr;
 	tlsr8258_flash_debug_update(0xF0060001u);
 	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
-	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	if (ret != 0) {
+		goto out;
+	}
 	tlsr8258_flash_debug_update(0xF0060002u);
-	tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_SECTOR_ERASE);
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_SECTOR_ERASE);
+	if (ret != 0) {
+		goto out;
+	}
 	tlsr8258_flash_debug_update(0xF0060003u);
-	tlsr8258_flash_send_addr(addr);
+	ret = tlsr8258_flash_send_addr(addr);
+	if (ret != 0) {
+		goto out;
+	}
 	tlsr8258_mspi_high();
 	tlsr8258_flash_debug_update(0xF0060004u);
 
 	ret = tlsr8258_flash_wait_done();
+
+out:
+	tlsr8258_mspi_high();
 	TLSR8258_REG_MSPI_MODE = saved_mode;
 	tlsr8258_flash_debug_trace.last_ret = (uint32_t)ret;
 	tlsr8258_flash_debug_update(0xF0060005u);
@@ -451,14 +532,6 @@ static TLSR8258_FLASH_ENTRY int tlsr8258_flash_read(const struct device *dev,
 	}
 
 	k_sem_take(&dev_data->lock, K_FOREVER);
-	/*
-	 * Do not read through the XIP mapping here.  NVS can erase/program a
-	 * sector through MSPI and the debugger can do the same while the CPU is
-	 * halted; the TLSR8258 XIP line can then retain the pre-erase contents.
-	 * That made an erased NVS partition appear to contain an old joined blob
-	 * after reboot.  The manual MSPI transaction is in RAM and observes the
-	 * current flash contents.
-	 */
 	ret = tlsr8258_flash_read_ram((uint32_t)offset, data, len);
 	k_sem_give(&dev_data->lock);
 
@@ -475,12 +548,6 @@ static TLSR8258_FLASH_ENTRY int tlsr8258_flash_read(const struct device *dev,
  */
 TLSR8258_FLASH_EXEC void tlsr8258_flash_watchdog_clear(void)
 {
-	tlsr8258_watchdog_clear();
-}
-
-static void tlsr8258_flash_watchdog_feed(void *ctx)
-{
-	ARG_UNUSED(ctx);
 	tlsr8258_watchdog_clear();
 }
 
@@ -665,9 +732,7 @@ static int tlsr8258_flash_init(const struct device *dev)
 	data->layout.pages_size = TLSR8258_FLASH_SECTOR_SIZE;
 	tlsr8258_flash_debug_trace.marker = 0xF1A58D00u;
 	tlsr8258_flash_debug_trace.phase = 0xF0000001u;
-	tlsr8258_flash_apply_vdd_calibration(config);
-
-	return 0;
+	return tlsr8258_flash_apply_vdd_calibration(config);
 }
 
 static DEVICE_API(flash, tlsr8258_flash_api) = {
