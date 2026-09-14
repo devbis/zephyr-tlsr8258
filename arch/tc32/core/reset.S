@@ -273,7 +273,21 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	nop
 	tsub r2, r2, r0
 	tmov r1, #0
-.Lbss_loop:
+	/*
+	 * .bss is word aligned and tens of kilobytes long, so clear it a word
+	 * at a time and leave the byte loop for a trailing partial word.
+	 */
+.Lbss_word_loop:
+	tcmp r2, #4
+	nop
+	nop
+	tjlo .Lbss_byte_loop
+	tstorer r1, [r0]
+	tmov r3, #4
+	tadd r0, r0, r3
+	tsub r2, r2, r3
+	tj .Lbss_word_loop
+.Lbss_byte_loop:
 	tcmp r2, #0
 	nop
 	nop
@@ -282,7 +296,7 @@ SECTION_FUNC(TEXT, z_prep_c_flash_continue)
 	tmov r3, #1
 	tadd r0, r0, r3
 	tsub r2, r2, r3
-	tj .Lbss_loop
+	tj .Lbss_byte_loop
 .Lbss_done:
 #ifndef CONFIG_XIP
 	tloadr r0, .Lrodata_lma_start
