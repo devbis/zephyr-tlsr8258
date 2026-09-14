@@ -115,9 +115,7 @@ static bool zb_core_init_done;
 static bool zb_commissioning_pending;
 static bool zb_waiting_for_radio_log;
 static bool zb_persistent_rejoin_in_progress;
-#if !defined(ZB_ROUTER_ROLE)
 static uint32_t zb_persistent_rejoin_started_ms;
-#endif
 static uint32_t zb_last_commission_retry_ms;
 
 #define ZB_COMMISSION_RETRY_POLL_MS 5000U
@@ -390,8 +388,7 @@ static void zb_core_bootstrap_once(void)
 	}
 	#endif
 
-	#if !defined(ZB_ROUTER_ROLE)
-	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
 	if (tlsr8258_pm_deep_sleep_wake_pending()) {
 		if (zb_platform_bdb_init_default() != 0) {
 			LOG_ERR("TLSR8258 deep-sleep wake: BDB restore init failed");
@@ -419,9 +416,8 @@ static void zb_core_bootstrap_once(void)
 		zb_persistent_rejoin_in_progress = true;
 		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 	}
-	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+	#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
 	}
-	#endif
 	#endif
 
 	if (zb_platform_app_enable_radio_smoke_probe()) {
@@ -457,9 +453,6 @@ static void zb_core_bootstrap_once(void)
 
 static void zb_process_deferred_persistent_rejoin(void)
 {
-	#if defined(ZB_ROUTER_ROLE)
-	return;
-	#else
 	if (!zb_bootstrap_done) {
 		return;
 	}
@@ -493,7 +486,6 @@ static void zb_process_deferred_persistent_rejoin(void)
 		zb_persistent_rejoin_in_progress = true;
 		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 	}
-	#endif
 }
 
 static void zb_process_deferred_commissioning(void)
@@ -514,7 +506,8 @@ static void zb_requeue_commissioning_if_needed(void)
 {
 	uint32_t now_ms;
 
-	if (!zb_bootstrap_done || zb_commissioning_pending || zb_isDeviceJoinedNwk()) {
+	if (!zb_bootstrap_done || zb_commissioning_pending ||
+	    zb_persistent_rejoin_in_progress || zb_isDeviceJoinedNwk()) {
 		return;
 	}
 
@@ -667,9 +660,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	zb_commissioning_pending = false;
 	zb_waiting_for_radio_log = false;
 	zb_persistent_rejoin_in_progress = false;
-#if !defined(ZB_ROUTER_ROLE)
 	zb_persistent_rejoin_started_ms = 0U;
-#endif
 	zb_last_commission_retry_ms = 0U;
 	zb_link_last_tx_success_count = 0U;
 	zb_link_last_tx_success_ms = 0U;

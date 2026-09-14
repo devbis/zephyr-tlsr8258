@@ -228,10 +228,25 @@ static bool zb_platform_bdb_restore_joined_target(void)
 }
 #endif
 
+#if defined(ZB_ROUTER_ROLE)
+static bool zb_platform_bdb_router_rejoin_start(void);
+#endif
+
 bool zb_platform_bdb_service_persistent_rejoin(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return false;
+#elif defined(ZB_ROUTER_ROLE)
+	if (!zb_bdb_restore_joined_target_pending) {
+		return false;
+	}
+
+	if (!zb_platform_bdb_router_rejoin_start()) {
+		return false;
+	}
+
+	zb_bdb_restore_joined_target_pending = false;
+	return true;
 #elif !ZB_PLATFORM_BDB_ED_RESTORE
 	return false;
 #else
@@ -259,6 +274,15 @@ void zb_platform_bdb_abandon_persistent_rejoin(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return;
+#elif defined(ZB_ROUTER_ROLE)
+	LOG_WRN("zb bdb: abandoning router persistent rejoin, falling back to fresh commissioning");
+
+	zb_bdb_restore_joined_target_pending = false;
+	zdo_nwkRejoinWithBackOffStop();
+	(void)zb_platform_clear_persistent_state();
+	g_bdbAttrs.nodeIsOnANetwork = 0U;
+	BDB_STATE_SET(BDB_STATE_IDLE);
+	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
 #elif !ZB_PLATFORM_BDB_ED_RESTORE
 	return;
 #else
@@ -377,6 +401,84 @@ static bool zb_platform_bdb_router_has_valid_join_context(void)
 
 	return false;
 }
+
+static void zb_platform_bdb_router_restore_ext_pan(void)
+{
+	if (memcmp(g_zbNIB.extPANId, g_zero_addr, EXT_ADDR_LEN) != 0) {
+		return;
+	}
+
+	memset(&zb_bootstrap_target, 0, sizeof(zb_bootstrap_target));
+	if (!zb_platform_app_get_fixed_join_target(&zb_bootstrap_target) ||
+	    zb_bootstrap_target.channel != g_zbMacPib.phyChannelCur ||
+	    zb_bootstrap_target.pan_id != g_zbMacPib.panId ||
+	    memcmp(zb_bootstrap_target.ext_pan_id, g_zero_addr,
+		   EXT_ADDR_LEN) == 0) {
+		return;
+	}
+
+	memcpy(g_zbNIB.extPANId, zb_bootstrap_target.ext_pan_id, EXT_ADDR_LEN);
+	if (memcmp(aps_ib.aps_use_ext_panid, g_zero_addr, EXT_ADDR_LEN) == 0) {
+		memcpy(aps_ib.aps_use_ext_panid, zb_bootstrap_target.ext_pan_id,
+		       EXT_ADDR_LEN);
+	}
+}
+
+static bool zb_platform_bdb_router_rejoin_context(void)
+{
+	const u8 *key;
+
+	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL ||
+	    g_zbMacPib.panId == MAC_INVALID_PANID ||
+	    g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+	    g_zbNIB.panId != g_zbMacPib.panId ||
+	    g_zbMacPib.phyChannelCur < 11U ||
+	    g_zbMacPib.phyChannelCur > 26U ||
+	    memcmp(g_zbNIB.extPANId, g_zero_addr, EXT_ADDR_LEN) == 0) {
+		return false;
+	}
+
+	key = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
+	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+		if (key[i] != 0U) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool zb_platform_bdb_router_rejoin_start(void)
+{
+	if (!zb_platform_bdb_router_rejoin_context() ||
+	    !zdo_ifZdoNwkManagerIdle()) {
+		return false;
+	}
+
+	/* The old short address is explicitly unusable.  Accept the rejoin
+	 * response using the broadcast filter; the response handler installs the
+	 * newly allocated address in both the MAC PIB and NWK NIB. */
+	zb_radio_port_update_filters(g_zbMacPib.panId,
+				     MAC_SHORT_ADDR_BROADCAST,
+				     g_zbMacPib.extAddress);
+	if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
+		LOG_WRN("zb bdb: router recovery radio start failed on channel %u",
+			g_zbMacPib.phyChannelCur);
+		return false;
+	}
+
+	zb_rejoinSecModeSet(REJOIN_SECURITY);
+	if (zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,
+			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
+		LOG_WRN("zb bdb: router recovery rejoin start failed on channel %u",
+			g_zbMacPib.phyChannelCur);
+		return false;
+	}
+
+	LOG_INF("zb bdb: recovering router on channel %u pan 0x%04x",
+		g_zbMacPib.phyChannelCur, g_zbMacPib.panId);
+	return true;
+}
 #endif
 
 /*
@@ -470,6 +572,13 @@ int zb_platform_bdb_init_default(void)
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_bdb_restore_joined_target_pending =
 		g_zbNwkCtx.joined && zb_platform_bdb_has_valid_join_context();
+#elif defined(ZB_ROUTER_ROLE)
+	/* A reset may retain PAN/security state while losing the allocated short
+	 * address and the transient joined flag.  Keep the saved credentials and
+	 * perform a secure rejoin even when permit-join is closed. */
+	zb_platform_bdb_router_restore_ext_pan();
+	zb_bdb_restore_joined_target_pending =
+		!g_zbNwkCtx.joined && zb_platform_bdb_router_rejoin_context();
 #else
 	zb_bdb_restore_joined_target_pending = false;
 #endif
