@@ -12,7 +12,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/kvss/nvs.h>
 #include <zephyr/storage/flash_map.h>
-#include <zephyr/sys/crc.h>
 #include <zephyr/zigbee/zb_types.h>
 #include <errno.h>
 #include "drv_nv.h"
@@ -50,20 +49,26 @@ typedef struct {
 	u16 len;
 } nv_item_len_chk_t;
 
-struct zb_nvs_ate {
-	uint16_t id;
-	uint16_t offset;
-	uint16_t len;
-	uint8_t part;
-	uint8_t crc8;
-} __packed;
-
 static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
 /* Indexed vendor records are small (neighbor/key-pair/timeout entries), but
  * are not singleton values. Keep one bounded scratch record so the adapter
  * can strip its metadata before copying into the caller's payload buffer. */
 static u8 nv_index_scratch[NV_INDEX_HEADER_LEN +
 				  CONFIG_ZIGBEE_NV_INDEX_VALUE_MAX];
+
+void zb_platform_persistence_runtime_reset(void)
+{
+	zb_nvs_ready = false;
+	zb_nvs_init_attempted = false;
+	zb_nvs_geometry_ready = false;
+	zb_nvs_degraded_logged = false;
+	zb_nvs_blank_partition = false;
+}
+
+bool zb_platform_persistence_can_write(void)
+{
+	return zb_nvs_ready || zb_nvs_blank_partition;
+}
 
 static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len);
 
@@ -125,6 +130,7 @@ static bool zb_nvs_partition_appears_blank(void)
 	uint8_t sample[16];
 	uint8_t erase_value;
 	off_t tail_off;
+	bool marker_only = false;
 	int rc;
 
 	if (!zb_nvs_geometry_ready || zb_nvs.flash_device == NULL ||
@@ -155,31 +161,41 @@ static bool zb_nvs_partition_appears_blank(void)
 		}
 		for (size_t i = 0; i < sizeof(sample); i++) {
 			if (sample[i] != erase_value) {
+				marker_only = true;
+				break;
+			}
+		}
+	}
+
+	if (!marker_only) {
+		return true;
+	}
+
+	/* NVS leaves one GC marker in an otherwise empty sector. Treat that
+	 * interrupted first-mount state as blank so it can be rebuilt safely. */
+	for (uint16_t sector = 0U; sector < zb_nvs.sector_count; sector++) {
+		off_t sector_off = zb_nvs.offset + ((off_t)sector * zb_nvs.sector_size);
+		off_t marker_off = sector_off + zb_nvs.sector_size - 16U;
+
+		for (off_t offset = 0; offset < zb_nvs.sector_size; offset += sizeof(sample)) {
+			off_t read_off = sector_off + offset;
+			size_t read_len = MIN(sizeof(sample), zb_nvs.sector_size - offset);
+
+			rc = flash_read(zb_nvs.flash_device, read_off, sample, read_len);
+			if (rc < 0) {
 				return false;
+			}
+			for (size_t i = 0; i < read_len; i++) {
+				if (sample[i] != erase_value &&
+				    (read_off + (off_t)i < marker_off ||
+				     read_off + (off_t)i >= marker_off + 8U)) {
+					return false;
+				}
 			}
 		}
 	}
 
 	return true;
-}
-
-static int zb_nvs_blank_partition_init(void)
-{
-	struct zb_nvs_ate gc_done_ate = {
-		.id = 0xffffU,
-		.offset = 0U,
-		.len = 0U,
-		.part = 0xffU,
-	};
-	off_t marker_off;
-
-	gc_done_ate.crc8 = crc8_ccitt(0xff, &gc_done_ate,
-				      offsetof(struct zb_nvs_ate, crc8));
-	marker_off = zb_nvs.offset + zb_nvs.sector_size -
-		     (2 * (off_t)sizeof(gc_done_ate));
-
-	return flash_write(zb_nvs.flash_device, marker_off, &gc_done_ate,
-			   sizeof(gc_done_ate));
 }
 
 static bool zb_nvs_ensure_ready(void)
@@ -230,9 +246,16 @@ static bool zb_nvs_ensure_ready(void)
 		return true;
 	}
 
+	/*
+	 * The 512-KiB vendor layout used this range for its key-pair module.
+	 * Treat an unmountable volume as legacy or otherwise unusable data and
+	 * defer formatting until the first write.  There is no state that can be
+	 * safely restored from a volume which NVS rejected.
+	 */
 	zb_nvs_init_attempted = false;
-	zb_nvs_log_degraded("nvs mount failed", rc);
-	return false;
+	zb_nvs_blank_partition = true;
+	zb_nvs_log_degraded("nvs mount failed; formatting on first write", rc);
+	return true;
 }
 
 static bool zb_nvs_ensure_writable(void)
@@ -247,9 +270,11 @@ static bool zb_nvs_ensure_writable(void)
 		return true;
 	}
 
-	rc = zb_nvs_blank_partition_init();
+	/* Rebuild a blank or marker-only partition before the first write. */
+	rc = flash_flatten(zb_nvs.flash_device, zb_nvs.offset,
+			   zb_nvs.sector_size * zb_nvs.sector_count);
 	if (rc < 0) {
-		zb_nvs_log_degraded("nvs deferred blank init failed", rc);
+		zb_nvs_log_degraded("nvs blank partition erase failed", rc);
 		return false;
 	}
 

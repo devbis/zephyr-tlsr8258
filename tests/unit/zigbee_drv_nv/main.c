@@ -146,6 +146,15 @@ int flash_write(const struct device *dev, off_t offs, const void *src, size_t le
 	return (int)len;
 }
 
+int flash_flatten(const struct device *dev, off_t offs, size_t size)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(offs);
+	ARG_UNUSED(size);
+	memset(fake_entries, 0, sizeof(fake_entries));
+	return 0;
+}
+
 uint8_t crc8_ccitt(uint8_t seed, const void *src, size_t len)
 {
 	ARG_UNUSED(seed);
