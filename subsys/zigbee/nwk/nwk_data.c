@@ -581,6 +581,39 @@ void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen
     nwk_tx(buf, pNwkHdr, nextHop, 0, payload, payloadLen);
 }
 
+/* A joining router must still accept the one frame that completes the join:
+ * the trust centre sends the transport key as an APS-secured payload inside an
+ * unsecured NWK data frame, which arrives before the joined state is set. Let
+ * exactly that frame past the joined-state gate and nothing else.
+ */
+#if defined(ZB_ROUTER_ROLE)
+static bool nwk_pending_secure_join(const nwk_hdr_t *nwk_hdr,
+                                    const zb_mscp_data_ind_t *ind)
+{
+    const u8 *aps_hdr;
+
+    if (nwk_hdr == NULL || ind == NULL || ind->msdu == NULL ||
+        ind->msduLength <= nwk_hdr->frameHdrLen ||
+        nwk_hdr->frameControl.frameType != FRAME_TYPE_DATA ||
+        nwk_hdr->frameControl.security ||
+        nwk_hdr->dstAddr != g_zbInfo.nwkNib.nwkAddr ||
+        nwk_hdr->srcAddr != g_zbInfo.macPib.coordShortAddress) {
+        return false;
+    }
+
+    aps_hdr = ind->msdu + nwk_hdr->frameHdrLen;
+    return (aps_hdr[0] & BIT(5)) != 0U;
+}
+#else
+static inline bool nwk_pending_secure_join(const nwk_hdr_t *nwk_hdr,
+                                           const zb_mscp_data_ind_t *ind)
+{
+    ARG_UNUSED(nwk_hdr);
+    ARG_UNUSED(ind);
+    return false;
+}
+#endif
+
 void tl_zbMacMcpsDataIndicationHandler(void *arg)
 {
     zb_buf_t *buf = (zb_buf_t *)arg;
@@ -616,7 +649,8 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
      * discard every secured ZDP/ZCL request here. */
     nwk_router_repair_live_join();
 #endif
-    if (!nwk_joined() && nwk_user_state() != NLME_JOINING) {
+    if (!nwk_joined() && nwk_user_state() != NLME_JOINING &&
+        !nwk_pending_secure_join(&nwkHdr, ind)) {
         if (frameType != FRAME_TYPE_INTERPAN) {
             zb_buf_free(buf);
             return;

@@ -1029,7 +1029,15 @@ if (!g_zbNwkCtx.joined) {
     /* A late NWK failure may clear only the runtime bit while the restored
      * PAN/short/NWK-key tuple is still valid. Repair it before dropping an
      * otherwise valid APS request (notably MGMT_LEAVE_REQ from Z2M). */
-    if (zdo_live_join_context()) {
+    /* The trust centre's APS-secured transport key arrives while the short
+     * address is still unallocated, so the joined bit cannot be set yet.
+     * Accept that one frame from our coordinator as a live join context. */
+    bool pending_secure_join =
+        (hdr->frameCtrl & 0x20U) != 0U &&
+        hdr->srcShortAddr == g_zbInfo.macPib.coordShortAddress &&
+        g_zbInfo.macPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED;
+
+    if (zdo_live_join_context() || pending_secure_join) {
         g_zbNwkCtx.joined = 1U;
         g_zbNwkCtx.is_factory_new = 0U;
         g_zbNwkCtx.user_state = NLME_IDLE;
