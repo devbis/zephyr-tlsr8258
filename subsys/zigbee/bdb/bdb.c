@@ -35,6 +35,7 @@ extern volatile u32 zb_nwk_ed_trace[];
 #include "includes/bdb.h"
 
 #include <zephyr/zigbee/zb_radio_port.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 
 /**********************************************************************
@@ -324,6 +325,10 @@ void bdb_globalLinkKeyFix(bool isFactoryNew)
 _CODE_BDB_ static void bdb_commissioningInfoSave(void *arg)
 {
 #if NV_ENABLE
+    if (!zb_platform_persistence_can_write()) {
+        return;
+    }
+
     nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
     zdo_ssInfoSaveToFlash();
     zb_info_save(NULL);

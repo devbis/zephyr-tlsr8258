@@ -390,6 +390,14 @@ void __weak zb_platform_app_register_endpoints(void)
 {
 }
 
+void zb_platform_bdb_runtime_reset(void)
+{
+#if defined(CONFIG_ZIGBEE_BDB)
+	zb_bdb_bootstrap_ready = false;
+	zb_bdb_restore_joined_target_pending = false;
+#endif
+}
+
 int zb_platform_bdb_init_default(void)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
@@ -397,6 +405,14 @@ int zb_platform_bdb_init_default(void)
 #else
 	u32 frameCounter = 0U;
 	af_simple_descriptor_t *registered_desc;
+
+	if (zb_bdb_bootstrap_ready && g_bdbCtx.simpleDesc == NULL) {
+		/* g_zbInfo is rebuilt on a TLSR reboot, while this file's static
+		 * guard can remain in retained SRAM.  Do not skip BDB init with an
+		 * empty runtime context. */
+		zb_bdb_bootstrap_ready = false;
+		zb_bdb_restore_joined_target_pending = false;
+	}
 
 	if (zb_bdb_bootstrap_ready) {
 		return 0;

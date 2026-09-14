@@ -48,6 +48,13 @@ static bool nwk_router_started;
 static bool nwk_router_bootstrap_announce_sent;
 static ev_timer_event_t *nwk_router_persist_save_evt;
 
+void zb_router_runtime_reset(void)
+{
+	nwk_router_started = false;
+	nwk_router_bootstrap_announce_sent = false;
+	nwk_router_persist_save_evt = NULL;
+}
+
 static int nwk_router_bootstrap_deferred_save_timer(void *arg)
 {
 	ARG_UNUSED(arg);
@@ -58,7 +65,8 @@ static int nwk_router_bootstrap_deferred_save_timer(void *arg)
 
 void zb_router_schedule_persistence_save(void)
 {
-	if (nwk_router_persist_save_evt != NULL || !g_zbNwkCtx.joined ||
+	if (nwk_router_persist_save_evt != NULL ||
+	    !zb_platform_persistence_can_write() || !g_zbNwkCtx.joined ||
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
 	    g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
 		return;
@@ -68,7 +76,7 @@ void zb_router_schedule_persistence_save(void)
 	 * association/interview traffic has drained before saving the joined
 	 * PIB, but make sure the learned short address survives reboot. */
 	nwk_router_persist_save_evt = TL_ZB_TIMER_SCHEDULE(
-		nwk_router_bootstrap_deferred_save_timer, NULL, 15000U);
+		nwk_router_bootstrap_deferred_save_timer, NULL, 60000U);
 }
 
 static void nwk_router_bootstrap_fill_nwk_key(uint8_t key[SEC_KEY_LEN])

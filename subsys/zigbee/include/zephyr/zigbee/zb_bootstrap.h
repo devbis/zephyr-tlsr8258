@@ -44,6 +44,7 @@ const uint8_t *zb_platform_runtime_ieee_addr_get(void);
  * These are no-ops when BDB is not enabled.
  */
 int zb_platform_bdb_init_default(void);
+void zb_platform_bdb_runtime_reset(void);
 uint8_t zb_platform_bdb_network_steer_start(void);
 uint8_t zb_platform_bdb_network_formation_start(void);
 bool zb_platform_bdb_service_persistent_rejoin(void);
@@ -66,6 +67,10 @@ void zb_platform_app_network_left(void);
  * zcl_init / af_endpointRegister / zcl_register for their endpoints.
  */
 void zb_platform_app_register_endpoints(void);
+void zb_platform_app_runtime_reset(void);
+
+/* Reset transient router bootstrap state after a soft MCU reboot. */
+void zb_router_runtime_reset(void);
 
 /*
  * Identity strings used by the Basic-cluster interview fallback. Applications

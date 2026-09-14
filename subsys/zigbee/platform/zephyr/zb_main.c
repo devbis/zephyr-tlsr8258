@@ -208,6 +208,15 @@ static void zb_core_bootstrap_once(void)
 		u8 cold_reset = TRUE;
 
 		/*
+		 * The TLSR soft-reset entry can retain transient C state.  Reset the
+		 * bootstrap owners before rebuilding the vendor runtime so stale
+		 * timer pointers and one-shot guards cannot suppress initialisation.
+		 */
+		zb_platform_bdb_runtime_reset();
+		zb_platform_app_runtime_reset();
+		zb_router_runtime_reset();
+
+		/*
 		 * The TLSR soft reboot path does not clear SRAM before jumping back
 		 * through the application reset entry.  g_zbInfo is the compatibility
 		 * snapshot used by the ported libzigbee code, so leaving it intact here
@@ -649,6 +658,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	 * a removed PAN/short tuple become live again.  Reset all thread-owned
 	 * bootstrap/watchdog state before entering the common startup path.
 	 */
+	zb_platform_persistence_runtime_reset();
+	zb_platform_bdb_runtime_reset();
+	zb_platform_app_runtime_reset();
+	zb_router_runtime_reset();
 	zb_bootstrap_done = false;
 	zb_core_init_done = false;
 	zb_commissioning_pending = false;

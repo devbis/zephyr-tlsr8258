@@ -181,7 +181,6 @@ static int app_bdb_commissioning_retry(void *data)
 		app_bdb_activate_poll_rate();
 		commissioning_start_requested = true;
 #if APP_BDB_ROLE_ROUTER
-		printk("app_bdb_retry: router joined -> enable parenting\n");
 		zb_router_enable_parenting(0xffU);
 #endif
 		return -1;
@@ -217,6 +216,16 @@ static void app_bdb_commissioning_retry_schedule(void)
 				  APP_BDB_COMMISSIONING_RETRY_MS);
 }
 #endif /* CONFIG_ZIGBEE_BDB */
+
+void zb_platform_app_runtime_reset(void)
+{
+#if defined(CONFIG_ZIGBEE_BDB)
+	commissioning_start_requested = false;
+	bdb_runtime_ready = false;
+	leave_recommission_pending = false;
+	commissioning_retry_timer = NULL;
+#endif
+}
 
 /* ------------------------------------------------------------------ */
 /* Public API                                                          */
@@ -287,6 +296,15 @@ bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 void app_bdb_bootstrap_ready(void)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
+	if (bdb_runtime_ready && g_bdbCtx.simpleDesc == NULL) {
+		/* The platform clears g_zbInfo before rebuilding the stack, but
+		 * retained SRAM can preserve this application-level guard. */
+		bdb_runtime_ready = false;
+		commissioning_start_requested = false;
+		leave_recommission_pending = false;
+		commissioning_retry_timer = NULL;
+	}
+
 	if (!bdb_runtime_ready) {
 		int err = zb_platform_bdb_init_default();
 		bool joined = zb_isDeviceJoinedNwk();
@@ -476,9 +494,6 @@ static void app_bdb_active_ep_rsp_cb(void *p)
 void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork)
 {
 #if defined(CONFIG_ZIGBEE_BDB)
-	printk("app_bdb_commissioning_status: status=0x%02x joinedArg=%u joinedNwk=%u router=%u\n",
-	       status, joinedNetwork ? 1U : 0U, zb_isDeviceJoinedNwk() ? 1U : 0U,
-	       APP_BDB_ROLE_ROUTER);
 	app_bdb_rejoin_callback_trace_put((0x14U << 24) |
 					  ((uint32_t)status) |
 					  ((uint32_t)(joinedNetwork ? 1U : 0U) << 8) |
