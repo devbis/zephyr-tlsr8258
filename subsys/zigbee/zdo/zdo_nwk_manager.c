@@ -802,6 +802,24 @@ void zdo_nwkAuthTimeoutStart(void *arg)
         return;
     }
 
+    /*
+     * A centralized trust centre pushes the Transport-Key back-to-back with
+     * the association response, so the key is installed before this deferred
+     * association-confirm chain runs and ss_apsTransportKeyCmdHandle() has
+     * already taken its early-key path: it set aps_authenticated and posted
+     * the join confirm itself.  Authentication is complete, and the only code
+     * that cancels this timer is that same key handler, which will not run
+     * again.  Arming here therefore guarantees an expiry:
+     * zdo_auth_check_timer_cb() reinitialises the address map and the
+     * neighbour table and reports ZDO_NOT_AUTHORIZED, tearing down a join
+     * that succeeded on air.  Either the join is never completed, or it is
+     * completed and then destroyed one TRANSPORT_NETWORK_KEY_WAIT_TIME later.
+     */
+    if (aps_ib.aps_authenticated) {
+        zb_buf_free((zb_buf_t *)arg);
+        return;
+    }
+
     zdo_nwk_mngr()->savedBuf = arg;
     /* A TLSR8258 ED fetches the key through the parent's indirect queue.
      * Association response delivery is deferred through the Zephyr task
