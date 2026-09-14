@@ -914,6 +914,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
     u8 *fc = (u8 *)&nwkHdr.frameControl;
     u16 srcAddr;
     u8 radius;
+    bool multicast;
 #if defined(ZB_ROUTER_ROLE)
     /*
      * A late startup/NLME failure can clear only the runtime joined bit after
@@ -947,7 +948,11 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
 
     fc[0] = (FRAME_TYPE_DATA & 0x03U) | (2U << 2);
     fc[0] |= (u8)(req->discoverRoute << 6);
-    fc[1] = (u8)(req->addrMode ? 1U : 0U);
+    /* NLDE addrMode 1 denotes group delivery. The short and extended unicast
+     * modes are nonzero in the APS API but must not set the NWK multicast bit.
+     */
+    multicast = req->addrMode == 1U;
+    fc[1] = multicast ? BIT(0) : 0U;
 
     if (req->securityEnable) {
         fc[1] |= 0x02U;
@@ -978,7 +983,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
         nwkHdr.seqNum = g_zbInfo.nwkNib.seqNum++;
     }
 
-    if (req->addrMode != 0U) {
+    if (multicast) {
         nwkHdr.mcastControl.multicastMode = aps_group_search_by_addr(req->dstAddr) ? 1U : 0U;
         nwkHdr.mcastControl.nonmemberRadius = req->nonmemberRadius & 0x07U;
     }
