@@ -124,80 +124,6 @@ static int zb_nvs_geometry_init(void)
 	return 0;
 }
 
-static bool zb_nvs_partition_appears_blank(void)
-{
-	const struct flash_parameters *params;
-	uint8_t sample[16];
-	uint8_t erase_value;
-	off_t tail_off;
-	bool marker_only = false;
-	int rc;
-
-	if (!zb_nvs_geometry_ready || zb_nvs.flash_device == NULL ||
-	    zb_nvs.sector_count == 0U || zb_nvs.sector_size < sizeof(sample)) {
-		return false;
-	}
-
-	params = flash_get_parameters(zb_nvs.flash_device);
-	erase_value = (params != NULL) ? params->erase_value : 0xffU;
-
-	for (uint16_t sector = 0U; sector < zb_nvs.sector_count; sector++) {
-		off_t head_off = zb_nvs.offset + ((off_t)sector * zb_nvs.sector_size);
-
-		rc = flash_read(zb_nvs.flash_device, head_off, sample, sizeof(sample));
-		if (rc < 0) {
-			return false;
-		}
-		for (size_t i = 0; i < sizeof(sample); i++) {
-			if (sample[i] != erase_value) {
-				return false;
-			}
-		}
-
-		tail_off = head_off + zb_nvs.sector_size - sizeof(sample);
-		rc = flash_read(zb_nvs.flash_device, tail_off, sample, sizeof(sample));
-		if (rc < 0) {
-			return false;
-		}
-		for (size_t i = 0; i < sizeof(sample); i++) {
-			if (sample[i] != erase_value) {
-				marker_only = true;
-				break;
-			}
-		}
-	}
-
-	if (!marker_only) {
-		return true;
-	}
-
-	/* NVS leaves one GC marker in an otherwise empty sector. Treat that
-	 * interrupted first-mount state as blank so it can be rebuilt safely. */
-	for (uint16_t sector = 0U; sector < zb_nvs.sector_count; sector++) {
-		off_t sector_off = zb_nvs.offset + ((off_t)sector * zb_nvs.sector_size);
-		off_t marker_off = sector_off + zb_nvs.sector_size - 16U;
-
-		for (off_t offset = 0; offset < zb_nvs.sector_size; offset += sizeof(sample)) {
-			off_t read_off = sector_off + offset;
-			size_t read_len = MIN(sizeof(sample), zb_nvs.sector_size - offset);
-
-			rc = flash_read(zb_nvs.flash_device, read_off, sample, read_len);
-			if (rc < 0) {
-				return false;
-			}
-			for (size_t i = 0; i < read_len; i++) {
-				if (sample[i] != erase_value &&
-				    (read_off + (off_t)i < marker_off ||
-				     read_off + (off_t)i >= marker_off + 8U)) {
-					return false;
-				}
-			}
-		}
-	}
-
-	return true;
-}
-
 static bool zb_nvs_ensure_ready(void)
 {
 	int rc;
@@ -234,11 +160,14 @@ static bool zb_nvs_ensure_ready(void)
 		return false;
 	}
 
-	if (zb_nvs_partition_appears_blank()) {
-		zb_nvs_blank_partition = true;
-		zb_nvs_init_attempted = false;
-		return true;
-	}
+	/*
+	 * Always try to mount first.  NVS mounts a blank volume perfectly well
+	 * and leaves a close-sector marker behind, so probing the flash by hand
+	 * and declaring a marker-only partition "blank" made every later boot
+	 * skip the mount: nvs_read() then failed, zb_platform_restore_persistent_state()
+	 * reported the item as missing, and the router fell back to a fresh
+	 * association instead of restoring the network it had saved.
+	 */
 	rc = nvs_mount(&zb_nvs);
 	if (rc == 0) {
 		zb_nvs_ready = true;
