@@ -74,6 +74,22 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
     ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
     if (ret != NV_SUCC) {
+        /*
+         * A TLSR soft reset does not clear SRAM, so ss_ib can still hold the
+         * previous session's security state even though the NV record is
+         * gone. Left in place, the stale key metadata makes a freshly
+         * received Transport-Key look preconfigured and the join fails.
+         * Drop the whole block and restore the pointer defaults.
+         */
+        memset(&ss_ib, 0, sizeof(ss_ib));
+#if ZB_COORDINATOR_ROLE
+        ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+        ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+        ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+        ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+        ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
         ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
     }
     return ret;
