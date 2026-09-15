@@ -416,9 +416,18 @@ void *ss_zdoGetNwkKeyBySeqNum(u8 seqNum)
     return NULL;
 }
 
+/*
+ * Called from the tail of the task loop, so the guard is what sets the flash
+ * write rate. Persist one counter value every 1024 frames, which is what
+ * libzb_router.a does: it tests `counter << 22` against zero, i.e. the low ten
+ * bits. The increment inside keeps the counter off the multiple once the value
+ * has been stored, so a quiet node cannot rewrite the same value every pass.
+ */
+#define SS_FRAME_COUNTER_SAVE_MASK 0x3FFU
+
 void zdo_ssInfoUpdate(void)
 {
-    if (ss_ib.outgoingFrameCounter < 1024U &&
+    if ((ss_ib.outgoingFrameCounter & SS_FRAME_COUNTER_SAVE_MASK) == 0U &&
         g_bdbAttrs.nodeIsOnANetwork != 0U &&
         g_bdbCtx.forceJoin == 0U) {
         ss_ib.outgoingFrameCounter++;

@@ -82,7 +82,8 @@ static void zb_taskq_drain(void)
 
 	/* Keep the outgoing NWK security counter ahead of a reboot.  This is
 	 * the Zephyr equivalent of the vendor tl_zbTaskProcedure() tail call;
-	 * zdo_ssInfoUpdate() persists the initial counter range after joining. */
+	 * zdo_ssInfoUpdate() persists the counter once every 1024 frames.
+	 */
 	zdo_ssInfoUpdate();
 }
 
