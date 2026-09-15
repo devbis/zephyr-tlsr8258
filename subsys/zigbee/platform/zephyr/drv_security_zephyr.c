@@ -12,11 +12,6 @@
 
 #include "drv_security.h"
 
-#if !defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
-/* Exact TLSR8258 vendor AES entry point from libdrivers_8258.a::aes.o. */
-extern int aes_encrypt(unsigned char *key, unsigned char *data, unsigned char *result);
-#endif
-
 #define AES_BLOCK_SIZE 16U
 #define AES_ROUND_KEYS 176U
 
@@ -351,10 +346,7 @@ static void _aes_run(u8 mode, const u8 *key, const u8 *in, u8 *out)
 
 void drv_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 {
-	/* Match libzigbee's drv_aes_encrypt -> vendor aes_encrypt().  The vendor
-	 * routine stages the key into the TLSR AES register file before writing
-	 * the result, so the MMO calls with key == result are safe. */
-	(void)aes_encrypt(key, plain, result);
+	_aes_run(AES_TRIG_ENCRYPT, key, plain, result);
 }
 
 void drv_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
