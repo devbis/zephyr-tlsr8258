@@ -431,6 +431,22 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	if (actual_len == -ENOENT) {
 		u8 op_idx;
 
+		/*
+		 * Only indexed items can live in the index. nv_flashWriteNew()
+		 * stores a single item under its plain key and never allocates an
+		 * index slot for it, so probing the index for one is guaranteed to
+		 * fail - and it is not free: nv_index_latest() issues 256 NVS
+		 * lookups, every one of them a miss that walks every ATE in the
+		 * volume. Two absent single items (the APS group and binding
+		 * tables of a node with neither) cost ~180000 eight-byte flash
+		 * reads during aps_me_init(), and the flash driver masks
+		 * interrupts for each one, so the radio stays deaf for tens of
+		 * seconds after every reset.
+		 */
+		if (single) {
+			return NV_ITEM_NOT_FOUND;
+		}
+
 		if (!nv_index_latest(id, itemId, &op_idx) ||
 		    !nv_index_record_read(id, itemId, op_idx, len, buf)) {
 			return NV_ITEM_NOT_FOUND;
@@ -457,8 +473,6 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 
 nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 {
-	u8 op_idx;
-
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
@@ -466,17 +480,12 @@ nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 		return NV_ITEM_NOT_FOUND;
 	}
 	int rc = nvs_delete(&zb_nvs, nv_key(id, itemId));
-	if (rc == -ENOENT && nv_index_latest(id, itemId, &op_idx)) {
-		rc = nvs_delete(&zb_nvs, nv_index_key(id, op_idx));
-	}
 
 	return rc == 0 ? NV_SUCC : NV_ITEM_NOT_FOUND;
 }
 
 nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 {
-	u8 op_idx;
-
 	if (len == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
@@ -486,12 +495,7 @@ nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 	ssize_t rc = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
 
 	if (rc < 0) {
-		if (!nv_index_latest(id, itemId, &op_idx) ||
-		    !nv_index_header_read(id, op_idx, NULL)) {
-			return NV_ITEM_NOT_FOUND;
-		}
-		rc = (ssize_t)nv_index_scratch[2] |
-			 ((ssize_t)nv_index_scratch[3] << 8);
+		return NV_ITEM_NOT_FOUND;
 	}
 	*len = (u16)rc;
 	return NV_SUCC;
