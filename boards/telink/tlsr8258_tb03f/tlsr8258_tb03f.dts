@@ -80,7 +80,7 @@
 
 		app_partition: partition@0 {
 			label = "image-0";
-			reg = <0x00000000 0x0007e000>;
+			reg = <0x00000000 0x0007c000>;
 		};
 
 		slot1_partition: partition@40000 {
@@ -90,11 +90,17 @@
 
 		scratch_partition: partition@70000 {
 			label = "image-scratch";
-			reg = <0x00070000 0x0000e000>;
+			reg = <0x00070000 0x0000c000>;
 		};
-		zigbee_nv_partition: partition@7e000 {
+		/*
+		 * The volume stores the outgoing NWK frame counter, which the
+		 * Zigbee stack rewrites far more often than anything else it
+		 * keeps here. Two sectors, the NVS minimum, garbage-collect
+		 * continuously at that rate; four spread the wear.
+		 */
+		zigbee_nv_partition: partition@7c000 {
 			label = "zigbee_nv";
-			reg = <0x0007e000 0x00002000>;
+			reg = <0x0007c000 0x00004000>;
 		};
 	};
 };
