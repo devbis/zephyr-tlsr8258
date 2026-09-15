@@ -79,7 +79,6 @@ struct tlsr8258_flash_debug_trace {
 	uint32_t wait_spins;
 	uint32_t last_ret;
 	uint32_t mspi_ctrl;
-	uint32_t mspi_data;
 	uint32_t mspi_mode;
 	uint32_t irq_en;
 };
@@ -91,11 +90,20 @@ static const struct flash_parameters tlsr8258_flash_parameters = {
 	.erase_value = 0xff,
 };
 
+/*
+ * Never touch TLSR8258_REG_MSPI_DATA here.  In auto-read mode (MSPI_CTRL
+ * 0x0a) a read of that register pops the fetched byte and starts the next
+ * SPI transfer, so sampling it for diagnostics consumed the caller's data:
+ * tlsr8258_mspi_wait() runs this twice per call, which dropped two bytes
+ * before the data loop and two more for every byte delivered.  Every
+ * flash_read() therefore returned the flash content from addr+2 with a
+ * stride of 3, which made NVS see all sectors as closed and reject the
+ * volume with -EDEADLK.
+ */
 static ALWAYS_INLINE void tlsr8258_flash_debug_update(uint32_t phase)
 {
 	tlsr8258_flash_debug_trace.phase = phase;
 	tlsr8258_flash_debug_trace.mspi_ctrl = TLSR8258_REG_MSPI_CTRL;
-	tlsr8258_flash_debug_trace.mspi_data = TLSR8258_REG_MSPI_DATA;
 	tlsr8258_flash_debug_trace.mspi_mode = TLSR8258_REG_MSPI_MODE;
 	tlsr8258_flash_debug_trace.irq_en = *TLSR8258_REG_IRQ_EN;
 }
