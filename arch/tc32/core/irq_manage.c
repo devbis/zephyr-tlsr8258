@@ -11,7 +11,6 @@
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
-#define Z_TC32_BRANCH_TARGET(fn) ((uintptr_t)(fn))
 #define TC32_IRQ_MAX_DRAIN (TLSR8258_NUM_IRQS * 2u)
 
 /*
@@ -51,7 +50,7 @@ static ALWAYS_INLINE void enter_irq(unsigned int irq)
 		sys_trace_isr_enter();
 	}
 
-	((void (*)(const void *))Z_TC32_BRANCH_TARGET(ite->isr))(ite->arg);
+	((void (*)(const void *))ite->isr)(ite->arg);
 
 	if (IS_ENABLED(CONFIG_TRACING_ISR)) {
 		sys_trace_isr_exit();
