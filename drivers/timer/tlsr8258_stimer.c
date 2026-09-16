@@ -127,7 +127,8 @@ void sys_clock_set_timeout(uint32_t ticks, bool idle)
 	tlsr8258_irq_clear_parent(TLSR8258_IRQ_SYSTEM_TIMER);
 	tlsr8258_stimer_program_compare(last_announce_cycle + cycles, now);
 	TLSR8258_REG_SYSTEM_TICK_MODE |= FLD_SYSTEM_TICK_IRQ_EN;
-	*TLSR8258_REG_IRQ_MASK |= BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() |
+		BIT(TLSR8258_IRQ_SYSTEM_TIMER));
 
 	irq_unlock(key);
 }
@@ -149,7 +150,8 @@ uint32_t sys_clock_elapsed(void)
 static int tlsr8258_stimer_init(void)
 {
 	IRQ_CONNECT(TLSR8258_IRQ_SYSTEM_TIMER, 0, tlsr8258_stimer_irq, NULL, 0);
-	*TLSR8258_REG_IRQ_MASK &= ~BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() &
+		~BIT(TLSR8258_IRQ_SYSTEM_TIMER));
 	tlsr8258_irq_clear_parent(TLSR8258_IRQ_SYSTEM_TIMER);
 	TLSR8258_REG_SYSTEM_TICK_CTRL = FLD_SYSTEM_TICK_STOP;
 	while ((TLSR8258_REG_SYSTEM_TICK_CTRL & FLD_SYSTEM_TICK_RUNNING) != 0u) {
@@ -168,7 +170,8 @@ static int tlsr8258_stimer_init(void)
 	next_compare_cycle = last_announce_cycle + CYCLES_PER_TICK;
 	TLSR8258_REG_SYSTEM_TICK_IRQ = tlsr8258_stimer_align_compare(next_compare_cycle);
 	TLSR8258_REG_SYSTEM_TICK_MODE |= FLD_SYSTEM_TICK_IRQ_EN;
-	*TLSR8258_REG_IRQ_MASK |= BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() |
+		BIT(TLSR8258_IRQ_SYSTEM_TIMER));
 
 	return 0;
 }

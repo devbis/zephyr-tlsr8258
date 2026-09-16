@@ -96,13 +96,28 @@
 #define TLSR8258_IRQ_EDGE_MASK     GENMASK(23, 16)
 #define TLSR8258_IRQ_VALID_MASK    (~TLSR8258_IRQ_RESERVED_MASK & GENMASK(23, 0))
 
-#define TLSR8258_REG_IRQ_MASK  ((volatile uint32_t *)0x00800640u)
+#define TLSR8258_REG_IRQ_MASK  ((volatile uint8_t *)0x00800640u)
 #define TLSR8258_REG_IRQ_EN   ((volatile uint8_t *)0x00800643u)
 #define TLSR8258_REG_IRQ_SRC ((volatile uint32_t *)0x00800648u)
 
 #define TLSR8258_REG_TMR_STA ((volatile uint8_t *)0x00800623u)
 
 #ifndef _ASMLANGUAGE
+/* reg_irq_mask is 24-bit and is adjacent to the global enable byte. */
+static inline uint32_t tlsr8258_irq_mask_read(void)
+{
+	return (uint32_t)TLSR8258_REG_IRQ_MASK[0] |
+		((uint32_t)TLSR8258_REG_IRQ_MASK[1] << 8) |
+		((uint32_t)TLSR8258_REG_IRQ_MASK[2] << 16);
+}
+
+static inline void tlsr8258_irq_mask_write(uint32_t mask)
+{
+	TLSR8258_REG_IRQ_MASK[0] = (uint8_t)mask;
+	TLSR8258_REG_IRQ_MASK[1] = (uint8_t)(mask >> 8);
+	TLSR8258_REG_IRQ_MASK[2] = (uint8_t)(mask >> 16);
+}
+
 static inline uint32_t tlsr8258_irq_bit(unsigned int irq)
 {
 	return irq < TLSR8258_NUM_IRQS ? BIT(irq) : 0u;

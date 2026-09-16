@@ -422,7 +422,8 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 	TLSR8258_REG_TMR_CTRL8 |= TLSR8258_FLD_TMR1_EN;
 
 	TLSR8258_REG_MCU_WAKEUP_MASK |= wakeup_src;
-	*TLSR8258_REG_IRQ_MASK &= ~(TLSR8258_FLD_IRQ_TMR1_EN | TLSR8258_FLD_IRQ_ZB_RT_EN);
+	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() &
+		~(TLSR8258_FLD_IRQ_TMR1_EN | TLSR8258_FLD_IRQ_ZB_RT_EN));
 	TLSR8258_REG_PWDN_CTRL = TLSR8258_FLD_PWDN_CTRL_SLEEP;
 
 	compiler_barrier();

@@ -34,7 +34,8 @@ int main(void)
 	 * board-local smoke path so post-wake scheduler activity cannot preempt
 	 * the direct success/fail markers.
 	 */
-	*TLSR8258_REG_IRQ_MASK &= ~BIT(TLSR8258_IRQ_SYSTEM_TIMER);
+	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() &
+		~BIT(TLSR8258_IRQ_SYSTEM_TIMER));
 	tlsr8258_irq_clear_parent(TLSR8258_IRQ_SYSTEM_TIMER);
 
 	ret = tlsr8258_pm_suspend_for_ms(100u);

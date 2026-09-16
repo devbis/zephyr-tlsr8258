@@ -97,7 +97,7 @@ static ALWAYS_INLINE void z_tc32_irq_enable(unsigned int irq)
 	uint32_t bit = tlsr8258_irq_bit(irq);
 
 	if ((bit & TLSR8258_IRQ_VALID_MASK) != 0u) {
-		*TLSR8258_REG_IRQ_MASK |= bit;
+		tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() | bit);
 	}
 	arch_irq_unlock(key);
 }
@@ -108,7 +108,7 @@ static ALWAYS_INLINE void z_tc32_irq_disable(unsigned int irq)
 	uint32_t bit = tlsr8258_irq_bit(irq);
 
 	if (bit != 0u) {
-		*TLSR8258_REG_IRQ_MASK &= ~bit;
+		tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() & ~bit);
 	}
 	arch_irq_unlock(key);
 }
@@ -117,7 +117,7 @@ static ALWAYS_INLINE int z_tc32_irq_is_enabled(unsigned int irq)
 {
 	uint32_t bit = tlsr8258_irq_bit(irq);
 
-	return (bit & TLSR8258_IRQ_VALID_MASK & *TLSR8258_REG_IRQ_MASK) != 0u;
+	return (bit & TLSR8258_IRQ_VALID_MASK & tlsr8258_irq_mask_read()) != 0u;
 }
 
 #define ARCH_IRQ_CONNECT(irq_p, priority_p, isr_p, isr_param_p, flags_p) \
