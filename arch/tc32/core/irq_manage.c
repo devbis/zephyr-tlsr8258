@@ -29,6 +29,12 @@ volatile uint32_t __noinit z_tc32_irq_debug_drained;
  * Placed in .data (initialised to zero) so SWS can read consistently even
  * after a reset loop.
  */
+/*
+ * Bumped once per dispatcher entry so arch_cpu_idle() can tell that an
+ * interrupt has actually been taken.
+ */
+volatile uint32_t z_tc32_irq_count;
+
 volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
 volatile uint32_t z_tc32_irq_lock_depth;
 volatile uint32_t z_tc32_irq_lock_max_depth;
@@ -109,6 +115,7 @@ void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 	 * with no inline tick service.
 	 */
 	_kernel.cpus[0].nested++;
+	z_tc32_irq_count++;
 
 	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
 		unsigned int irq;

@@ -36,6 +36,7 @@
  * .data so SWS can read them while CPU is halted.
  */
 #define Z_TC32_IRQ_LOCK_OWNER_DEPTH 8u
+extern volatile uint32_t z_tc32_irq_count;
 extern volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
 extern volatile uint32_t z_tc32_irq_lock_depth;
 extern volatile uint32_t z_tc32_irq_lock_max_depth;
