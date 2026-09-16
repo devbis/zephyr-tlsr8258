@@ -128,6 +128,13 @@ __reset:
 	tloadr r0, .Lirq_en
 	tmov r1, #0
 	tstorerb r1, [r0]
+	/*
+	 * reg_irq_mask is 24 bits and reg_irq_en is the byte above it, so this
+	 * word store spans both. It is safe only because it stores a constant
+	 * zero, which is what the byte store above already put in the gate;
+	 * anything that reads the mask back and writes it again has to use the
+	 * byte accessors in <tlsr825x/irq.h> instead.
+	 */
 	tloadr r0, .Lirq_mask
 	tstorer r1, [r0]
 	tjl z_prep_c
