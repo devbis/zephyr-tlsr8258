@@ -962,8 +962,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
     nwk_router_repair_live_join();
 #endif
 
-    if ((!nwk_joined()) ||
-        (g_zbInfo.nwkNib.secAllFrames && nwk_user_state() != NLME_IDLE)) {
+    if ((!nwk_joined()) || (nwk_user_state() != NLME_IDLE)) {
         if (req->ndsuHandle <= 0xbfU) {
             nwkNldeDataCnf(arg, NWK_STATUS_INVALID_REQUEST, req->ndsuHandle);
         } else {

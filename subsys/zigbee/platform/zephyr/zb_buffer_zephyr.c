@@ -32,6 +32,7 @@ K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
 /* Track slab ownership so an invalid or duplicate free cannot corrupt the
  * slab free list. */
 static volatile u32 zb_buf_in_use[2];
+static struct k_spinlock zb_buf_lock;
 
 static bool zb_buf_index(const zb_buf_t *buf, u32 *index)
 {
@@ -69,15 +70,19 @@ zb_buf_t *zb_buf_allocate(void)
 	void *block = NULL;
 
 	if (k_mem_slab_alloc(&zb_buf_slab, &block, K_NO_WAIT) != 0) {
+		g_sysDiags.packetBufferAllocateFailures++;
 		return NULL;
 	}
 
 	memset(block, 0, sizeof(zb_buf_t));
 	{
 		u32 index;
+		k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
+
 		if (zb_buf_index((zb_buf_t *)block, &index)) {
 			zb_buf_mark_owned(index);
 		}
+		k_spin_unlock(&zb_buf_lock, key);
 	}
 	return (zb_buf_t *)block;
 }
@@ -89,14 +94,18 @@ void zb_buf_free(zb_buf_t *buf)
 	}
 	{
 		u32 index;
+		k_spinlock_key_t key;
+
 		if (!zb_buf_index(buf, &index)) {
 			return;
 		}
+		key = k_spin_lock(&zb_buf_lock);
 		if (!zb_buf_owned(index)) {
-			/* A second free would make k_mem_slab's free-list cyclic. */
+			k_spin_unlock(&zb_buf_lock, key);
 			return;
 		}
 		zb_buf_mark_free(index);
+		k_spin_unlock(&zb_buf_lock, key);
 	}
 	k_mem_slab_free(&zb_buf_slab, buf);
 }

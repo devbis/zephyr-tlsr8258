@@ -445,7 +445,7 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
 void tl_zbNwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
-    if (pNwkHdr->srcAddr != g_zbNIB.managerAddr) {
+    if (pNwkHdr->dstAddr != g_zbNIB.nwkAddr) {
         if (pNwkHdr->radius == 0U) {
             zb_buf_free((zb_buf_t *)arg);
             return;

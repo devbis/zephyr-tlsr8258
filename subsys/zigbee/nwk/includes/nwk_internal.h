@@ -11,6 +11,13 @@
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_neighbor.h"
 
+typedef struct {
+	u32 timeout;
+	addrExt_t extAddr;
+} nwk_endDevTimeout_nv_t;
+
+u8 tl_addrByShort(u16 shortAddr, u8 addIfMissing, u8 unused, u16 *idx);
+
 /* Route-discovery / TX-pend forward decls. */
 extern void nwkReportCmdHandler(void *arg, nwkCmd_t *cmd);
 extern void nwkReportCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);

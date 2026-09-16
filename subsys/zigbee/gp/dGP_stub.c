@@ -305,7 +305,7 @@ void gpTxQueueMaintenceClear(void)
 
     if (gpTxQueue.used && (pGpDataReq != NULL) &&
         (pGpDataReq->appId == GP_APP_ID_SRC_ID) &&
-        (pGpDataReq->gpdId.srcId != 0U)) {
+        (pGpDataReq->gpdId.srcId == 0U)) {
         gpTxQueueListClear(&gpTxQueue);
     }
 }

@@ -20,6 +20,7 @@
 
 #include "zb_common_stub.h"
 #include "nwk/includes/nwk.h"
+#include "nwk/includes/nwk_internal.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -167,46 +168,85 @@ void nwkRoutingTabEntryDstDel(u16 dstAddr)
 	}
 }
 
-void nwkRouteRepair(u16 dstAddr)
+void nwkRouteRepair(zb_buf_t *buf, u16 dstAddr, u16 statusDstAddr, u8 statusCode)
 {
-	nwk_routingTabEntry_t *entry = nwkRoutingTabEntryFind(dstAddr);
+	nwk_hdr_t hdr;
+	nwkCmd_t cmd;
+	u8 security = 0U;
 
-	if (entry != NULL) {
-		entry->status = NWK_ROUTE_STATE_DISCOVERY_FAILED;
+	memset(&hdr, 0, sizeof(hdr));
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.cmdId = NWK_CMD_NETWORK_STATUS;
+	cmd.nwkStatus.statusCode = statusCode;
+	cmd.nwkStatus.dstAddr = statusDstAddr;
+
+	if ((ss_ib.secureAllFresh != 0U) && (ss_ib.securityLevel != 0U) &&
+	    ss_keyPreconfigured()) {
+		security = 1U;
 	}
 
-	g_zbNwkCtx.manyToOneRepair.nwkFwdDstAddr = dstAddr;
-	g_zbNwkCtx.manyToOneRepair.nwkFwdSrcAddr = g_zbNIB.nwkAddr;
+	hdr.frameControl.frameType = FRAME_TYPE_COMMAND;
+	hdr.frameControl.protocolVer = ZB_PROTOCOL_VERSION;
+	hdr.frameControl.srcIEEEAddr = 1U;
+	hdr.frameControl.security = security;
+	memcpy(hdr.srcIeeeAddr, g_zbMacPib.extAddress, EXT_ADDR_LEN);
+	hdr.dstAddr = dstAddr;
+	hdr.srcAddr = g_zbNIB.nwkAddr;
+	hdr.radius = (u8)(g_zbNIB.maxDepth << 1);
+	hdr.seqNum = g_zbNIB.seqNum++;
+	hdr.frameHdrLen = getNwkHdrSize(&hdr);
 
-	if (g_zbNwkCtx.joined) {
-		zb_buf_t *buf = (zb_buf_t *)ev_buf_allocate(LARGE_BUFFER);
-
-		if (buf != NULL) {
-			tl_zbNwkNlmeNwkStatusInd(buf, dstAddr,
-						 NWK_COMMAND_STATUS_NO_ROUTE_AVAILABLE);
-		}
-	}
+	tl_zbNwkSendNwkStatusCmd(buf, &hdr, &cmd,
+					NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
 }
 
-void nwkRouteMaintenance(nwk_routingTabEntry_t *entry)
+void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, u16 macDstAddr)
 {
-	if (!nwk_routing_entry_active(entry)) {
+	nwk_routingTabEntry_t *entry = NULL;
+	u16 repairDst;
+	u16 statusDst;
+	u8 statusCode;
+	zb_buf_t *buf;
+
+	if (pNwkHdr == NULL) {
 		return;
 	}
 
-	if (entry->transFail >= NWKC_TRANSFAILURE_CNT_THRESHOLD) {
-		entry->status = NWK_ROUTE_STATE_DISCOVERY_FAILED;
-		return;
+	if (pNwkHdr->frameControl.srcRoute) {
+		repairDst = pNwkHdr->srcAddr;
+		statusDst = pNwkHdr->dstAddr;
+		statusCode = NWK_COMMAND_STATUS_SOURCE_ROUTE_FAILURE;
+	} else {
+		for (u16 i = 0U; i < ROUTING_TABLE_SIZE; i++) {
+			if ((g_routingTab[i].status == NWK_ROUTE_STATE_ACTIVE) &&
+			    (g_routingTab[i].dstAddr == pNwkHdr->dstAddr)) {
+				entry = &g_routingTab[i];
+				break;
+			}
+		}
+
+		if (entry == NULL) {
+			return;
+		}
+
+		entry->status = NWK_ROUTE_STATE_DISCOVERY_INACTIVE;
+		if (entry->manyToOne) {
+			g_zbNwkCtx.manyToOneRepair.senderAddr = pNwkHdr->srcAddr;
+			g_zbNwkCtx.manyToOneRepair.lastSendFailAddr = macDstAddr;
+			repairDst = pNwkHdr->dstAddr;
+			statusDst = pNwkHdr->srcAddr;
+			statusCode = NWK_COMMAND_STATUS_MANY_TO_ONE_ROUTE_FAILURE;
+		} else {
+			repairDst = pNwkHdr->srcAddr;
+			statusDst = pNwkHdr->dstAddr;
+			statusCode = NWK_COMMAND_STATUS_NONE_TREE_LINK_FAILURE;
+		}
 	}
 
-	if (entry->status != NWK_ROUTE_STATE_ACTIVE) {
-		if (entry->forgetCnt < 0xffU) {
-			entry->forgetCnt++;
-		}
-
-		if (entry->forgetCnt >= 3U) {
-			nwkRoutingTabEntryClear(entry);
-		}
+	buf = zb_buf_allocate();
+	if (buf != NULL) {
+		nwkRouteRepair(buf, repairDst, statusDst, statusCode);
 	}
 }
 
@@ -240,10 +280,27 @@ u8 nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr)
 
 int nwkRoutingTabPeriodic(void *arg)
 {
+	u16 active_num = 0U;
+
 	ARG_UNUSED(arg);
 
 	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
-		nwkRouteMaintenance(&g_routingTab[i]);
+		if (g_routingTab[i].status == NWK_ROUTE_STATE_ACTIVE) {
+			active_num++;
+		}
+	}
+
+	if (active_num == 0U) {
+		return 0;
+	}
+
+	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+		nwk_routingTabEntry_t *entry = &g_routingTab[i];
+
+		if ((entry->status == NWK_ROUTE_STATE_ACTIVE) && (entry->manyToOne == 0U) &&
+		    (entry->forgetCnt != 0xffU)) {
+			entry->forgetCnt++;
+		}
 	}
 
 	return 0;

@@ -396,7 +396,7 @@ u8 zdo_send_req(zdo_zdp_req_t *req)
 	if (dst_addr_mode == SHORT_ADDR_MODE) {
 		dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
 		memcpy(&dstEpInfo.dstAddr, &dst_nwk_addr, sizeof(dst_nwk_addr));
-	} else {
+	} else if (dst_addr_mode == EXT_ADDR_MODE) {
 		dstEpInfo.dstAddrMode = APS_LONG_DSTADDR_WITHEP;
 		memcpy(&dstEpInfo.dstAddr, dst_ext_addr, EXT_ADDR_LEN);
 	}

@@ -92,10 +92,16 @@ _CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
 _CODE_SS_ void ss_ttlMAC(u8 len, u8 *input, u8 *key, u8 *hashOut)
 {
     u8 hasIn[2 * AES_BLOCK_SIZE_LOCAL];
-    u8 tmpBuf[0x80];
+    u8 *tmpBuf;
 
     if (len > 0x70U) {
         ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_PARAM_ERROR);
+        return;
+    }
+
+    tmpBuf = ev_buf_allocate(0x80U);
+    if (tmpBuf == NULL) {
+        ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_BUFFER_OVERFLOWN);
         return;
     }
 
@@ -110,6 +116,7 @@ _CODE_SS_ void ss_ttlMAC(u8 len, u8 *input, u8 *key, u8 *hashOut)
 
     tl_cryHashFunction(tmpBuf, (u8)(AES_BLOCK_SIZE_LOCAL + len), hasIn + AES_BLOCK_SIZE_LOCAL);
     tl_cryHashFunction(hasIn, 2 * AES_BLOCK_SIZE_LOCAL, hashOut);
+    ev_buf_free(tmpBuf);
 }
 
 _CODE_SS_ u8 ss_keyHash(u8 *padV, u8 *key, u8 *hashOut)
@@ -149,7 +156,7 @@ _CODE_SS_ u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
 
     authData = ev_buf_allocate(authLen);
     if (authData == NULL) {
-        return RET_ERROR;
+        return 0xffU;
     }
 
     authData[0] = 0;
@@ -275,7 +282,7 @@ _CODE_SS_ u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLe
 
     for (u8 i = 0; i < micLen; i++) {
         if (mic[i] != tmpMic[i]) {
-            return RET_ERROR;
+            return 0xffU;
         }
     }
 

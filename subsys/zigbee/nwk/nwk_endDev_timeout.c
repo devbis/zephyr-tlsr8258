@@ -33,11 +33,6 @@ extern void zb_buf_clear(zb_buf_t *buf);
  * ev_buf_* come from os/ev_buffer.h.
  */
 
-typedef struct {
-	u32 timeout;
-	addrExt_t extAddr;
-} nwk_endDevTimeout_nv_t;
-
 typedef struct _attribute_packed_ {
 	u16 dstAddr;
 	u16 srcAddr;
@@ -269,10 +264,10 @@ void nwkEndDevTimeoutInfoNVStore(void *arg)
 
 	memset(&itemInfo, 0, sizeof(itemInfo));
 
-	if (nv_flashReadNew(0, NV_MODULE_ZB_INFO, ITEM_FIELD_IDLE, sizeof(timeoutInfo),
+	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(timeoutInfo),
 			    (u8 *)&itemInfo) == NV_SUCC) {
 		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
-			if (nv_flashReadByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT,
 						itemInfo.opSect, i, sizeof(timeoutInfo),
 						(u8 *)&timeoutInfo) != NV_SUCC) {
 				continue;
@@ -287,12 +282,12 @@ void nwkEndDevTimeoutInfoNVStore(void *arg)
 				return;
 			}
 
-			(void)nv_itemDeleteByIndex(NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT,
+			(void)nv_itemDeleteByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT,
 						   itemInfo.opSect, i);
 		}
 	}
 
-	(void)nv_flashWriteNew(0, NV_MODULE_ZB_INFO, NV_ITEM_ED_TIMEOUT, sizeof(*info),
+	(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT, sizeof(*info),
 			       (u8 *)info);
 	ev_buf_free((u8 *)info);
 }

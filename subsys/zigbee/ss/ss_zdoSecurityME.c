@@ -474,7 +474,7 @@ void ss_securityModeSet(ss_securityMode_e m)
     if (aps_ib.aps_authenticated &&
         !ZB_IS_64BIT_ADDR_ZERO(ss_ib.trust_center_address) &&
         !ZB_IS_64BIT_ADDR_INVALID(ss_ib.trust_center_address)) {
-        ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_NWK_GET_ENTRY);
+        ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_NWK_NEIGHBOR_TABLE);
         return;
     }
 

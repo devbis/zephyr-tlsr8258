@@ -422,7 +422,7 @@ tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtPanId(extPANId_t
 
 		if ((memcmp(entry->extPanId, extPanId, EXT_ADDR_LEN) == 0) &&
 		    entry->permitJoining && entry->potentialParent &&
-		    (entry->lqi == 0U)) {
+		    (entry->lqi != 0U)) {
 			return entry;
 		}
 	}

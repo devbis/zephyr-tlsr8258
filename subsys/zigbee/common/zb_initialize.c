@@ -102,21 +102,21 @@ void zb_init(void)
         nv_resetToFactoryNew();
     }
 
-    if (zb_info_load() != NV_SUCC) {
+    if (zb_info_load() == NV_SUCC) {
         tl_zbMacInit(0);
         tl_zbNwkInit(0);
         aps_init();
-        return;
+    } else {
+        tl_zbMacInit(1);
+        tl_zbNwkInit(1);
+        aps_init();
+#if defined(ZB_ROUTER_ROLE)
+        zb_nwkKeySet();
+        ss_zdoUseKey(0);
+#endif
+        tl_bdbAttrInit();
     }
 
-    tl_zbMacInit(1);
-    tl_zbNwkInit(1);
-    aps_init();
-#if defined(ZB_ROUTER_ROLE)
-    zb_nwkKeySet();
-    ss_zdoUseKey(0);
-#endif
-    tl_bdbAttrInit();
     af_init();
     zdo_init();
 }

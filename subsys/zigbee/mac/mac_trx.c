@@ -968,7 +968,8 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
     return macPld;
 }
 
-void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi)
+_attribute_ram_code_ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt,
+                                                 u32 timestamp, s8 rssi)
 {
 	 zb_buf_t *buf;
 	 zb_mac_rx_pending_meta_t *meta;
@@ -1077,7 +1078,7 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
 	}
 }
 
-void zb_macDataSendHandler(void)
+_attribute_ram_code_ void zb_macDataSendHandler(void)
 {
     mac_trxTask((void *)MAC_TX_EV_SEND_SUCC);
 }

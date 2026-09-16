@@ -241,7 +241,8 @@ void tl_zbMacOrphanResponseStatusCheck(void *arg, u8 status)
         return;
     }
 
-    memset(ind, 0, sizeof(*ind));
+    ind->status = MAC_SUCCESS;
+    ind->isAssoc = 0U;
     memcpy(ind->srcAddrBytes, saved.bytes0_7, sizeof(ind->srcAddrBytes));
     ind->srcAddrMode = ADDR_MODE_EXT;
     ind->dstShortAddr = saved.shortAddr;

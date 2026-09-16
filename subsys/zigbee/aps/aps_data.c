@@ -863,7 +863,7 @@ u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
     u16 idx;
     u8 duplicate = 0U;
 
-    if (tl_idxByShortAddr(&idx, src_addr) != RET_OK) {
+    if (tl_addrByShort(src_addr, 1U, 0U, &idx) != RET_OK) {
         return 0;
     }
 

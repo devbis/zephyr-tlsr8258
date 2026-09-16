@@ -147,7 +147,7 @@ int tl_zbNwkPanidConflictDoubleCheck(void *arg)
 
 	(void)tl_zbMacMlmeBeaconRequestCmdSend();
 
-	if (--g_panIdConflictDected.cnt != 0U) {
+	if ((s8)(--g_panIdConflictDected.cnt) > 0) {
 		return 2000;
 	}
 
@@ -163,7 +163,7 @@ bool tl_zbNwkPanidConflictDetect(u16 panId, extPANId_t epid)
 	}
 
 	if (memcmp(epid, g_zero_addr, EXT_ADDR_LEN) != 0 &&
-	    memcmp(epid, g_zbNIB.extPANId, EXT_ADDR_LEN) != 0) {
+	    memcmp(epid, g_zbNIB.extPANId, EXT_ADDR_LEN) == 0) {
 		return FALSE;
 	}
 
@@ -238,7 +238,7 @@ void tl_zbNwkPanidConflictProcess(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 
-	if (g_zbNIB.panId != g_zbNwkCtx.new_panid) {
+	if (g_zbNIB.managerAddr != g_zbNIB.nwkAddr) {
 		tl_zbNwkReportForPanidConflict(buf);
 		return;
 	}
@@ -246,16 +246,12 @@ void tl_zbNwkPanidConflictProcess(void *arg)
 	for (;;) {
 		u16 newPanId = (u16)drv_u32Rand();
 
-		if (newPanId == 0U) {
-			continue;
-		}
-
-		if (newPanId == g_zbNwkCtx.new_panid) {
-			continue;
-		}
-
 		if (nwk_panid_in_list(g_zbNwkCtx.known_panids, g_zbNwkCtx.known_panids_cnt,
 				      newPanId)) {
+			continue;
+		}
+
+		if (newPanId == 0U) {
 			continue;
 		}
 

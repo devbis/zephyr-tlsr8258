@@ -172,7 +172,16 @@ nwk_routeDiscEntry_t *nwkRouteDiscEntryDstFind(u16 dstAddr)
 
 nwk_routeDiscEntry_t *nwkManyToOneRouteDiscEntryInitFind(void)
 {
-    return nwkRouteDiscEntryDstFind(NWK_BROADCAST_ROUTER_COORDINATOR);
+    for (u8 i = 0U; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+        nwk_routeDiscEntry_t *entry = &g_routeDiscTab[i];
+
+        if ((entry->dstAddr == NWK_BROADCAST_ROUTER_COORDINATOR) &&
+            (entry->srcAddr == g_zbNIB.nwkAddr)) {
+            return entry;
+        }
+    }
+
+    return NULL;
 }
 
 nwk_routeDiscEntry_t *nwkRouteDiscEntryCreate(u16 srcAddr, u16 dstAddr, u16 senderAddr, u8 forwardCost,
