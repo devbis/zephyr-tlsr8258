@@ -6,6 +6,7 @@
 #include <zephyr/arch/tc32/arch.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/linker/section_tags.h>
+#include <ksched.h>
 #include <kswap.h>
 #include <tlsr825x/irq.h>
 
@@ -34,6 +35,12 @@ volatile uint32_t __noinit z_tc32_irq_debug_drained;
  * interrupt has actually been taken.
  */
 volatile uint32_t z_tc32_irq_count;
+
+/*
+ * Set by z_tc32_handle_irqs() when it decides to switch, read by the exit
+ * path in reset.S: the thread whose interrupt frame has to be relocated.
+ */
+struct k_thread *z_tc32_switch_from;
 
 volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
 volatile uint32_t z_tc32_irq_lock_depth;
@@ -91,7 +98,7 @@ static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
 	return irq;
 }
 
-void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
+void *TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 {
 	uint32_t pending;
 	unsigned int drained = 0u;
@@ -117,7 +124,8 @@ void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 	_kernel.cpus[0].nested++;
 	z_tc32_irq_count++;
 
-	while ((pending = (*TLSR8258_REG_IRQ_SRC & *TLSR8258_REG_IRQ_MASK & TLSR8258_IRQ_VALID_MASK)) != 0u) {
+	while ((pending = (*TLSR8258_REG_IRQ_SRC & tlsr8258_irq_mask_read() &
+			  TLSR8258_IRQ_VALID_MASK)) != 0u) {
 		unsigned int irq;
 		bool rf_pending = (pending & BIT(TLSR8258_IRQ_ZB_RT)) != 0u;
 
@@ -155,6 +163,29 @@ void TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 	if (IS_ENABLED(CONFIG_STACK_SENTINEL)) {
 		z_check_stack_sentinel();
 	}
+
+	if (!IS_ENABLED(CONFIG_MULTITHREADING) || _kernel.cpus[0].nested != 0U) {
+		return NULL;
+	}
+
+	/*
+	 * Handlers routinely ready a higher priority thread, and
+	 * k_thread_abort() on the running thread from an ISR only marks it
+	 * dead and leaves the arch to stop running it. Ask the scheduler who
+	 * should run; the exit path in reset.S does the stack surgery, since
+	 * the interrupt frame sits on the banked IRQ stack and has to move to
+	 * the outgoing thread before anyone else can use that stack.
+	 */
+	struct k_thread *interrupted = _current;
+	void *next = z_get_next_switch_handle(interrupted);
+
+	if (next == (void *)interrupted) {
+		return NULL;
+	}
+
+	z_tc32_switch_from = interrupted;
+
+	return next;
 }
 
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
