@@ -80,8 +80,19 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	tloadr r0, [r5, #__struct_arch_esf_r1_OFFSET]
 	tloadr r1, [r5, #__struct_arch_esf_r2_OFFSET]
 	tloadr r2, [r5, #__struct_arch_esf_r3_OFFSET]
+	tloadr r3, [r5, #__struct_arch_esf_sr_OFFSET]
 	tadd r5, r5, #__struct_arch_esf_SIZEOF
 	tmov r13, r5
+	/*
+	 * A thread is switched to with reg_irq_en cleared, and it enters here
+	 * instead of returning into do_swap(), so nothing else will restore
+	 * the gate for it. Publish the state arch_new_thread() recorded in the
+	 * synthetic frame, the way z_tc32_switch_to_main does for main.
+	 */
+	tloadr r5, .Lthread_start_irq_en
+	nop
+	nop
+	tstorerb r3, [r5]
 	tjl .Lthread_entry_call
 	nop
 	nop
@@ -102,6 +113,8 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	.align 2
 .Lthread_kernel:
 	.word _kernel
+.Lthread_start_irq_en:
+	.word 0x00800643
 
 SECTION_FUNC(TEXT, z_thread_entry)
 	tmov r4, r0
