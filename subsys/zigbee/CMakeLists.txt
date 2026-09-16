@@ -73,7 +73,7 @@ zephyr_library_sources(
     platform/zephyr/drv_radio_map.c
     platform/zephyr/drv_radio_zephyr.c
     platform/zephyr/drv_nv_zephyr.c
-    platform/zephyr/drv_security_zephyr.c
+    platform/zephyr/zb_aes.c
     platform/zephyr/zb_persistence_zephyr.c
     platform/zephyr/zb_primitive_dispatch.c
 )
