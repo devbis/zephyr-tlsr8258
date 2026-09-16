@@ -34,6 +34,11 @@
 static uint32_t last_announce_cycle;
 static uint32_t next_compare_cycle;
 
+/* tests/kernel/context masks the tick source around a timing-sensitive
+ * section and needs to know which IRQ line carries it.
+ */
+const int32_t z_sys_timer_irq_for_test = TLSR8258_IRQ_SYSTEM_TIMER;
+
 __weak void tlsr8258_stimer_debug_tick(void)
 {
 }
