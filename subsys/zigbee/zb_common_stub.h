@@ -278,7 +278,7 @@ extern const addrExt_t g_zero_addr;
 #include "os/ev_poll.h"
 #include "os/ev.h"
 #include "drv_hw.h"
-#include "drv_security.h"
+#include "zb_aes.h"
 #include "drv_radio.h"
 #include "drv_nv.h"
 #include "mac/includes/mac_phy.h"

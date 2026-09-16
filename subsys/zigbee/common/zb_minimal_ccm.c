@@ -4,14 +4,14 @@
 
 #include <zephyr/sys/util.h>
 
-#include "drv_security.h"
+#include "zb_aes.h"
 #include "zb_minimal_ccm.h"
 
 #define ZB_MINIMAL_CCM_L_VAL 2U
 
 static void zb_minimal_aes_encrypt_block(const u8 *key, const u8 *in, u8 *out)
 {
-	drv_aes_encrypt((u8 *)key, (u8 *)in, out);
+	zb_aes_encrypt((u8 *)key, (u8 *)in, out);
 }
 
 static void zb_minimal_ccm_xor_block(u8 *dst, const u8 *src)

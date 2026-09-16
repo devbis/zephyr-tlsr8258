@@ -65,7 +65,7 @@ _CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
     while (idx < len) {
         block[pos++] = data[idx++];
         if (pos == AES_BLOCK_SIZE_LOCAL) {
-            drv_aes_encrypt(result, block, result);
+            zb_aes_encrypt(result, block, result);
             aes_block_xor(result, block);
             pos = 0;
         }
@@ -75,7 +75,7 @@ _CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
 
     while (pos != (AES_BLOCK_SIZE_LOCAL - 2U)) {
         if (pos >= AES_BLOCK_SIZE_LOCAL) {
-            drv_aes_encrypt(result, block, result);
+            zb_aes_encrypt(result, block, result);
             aes_block_xor(result, block);
             pos = 0;
         }
@@ -85,7 +85,7 @@ _CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
     block[pos++] = (u8)(((u16)len << 3) >> 8);
     block[pos] = (u8)(((u16)len << 3) & 0xffU);
 
-    drv_aes_encrypt(result, block, result);
+    zb_aes_encrypt(result, block, result);
     aes_block_xor(result, block);
 }
 
@@ -177,7 +177,7 @@ _CODE_SS_ u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
 
     for (u16 processed = 0; processed < (u16)(totalLen + AES_BLOCK_SIZE_LOCAL); processed += AES_BLOCK_SIZE_LOCAL) {
         aes_block_xor(x, b0);
-        drv_aes_encrypt(key, x, x);
+        zb_aes_encrypt(key, x, x);
 
         if (authRemain > AES_BLOCK_SIZE_LOCAL) {
             memcpy(b0, authData + authOffset, AES_BLOCK_SIZE_LOCAL);
@@ -216,7 +216,7 @@ _CODE_SS_ u8 aes_ccmBaseTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
     (void)opt;
 
     aes_ccm_ctr_blk_fill(ctr, iv, counter);
-    drv_aes_encrypt(key, ctr, stream);
+    zb_aes_encrypt(key, ctr, stream);
 
     for (u8 i = 0; i < M; i++) {
         mic[i] ^= stream[i];
@@ -227,7 +227,7 @@ _CODE_SS_ u8 aes_ccmBaseTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
         u8 chunk = (remain >= AES_BLOCK_SIZE_LOCAL) ? AES_BLOCK_SIZE_LOCAL : (u8)remain;
 
         aes_ccm_ctr_blk_fill(ctr, iv, counter);
-        drv_aes_encrypt(key, ctr, stream);
+        zb_aes_encrypt(key, ctr, stream);
 
         for (u8 i = 0; i < chunk; i++) {
             mStr[offset + i] ^= stream[i];

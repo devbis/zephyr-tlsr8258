@@ -108,13 +108,13 @@ void ll_decrypt_network_key(u8 key_index, u8 *encrypted_network_key, u32 transac
     ll_calculate_AES_input(AES_input, key_index, transaction_ID, response_ID);
 
     if (key_index == DEVELOPMENT_KEY) {
-        drv_aes_decrypt(AES_input, encrypted_network_key, network_key);
+        zb_aes_decrypt(AES_input, encrypted_network_key, network_key);
     } else if (key_index == MASTER_KEY) {
-        drv_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
-        drv_aes_decrypt(transport_key, encrypted_network_key, network_key);
+        zb_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
+        zb_aes_decrypt(transport_key, encrypted_network_key, network_key);
     } else if (key_index == CERTIFICATION_KEY) {
-        drv_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
-        drv_aes_decrypt(transport_key, encrypted_network_key, network_key);
+        zb_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
+        zb_aes_decrypt(transport_key, encrypted_network_key, network_key);
     }
 
     memcpy(encrypted_network_key, network_key, CCM_KEY_SIZE);
@@ -154,13 +154,13 @@ void ll_get_encrypted_network_key(u8 key_index, u32 transactionID, u32 responseI
 #endif
 
     if (key_index == DEVELOPMENT_KEY) {
-        drv_aes_encrypt(AES_input, network_key, encrypted_network_key);
+        zb_aes_encrypt(AES_input, network_key, encrypted_network_key);
     } else if(key_index == MASTER_KEY) {
-        drv_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
-        drv_aes_encrypt(transport_key, network_key, encrypted_network_key);
+        zb_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
+        zb_aes_encrypt(transport_key, network_key, encrypted_network_key);
     } else if(key_index == CERTIFICATION_KEY) {
-        drv_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
-        drv_aes_encrypt(transport_key, network_key, encrypted_network_key);
+        zb_aes_encrypt(SS_IB().touchLinkKey, AES_input, transport_key);
+        zb_aes_encrypt(transport_key, network_key, encrypted_network_key);
     }
 
     if (!APS_IB().aps_authenticated) {

@@ -1,16 +1,122 @@
+/* SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors */
 /* SPDX-License-Identifier: Apache-2.0 */
+
 /*
- * AES-128 driver for TLSR8258 using the built-in hardware AES accelerator.
- * Register layout (base 0x00800000):
- *   0x540  reg_aes_ctrl  (u8)  bit0=CODEC_TRIG(0=enc,1=dec), bit1=DATA_FEED, bit2=CODEC_FINISHED
- *   0x548  reg_aes_data  (u32) feed/read 4×u32
- *   0x550  reg_aes_key[] (u8)  16-byte key
+ * AES-128 block cipher for the Zigbee security service.
+ *
+ * Boards whose SoC carries an AES engine reach it through the Zephyr crypto
+ * API; everything else, native_sim included, uses the software cipher below.
  */
+
 #include <string.h>
 
 #include <zephyr/zigbee/zb_types.h>
 
-#include "drv_security.h"
+#include "zb_aes.h"
+
+#if defined(CONFIG_CRYPTO_TLSR8258)
+
+#include <zephyr/crypto/crypto.h>
+#include <zephyr/device.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(zigbee_aes, CONFIG_ZIGBEE_LOG_LEVEL);
+
+#define AES_BLOCK_SIZE 16U
+
+/*
+ * One long-lived session per direction. A session only caches the key, so
+ * reopening it costs a validation and a 16-byte copy; that happens on every
+ * AES-MMO block, because Matyas-Meyer-Oseas chains the previous hash state as
+ * the next round's key. CCM* keeps one key for a whole frame and reuses the
+ * session as is.
+ *
+ * Only the Zigbee thread calls in here, so the contexts need no locking of
+ * their own; the driver serialises access to the engine.
+ */
+struct zb_aes_session {
+	struct cipher_ctx ctx;
+	u8 key[AES_BLOCK_SIZE];
+	bool open;
+};
+
+static struct zb_aes_session zb_aes_enc;
+static struct zb_aes_session zb_aes_dec;
+
+static int zb_aes_session_get(struct zb_aes_session *session, enum cipher_op op, const u8 *key)
+{
+	const struct device *dev = DEVICE_DT_GET_ONE(telink_tlsr8258_aes);
+	int ret;
+
+	if (session->open && (memcmp(session->key, key, AES_BLOCK_SIZE) == 0)) {
+		return 0;
+	}
+
+	if (!device_is_ready(dev)) {
+		LOG_ERR("AES device not ready");
+		return -ENODEV;
+	}
+
+	if (session->open) {
+		(void)cipher_free_session(dev, &session->ctx);
+		session->open = false;
+	}
+
+	memcpy(session->key, key, AES_BLOCK_SIZE);
+
+	session->ctx.keylen = AES_BLOCK_SIZE;
+	session->ctx.key.bit_stream = session->key;
+	session->ctx.flags = CAP_RAW_KEY | CAP_SYNC_OPS | CAP_SEPARATE_IO_BUFS;
+
+	ret = cipher_begin_session(dev, &session->ctx, CRYPTO_CIPHER_ALGO_AES,
+				   CRYPTO_CIPHER_MODE_ECB, op);
+	if (ret != 0) {
+		LOG_ERR("cipher_begin_session failed (%d)", ret);
+		return ret;
+	}
+
+	session->open = true;
+
+	return 0;
+}
+
+static void zb_aes_run(struct zb_aes_session *session, enum cipher_op op, u8 *key, u8 *in, u8 *out)
+{
+	struct cipher_pkt pkt = {
+		.in_buf = in,
+		.in_len = (int)AES_BLOCK_SIZE,
+		.out_buf = out,
+		.out_buf_max = (int)AES_BLOCK_SIZE,
+	};
+	int ret;
+
+	ret = zb_aes_session_get(session, op, key);
+	if (ret == 0) {
+		ret = cipher_block_op(&session->ctx, &pkt);
+	}
+
+	if (ret != 0) {
+		/*
+		 * The callers come from the vendor security service and take no
+		 * status. Wipe the output so a broken engine shows up as a MIC
+		 * mismatch instead of silently reusing whatever was there.
+		 */
+		LOG_ERR("AES block failed (%d)", ret);
+		memset(out, 0, AES_BLOCK_SIZE);
+	}
+}
+
+void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result)
+{
+	zb_aes_run(&zb_aes_enc, CRYPTO_CIPHER_OP_ENCRYPT, key, plain, result);
+}
+
+void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
+{
+	zb_aes_run(&zb_aes_dec, CRYPTO_CIPHER_OP_DECRYPT, key, cipher, result);
+}
+
+#else /* CONFIG_CRYPTO_TLSR8258 */
 
 #define AES_BLOCK_SIZE 16U
 #define AES_ROUND_KEYS 176U
@@ -259,99 +365,14 @@ static void aes_decrypt_block_sw(const u8 key[16], const u8 in[16], u8 out[16])
 	memcpy(out, state, sizeof(state));
 }
 
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
-
-void drv_aes_encrypt(u8 *key, u8 *plain, u8 *result)
+void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 {
 	aes_encrypt_block_sw(key, plain, result);
 }
 
-void drv_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
+void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
 {
 	aes_decrypt_block_sw(key, cipher, result);
 }
 
-#else
-
-#define TLSR_REG8(a)   (*(volatile u8  *)(0x00800000u + (a)))
-#define TLSR_REG32(a)  (*(volatile u32 *)(0x00800000u + (a)))
-
-#define REG_AES_CTRL        TLSR_REG8(0x540)
-#define REG_AES_DATA        TLSR_REG32(0x548)
-#define REG_AES_KEY(i)      TLSR_REG8(0x550u + (i))
-
-#define AES_TRIG_ENCRYPT    0u
-#define AES_TRIG_DECRYPT    BIT(0)
-#define AES_DATA_FEED       BIT(1)
-#define AES_FINISHED        BIT(2)
-
-static void _aes_run(u8 mode, const u8 *key, const u8 *in, u8 *out)
-{
-	/*
-	 * AES-MMO usage in ss_tlCCM.c:tl_cryHashFunction calls drv_aes_encrypt
-	 * with `key` and `out` pointing to the SAME 16-byte buffer (Matyas-
-	 * Meyer-Oseas chains the previous hash state as the next round's
-	 * key). The TLSR8258 HW AES engine is supposed to copy the key into
-	 * its internal register file BEFORE the output write-back, so the
-	 * aliased call should be safe — but empirically the derived
-	 * Transport-Key encryption key for "ZigBeeAlliance09" pad=0 comes
-	 * back wrong (`b6 04 63 aa ...` instead of the spec-mandated
-	 * `4b ab 0f 17 ...`, verified by SWS read of keyTemp[0..3] after
-	 * ss_keyHash; the same C code with a SW AES in the standalone
-	 * tc32 repro produces the correct bytes). Stage the key into a
-	 * local buffer here so the HW load is unambiguously decoupled from
-	 * the output write-back, regardless of how the caller scheduled
-	 * the surrounding load/stores. NWK CCM never aliases key/out so
-	 * this is a no-op cost for the hot RX path.
-	 */
-	u8 key_local[16];
-
-	for (int i = 0; i < 16; i++) {
-		key_local[i] = key[i];
-	}
-
-	if (mode == AES_TRIG_ENCRYPT) {
-		REG_AES_CTRL &= ~AES_TRIG_DECRYPT;
-	} else {
-		REG_AES_CTRL |= AES_TRIG_DECRYPT;
-	}
-
-	for (int i = 0; i < 16; i++) {
-		REG_AES_KEY(i) = key_local[i];
-	}
-
-	const u8 *p = in;
-
-	while (REG_AES_CTRL & AES_DATA_FEED) {
-		u32 w = (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
-
-		REG_AES_DATA = w;
-		p += 4;
-	}
-
-	while (!(REG_AES_CTRL & AES_FINISHED)) {
-	}
-
-	u8 *q = out;
-
-	for (int i = 0; i < 4; i++) {
-		u32 w = REG_AES_DATA;
-
-		*q++ = (u8)(w & 0xff);
-		*q++ = (u8)((w >> 8) & 0xff);
-		*q++ = (u8)((w >> 16) & 0xff);
-		*q++ = (u8)((w >> 24) & 0xff);
-	}
-}
-
-void drv_aes_encrypt(u8 *key, u8 *plain, u8 *result)
-{
-	_aes_run(AES_TRIG_ENCRYPT, key, plain, result);
-}
-
-void drv_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
-{
-	_aes_run(AES_TRIG_DECRYPT, key, cipher, result);
-}
-
-#endif
+#endif /* CONFIG_CRYPTO_TLSR8258 */
