@@ -45,9 +45,11 @@
 
 #if defined(__APPLE__)
 #define NSI_KEEP_SECTION_DATA(sec) \
-	__attribute__((__used__)) __attribute__((__section__("__DATA," sec)))
+	__attribute__((__used__)) \
+	__attribute__((__section__("__DATA," sec ",regular,no_dead_strip")))
 #define NSI_KEEP_SECTION_TEXT(sec) \
-	__attribute__((__used__)) __attribute__((__section__("__TEXT," sec)))
+	__attribute__((__used__)) \
+	__attribute__((__section__("__TEXT," sec ",regular,pure_instructions")))
 #else
 #define NSI_KEEP_SECTION_DATA(sec) __attribute__((__section__(sec)))
 #define NSI_KEEP_SECTION_TEXT(sec) __attribute__((__section__(sec)))
