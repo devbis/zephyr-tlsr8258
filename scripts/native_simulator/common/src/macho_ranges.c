@@ -26,14 +26,6 @@ MACHO_ALIAS(__init_end, "section$end$__DATA$zi4_90_0");
 MACHO_ALIAS(__zephyr_init_array_start, "section$start$__DATA$zi1_30_0");
 MACHO_ALIAS(__zephyr_init_array_end, "section$end$__DATA$zi4_90_0");
 
-/* POSIX/native task hooks from the embedded image */
-MACHO_ALIAS(__native_PRE_BOOT_1_tasks_start, "section$start$__DATA$natt0_0");
-MACHO_ALIAS(__native_PRE_BOOT_2_tasks_start, "section$start$__DATA$natt1_10");
-MACHO_ALIAS(__native_PRE_BOOT_3_tasks_start, "section$start$__DATA$natt4_1");
-MACHO_ALIAS(__native_FIRST_SLEEP_tasks_start, "section$start$__DATA$natt4_1");
-MACHO_ALIAS(__native_ON_EXIT_tasks_start, "section$start$__DATA$natt4_1");
-MACHO_ALIAS(__native_tasks_end, "section$end$__DATA$natt4_1");
-
 /* Runner-side NSI task hooks */
 MACHO_ALIAS(__nsi_PRE_BOOT_1_tasks_start, "section$start$__DATA$nsit0_0");
 MACHO_ALIAS(__nsi_PRE_BOOT_2_tasks_start, "section$start$__DATA$nsit1_0");

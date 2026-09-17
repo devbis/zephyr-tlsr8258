@@ -17,6 +17,8 @@
 #include <string.h>
 #include <zephyr/sys/util.h>
 
+#include "posix_native_task.h"
+
 extern const struct mach_header_64 _mh_execute_header;
 
 struct macho_native_task_section {
@@ -102,11 +104,11 @@ static void macho_sort_native_task_sections(struct macho_native_task_section *se
 void run_native_tasks(int level)
 {
 	static const char *const prefixes[] = {
-		"natt0_",
-		"natt1_",
-		"natt2_",
-		"natt3_",
-		"natt4_",
+		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_1,
+		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_2,
+		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_3,
+		NATIVE_TASK_MACHO_SEC_LEVEL_FIRST_SLEEP,
+		NATIVE_TASK_MACHO_SEC_LEVEL_ON_EXIT,
 	};
 	struct macho_native_task_section sections[16];
 	size_t count;
