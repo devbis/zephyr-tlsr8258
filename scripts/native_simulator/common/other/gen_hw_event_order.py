@@ -173,6 +173,8 @@ def collect_init_symbols(nm, objects):
         )
         symbols.append(f"___macho_init_range_end_{name}")
 
+    symbols.extend(("___zephyr_init_array_start", "___zephyr_init_array_end"))
+
     return symbols
 
 

@@ -251,11 +251,13 @@ static void z_sys_init_run_level(enum init_level level)
 
 #ifdef CONFIG_STATIC_INIT_GNU
 
-extern void (*__zephyr_init_array_start[])();
-extern void (*__zephyr_init_array_end[])();
-
 static void z_static_init_gnu(void)
 {
+#ifdef __APPLE__
+	arch_static_init_gnu();
+#else
+	extern void (*__zephyr_init_array_start[])();
+	extern void (*__zephyr_init_array_end[])();
 	void	(**fn)();
 
 	for (fn = __zephyr_init_array_start; fn != __zephyr_init_array_end; fn++) {
@@ -265,6 +267,7 @@ static void z_static_init_gnu(void)
 		}
 		(**fn)();
 	}
+#endif
 }
 
 #endif

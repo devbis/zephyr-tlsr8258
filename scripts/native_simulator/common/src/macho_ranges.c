@@ -6,18 +6,8 @@
 
 #ifdef __APPLE__
 
-/*
- * ld64 does not consume the GNU linker scripts which normally synthesize these
- * section boundary symbols for the native simulator final link. Re-export them
- * from the Mach-O section start/end pseudo-symbols so the existing runtime can
- * keep using the Linux-oriented names.
- */
-
 #define MACHO_ALIAS(sym, target) \
 	__asm__(".globl _" #sym "\n_" #sym " = " target)
-
-MACHO_ALIAS(__zephyr_init_array_start, "section$start$__DATA$z_init_array");
-MACHO_ALIAS(__zephyr_init_array_end, "section$end$__DATA$z_init_array");
 
 /* Runner-side NSI task hooks */
 MACHO_ALIAS(__nsi_PRE_BOOT_1_tasks_start, "___nsi_task_range_start_PRE_BOOT_1");

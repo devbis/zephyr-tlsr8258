@@ -27,6 +27,7 @@ static inline void arch_kernel_init(void)
 
 #ifdef __APPLE__
 void arch_sys_init_run_level(unsigned int level);
+void arch_static_init_gnu(void);
 #endif
 
 static ALWAYS_INLINE void

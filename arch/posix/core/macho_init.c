@@ -10,14 +10,20 @@
 
 #include <kernel_internal.h>
 
-/* Keep an empty GNU constructor range materialized in the embedded image. */
-static void z_macho_init_array_sentinel_fn(void)
+/* Keep GNU constructor bounds materialized in the embedded image. */
+static void z_macho_init_array_marker_fn(void)
 {
 }
 
-static void (*const z_macho_init_array_sentinel)(void)
-	__attribute__((used, section("__DATA,__mod_init_func"))) =
-		z_macho_init_array_sentinel_fn;
+void (*const __zephyr_init_array_start[])(void)
+	__attribute__((used, visibility("default"),
+		       section("__DATA,z_init_array"))) =
+		{ z_macho_init_array_marker_fn };
+
+void (*const __zephyr_init_array_end[])(void)
+	__attribute__((used, visibility("default"),
+		       section("__DATA,z_init_array"))) =
+		{ z_macho_init_array_marker_fn };
 
 #define MACHO_INIT_MARKERS(level) \
 	static const struct init_entry _CONCAT(__macho_init_range_start_, level) \
@@ -63,6 +69,16 @@ void arch_sys_init_run_level(unsigned int level)
 		if ((entry->init_fn != NULL) || (entry->dev != NULL)) {
 			z_sys_init_run_entry(entry, level);
 		}
+	}
+}
+
+void arch_static_init_gnu(void)
+{
+	void (*const *fn)(void);
+
+	for (fn = __zephyr_init_array_start;
+	     fn != __zephyr_init_array_end; fn++) {
+		(*fn)();
 	}
 }
 
