@@ -2465,9 +2465,9 @@ toolchain_linker_finalize()
 build_info(zephyr version VALUE ${PROJECT_VERSION_STR})
 build_info(zephyr zephyr-base VALUE ${ZEPHYR_BASE})
 
-if(CMAKE_HOST_APPLE AND TARGET arch__posix__core)
+if(CMAKE_HOST_APPLE AND TARGET native_simulator)
   zephyr_generate_macho_iterable_sections(
-    TARGET arch__posix__core
+    TARGET native_simulator
     STRUCT_TAGS ${struct_tags_json}
   )
 endif()

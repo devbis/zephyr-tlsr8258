@@ -83,3 +83,20 @@ def test_parse_linker_script_names_reads_boundary_symbols(tmp_path):
     )
 
     assert sut.parse_linker_script_names([linker_script]) == ["ztest_unit_test"]
+
+
+def test_parse_alias_names_reads_boundary_references(tmp_path):
+    source = tmp_path / "references.h"
+    source.write_text(
+        "STRUCT_SECTION_FOREACH(device, dev) {}\n"
+        "TYPE_SECTION_START(log_const)\n"
+        "TYPE_SECTION_END_EXTERN(struct log_source_dynamic_data, log_dynamic)\n"
+        "extern struct ztest_unit_test _ztest_unit_test_list_start[];\n"
+    )
+
+    assert sut.parse_alias_names([source]) == [
+        "device",
+        "log_const",
+        "log_dynamic",
+        "ztest_unit_test",
+    ]

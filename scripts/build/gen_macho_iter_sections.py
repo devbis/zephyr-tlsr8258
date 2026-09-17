@@ -135,6 +135,30 @@ def parse_linker_script_names(paths):
     return names
 
 
+def parse_alias_names(paths):
+    """Extract iterable-section names whose boundary symbols are referenced."""
+    names = []
+    patterns = [
+        re.compile(
+            r"(?:STRUCT_SECTION_FOREACH(?:_ALTERNATE|_REVERSE)?|"
+            r"TYPE_SECTION_FOREACH(?:_ALTERNATE|_REVERSE)?)"
+            r"\s*\(\s*([A-Za-z0-9_]+)"
+        ),
+        re.compile(r"TYPE_SECTION_(?:START|END)\s*\(\s*([A-Za-z0-9_]+)"),
+        re.compile(
+            r"TYPE_SECTION_(?:START|END)_EXTERN\s*\([^,]+,\s*([A-Za-z0-9_]+)"
+        ),
+        re.compile(r"_([A-Za-z0-9_]+)_list_(?:start|end)\b"),
+    ]
+
+    for path in paths:
+        text = Path(path).read_text(encoding="utf-8")
+        for pattern in patterns:
+            names.extend(pattern.findall(text))
+
+    return names
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path)
@@ -142,6 +166,7 @@ def parse_args():
     parser.add_argument("--tag", default="__subsystem")
     parser.add_argument("--source", action="append", type=Path, default=[])
     parser.add_argument("--source-dir", action="append", type=Path, default=[])
+    parser.add_argument("--alias-source-dir", action="append", type=Path, default=[])
     parser.add_argument("--linker-script", action="append", type=Path, default=[])
     parser.add_argument("--header", required=True, type=Path)
     parser.add_argument("--aliases", required=True, type=Path)
@@ -168,6 +193,14 @@ def main():
         for path in source_dir.rglob("*")
         if path.suffix in {".c", ".h", ".cmake", ".ld"}
     ]
+    alias_source_files = [
+        path
+        for source_dir in args.alias_source_dir
+        for path in source_dir.rglob("*")
+        if path.suffix in {".c", ".h", ".cmake", ".ld"}
+    ]
+    alias_names = parse_alias_names(alias_source_files)
+    names.extend(alias_names)
     names.extend(parse_source_names(source_files))
     names.extend(
         parse_linker_script_names(path for path in source_files if path.suffix == ".ld")
@@ -176,13 +209,20 @@ def main():
     if not names:
         raise ValueError("no iterable section names were provided")
     mapping = build_mapping(sorted(set(names)))
-    alias_names = None
+    explicit_alias_names = None
     if args.alias_input is not None:
-        alias_names = [
+        explicit_alias_names = [
             line.strip()
             for line in args.alias_input.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
+        alias_names.extend(explicit_alias_names)
+
+    if alias_names:
+        alias_names = sorted(set(alias_names))
+    else:
+        alias_names = None
+
     write_outputs(mapping, args.header, args.aliases, args.linker, alias_names)
 
 

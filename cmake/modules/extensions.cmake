@@ -6513,8 +6513,6 @@ function(zephyr_generate_macho_iterable_sections)
         list(APPEND generator_args --source-dir ${ZEPHYR_BASE}/${source_dir})
       endforeach()
     endif()
-    # These boundaries are consumed by the native simulator runtime. Aliasing
-    # every inventory entry would reference absent Mach-O sections.
     set(alias_names
       _static_thread_data
       eth_bridge
@@ -6542,6 +6540,11 @@ function(zephyr_generate_macho_iterable_sections)
     file(APPEND ${alias_input_file} "${name}\n")
   endforeach()
 
+  set(alias_generator_args)
+  foreach(source_dir include kernel drivers subsys cmake/linker_script)
+    list(APPEND alias_generator_args --alias-source-dir ${ZEPHYR_BASE}/${source_dir})
+  endforeach()
+
   if(DEFINED MACHO_STRUCT_TAGS)
     list(APPEND generator_args --struct-tags ${MACHO_STRUCT_TAGS})
     string(MAKE_C_IDENTIFIER "${MACHO_TARGET}" macho_target_id)
@@ -6552,6 +6555,7 @@ function(zephyr_generate_macho_iterable_sections)
               ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
               --input ${input_file}
               --alias-input ${alias_input_file}
+              ${alias_generator_args}
               ${generator_args}
               --header ${header_file}
               --aliases ${alias_file}
@@ -6580,6 +6584,7 @@ function(zephyr_generate_macho_iterable_sections)
               ${ZEPHYR_BASE}/scripts/build/gen_macho_iter_sections.py
               --input ${input_file}
               --alias-input ${alias_input_file}
+              ${alias_generator_args}
               ${generator_args}
               --header ${header_file}
               --aliases ${alias_file}
@@ -6596,7 +6601,12 @@ function(zephyr_generate_macho_iterable_sections)
   else()
     target_include_directories(${MACHO_TARGET} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include/generated)
   endif()
-  target_sources(${MACHO_TARGET} PRIVATE ${alias_file})
+  get_target_property(macho_target_type ${MACHO_TARGET} TYPE)
+  if("${macho_target_type}" STREQUAL "INTERFACE_LIBRARY")
+    target_sources(${MACHO_TARGET} INTERFACE ${alias_file})
+  else()
+    target_sources(${MACHO_TARGET} PRIVATE ${alias_file})
+  endif()
 endfunction()
 
 #[=======================================================================[.rst:
