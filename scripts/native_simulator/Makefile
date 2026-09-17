@@ -67,6 +67,7 @@ NSI_WARNINGS?=-Wall -Wpedantic
 NSI_CPPFLAGS?=-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENDED
 
 HOST_OS:=$(shell uname -s)
+NSI_ZEPHYR_INIT_SECTION:=z_init_array
 
 NO_PIE_CO:=-fno-pie -fno-pic
 DEPENDFLAGS:=-MMD -MP
@@ -152,8 +153,10 @@ ${NSI_BUILD_PATH}/%.loc_cpusw.o: /% ${NSI_CONFIG_FILE}
 	fi
 	@if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 ifeq (${HOST_OS},Darwin)
+# Keep Zephyr constructors out of dyld startup; z_static_init_gnu runs them later.
 	@if [ -z "${NSI_OBJCOPY}" ] || [ "${NSI_OBJCOPY}" = "CMAKE_OBJCOPY-NOTFOUND" ]; then \
-	  ld -r -o $@ $<; \
+	  ld -r -rename_section __DATA __mod_init_func __DATA ${NSI_ZEPHYR_INIT_SECTION} \
+	    -sectcreate __DATA ${NSI_ZEPHYR_INIT_SECTION} /dev/null -o $@ $<; \
 	else \
 	  ${NSI_OBJCOPY} --localize-hidden $< $@ -w --localize-symbol=_* ${NSI_LOCALIZE_OPTIONS}; \
 	fi

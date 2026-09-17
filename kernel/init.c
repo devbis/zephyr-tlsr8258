@@ -256,13 +256,6 @@ extern void (*__zephyr_init_array_end[])();
 
 static void z_static_init_gnu(void)
 {
-#ifdef __APPLE__
-	/*
-	 * Mach-O host binaries run constructors via dyld, and this experimental
-	 * Apple native_sim path does not synthesize ELF-style init_array bounds.
-	 */
-	return;
-#else
 	void	(**fn)();
 
 	for (fn = __zephyr_init_array_start; fn != __zephyr_init_array_end; fn++) {
@@ -272,7 +265,6 @@ static void z_static_init_gnu(void)
 		}
 		(**fn)();
 	}
-#endif
 }
 
 #endif

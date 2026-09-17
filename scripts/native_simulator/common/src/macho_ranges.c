@@ -23,8 +23,8 @@ MACHO_ALIAS(__init_PRE_KERNEL_2_start, "section$start$__DATA$zi2_0_0");
 MACHO_ALIAS(__init_POST_KERNEL_start, "section$start$__DATA$zi3_40_0");
 MACHO_ALIAS(__init_APPLICATION_start, "section$start$__DATA$zi4_0_0");
 MACHO_ALIAS(__init_end, "section$end$__DATA$zi4_90_0");
-MACHO_ALIAS(__zephyr_init_array_start, "section$start$__DATA$zi1_30_0");
-MACHO_ALIAS(__zephyr_init_array_end, "section$end$__DATA$zi4_90_0");
+MACHO_ALIAS(__zephyr_init_array_start, "section$start$__DATA$z_init_array");
+MACHO_ALIAS(__zephyr_init_array_end, "section$end$__DATA$z_init_array");
 
 /* Runner-side NSI task hooks */
 MACHO_ALIAS(__nsi_PRE_BOOT_1_tasks_start, "section$start$__DATA$nsit0_0");
