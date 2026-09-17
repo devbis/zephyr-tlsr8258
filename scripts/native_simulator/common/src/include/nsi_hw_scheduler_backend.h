@@ -9,11 +9,12 @@
 
 #include "nsi_hws_models_if.h"
 
-#define NSI_HWS_MAX_EVENTS 64U
-
 #ifdef __APPLE__
-extern struct nsi_hw_event_st nsi_hws_events[NSI_HWS_MAX_EVENTS];
+extern struct nsi_hw_event_st __nsi_hw_events_start[];
+extern struct nsi_hw_event_st __nsi_hw_events_end[];
 extern unsigned int nsi_hws_backend_event_count;
+
+#define nsi_hws_events __nsi_hw_events_start
 
 void nsi_hws_backend_init(void);
 #else

@@ -56,6 +56,8 @@ NSI_LINKER?=${NSI_CC}
 NSI_AR?=ar
 #  Objcopy program (it is unlikely you'll need to change this)
 NSI_OBJCOPY?=objcopy
+#  Python interpreter used by native simulator build helpers
+NSI_PYTHON?=python3
 
 #  Build debug switch (by default enabled)
 NSI_DEBUG?=-g
@@ -68,6 +70,7 @@ NSI_CPPFLAGS?=-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTE
 
 HOST_OS:=$(shell uname -s)
 NSI_ZEPHYR_INIT_SECTION:=z_init_array
+NSI_HW_EVENT_ORDER_FILE:=${NSI_BUILD_PATH}/nsi_hw_events.order
 
 NO_PIE_CO:=-fno-pie -fno-pic
 DEPENDFLAGS:=-MMD -MP
@@ -77,7 +80,7 @@ CFLAGS:=-std=c11 ${COMMON_BUILD_FLAGS} ${NSI_BUILD_C_OPTIONS}
 CXXFLAGS:=${COMMON_BUILD_FLAGS} ${NSI_BUILD_CXX_OPTIONS}
 ifeq (${HOST_OS},Darwin)
 FINALLINK_FLAGS:=${NO_PIE_CO} ${NSI_WARNINGS} \
-  -Wl,-dead_strip -pthread \
+  -Wl,-dead_strip -Wl,-order_file,${NSI_HW_EVENT_ORDER_FILE} -pthread \
   ${NSI_LINK_OPTIONS} -lm
 NSI_LINK_CMD=${NSI_LINKER} ${LOCALIZED_EMBSW} -Wl,-force_load,${NSI_BUILD_PATH}/${RUNNER_LIB} \
   ${NSI_EXTRA_LIBS} -o $@ ${FINALLINK_FLAGS}
@@ -145,6 +148,11 @@ ${NSI_BUILD_PATH}/${RUNNER_LIB}: ${OBJS}
 	if [ -f $@ ]; then rm $@ ; fi
 	${NSI_AR} -cr $@ ${OBJS}
 
+${NSI_HW_EVENT_ORDER_FILE}: ${SRCS} ${NSI_EXTRA_SRCS} \
+ ${NSI_PATH}/common/other/gen_hw_event_order.py | ${NSI_BUILD_PATH}
+	${NSI_PYTHON} ${NSI_PATH}/common/other/gen_hw_event_order.py \
+	 --output $@ ${SRCS} ${NSI_EXTRA_SRCS}
+
 ${NSI_BUILD_PATH}/%.loc_cpusw.o: /% ${NSI_CONFIG_FILE}
 	@if [ -z $< ] || [ ! -f $< ]; then \
 	  echo "Error: Input embedded CPU SW ($<) not found \
@@ -164,7 +172,8 @@ else
 	${NSI_OBJCOPY} --localize-hidden $< $@ -w --localize-symbol=_* ${NSI_LOCALIZE_OPTIONS}
 endif
 
-${NSI_EXE}: ${NSI_BUILD_PATH}/${RUNNER_LIB} ${LOCALIZED_EMBSW} ${NSI_EXTRA_LIBS} \
+${NSI_EXE}: ${NSI_BUILD_PATH}/${RUNNER_LIB} ${NSI_HW_EVENT_ORDER_FILE} \
+ ${LOCALIZED_EMBSW} ${NSI_EXTRA_LIBS} \
  ${NSI_BUILD_PATH}/linker_script.ld
 	${NSI_LINK_CMD}
 
