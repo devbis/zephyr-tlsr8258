@@ -52,7 +52,7 @@ set(NSI_DIR ${ZEPHYR_BASE}/scripts/native_simulator CACHE PATH "Path to the nati
 if(NATIVE_TARGET_HOST) # Allow users to manually select the target for cross-compiling use cases
   set(TARGET_HOST ${NATIVE_TARGET_HOST})
 else()
-  if("${CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "^(aarch64|arm64)$")
+  if("${CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "(aarch64|arm64)")
     set(TARGET_HOST "aarch64")
   elseif("${CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "arm.*")
     # All 32bit arm variants
