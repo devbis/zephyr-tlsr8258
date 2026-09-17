@@ -60,7 +60,7 @@
 
 #define NCT_DEBUG_PRINTS 0
 
-/* For GNU/Darwin pthread extensions used below */
+/* Expose pthread extensions used by the stack and thread-name helpers below. */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
