@@ -15,4 +15,5 @@ endif()
 
 zephyr_library_sources(
   posix_core_nsi.c
+  macho_init.c
 )
