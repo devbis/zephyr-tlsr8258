@@ -21,7 +21,9 @@ extern "C" {
 #define NATIVE_SIMULATOR_IF_ATTR __attribute__((visibility("default")))
 
 #if defined(__APPLE__)
-#define NATIVE_SIMULATOR_IF NATIVE_SIMULATOR_IF_ATTR NSI_KEEP_SECTION_TEXT("nsiif")
+#define NATIVE_SIMULATOR_IF_SECT(sect) \
+	NATIVE_SIMULATOR_IF_ATTR NSI_KEEP_SECTION_TEXT(sect)
+#define NATIVE_SIMULATOR_IF NATIVE_SIMULATOR_IF_SECT("nsiif")
 #define NATIVE_SIMULATOR_IF_DATA NATIVE_SIMULATOR_IF_ATTR NSI_KEEP_SECTION_DATA("nsiifdat")
 #define NATIVE_SIMULATOR_IF_TEXT NATIVE_SIMULATOR_IF_ATTR NSI_KEEP_SECTION_TEXT("nsiiftxt")
 #else
@@ -35,13 +37,9 @@ extern "C" {
 /*
  * Implementation note:
  * The interface between the embedded SW and the native simulator is allocated in its
- * own section to allow the embedded software developers to, using a linker script,
- * direct the linker to keep those symbols even when doing its linking with garbage collection.
- * It is also be possible for the embedded SW to require the linker to keep those
- * symbols by requiring each of them to be kept explicitly by name (either by defining them
- * as entry points, or as required in the output).
- * It is also possible for the embedded SW developers to not use garbage collection
- * during their SW linking.
+ * own section so the linker can retain those symbols when garbage collection is enabled.
+ * On ELF this is controlled by the linker script; on Mach-O the section attributes
+ * mark the symbols as not eligible for dead stripping.
  */
 
 
