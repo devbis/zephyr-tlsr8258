@@ -85,9 +85,8 @@ zephyr_compile_options(
 
 # While doing the partial linking of the native library, some symbols will be missing
 # which are provided by the native simulator runner
-if(CMAKE_HOST_APPLE)
-  zephyr_ld_options(-Wl,-undefined,dynamic_lookup)
-else()
+# Apple ld allows unresolved symbols in relocatable output by default.
+if(NOT CMAKE_HOST_APPLE)
   zephyr_ld_options(-Wl,--unresolved-symbols=ignore-all)
 endif()
 
