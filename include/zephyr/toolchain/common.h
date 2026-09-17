@@ -262,7 +262,7 @@
 #if defined(__APPLE__)
 #define LINKER_KEEP(symbol) \
 	static const void * const symbol##_ptr  __used \
-	__attribute__((__section__("__DATA,symbol_to_keep"))) = (void *)&symbol
+	__attribute__((__section__("__DATA,symbol_to_keep,regular,no_dead_strip"))) = (void *)&symbol
 #else
 #define LINKER_KEEP(symbol) \
 	static const void * const symbol##_ptr  __used \
