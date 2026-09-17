@@ -156,7 +156,7 @@ ifeq (${HOST_OS},Darwin)
 # Keep Zephyr constructors out of dyld startup; z_static_init_gnu runs them later.
 	@if [ -z "${NSI_OBJCOPY}" ] || [ "${NSI_OBJCOPY}" = "CMAKE_OBJCOPY-NOTFOUND" ]; then \
 	  ld -r -rename_section __DATA __mod_init_func __DATA ${NSI_ZEPHYR_INIT_SECTION} \
-	    -sectcreate __DATA ${NSI_ZEPHYR_INIT_SECTION} /dev/null -o $@ $<; \
+	    -o $@ $<; \
 	else \
 	  ${NSI_OBJCOPY} --localize-hidden $< $@ -w --localize-symbol=_* ${NSI_LOCALIZE_OPTIONS}; \
 	fi
