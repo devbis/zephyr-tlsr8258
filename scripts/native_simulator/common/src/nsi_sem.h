@@ -9,6 +9,8 @@
 
 #include <stdint.h>
 
+#include "nsi_utils.h"
+
 #ifdef __APPLE__
 #include <errno.h>
 #include <pthread.h>
@@ -19,7 +21,7 @@ typedef struct {
 	uint32_t count;
 } nsi_sem_t;
 
-static inline int nsi_sem_init(nsi_sem_t *sem, unsigned int value)
+NSI_INLINE int nsi_sem_init(nsi_sem_t *sem, unsigned int value)
 {
 	int ret;
 
@@ -39,7 +41,7 @@ static inline int nsi_sem_init(nsi_sem_t *sem, unsigned int value)
 	return 0;
 }
 
-static inline int nsi_sem_post(nsi_sem_t *sem)
+NSI_INLINE int nsi_sem_post(nsi_sem_t *sem)
 {
 	int ret;
 	int unlock_ret;
@@ -65,7 +67,7 @@ static inline int nsi_sem_post(nsi_sem_t *sem)
 	return unlock_ret;
 }
 
-static inline int nsi_sem_wait(nsi_sem_t *sem)
+NSI_INLINE int nsi_sem_wait(nsi_sem_t *sem)
 {
 	int ret;
 	int unlock_ret;
@@ -97,17 +99,17 @@ static inline int nsi_sem_wait(nsi_sem_t *sem)
 
 typedef sem_t nsi_sem_t;
 
-static inline int nsi_sem_init(nsi_sem_t *sem, unsigned int value)
+NSI_INLINE int nsi_sem_init(nsi_sem_t *sem, unsigned int value)
 {
 	return sem_init(sem, 0, value);
 }
 
-static inline int nsi_sem_post(nsi_sem_t *sem)
+NSI_INLINE int nsi_sem_post(nsi_sem_t *sem)
 {
 	return sem_post(sem);
 }
 
-static inline int nsi_sem_wait(nsi_sem_t *sem)
+NSI_INLINE int nsi_sem_wait(nsi_sem_t *sem)
 {
 	return sem_wait(sem);
 }
