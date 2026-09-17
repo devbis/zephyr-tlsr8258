@@ -45,6 +45,8 @@
 #if defined(__clang__) && !defined(__OBJC__)
 #undef __weak
 #define __weak __attribute__((__weak__))
+#elif !defined(__weak)
+#define __weak __attribute__((__weak__))
 #endif
 
 #endif /* ZEPHYR_INCLUDE_TOOLCHAIN_APPLE_H_ */
