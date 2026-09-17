@@ -17,7 +17,7 @@ extern "C" {
 
 #if defined(__APPLE__)
 #define NSI_HW_EVENT_SECTION(prio) \
-	NSI_KEEP_SECTION_DATA("nsihwe_" NSI_STRINGIFY(prio))
+	NSI_KEEP_SECTION_DATA("nsihwe")
 #else
 #define NSI_HW_EVENT_SECTION(prio) \
 	__attribute__((__section__(".nsi_hw_event_" NSI_STRINGIFY(prio))))
@@ -27,6 +27,7 @@ extern "C" {
 struct nsi_hw_event_st {
 	void (*const callback)(void);
 	uint64_t *timer;
+	unsigned int priority;
 };
 
 /**
@@ -48,6 +49,7 @@ struct nsi_hw_event_st {
 		= {			\
 			.callback = fn,	\
 			.timer = &t,	\
+			.priority = prio,	\
 		}
 
 #ifdef __cplusplus

@@ -36,4 +36,8 @@ MACHO_ALIAS(__nsi_ON_EXIT_PRE_tasks_start, "section$start$__DATA$nsit5_100");
 MACHO_ALIAS(__nsi_ON_EXIT_POST_tasks_start, "section$start$__DATA$nsit6_0");
 MACHO_ALIAS(__nsi_tasks_end, "section$end$__DATA$nsit6_0");
 
+/* Native simulator HW events */
+MACHO_ALIAS(__nsi_hw_events_start, "section$start$__DATA$nsihwe");
+MACHO_ALIAS(__nsi_hw_events_end, "section$end$__DATA$nsihwe");
+
 #endif /* __APPLE__ */
