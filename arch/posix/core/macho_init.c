@@ -8,6 +8,7 @@
 #include <mach-o/dyld.h>
 #include <mach-o/loader.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -17,6 +18,15 @@
 #include <kernel_internal.h>
 
 extern const struct mach_header_64 _mh_execute_header;
+
+/* Keep an empty GNU constructor range materialized in the embedded image. */
+static void z_macho_init_array_sentinel_fn(void)
+{
+}
+
+static void (*const z_macho_init_array_sentinel)(void)
+	__attribute__((used, section("__DATA,__mod_init_func"))) =
+		z_macho_init_array_sentinel_fn;
 
 /*
  * Mach-O keeps each init priority in a separate section. Collecting and
