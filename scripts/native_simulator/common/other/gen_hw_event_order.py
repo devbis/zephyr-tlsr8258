@@ -47,6 +47,21 @@ NATIVE_TASK_SYMBOL_RE = re.compile(
     r"(?P<priority>[0-9]+)_(?P<function>[A-Za-z_][A-Za-z0-9_]*)$"
 )
 
+MACHO_INIT_LEVELS = (
+    "EARLY",
+    "PRE_KERNEL_1",
+    "PRE_KERNEL_2",
+    "POST_KERNEL",
+    "APPLICATION",
+    "SMP",
+)
+
+MACHO_INIT_SYMBOL_RE = re.compile(
+    r"___init_order_(?P<level>EARLY|PRE_KERNEL_[12]|POST_KERNEL|APPLICATION|SMP)_"
+    r"(?P<priority>[0-9]+)_"
+    r"(?P<sub_priority>[0-9]+)_(?P<name>[A-Za-z_][A-Za-z0-9_]*)$"
+)
+
 def collect_events(paths):
     """Return HW event symbols in priority order."""
     events = []
@@ -126,6 +141,41 @@ def collect_native_task_symbols(nm, objects):
     return symbols
 
 
+def collect_init_symbols(nm, objects):
+    """Return compiled Mach-O init-entry symbols in priority order."""
+    entries = {level: [] for level in MACHO_INIT_LEVELS}
+    seen = set()
+
+    for obj in objects:
+        result = subprocess.run(
+            [str(nm), "-j", str(obj)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        for line in result.stdout.splitlines():
+            symbol = line.strip()
+            match = MACHO_INIT_SYMBOL_RE.fullmatch(symbol)
+            if match is None or symbol in seen:
+                continue
+
+            seen.add(symbol)
+            entries[match.group("level")].append(
+                (int(match.group("priority")), int(match.group("sub_priority")), symbol)
+            )
+
+    symbols = []
+    for name in MACHO_INIT_LEVELS:
+        symbols.append(f"___macho_init_range_start_{name}")
+        symbols.extend(
+            symbol
+            for _, _, symbol in sorted(entries[name], key=lambda entry: (entry[0], entry[1]))
+        )
+        symbols.append(f"___macho_init_range_end_{name}")
+
+    return symbols
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
@@ -140,6 +190,7 @@ def main():
     symbols = collect_symbols(args.sources)
     if args.nm is not None:
         symbols.extend(collect_native_task_symbols(args.nm, args.object))
+        symbols.extend(collect_init_symbols(args.nm, args.object))
     args.output.write_text("\n".join(symbols) + "\n", encoding="utf-8")
 
 

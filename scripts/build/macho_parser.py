@@ -39,7 +39,7 @@ class MachOFile:
     _LC_SYMTAB = 0x2
     _N_TYPE = 0x0E
     _N_SECT = 0x0E
-    _INIT_SECTION_RE = re.compile(r"^zi([0-5])_[0-9]+_[0-9]+$")
+    _INIT_SECTION_RE = re.compile(r"^zi([0-5])(?:_[0-9]+_[0-9]+)?$")
 
     @staticmethod
     def is_macho(image_file):
@@ -218,6 +218,7 @@ class MachOFile:
                 for symbol in self._symbols
                 if symbol.section_index == section.index
                 and symbol.name.startswith("__init_")
+                and not symbol.name.startswith("__init_order_")
             )
 
         for level in entries:

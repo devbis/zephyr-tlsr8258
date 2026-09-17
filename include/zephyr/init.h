@@ -109,18 +109,27 @@ struct init_entry {
  */
 #define Z_INIT_ENTRY_NAME(init_id) _CONCAT(__init_, init_id)
 
+#if defined(__APPLE__)
+#define Z_INIT_ENTRY_ORDER_NAME(init_id, level, prio, sub_prio) \
+	__init_order_##level##_##prio##_##sub_prio##_##init_id
+#define Z_INIT_ENTRY_ORDER_ALIAS(init_id, level, prio, sub_prio) \
+	__asm__("_" STRINGIFY(Z_INIT_ENTRY_ORDER_NAME(init_id, level, prio, sub_prio)) \
+		" = _" STRINGIFY(Z_INIT_ENTRY_NAME(init_id)))
+#else
+#define Z_INIT_ENTRY_ORDER_ALIAS(init_id, level, prio, sub_prio)
+#endif
+
 /**
  * @brief Init entry section.
  *
  * Each init entry is placed in a section with a name crafted so that it allows
- * linker scripts to sort them according to the specified
- * level/priority/sub-priority.
+ * the linker to sort them according to the specified level, priority and
+ * sub-priority. The Darwin backend uses linker ordering within a level section.
  */
 #if defined(__APPLE__)
 #define Z_INIT_ENTRY_SECTION(level, prio, sub_prio)                                                \
 	__attribute__((__section__(                                                                \
-		"__DATA,zi" STRINGIFY(INIT_LEVEL_ORD(level)) "_" STRINGIFY(prio) "_"            \
-		STRINGIFY(sub_prio))))
+		"__DATA,zi" STRINGIFY(INIT_LEVEL_ORD(level)))))
 #else
 #define Z_INIT_ENTRY_SECTION(level, prio, sub_prio)                                                \
 	__attribute__((__section__(                                                                \
@@ -185,7 +194,8 @@ struct init_entry {
 #define SYS_INIT_NAMED(name, init_fn_, level, prio)                                       \
 	static const Z_DECL_ALIGN(struct init_entry)                                      \
 		Z_INIT_ENTRY_SECTION(level, prio, 0) __used __noasan                      \
-		Z_INIT_ENTRY_NAME(name) = {.init_fn = (init_fn_), .dev = NULL}            \
+		Z_INIT_ENTRY_NAME(name) = {.init_fn = (init_fn_), .dev = NULL};           \
+	Z_INIT_ENTRY_ORDER_ALIAS(name, level, prio, 0)
 
 /** @} */
 

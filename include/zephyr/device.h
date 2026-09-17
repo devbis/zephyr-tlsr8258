@@ -1357,7 +1357,8 @@ device_get_dt_nodelabels(const struct device *dev)
 		Z_INIT_ENTRY_NAME(DEVICE_NAME_GET(dev_id)) = {                                     \
 			.init_fn = NULL,                                                           \
 			.dev = (const struct device *)&DEVICE_NAME_GET(dev_id),                    \
-		}
+		};                                                                            \
+	Z_INIT_ENTRY_ORDER_ALIAS(DEVICE_NAME_GET(dev_id), level, prio, Z_DEVICE_INIT_SUB_PRIO(node_id))
 
 /**
  * @brief Define a @ref device and all other required objects.
