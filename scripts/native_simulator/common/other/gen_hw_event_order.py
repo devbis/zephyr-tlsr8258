@@ -3,10 +3,11 @@
 # SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate an ld64 order file for native simulator HW events."""
+"""Generate an ld64 order file for native simulator ordered entries."""
 
 import argparse
 import re
+import subprocess
 from pathlib import Path
 
 EVENT_RE = re.compile(
@@ -32,6 +33,19 @@ NSI_TASK_LEVELS = {
     "ON_EXIT_PRE": 5,
     "ON_EXIT_POST": 6,
 }
+
+NATIVE_TASK_LEVELS = (
+    "PRE_BOOT_1",
+    "PRE_BOOT_2",
+    "PRE_BOOT_3",
+    "FIRST_SLEEP",
+    "ON_EXIT",
+)
+
+NATIVE_TASK_SYMBOL_RE = re.compile(
+    r"(?P<prefix>_+)native_task_(?P<level>PRE_BOOT_[123]|FIRST_SLEEP|ON_EXIT)_"
+    r"(?P<priority>[0-9]+)_(?P<function>[A-Za-z_][A-Za-z0-9_]*)$"
+)
 
 def collect_events(paths):
     """Return HW event symbols in priority order."""
@@ -77,16 +91,55 @@ def collect_symbols(paths):
     return symbols
 
 
+def collect_native_task_symbols(nm, objects):
+    """Return compiled native task symbols in priority order."""
+    tasks = {level: [] for level in NATIVE_TASK_LEVELS}
+    seen = set()
+
+    for obj in objects:
+        result = subprocess.run(
+            [str(nm), "-j", str(obj)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        for line in result.stdout.splitlines():
+            match = NATIVE_TASK_SYMBOL_RE.fullmatch(line.strip())
+            if match is None or match.group("level") not in NATIVE_TASK_LEVELS:
+                continue
+
+            symbol = line.strip()
+            if symbol in seen:
+                continue
+            seen.add(symbol)
+            tasks[match.group("level")].append((int(match.group("priority")), symbol))
+
+    symbols = []
+    for level in NATIVE_TASK_LEVELS:
+        symbols.append(f"___native_task_range_start_{level}")
+        symbols.extend(
+            symbol
+            for _, symbol in sorted(tasks[level], key=lambda task: task[0])
+        )
+        symbols.append(f"___native_task_range_end_{level}")
+
+    return symbols
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("sources", nargs="+", type=Path)
+    parser.add_argument("--nm", type=Path)
+    parser.add_argument("--object", action="append", default=[], type=Path)
+    parser.add_argument("sources", nargs="*", type=Path)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     symbols = collect_symbols(args.sources)
+    if args.nm is not None:
+        symbols.extend(collect_native_task_symbols(args.nm, args.object))
     args.output.write_text("\n".join(symbols) + "\n", encoding="utf-8")
 
 

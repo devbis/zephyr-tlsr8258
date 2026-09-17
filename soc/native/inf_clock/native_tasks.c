@@ -11,123 +11,52 @@
  */
 #ifdef __APPLE__
 
-#include <mach-o/dyld.h>
-#include <mach-o/loader.h>
-#include <stdint.h>
-#include <string.h>
 #include <zephyr/sys/util.h>
 
 #include "posix_native_task.h"
 
-extern const struct mach_header_64 _mh_execute_header;
+/* ld64 orders the task entries by priority; markers delimit each task level. */
+#define NATIVE_TASK_MARKERS(level) \
+	static void (*const _CONCAT(__native_task_range_start_, level))() \
+	__used __noasan NATIVE_TASK_SECTION(level, 0) = NULL; \
+	static void (*const _CONCAT(__native_task_range_end_, level))() \
+	__used __noasan NATIVE_TASK_SECTION(level, 0) = NULL
 
-struct macho_native_task_section {
-	void (**start)(void);
-	size_t count;
-	unsigned int prio;
+NATIVE_TASK_MARKERS(PRE_BOOT_1);
+NATIVE_TASK_MARKERS(PRE_BOOT_2);
+NATIVE_TASK_MARKERS(PRE_BOOT_3);
+NATIVE_TASK_MARKERS(FIRST_SLEEP);
+NATIVE_TASK_MARKERS(ON_EXIT);
+
+struct native_task_range {
+	void (*const *start)(void);
+	void (*const *end)(void);
 };
 
-static unsigned int macho_parse_native_task_prio(const char *str)
-{
-	unsigned int value = 0U;
-
-	while ((*str >= '0') && (*str <= '9')) {
-		value = (value * 10U) + (unsigned int)(*str - '0');
-		str++;
+#define NATIVE_TASK_RANGE(level) \
+	{ \
+		&_CONCAT(__native_task_range_start_, level), \
+		&_CONCAT(__native_task_range_end_, level), \
 	}
-
-	return value;
-}
-
-static size_t macho_collect_native_task_sections(const char *prefix,
-						 struct macho_native_task_section *sections,
-						 size_t max_sections)
-{
-	const struct mach_header_64 *hdr = &_mh_execute_header;
-	const struct load_command *lc =
-		(const struct load_command *)((const char *)hdr + sizeof(*hdr));
-	const intptr_t slide = _dyld_get_image_vmaddr_slide(0);
-	const size_t prefix_len = strlen(prefix);
-	size_t count = 0U;
-
-	for (uint32_t i = 0U; i < hdr->ncmds; i++) {
-		if (lc->cmd == LC_SEGMENT_64) {
-			const struct segment_command_64 *seg =
-				(const struct segment_command_64 *)lc;
-			const struct section_64 *sec =
-				(const struct section_64 *)(seg + 1);
-
-			if (strncmp(seg->segname, "__DATA", sizeof(seg->segname)) == 0) {
-				for (uint32_t j = 0U; (j < seg->nsects) && (count < max_sections);
-				     j++, sec++) {
-					char sectname[sizeof(sec->sectname) + 1];
-
-					memcpy(sectname, sec->sectname, sizeof(sec->sectname));
-					sectname[sizeof(sec->sectname)] = '\0';
-
-					if (strncmp(sectname, prefix, prefix_len) != 0) {
-						continue;
-					}
-
-					sections[count].start =
-						(void (**)(void))(uintptr_t)(sec->addr + slide);
-					sections[count].count = sec->size / sizeof(void (*)(void));
-					sections[count].prio =
-						macho_parse_native_task_prio(sectname + prefix_len);
-					count++;
-				}
-			}
-		}
-
-		lc = (const struct load_command *)((const char *)lc + lc->cmdsize);
-	}
-
-	return count;
-}
-
-static void macho_sort_native_task_sections(struct macho_native_task_section *sections,
-					    size_t count)
-{
-	for (size_t i = 1U; i < count; i++) {
-		struct macho_native_task_section key = sections[i];
-		size_t j = i;
-
-		while ((j > 0U) && (sections[j - 1U].prio > key.prio)) {
-			sections[j] = sections[j - 1U];
-			j--;
-		}
-
-		sections[j] = key;
-	}
-}
 
 void run_native_tasks(int level)
 {
-	static const char *const prefixes[] = {
-		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_1,
-		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_2,
-		NATIVE_TASK_MACHO_SEC_LEVEL_PRE_BOOT_3,
-		NATIVE_TASK_MACHO_SEC_LEVEL_FIRST_SLEEP,
-		NATIVE_TASK_MACHO_SEC_LEVEL_ON_EXIT,
+	static const struct native_task_range ranges[] = {
+		NATIVE_TASK_RANGE(PRE_BOOT_1),
+		NATIVE_TASK_RANGE(PRE_BOOT_2),
+		NATIVE_TASK_RANGE(PRE_BOOT_3),
+		NATIVE_TASK_RANGE(FIRST_SLEEP),
+		NATIVE_TASK_RANGE(ON_EXIT),
 	};
-	struct macho_native_task_section sections[16];
-	size_t count;
 
-	if ((level < 0) || (level >= (int)ARRAY_SIZE(prefixes))) {
+	if ((level < 0) || (level >= (int)ARRAY_SIZE(ranges))) {
 		return;
 	}
 
-	count = macho_collect_native_task_sections(prefixes[level], sections,
-						       ARRAY_SIZE(sections));
-	macho_sort_native_task_sections(sections, count);
-
-	for (size_t i = 0U; i < count; i++) {
-		for (size_t j = 0U; j < sections[i].count; j++) {
-			void (*fn)(void) = sections[i].start[j];
-
-			if (fn != NULL) {
-				fn();
-			}
+	for (void (*const *fptr)(void) = ranges[level].start; fptr < ranges[level].end;
+	     fptr++) {
+		if (*fptr != NULL) {
+			(*fptr)();
 		}
 	}
 }

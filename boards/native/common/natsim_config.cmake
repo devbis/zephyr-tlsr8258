@@ -32,6 +32,7 @@ set(nsi_config_content
   "NSI_CC:=$<$<BOOL:${launcher}>:${launcher} >${CMAKE_C_COMPILER}"
   "NSI_OBJCOPY:=${CMAKE_OBJCOPY}"
   "NSI_PYTHON:=${PYTHON_EXECUTABLE}"
+  "NSI_NM:=${CMAKE_NM}"
   "NSI_EMBEDDED_CPU_SW:=${zephyr_build_path}/${KERNEL_ELF_NAME} ${CONFIG_NATIVE_SIMULATOR_EXTRA_IMAGE_PATHS}"
   "NSI_EXE:=${zephyr_build_path}/${KERNEL_EXE_NAME}"
   "NSI_EXTRA_SRCS:=$<JOIN:$<TARGET_PROPERTY:native_simulator,INTERFACE_SOURCES>,\ >"

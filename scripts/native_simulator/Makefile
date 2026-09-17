@@ -58,6 +58,8 @@ NSI_AR?=ar
 NSI_OBJCOPY?=objcopy
 #  Python interpreter used by native simulator build helpers
 NSI_PYTHON?=python3
+#  Symbol table tool used by native simulator build helpers
+NSI_NM?=nm
 
 #  Build debug switch (by default enabled)
 NSI_DEBUG?=-g
@@ -149,9 +151,10 @@ ${NSI_BUILD_PATH}/${RUNNER_LIB}: ${OBJS}
 	${NSI_AR} -cr $@ ${OBJS}
 
 ${NSI_HW_EVENT_ORDER_FILE}: ${SRCS} ${NSI_EXTRA_SRCS} \
- ${NSI_PATH}/common/other/gen_hw_event_order.py | ${NSI_BUILD_PATH}
+ ${NSI_PATH}/common/other/gen_hw_event_order.py ${LOCALIZED_EMBSW} | ${NSI_BUILD_PATH}
 	${NSI_PYTHON} ${NSI_PATH}/common/other/gen_hw_event_order.py \
-	 --output $@ ${SRCS} ${NSI_EXTRA_SRCS}
+	 --output $@ --nm ${NSI_NM} \
+	 $(addprefix --object ,${LOCALIZED_EMBSW}) ${SRCS} ${NSI_EXTRA_SRCS}
 
 ${NSI_BUILD_PATH}/%.loc_cpusw.o: /% ${NSI_CONFIG_FILE}
 	@if [ -z $< ] || [ ! -f $< ]; then \
