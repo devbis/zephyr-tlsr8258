@@ -10,19 +10,26 @@
 
 #include <kernel_internal.h>
 
+#define Z_MACHO_INIT_ARRAY_START \
+	CONCAT(__zephyr_init_array_start_, CONFIG_NATIVE_SIMULATOR_MCU_N)
+#define Z_MACHO_INIT_ARRAY_END \
+	CONCAT(__zephyr_init_array_end_, CONFIG_NATIVE_SIMULATOR_MCU_N)
+#define Z_MACHO_INIT_ARRAY_SECTION \
+	"__DATA,zinit_array_" STRINGIFY(CONFIG_NATIVE_SIMULATOR_MCU_N)
+
 /* Keep GNU constructor bounds materialized in the embedded image. */
 static void z_macho_init_array_marker_fn(void)
 {
 }
 
-void (*const __zephyr_init_array_start[])(void)
+void (*const Z_MACHO_INIT_ARRAY_START[])(void)
 	__attribute__((used, visibility("default"),
-		       section("__DATA,z_init_array"))) =
+		       section(Z_MACHO_INIT_ARRAY_SECTION))) =
 		{ z_macho_init_array_marker_fn };
 
-void (*const __zephyr_init_array_end[])(void)
+void (*const Z_MACHO_INIT_ARRAY_END[])(void)
 	__attribute__((used, visibility("default"),
-		       section("__DATA,z_init_array"))) =
+		       section(Z_MACHO_INIT_ARRAY_SECTION))) =
 		{ z_macho_init_array_marker_fn };
 
 #define MACHO_INIT_MARKERS(level) \
@@ -76,8 +83,8 @@ void arch_static_init_gnu(void)
 {
 	void (*const *fn)(void);
 
-	for (fn = __zephyr_init_array_start;
-	     fn != __zephyr_init_array_end; fn++) {
+	for (fn = Z_MACHO_INIT_ARRAY_START;
+	     fn != Z_MACHO_INIT_ARRAY_END; fn++) {
 		(*fn)();
 	}
 }

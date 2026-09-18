@@ -71,7 +71,7 @@ NSI_WARNINGS?=-Wall -Wpedantic
 NSI_CPPFLAGS?=-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENDED
 
 HOST_OS:=$(shell uname -s)
-NSI_ZEPHYR_INIT_SECTION:=z_init_array
+NSI_ZEPHYR_INIT_SECTION:=zinit_array
 NSI_HW_EVENT_ORDER_FILE:=${NSI_BUILD_PATH}/nsi_hw_events.order
 
 NO_PIE_CO:=-fno-pie -fno-pic
@@ -166,7 +166,13 @@ ${NSI_BUILD_PATH}/%.loc_cpusw.o: /% ${NSI_CONFIG_FILE}
 ifeq (${HOST_OS},Darwin)
 # Keep Zephyr constructors out of dyld startup; z_static_init_gnu runs them later.
 	@if [ -z "${NSI_OBJCOPY}" ] || [ "${NSI_OBJCOPY}" = "CMAKE_OBJCOPY-NOTFOUND" ]; then \
-	  ld -r -rename_section __DATA __mod_init_func __DATA ${NSI_ZEPHYR_INIT_SECTION} \
+	  image_id=$$(${NSI_NM} -j $< | sed -n 's/^___zephyr_init_array_start_\([0-9][0-9]*\)$$/\1/p'); \
+	  if [ -n "$${image_id}" ]; then \
+	    init_section=${NSI_ZEPHYR_INIT_SECTION}_$${image_id}; \
+	  else \
+	    init_section=${NSI_ZEPHYR_INIT_SECTION}; \
+	  fi; \
+	  ld -r -rename_section __DATA __mod_init_func __DATA $${init_section} \
 	    -o $@ $<; \
 	else \
 	  ${NSI_OBJCOPY} --localize-hidden $< $@ -w --localize-symbol=_* ${NSI_LOCALIZE_OPTIONS}; \

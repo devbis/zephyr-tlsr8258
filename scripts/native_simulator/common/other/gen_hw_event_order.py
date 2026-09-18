@@ -62,6 +62,10 @@ MACHO_INIT_SYMBOL_RE = re.compile(
     r"(?P<sub_priority>[0-9]+)_(?P<name>[A-Za-z_][A-Za-z0-9_]*)$"
 )
 
+MACHO_INIT_ARRAY_SYMBOL_RE = re.compile(
+    r"___zephyr_init_array_(?P<bound>start|end)_(?P<image>[0-9]+)$"
+)
+
 def collect_events(paths):
     """Return HW event symbols in priority order."""
     events = []
@@ -144,6 +148,7 @@ def collect_native_task_symbols(nm, objects):
 def collect_init_symbols(nm, objects):
     """Return compiled Mach-O init-entry symbols in priority order."""
     entries = {level: [] for level in MACHO_INIT_LEVELS}
+    init_array_bounds = {}
     seen = set()
 
     for obj in objects:
@@ -155,6 +160,13 @@ def collect_init_symbols(nm, objects):
         )
         for line in result.stdout.splitlines():
             symbol = line.strip()
+            init_array_match = MACHO_INIT_ARRAY_SYMBOL_RE.fullmatch(symbol)
+            if init_array_match is not None:
+                image = int(init_array_match.group("image"))
+                bounds = init_array_bounds.setdefault(image, {})
+                bounds[init_array_match.group("bound")] = symbol
+                continue
+
             match = MACHO_INIT_SYMBOL_RE.fullmatch(symbol)
             if match is None or symbol in seen:
                 continue
@@ -173,7 +185,10 @@ def collect_init_symbols(nm, objects):
         )
         symbols.append(f"___macho_init_range_end_{name}")
 
-    symbols.extend(("___zephyr_init_array_start", "___zephyr_init_array_end"))
+    for image in sorted(init_array_bounds):
+        bounds = init_array_bounds[image]
+        if {"start", "end"}.issubset(bounds):
+            symbols.extend((bounds["start"], bounds["end"]))
 
     return symbols
 
