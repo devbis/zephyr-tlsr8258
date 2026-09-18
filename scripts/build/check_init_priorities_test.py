@@ -85,6 +85,7 @@ class testZephyrInitLevels(unittest.TestCase):
 
         obj = check_init_priorities.ZephyrInitLevels("", None)
         obj._elf = mock_elf
+        obj._macho = None
         obj._load_objects()
 
         self.assertDictEqual(obj._objects, {0xAA: ("a", 4, 1), 0xBB: ("b", 8, 2)})
@@ -129,6 +130,7 @@ class testZephyrInitLevels(unittest.TestCase):
 
         obj = check_init_priorities.ZephyrInitLevels("", None)
         obj._elf = mock_elf
+        obj._macho = None
         obj._load_level_addr()
 
         self.assertDictEqual(
@@ -165,6 +167,7 @@ class testZephyrInitLevels(unittest.TestCase):
     def test_initlevel_pointer_32(self, mock_zilinit):
         obj = check_init_priorities.ZephyrInitLevels("", None)
         obj._elf = mock.Mock()
+        obj._macho = None
         obj._elf.elfclass = 32
         mock_section = mock.Mock()
         obj._elf.get_section.return_value = mock_section
@@ -180,6 +183,7 @@ class testZephyrInitLevels(unittest.TestCase):
     def test_initlevel_pointer_64(self, mock_zilinit):
         obj = check_init_priorities.ZephyrInitLevels("", None)
         obj._elf = mock.Mock()
+        obj._macho = None
         obj._elf.elfclass = 64
         mock_section = mock.Mock()
         obj._elf.get_section.return_value = mock_section
@@ -200,6 +204,7 @@ class testZephyrInitLevels(unittest.TestCase):
     @mock.patch("check_init_priorities.ZephyrInitLevels.__init__", return_value=None)
     def test_process_initlevels(self, mock_zilinit, mock_ip, mock_on):
         obj = check_init_priorities.ZephyrInitLevels("", None)
+        obj._macho = None
         obj._init_level_addr = {
             "EARLY": 0x00,
             "PRE_KERNEL_1": 0x00,
