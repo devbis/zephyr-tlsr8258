@@ -60,6 +60,8 @@ NSI_OBJCOPY?=objcopy
 NSI_PYTHON?=python3
 #  Symbol table tool used by native simulator build helpers
 NSI_NM?=nm
+#  Mach-O symbol table editor used by native simulator build helpers
+NSI_NMEDIT?=nmedit
 
 #  Build debug switch (by default enabled)
 NSI_DEBUG?=-g
@@ -175,7 +177,12 @@ ifeq (${HOST_OS},Darwin)
 	    init_section=${NSI_ZEPHYR_INIT_SECTION}; \
 	  fi; \
 	  ld -r -rename_section __DATA __mod_init_func __DATA $${init_section} \
-	    -o $@ $<; \
+	    -o $@.section $<; \
+	  ${NSI_NM} -m $@.section | awk \
+	    '$$2 == "(__TEXT,nsiif)" || $$2 == "(__DATA,nsiifdat)" || \
+	     $$2 == "(__TEXT,nsiiftxt)" { print $$NF }' > $@.symbols; \
+	  ${NSI_NMEDIT} -s $@.symbols -o $@ $@.section; \
+	  rm -f $@.section $@.symbols; \
 	else \
 	  ${NSI_OBJCOPY} --localize-hidden $< $@ -w --localize-symbol=_* ${NSI_LOCALIZE_OPTIONS}; \
 	fi
