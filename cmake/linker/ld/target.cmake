@@ -117,7 +117,7 @@ function(toolchain_ld_link_elf)
     ${ARGN}                                                   # input args to parse
   )
 
-  if(CMAKE_HOST_APPLE AND "${ZEPHYR_TOOLCHAIN_VARIANT}" STREQUAL "host")
+  if(TOOLCHAIN_LD_LINK_ELF_USE_FORCE_LOAD)
     set(whole_archive_flags)
     foreach(lib ${WHOLE_ARCHIVE_LIBS})
       list(APPEND whole_archive_flags
