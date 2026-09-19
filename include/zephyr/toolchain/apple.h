@@ -30,6 +30,9 @@
 
 #include <zephyr/macho_iter_sections.h>
 
+#define Z_MACHO_SEC_noinit znoinit
+#define Z_MACHO_SEC__noinit znoinit
+
 #define Z_MACHO_SEC_GET(token) _CONCAT(Z_MACHO_SEC_, token)
 #define Z_MACHO_SECNAME(token) STRINGIFY(Z_MACHO_SEC_GET(token))
 

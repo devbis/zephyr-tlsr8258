@@ -78,11 +78,17 @@ zephyr_library_include_directories(
 )
 
 set(libpath ${BSIM_OUT_PATH}/lib)
+if(CONFIG_64BIT)
+  set(bsim_lib_suffix "")
+else()
+  set(bsim_lib_suffix ".32")
+endif()
+
 set_property(TARGET native_simulator APPEND PROPERTY RUNNER_LINK_LIBRARIES
-  ${libpath}/libUtilv1.32.a
-  ${libpath}/libPhyComv1.32.a
-  ${libpath}/lib2G4PhyComv1.32.a
-  ${libpath}/libRandv2.32.a
+  ${libpath}/libUtilv1${bsim_lib_suffix}.a
+  ${libpath}/libPhyComv1${bsim_lib_suffix}.a
+  ${libpath}/lib2G4PhyComv1${bsim_lib_suffix}.a
+  ${libpath}/libRandv2${bsim_lib_suffix}.a
 )
 
 target_compile_options(native_simulator INTERFACE

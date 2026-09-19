@@ -15,6 +15,7 @@ entropy_driver_api
 eth_bridge
 k_kernel_init_post_entry
 k_kernel_init_pre_entry
+k_stack
 k_mem_slab
 net_buf_pool
 net_if
