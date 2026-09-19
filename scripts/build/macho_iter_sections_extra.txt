@@ -1,0 +1,23 @@
+# Extra iterable sections to emit Mach-O boundary aliases for.
+#
+# gen_macho_iter_sections.py finds the sections whose _<name>_list_start,
+# _<name>_list_end or _<name>_ext_end bounds appear in the sources. It cannot see
+# a bound that is built by another macro, as DEVICE_API_IS() does out of the API
+# class name, so those are listed here.
+#
+# This is a list rather than "emit an alias for every section" because ld64
+# materialises an output section for every section$start$ reference, and it runs
+# out of section indexes well before the full set of iterable sections.
+#
+# One logical section name per line; blank lines and # comments are ignored.
+_static_thread_data
+entropy_driver_api
+eth_bridge
+k_kernel_init_post_entry
+k_kernel_init_pre_entry
+k_mem_slab
+net_buf_pool
+net_if
+net_if_dev
+net_l2
+net_pkt_alloc_stats_slab
