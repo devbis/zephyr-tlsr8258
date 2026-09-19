@@ -10,7 +10,7 @@
 
 #define GPIOTE_NRFX_INST_BY_REG_CONCAT(reg) g_nrfx_gpiote##reg
 #define GPIOTE_NRFX_INST_BY_REG(reg) GPIOTE_NRFX_INST_BY_REG_CONCAT(reg)
-#define GPIOTE_NRFX_INST_BY_NODE(node) GPIOTE_NRFX_INST_BY_REG(DT_REG_ADDR(node))
+#define GPIOTE_NRFX_INST_BY_NODE(node) GPIOTE_NRFX_INST_BY_REG(DT_REG_ADDR_RAW(node))
 
 #define GPIOTE_NRFX_INST_DECL(instname) \
 	extern nrfx_gpiote_t instname;
