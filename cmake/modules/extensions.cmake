@@ -6522,6 +6522,9 @@ function(zephyr_generate_macho_iterable_sections)
         list(APPEND generator_args --source-dir ${ZEPHYR_BASE}/${source_dir})
       endforeach()
     endif()
+    file(STRINGS ${ZEPHYR_BASE}/scripts/build/macho_iter_sections_extra.txt alias_names
+      REGEX "^[^#]"
+    )
   endif()
 
   list(APPEND section_names ${alias_names})
