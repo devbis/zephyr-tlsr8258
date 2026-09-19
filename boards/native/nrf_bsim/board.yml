@@ -4,6 +4,8 @@ boards:
   vendor: zephyr
   socs:
   - name: native
+    variants:
+    - name: "64"
 - name: nrf5340bsim
   full_name: nRF5340 simulated boards (BabbleSim)
   vendor: zephyr
