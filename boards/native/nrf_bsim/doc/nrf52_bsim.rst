@@ -59,8 +59,23 @@ Note that unlike a real nrf52 device, the nrf52_bsim has unlimited RAM and flash
 Building and running
 ********************
 
-This board requires the host 32 bit C library. See
+The default board variant requires the host 32 bit C library. See
 :ref:`POSIX Arch dependencies<posix_arch_deps>`.
+
+On macOS, use the 64-bit board variant and apply the local compatibility
+patches before building BabbleSim. This variant uses the native 64-bit host
+library:
+
+.. code-block:: console
+
+   ${ZEPHYR_BASE}/scripts/bsim/build_macos.sh
+   west build -b nrf52_bsim/native/64 samples/hello_world
+
+The script applies patches to the BabbleSim components and the
+``nrf_hw_models`` west module. It is safe to run repeatedly; already applied
+patches are left unchanged. Set ``BSIM_ROOT_PATH``, ``BSIM_OUT_PATH``,
+``BSIM_COMPONENTS_PATH`` or ``ZEPHYR_NRF_HW_MODELS_MODULE`` when the west
+workspace uses non-default paths.
 
 To target this board you also need to have `BabbleSim`_ compiled in your system.
 If you do not have it yet, the easiest way to get it, is to enable the babblesim group

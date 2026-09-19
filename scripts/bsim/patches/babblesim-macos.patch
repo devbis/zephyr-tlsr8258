@@ -1,0 +1,86 @@
+diff --git a/common/Makefile b/common/Makefile
+--- a/common/Makefile
++++ b/common/Makefile
+@@ -29 +29 @@ export BSIM_COMPONENTS_PATH
+-COMPONENTS:=$(shell ls ${BSIM_COMPONENTS_PATH} --hide=common)
++COMPONENTS:=$(shell find ${BSIM_COMPONENTS_PATH} -mindepth 1 -maxdepth 1 -type d ! -name common ! -name .git -exec basename {} \;)
+@@ -38 +38 @@ ${BSIM_OUT_PATH}:
+-	@mkdir ${BSIM_OUT_PATH} -p
++	@mkdir -p ${BSIM_OUT_PATH}
+@@ -40 +40 @@ ${BSIM_OUT_PATH}/bin/: | ${BSIM_OUT_PATH}
+-	mkdir ${BSIM_OUT_PATH}/bin/
++	mkdir -p ${BSIM_OUT_PATH}/bin/
+@@ -42 +42 @@ ${BSIM_OUT_PATH}/lib/: | ${BSIM_OUT_PATH}
+-	@mkdir ${BSIM_OUT_PATH}/lib/
++	@mkdir -p ${BSIM_OUT_PATH}/lib/
+@@ -44 +44 @@ ${BSIM_OUT_PATH}/results/: | ${BSIM_OUT_PATH}
+-	@mkdir ${BSIM_OUT_PATH}/results/
++	@mkdir -p ${BSIM_OUT_PATH}/results/
+diff --git a/common/make.device.inc b/common/make.device.inc
+--- a/common/make.device.inc
++++ b/common/make.device.inc
+@@ -33 +33,2 @@ $(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}: $(COMPONENT_OUTPUT_DIR)/${EXE_NAME}
+-	@nm ${COMPONENT_OUTPUT_DIR}/${EXE_NAME} | grep -v " [U|w] " | sort | cut -d" " -f1,3 > $(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME} ; sed -i "1i $$(wc -l $(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME} | cut -d" " -f1)" $(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}
++	@nm ${COMPONENT_OUTPUT_DIR}/${EXE_NAME} | grep -v " [U|w] " | sort | cut -d" " -f1,3 > "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}"
++	@{ echo "$$(wc -l < "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}")"; cat "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}"; } > "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}.tmp" && mv "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}.tmp" "$(COMPONENT_OUTPUT_DIR)/${MAP_FILE_NAME}"
+diff --git a/common/make.lib_a64et32.inc b/common/make.lib_a64et32.inc
+--- a/common/make.lib_a64et32.inc
++++ b/common/make.lib_a64et32.inc
+@@ -9,0 +10,8 @@ VERSION_FILE:=${LIB_NAME}.version
++ifeq ($(shell uname -s),Darwin)
++LIB32_TARGETS:=
++LIB32_INSTALL_TARGETS:=
++else
++LIB32_TARGETS:=$(COMPONENT_OUTPUT_DIR)/${LIBFILE32}
++LIB32_INSTALL_TARGETS:=${BSIM_LIBS_DIR}/${LIBFILE32}
++endif
++
+@@ -47 +55 @@ $(COMPONENT_OUTPUT_DIR)/${LIBFILE32} : ${OBJS32} ${A_LIBS32}
+-compile: $(COMPONENT_OUTPUT_DIR)/${LIBFILE} $(COMPONENT_OUTPUT_DIR)/${LIBFILE32}
++compile: $(COMPONENT_OUTPUT_DIR)/${LIBFILE} ${LIB32_TARGETS}
+@@ -77 +85 @@ ${BSIM_LIBS_DIR}/% : $(COMPONENT_OUTPUT_DIR)/%
+-install: ${BSIM_LIBS_DIR}/${LIBFILE}  ${BSIM_LIBS_DIR}/${LIBFILE32} ${BSIM_LIBS_DIR}/${VERSION_FILE}
++install: ${BSIM_LIBS_DIR}/${LIBFILE} ${LIB32_INSTALL_TARGETS} ${BSIM_LIBS_DIR}/${VERSION_FILE}
+diff --git a/common/make.lib_so.inc b/common/make.lib_so.inc
+--- a/common/make.lib_so.inc
++++ b/common/make.lib_so.inc
+@@ -32 +32 @@ $(COMPONENT_OUTPUT_DIR)/${LIBFILE_DYN} : ${OBJS} $(A_LIBS)
+-	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
++	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${BSIM_SO_LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
+diff --git a/common/make.lib_soeta.inc b/common/make.lib_soeta.inc
+--- a/common/make.lib_soeta.inc
++++ b/common/make.lib_soeta.inc
+@@ -42 +42 @@ $(COMPONENT_OUTPUT_DIR)/${LIBFILE_DYN} : $(COMPONENT_OUTPUT_DIR) ${OBJS} ${A_LIBS}
+-	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
++	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${BSIM_SO_LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
+diff --git a/common/make.lib_soeta64et32.inc b/common/make.lib_soeta64et32.inc
+--- a/common/make.lib_soeta64et32.inc
++++ b/common/make.lib_soeta64et32.inc
+@@ -10,0 +11,8 @@ VERSION_FILE:=${LIB_NAME}.version
++ifeq ($(shell uname -s),Darwin)
++LIB32_TARGETS:=
++LIB32_INSTALL_TARGETS:=
++else
++LIB32_TARGETS:=$(COMPONENT_OUTPUT_DIR)/${LIBFILE32}
++LIB32_INSTALL_TARGETS:=${BSIM_LIBS_DIR}/${LIBFILE32}
++endif
++
+@@ -26 +34 @@ always_run_this_target:
+-compile: $(COMPONENT_OUTPUT_DIR)/${LIBFILE_DYN} $(COMPONENT_OUTPUT_DIR)/${LIBFILE} $(COMPONENT_OUTPUT_DIR)/${LIBFILE32}
++compile: $(COMPONENT_OUTPUT_DIR)/${LIBFILE_DYN} $(COMPONENT_OUTPUT_DIR)/${LIBFILE} ${LIB32_TARGETS}
+@@ -53 +61 @@ $(COMPONENT_OUTPUT_DIR)/${LIBFILE_DYN}: ${OBJS} $(A_LIBS)
+-	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
++	@${CC} -o $@ -fPIC -shared $^ ${LDFLAGS} ${BSIM_SO_LDFLAGS} ${SO_LIBS} ${A_LIBS} ${COVERAGE}
+@@ -81 +89 @@ ${BSIM_LIBS_DIR}/% : $(COMPONENT_OUTPUT_DIR)/%
+-install: ${BSIM_LIBS_DIR}/${LIBFILE_DYN} ${BSIM_LIBS_DIR}/${LIBFILE} ${BSIM_LIBS_DIR}/${LIBFILE32} ${BSIM_LIBS_DIR}/${VERSION_FILE}
++install: ${BSIM_LIBS_DIR}/${LIBFILE_DYN} ${BSIM_LIBS_DIR}/${LIBFILE} ${LIB32_INSTALL_TARGETS} ${BSIM_LIBS_DIR}/${VERSION_FILE}
+diff --git a/common/pre.make.inc b/common/pre.make.inc
+--- a/common/pre.make.inc
++++ b/common/pre.make.inc
+@@ -18,0 +19,6 @@ AR:=ar
++
++ifeq ($(shell uname -s),Darwin)
++BSIM_SO_LDFLAGS?=-undefined dynamic_lookup
++else
++BSIM_SO_LDFLAGS?=
++endif

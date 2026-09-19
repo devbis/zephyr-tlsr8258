@@ -1,0 +1,31 @@
+diff --git a/src/HW_models/NHW_UART_backend_pty_int.c b/src/HW_models/NHW_UART_backend_pty_int.c
+--- a/src/HW_models/NHW_UART_backend_pty_int.c
++++ b/src/HW_models/NHW_UART_backend_pty_int.c
+@@ -24,0 +25,3 @@
++#ifdef __APPLE__
++#include <util.h>
++#else
+@@ -25,0 +29 @@
++#endif
+diff --git a/src/nrfx/hal/nrf_hal_originals.c b/src/nrfx/hal/nrf_hal_originals.c
+--- a/src/nrfx/hal/nrf_hal_originals.c
++++ b/src/nrfx/hal/nrf_hal_originals.c
+@@ -196,0 +197 @@
++#define nrf_rtc_task_trigger nrf_rtc_task_trigger_weak
+@@ -197,0 +199 @@
++#undef nrf_rtc_task_trigger
+diff --git a/src/nrfx/hal/nrf_nvmc.c b/src/nrfx/hal/nrf_nvmc.c
+--- a/src/nrfx/hal/nrf_nvmc.c
++++ b/src/nrfx/hal/nrf_nvmc.c
+@@ -83 +83 @@ void nrf_nvmc_word_write(uint32_t addr, uint32_t value)
+-void nrf_nvmc_buffer_read(void *dest, uint32_t addr, size_t n)
++void nrf_nvmc_buffer_read(void *dest, uint32_t addr, uint32_t n)
+diff --git a/src/nrfx/hal/nrf_rtc.c b/src/nrfx/hal/nrf_rtc.c
+--- a/src/nrfx/hal/nrf_rtc.c
++++ b/src/nrfx/hal/nrf_rtc.c
+@@ -14 +14 @@ static int rtc_number_from_ptr(NRF_RTC_Type const * p_reg){
+-  int i = ( (int)p_reg - (int)&NRF_RTC_regs[0] ) / sizeof(NRF_RTC_Type);
++  int i = ((uintptr_t)p_reg - (uintptr_t)&NRF_RTC_regs[0]) / sizeof(NRF_RTC_Type);
+@@ -48 +48 @@ void nrf_rtc_task_trigger(NRF_RTC_Type * p_reg, nrf_rtc_task_t task)
+-  *(uint32_t *)((uint32_t)p_reg + task) = 1;
++  *(uint32_t *)((uintptr_t)p_reg + (uintptr_t)task) = 1;
