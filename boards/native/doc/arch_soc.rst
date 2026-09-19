@@ -82,11 +82,14 @@ This port is designed and tested to run in Linux.
      has its own section, and a section cannot hold another one. So
      ``DEVICE_API_IS()`` returns false for a device with an extending API, as
      ``tests/kernel/device`` reports.
-   * ld64 materialises an output section for every section boundary symbol and
-     runs out of section indexes after 127 of them, which is well below the
-     number of iterable sections Zephyr has. The bounds are therefore emitted
-     only for the sections the built image references, which is read back out of
-     it before the runner is linked.
+   * The boundary symbols of an iterable section are emitted only for the
+     sections listed in :file:`scripts/build/macho_iter_sections_extra.txt` and
+     those the generator finds referenced in the tree. ld64 materialises an
+     output section for every boundary symbol and runs out of section indexes
+     after 127 of them, which is well below the number of iterable sections
+     Zephyr has. An application referencing bounds outside that set fails to
+     link with undefined ``_<name>_list_start`` symbols; adding the section name
+     to that file fixes it as long as the budget allows.
 
 .. note::
 
