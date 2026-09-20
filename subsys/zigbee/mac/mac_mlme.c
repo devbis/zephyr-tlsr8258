@@ -225,7 +225,7 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
 	cmdId = payload[0];
 
 	if (g_zbMacCtx.status == ZB_MAC_STATE_INDIRECT_DATA &&
-	    cmdId != MAC_CMD_ASSOCIATION_RESPONSE) {
+	    cmdId != MAC_CMD_ASSOCIATION_RESPONSE && cmdId != MAC_CMD_DATA_REQUEST) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
