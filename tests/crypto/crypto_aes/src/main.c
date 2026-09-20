@@ -31,6 +31,8 @@
 #define CRYPTO_DEV_COMPAT infineon_mxcryptolite_crypto
 #elif CONFIG_CRYPTO_INFINEON_MXCRYPTO
 #define CRYPTO_DEV_COMPAT infineon_mxcrypto_crypto
+#elif DT_HAS_COMPAT_STATUS_OKAY(telink_tlsr8258_aes)
+#define CRYPTO_DEV_COMPAT telink_tlsr8258_aes
 #else
 #error "You need to enable one crypto device"
 #endif
