@@ -148,6 +148,11 @@
 			status = "disabled";
 		};
 
+		aes: aes@800540 {
+			compatible = "telink,tlsr8258-aes";
+			reg = <0x00800540 0x00000020>;
+		};
+
 		sram0: memory@840000 {
 			compatible = "mmio-sram";
 			reg = <0x00840000 0x00010000>;
