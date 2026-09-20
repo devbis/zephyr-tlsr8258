@@ -1,0 +1,10 @@
+identifier: tlsr8258_generic
+name: Telink TLSR8258 Generic
+type: mcu
+arch: tc32
+toolchain:
+  - host
+ram: 64
+flash: 512
+supported: []
+vendor: telink
