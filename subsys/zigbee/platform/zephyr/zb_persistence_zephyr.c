@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 
 #include <errno.h>
 #include <string.h>

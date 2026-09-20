@@ -16,7 +16,7 @@
  * preparation and radio filter/persistence hooks.
  */
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "mac/includes/tl_zb_mac.h"
 #include "mac/includes/tl_zb_mac_pib.h"
 
@@ -173,93 +173,7 @@ static bool nwk_router_bootstrap_has_restored_state(void)
 	       g_zbMacPib.panId != 0U;
 }
 
-uint8_t zb_routerStart(void)
-{
-	uint8_t ext_pan_id[EXT_ADDR_LEN];
-	uint8_t nwk_key[SEC_KEY_LEN] = {0};
-	uint8_t channel;
-	uint16_t pan_id;
-	uint16_t short_addr;
-	bool key_provided;
-	bool from_app;
-	bool restored = false;
-	int rc;
-
-	if (nwk_router_started) {
-		LOG_DBG("zb_routerStart: already started, ignoring");
-		return 0U;
-	}
-
-	if (nwk_router_bootstrap_has_restored_state()) {
-		/* Reboot with valid NVS state: keep restored PIB/NIB and
-		 * just reprogram the radio. Skip key generation and skip
-		 * zb_info_save (state is already persisted from the prior
-		 * boot's formation).
-		 */
-		restored = true;
-		channel = g_zbMacPib.phyChannelCur;
-		pan_id = g_zbMacPib.panId;
-		short_addr = g_zbMacPib.shortAddress;
-		memcpy(ext_pan_id, g_zbNIB.extPANId, EXT_ADDR_LEN);
-		from_app = false;
-		key_provided = true; /* keep restored key */
-		/* Older NVS images were written before the router capability was
-		 * forced awake. Re-apply the runtime router PIB before any TX; the
-		 * MAC completion path uses this value to decide whether RF may stop. */
-		nwk_router_bootstrap_apply_pib(channel, pan_id, short_addr, ext_pan_id);
-	} else {
-		from_app = nwk_router_bootstrap_resolve_profile(&channel, &pan_id,
-							      &short_addr, ext_pan_id,
-							      nwk_key, &key_provided);
-
-		if (!key_provided) {
-			nwk_router_bootstrap_fill_nwk_key(nwk_key);
-		}
-
-		nwk_router_bootstrap_apply_pib(channel, pan_id, short_addr, ext_pan_id);
-
-		/* Store the network key into the security IB so the APS
-		 * encrypt/decrypt path can find it. Slot 0 / seqNum 0
-		 * mirrors the vendor stack's freshly-formed-network
-		 * convention.
-		 */
-		memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwk_key, SEC_KEY_LEN);
-		ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0U;
-		ss_ib.activeKeySeqNum = 0U;
-		memset(nwk_key, 0, sizeof(nwk_key));
-	}
-
-	rc = zb_radio_port_set_channel(channel);
-	if (rc != 0) {
-		LOG_ERR("zb_routerStart: set_channel failed (%d)", rc);
-		return 1U;
-	}
-	zb_radio_port_update_filters(pan_id, short_addr, g_zbMacPib.extAddress);
-	(void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, channel);
-
-	/* The vendor start path owns the joined transition and the start
-	 * confirmation. Keeping joined clear until MLME-START succeeds avoids
-	 * exposing a half-started FFD to ZDO and BDB. */
-	g_zbNwkCtx.joined = 0U;
-	g_zbNwkCtx.is_factory_new = 0U;
-	g_zbNwkCtx.user_state = NLME_IDLE;
-
-	rc = zdo_nwkRouterStart();
-	if (rc != ZDO_SUCCESS) {
-		LOG_ERR("zb_routerStart: vendor start failed (%d)", rc);
-		return 1U;
-	}
-
-	nwk_router_started = true;
-
-	LOG_INF("zb router %s: pan 0x%04x ch %u short 0x%04x%s%s",
-		restored ? "restored" : "formed",
-		pan_id, channel, short_addr,
-		restored ? "" : (from_app ? " (app-profile)" : " (default)"),
-		restored ? "" : (key_provided ? " key=from-app" : " key=generated"));
-
-	return 0U;
-}
+/* zb_routerStart() now comes from the imported stack (zbapi/zb_api.c). */
 
 extern void tl_zbNwkBeaconPayloadUpdate(void);
 

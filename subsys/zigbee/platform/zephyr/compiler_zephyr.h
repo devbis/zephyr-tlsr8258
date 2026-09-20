@@ -18,6 +18,7 @@
 #define _attribute_ram_code_        /* no-op on Zephyr TC32 port */
 #define _attribute_no_inline_       __attribute__((noinline))
 #define _attribute_always_inline_   __attribute__((always_inline)) static inline
+#define _always_inline              inline __attribute__((always_inline))
 #define _attribute_data_retention_  /* no-op */
 #define _attribute_custom_code_     /* no-op */
 #define _attribute_gpio_wakeup_     /* no-op */

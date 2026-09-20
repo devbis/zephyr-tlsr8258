@@ -19,7 +19,7 @@
 
 #include <zephyr/kernel.h>
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "os/ev_timer.h"
 
 u32 g_secondCnt;

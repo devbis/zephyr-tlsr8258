@@ -20,12 +20,12 @@
 
 #include <zephyr/kernel.h>
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 
 extern void zb_buf_free(zb_buf_t *buf);
 
 /*
- * One queue per layer-id from the TL_Q_* enum in zb_common_stub.h.
+ * One queue per layer-id from the TL_Q_* enum in zb_common.h.
  * Depth was 8 in vendor builds (TL_Q_DEPTH not exposed publicly).
  * The router-side dispatcher drains each tick, but on the TLSR8258
  * port the producer (tl_zbPhyIndication, fed from the RX worker

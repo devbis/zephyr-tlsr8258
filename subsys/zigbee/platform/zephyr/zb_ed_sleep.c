@@ -12,9 +12,9 @@
 #include "bdb/includes/bdb.h"
 #include "mac/includes/mac_trx_api.h"
 #include "mac/includes/tl_zb_mac.h"
-#include "ss/ss_internal.h"
-#include "zdo/zdo_internal.h"
-#include "zb_common_stub.h"
+#include "ss/ss_zdoSecurityME.h"
+#include "zdo/zdo.h"
+#include "zb_common.h"
 
 #include <tlsr825x/power.h>
 

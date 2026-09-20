@@ -14,7 +14,7 @@
 
 #include <zephyr/kernel.h>
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 
 /* 127-byte PSDU + 5-byte TLSR DMA header is the complete 802.15.4 frame.
  * Keep a little alignment/headroom without spending 200 bytes in every one
@@ -170,10 +170,10 @@ void *tl_bufInitalloc(zb_buf_t *p, u8 size)
  * the PSDU pointer + meta (timestamp / rssi / len) into the first
  * few bytes of buf->buf[].
  */
-void *tl_phyRxBufTozbBuf(u8 *rxBuf)
+u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
 	ARG_UNUSED(rxBuf);
-	return zb_buf_allocate();
+	return (u8 *)zb_buf_allocate();
 }
 
 u8 zb_buf_rx_free_count(void)

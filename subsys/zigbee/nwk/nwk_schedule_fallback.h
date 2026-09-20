@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "os/ev_timer.h"
 #include <stdbool.h>
 

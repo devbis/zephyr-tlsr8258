@@ -20,8 +20,11 @@
 
 #include <zephyr/zigbee/zb_bootstrap.h>
 
-#include "zb_common_stub.h"
-#include "mac/includes/mac_internal.h"
+#include "zb_common.h"
+#include "zb_buffer.h"
+#include "mac/mac.h"
+#include "mac/mac_trx.h"
+#include "mac/mac_data.h"
 
 #include "af/zb_af.h"
 #include "../../zcl/zcl_include.h"
@@ -30,7 +33,7 @@
  * GreenPower hook — zdp_services.c::zdo_deviceAnnounceIndicate consults
  * this callback to suppress dev_annce for proxy-table entries that GP
  * has already claimed. gpDeviceAnnounceCheckCb_t comes from
- * gp/dGP_stub.h (pulled in unconditionally via zb_common_stub.h); this
+ * gp/dGP_stub.h (pulled in unconditionally via zb_common.h); this
  * weak NULL fallback covers builds where gp_sinkTab.c never overrides it
  * (CONFIG_ZIGBEE_GP=n, or GP without the sink role) — zdp_services.c
  * null-checks it before calling.
