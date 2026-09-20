@@ -177,7 +177,7 @@ if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
         mac/mac_indirect_data.c
         platform/zephyr/zb_buffer_zephyr.c
         platform/zephyr/zb_task_queue_router.c
-        platform/zephyr/zb_second_clock.c
+        common/second_clock.c
     )
 endif()
 
