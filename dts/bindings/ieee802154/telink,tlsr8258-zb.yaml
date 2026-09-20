@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 IEEE 802.15.4 RF node
+
+compatible: "telink,tlsr8258-zb"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
