@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "zb_common.h"
+#include "zb_af.h"
 #include "nwk_data.h"
 #include "nwk_join.h"
 #include "zb_nwk_neighbor.h"
@@ -193,6 +194,12 @@ static void nwk_associateJoin(void *arg)
 		nwk_nlmeJoinCnf(arg, NWK_STATUS_NOT_PERMITTED);
 		return;
 	}
+	if ((*(u8 *)&req->capabilityInfo & MAC_CAP_ALLOCATE_ADDRESS) == 0U) {
+		/* ZDO normally fills this from the AF node descriptor. Keep the
+		 * association request valid if a platform join shim omitted the
+		 * mandatory address-allocation capability. */
+		*(u8 *)&req->capabilityInfo = af_nodeMacCapabilityGet();
+	}
 
 	g_zbNwkCtx.join.pAssocJoinParent = parent;
 	g_zbInfo.nwkNib.panId = parent->panId;
@@ -200,6 +207,14 @@ static void nwk_associateJoin(void *arg)
 	 * PAN before the association request is posted, because the poll that
 	 * releases the indirect response is built from the PIB. */
 	g_zbInfo.macPib.panId = parent->panId;
+	/* The poll is also built from the coordinator tuple, which the vendor
+	 * fills from the association confirm. Keep it in sync while the join is
+	 * in flight, because the native-socket medium delivers the indirect
+	 * response before that confirm reaches the MAC. */
+	g_zbInfo.macPib.coordShortAddress = parent->shortAddr;
+	if (parent->addrMode == ZB_ADDR_64BIT_DEV) {
+		ZB_IEEE_ADDR_COPY(g_zbInfo.macPib.coordExtAddress, parent->extAddr);
+	}
 	g_zbInfo.nwkNib.parentInfo = 0;
 	ZB_EXTPANID_COPY(g_zbInfo.nwkNib.extPANId, req->extPANId);
 	g_zbInfo.nwkNib.capabilityInfo = req->capabilityInfo;
@@ -221,6 +236,7 @@ static void nwk_associateJoin(void *arg)
 		ZB_IEEE_ADDR_COPY(macReq->coordAddress.addr.extAddr, parent->extAddr);
 	}
 
+	g_zbNwkCtx.user_state = NLME_JOINING;
 	tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_ASSOCIATE_REQ, arg);
 }
 
