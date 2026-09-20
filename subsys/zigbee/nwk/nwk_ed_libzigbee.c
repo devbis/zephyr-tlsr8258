@@ -26,21 +26,12 @@
  * no vendor translation unit of their own.
  */
 #include "zb_common.h"
+#include "zdo/zdo_nwk_manager.h"
 #include "zb_common.h"
 
 extern void zdo_nlme_leave_confirm_cb(void *arg);
 
-void tl_zbNwkNlmeLeaveRequestHandler(void *arg)
-{
-	nlme_leave_cnf_t *cnf = (nlme_leave_cnf_t *)arg;
-
-	memset(cnf, 0, sizeof(*cnf));
-	memcpy(cnf->deviceAddr, g_zbInfo.macPib.extAddress, EXT_ADDR_LEN);
-	cnf->status = NWK_STATUS_SUCCESS;
-	g_zbNwkCtx.joined = 0U;
-	g_zbNwkCtx.is_factory_new = 1U;
-	tl_zbTaskPost(zdo_nlme_leave_confirm_cb, arg);
-}
+/* tl_zbNwkNlmeLeaveRequestHandler() now comes from the imported stack. */
 
 void zb_ed_operation_abort(void)
 {
