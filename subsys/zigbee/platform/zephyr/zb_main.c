@@ -24,6 +24,16 @@
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
+/*
+ * Bootstrap reset hooks. nwk_router_bootstrap.c provides the router and
+ * coordinator implementation; end-device builds do not compile it, so the
+ * reset is a no-op there rather than a link error.
+ */
+__weak void zb_router_runtime_reset(void)
+{
+}
+
+
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 extern void zdo_router_join_latch_set(void);
 extern void zdo_router_join_latch_clear(void);
