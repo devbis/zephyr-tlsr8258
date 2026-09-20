@@ -2,7 +2,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 #include "tl_platform.h"
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "ev_poll.h"
 
 extern struct k_sem zb_ev_sem;
@@ -141,6 +141,25 @@ u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
 
 	k_sem_give(&zb_ev_sem);
 	return RET_OK;
+}
+
+/*
+ * Vendor scheduler entry points. The imported stack calls zb_sched_init()
+ * during bring-up and asks for the user queue depth when it throttles; the
+ * vendor implementation lives in the zb_task_queue.c this port replaces.
+ */
+void zb_sched_init(void)
+{
+	k_spinlock_key_t key = k_spin_lock(&task_lock);
+
+	task_wptr = 0U;
+	task_rptr = 0U;
+	task_count = 0U;
+	rx_task_wptr = 0U;
+	rx_task_rptr = 0U;
+	rx_task_count = 0U;
+
+	k_spin_unlock(&task_lock, key);
 }
 
 void zb_taskq_run_pending_for_test(void)

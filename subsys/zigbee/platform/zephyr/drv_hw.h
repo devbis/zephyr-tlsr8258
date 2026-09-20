@@ -62,3 +62,19 @@ void flash_read(u32 addr, u32 len, u8 *buf);
 void flash_write(u32 addr, u32 len, u8 *buf);
 void flash_erase(u32 addr);
 bool drv_get_primary_ieee_addr(u8 *addr);
+
+/*
+ * Hardware timer hook used by the MAC. The vendor SDK declares this in its
+ * own drv_hw.h; the Zephyr backend in drv_hw_zephyr.c implements it on top
+ * of the event timer.
+ */
+typedef int (*timerCb_t)(void *arg);
+int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg);
+
+/*
+ * Outgoing frame counter retained across deep sleep. The vendor keeps it in a
+ * retention register; this port restores it from NV instead, so waking never
+ * rewinds the counter. Declared here because the stack reaches it through the
+ * vendor drv_pm.h, which this port does not import.
+ */
+u32 drv_pm_deepSleep_frameCnt_get(void);

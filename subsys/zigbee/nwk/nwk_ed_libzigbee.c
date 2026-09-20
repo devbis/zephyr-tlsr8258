@@ -25,8 +25,8 @@
  * files; this file only owns the Zephyr lifecycle/bootstrap hooks that have
  * no vendor translation unit of their own.
  */
-#include "zb_common_stub.h"
-#include "zb_local.h"
+#include "zb_common.h"
+#include "zb_common.h"
 
 extern void zdo_nlme_leave_confirm_cb(void *arg);
 

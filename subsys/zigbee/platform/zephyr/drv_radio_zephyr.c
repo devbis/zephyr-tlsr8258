@@ -59,7 +59,7 @@ extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 ti
 extern void zb_macDataSendHandler(void);
 extern void mac_trxTask(void *arg);
 #include "mac/includes/mac_trx_api.h"
-#include "zb_common_stub.h"
+#include "zb_common.h"
 
 /*
  * A router is an always-on 802.15.4 receiver.  The vendor MAC still uses

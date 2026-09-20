@@ -27,4 +27,12 @@ void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result);
  */
 void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result);
 
+/*
+ * The imported stack calls the vendor SDK's drv_security.h entry points. This
+ * port reaches the AES engine through the crypto driver instead, so map the
+ * vendor names onto it rather than importing that header.
+ */
+#define drv_aes_encrypt(key, plain, result)  zb_aes_encrypt((key), (plain), (result))
+#define drv_aes_decrypt(key, cipher, result) zb_aes_decrypt((key), (cipher), (result))
+
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_PLATFORM_ZEPHYR_ZB_AES_H_ */

@@ -8,10 +8,13 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_types.h>
+#include "zb_common.h"
 #include "drv_hw.h"
 #include "drv_nv.h"
 #include "ev_timer.h"
-#include "mac/includes/mac_internal.h"
+#include "mac/mac.h"
+#include "mac/mac_trx.h"
+#include "mac/mac_data.h"
 
 #if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
 #error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
@@ -309,4 +312,15 @@ bool drv_get_primary_ieee_addr(u8 *addr)
 	LOG_WRN("No primary IEEE address from hwinfo: eui64_rc=%d id_len=%d",
 		eui64_rc, (int)id_len);
 	return false;
+}
+
+u32 drv_pm_deepSleep_frameCnt_get(void)
+{
+	/*
+	 * No retention register on this port: the security IB is reloaded from
+	 * NV before the stack starts, so the value already in it is the right
+	 * one. Returning anything lower would rewind the counter and make the
+	 * trust centre drop our frames as replays.
+	 */
+	return ss_ib.outgoingFrameCounter;
 }

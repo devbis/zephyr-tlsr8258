@@ -14,11 +14,11 @@
 #include "ev_timer.h"
 #include "ev_poll.h"
 #include "ev_buffer.h"
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "zdo/zdo_api.h"
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include "zb_ed_sleep.h"
-#include "zdo/zdo_internal.h"
+#include "zdo/zdo.h"
 #include <tlsr825x/power.h>
 #endif
 

@@ -18,7 +18,7 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_zbhci.h>
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 
 LOG_MODULE_REGISTER(zigbee_zbhci_cmd, CONFIG_ZIGBEE_LOG_LEVEL);
 

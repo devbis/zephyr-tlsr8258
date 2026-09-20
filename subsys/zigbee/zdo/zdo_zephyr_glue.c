@@ -14,13 +14,15 @@
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 
-#include "zb_common_stub.h"
+#include "zb_common.h"
 #include "zdo_api.h"
 #include "af/zb_af.h"
 #include "aps/aps_api.h"
 #include "nwk/includes/nwk.h"
-#include "mac/includes/mac_internal.h"
-#include "ss/ss_internal.h"
+#include "mac/mac.h"
+#include "mac/mac_trx.h"
+#include "mac/mac_data.h"
+#include "ss/ss_zdoSecurityME.h"
 #include "zdo/zdp.h"
 
 /* ZDP endpoint metadata and response handoff from libzigbee/src/zdp.c. */
@@ -222,39 +224,7 @@ static u8 zdo_announce_seq;
  * platform implementation here so fresh joins and restored sessions use
  * the same APS/NWK transmit bridge.
  */
-u8 zb_zdoSendDevAnnance(void)
-{
-	u8 payload[1U + sizeof(zdo_device_annce_req_t)];
-	epInfo_t dst;
-	u8 capability = 0U;
-	u8 status;
-
-	/* Give the coordinator time to finish the association exchange. */
-	k_sleep(K_MSEC(40));
-
-	payload[0] = zdo_announce_seq++;
-	COPY_U16TOBUFFER(&payload[1], g_zbNIB.nwkAddr);
-	memcpy(&payload[3], g_zbMacPib.extAddress, sizeof(addrExt_t));
-
-	capability |= g_zbNIB.capabilityInfo.altPanCoord ? BIT(0) : 0U;
-	capability |= g_zbNIB.capabilityInfo.devType ? BIT(1) : 0U;
-	capability |= g_zbNIB.capabilityInfo.powerSrc ? BIT(2) : 0U;
-	capability |= g_zbMacPib.rxOnWhenIdle ? BIT(3) : 0U;
-	capability |= g_zbNIB.capabilityInfo.secuCapability ? BIT(6) : 0U;
-	capability |= BIT(7);
-	payload[11] = capability;
-
-	memset(&dst, 0, sizeof(dst));
-	dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-	dst.dstAddr.shortAddr = NWK_BROADCAST_RX_ON_WHEN_IDLE;
-	dst.dstEp = ZDO_EP;
-	dst.profileId = ZDO_PROFILE_ID;
-	dst.radius = 30U;
-
-	status = af_dataSend(ZDO_EP, &dst, DEVICE_ANNCE_CLID,
-			     sizeof(payload), payload, NULL);
-	return status;
-}
+/* zb_zdoSendDevAnnance() now comes from the imported stack (zbapi/zb_api.c). */
 
 u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	       u8 *cmdPld, u8 *apsCnt)
@@ -373,3 +343,26 @@ static int zdo_platform_attr_init(void)
 }
 
 SYS_INIT(zdo_platform_attr_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+
+/*
+ * Router join latch. The Zephyr bring-up path sets it while a join is in
+ * flight so persistence and the main loop can tell a live join from a restored
+ * one. The tip kept this state inside zdo_nwk_manager.c; with the stack
+ * imported verbatim it lives here instead.
+ */
+static volatile bool zdo_router_join_latched;
+
+void zdo_router_join_latch_set(void)
+{
+	zdo_router_join_latched = true;
+}
+
+void zdo_router_join_latch_clear(void)
+{
+	zdo_router_join_latched = false;
+}
+
+bool zdo_router_join_latch_is_set(void)
+{
+	return zdo_router_join_latched;
+}

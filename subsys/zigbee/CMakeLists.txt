@@ -55,8 +55,19 @@ zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
     ${CMAKE_CURRENT_SOURCE_DIR}/os
     ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/af
+    ${CMAKE_CURRENT_SOURCE_DIR}/aps
+    ${CMAKE_CURRENT_SOURCE_DIR}/bdb/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/gp
     ${CMAKE_CURRENT_SOURCE_DIR}/ss
+    ${CMAKE_CURRENT_SOURCE_DIR}/mac
     ${CMAKE_CURRENT_SOURCE_DIR}/mac/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/nwk
+    ${CMAKE_CURRENT_SOURCE_DIR}/nwk/includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/zdo
+    ${CMAKE_CURRENT_SOURCE_DIR}/zcl
+    ${CMAKE_CURRENT_SOURCE_DIR}/zcl/zll_commissioning
     ${CMAKE_CURRENT_SOURCE_DIR}/zbapi
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
@@ -116,6 +127,7 @@ zephyr_library_sources(
     aps/aps_group.c
     ss/ss_nv.c
     zbapi/zb_api.c
+    zbapi/zb_initialize.c
     nwk/nwk_schedule_fallback.c
 )
 
@@ -163,7 +175,6 @@ if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
         mac/mac_trx.c
         mac/mac_cr_coordinator.c
         mac/mac_indirect_data.c
-        common/zb_initialize.c
         platform/zephyr/zb_buffer_zephyr.c
         platform/zephyr/zb_task_queue_router.c
         platform/zephyr/zb_second_clock.c
@@ -177,6 +188,13 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZBHCI_UART
     platform/zephyr/zb_zbhci_cmd.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
+# The imported MAC hands Green Power confirms to cGp_dataCnf on every router
+# build, because the vendor ties GP_SUPPORT_ENABLE to ZB_ROUTER_ROLE. This port
+# gates the GP feature on CONFIG_ZIGBEE_GP instead, so build the two stubs the
+# MAC links against regardless; they stay inert while the feature is off.
+if((CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_COORDINATOR) AND NOT CONFIG_ZIGBEE_GP)
+    zephyr_library_sources(gp/cGP_stub.c gp/dGP_stub.c gp/gp_base.c gp/gp_sec.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_GP
     gp/cGP_stub.c gp/dGP_stub.c
     gp/gp_base.c gp/gp_sec.c
@@ -212,4 +230,25 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_COORDINATOR
 if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
     zephyr_library_sources(zdo/zdo_zephyr_glue.c)
 endif()
+
+# The vendor builds the stack with packed structs and short enums, and the
+# imported sources assert that layout. Apply it to the imported sources only:
+# the platform layer shares types with the Zephyr kernel and must keep the
+# toolchain's natural alignment.
+get_target_property(zigbee_sources subsys__zigbee SOURCES)
+foreach(zigbee_source ${zigbee_sources})
+    if(NOT zigbee_source MATCHES "platform/")
+        set_source_files_properties(${zigbee_source} PROPERTIES
+            COMPILE_OPTIONS "-fpack-struct;-fshort-enums")
+    endif()
+endforeach()
+
+
+# The Zephyr persistence layer owns zb_info_save(): it writes a versioned blob
+# covering the network context and the frame counter, where the imported stack
+# only stores g_zbInfo. Rename the imported definition rather than patching the
+# imported file, so the port's implementation is the one the stack reaches.
+set_source_files_properties(zbapi/zb_initialize.c PROPERTIES
+    COMPILE_DEFINITIONS "zb_info_save=zb_info_save_vendor")
+
 endif() # CONFIG_ZIGBEE
