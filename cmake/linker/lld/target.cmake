@@ -34,6 +34,9 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
   endif()
 
   zephyr_get_include_directories_for_lang(C current_includes)
+  if(DEFINED CMAKE_C_COMPILER_TARGET)
+    set(target_flag "--target=${CMAKE_C_COMPILER_TARGET}")
+  endif()
 
   add_custom_command(
     OUTPUT ${linker_script_gen}
@@ -43,6 +46,7 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     # NB: 'linker_script_dep' will use a keyword that ends 'DEPENDS'
     ${linker_script_dep}
     COMMAND ${CMAKE_C_COMPILER}
+    ${target_flag}
     -x assembler-with-cpp
     ${NOSYSDEF_CFLAG}
     -MD -MF ${linker_script_gen}.dep -MT ${linker_script_gen}
