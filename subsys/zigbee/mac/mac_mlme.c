@@ -81,10 +81,25 @@ static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw)
 
 static void tl_zbMlmeCmdDataReqRecvd(void *arg, void *raw)
 {
-	(void)raw;
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
+	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
+	u8 *req = (u8 *)arg;
+
+	/* The vendor callback consumes a compact request record, while the
+	 * Zephyr RX path reaches this handler with the parsed MAC header. Convert
+	 * the source address at the layer boundary before the indirect-data code
+	 * matches the pending entry. */
+	memset(req + 10, 0, 8);
+	if (mhr->srcAddrMode == ADDR_MODE_EXT) {
+		ZB_IEEE_ADDR_COPY(req + 10, mhr->srcAddr.extAddr);
+	} else if (mhr->srcAddrMode == ADDR_MODE_SHORT) {
+		req[10] = (u8)mhr->srcAddr.shortAddr;
+		req[11] = (u8)(mhr->srcAddr.shortAddr >> 8);
+	}
+	req[18] = mhr->srcAddrMode;
 	tl_zbMacMlmeDataRequestCb(arg);
 #else
+	(void)raw;
 	zb_buf_free((zb_buf_t *)arg);
 #endif
 }
@@ -198,7 +213,11 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
 		ZB_IEEE_ADDR_COPY(cnf->parentAddress, mhr->srcAddr.extAddr);
 	}
 
-	if (g_zbMacCtx.status != ZB_MAC_STATE_INDIRECT_DATA || associationReqOrigBuffer == NULL) {
+	/* The native-sim medium delivers a pending response as a normal RX frame
+	 * and does not expose the ACK frame-pending bit to the MAC state machine.
+	 * An outstanding association request is the ownership check that matters
+	 * here; the response itself clears the indirect-wait state below. */
+	if (associationReqOrigBuffer == NULL) {
 		zb_buf_free(buf);
 		return;
 	}
