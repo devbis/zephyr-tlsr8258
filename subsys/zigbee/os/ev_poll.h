@@ -24,6 +24,19 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/zigbee/zb_types.h>
+
+/* Default poll event IDs. Applications can override by defining EV_POLL_MAX
+ * and the enum members before including this header. */
+#ifndef EV_POLL_MAX
+typedef enum {
+	EV_POLL_ED_DETECT    = 0,
+	EV_POLL_POWER_DETECT = 1,
+	EV_POLL_HCI          = 2,
+	EV_POLL_MAX          = 8,
+} ev_poll_e;
+#endif
+
 
 /**
  *  @brief Definition for poll callback function 

@@ -26,7 +26,64 @@
 /**********************************************************************
  * INCLUDES
  */
-#include "includes/zb_common.h"
+/* Zephyr port: vendor "includes/zb_common.h" is replaced by the local
+ * zb_common.h aggregator that pulls in the same af/aps/mac/nwk/ss
+ * headers. Vendor types tied to the vendor task/buffer runtime
+ * (zb_buf_pool_t, tl_zbtaskq_user_t) are gated by the
+ * ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL / _TASKQ_USER macros below — the
+ * Zephyr runtime uses zb_main.c + drv_nv_zephyr.c instead, so those
+ * tables would just sit unused.
+ */
+#include "zb_common.h"
+#include "aps/aps_api.h"
+#include "nwk/includes/nwk.h"
+#include "nwk/includes/nwk_addr_map.h"
+#include "nwk/includes/nwk_neighbor.h"
+#include "zdo/zdo_api.h"
+
+#define ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL 1
+#define ZB_ZEPHYR_NO_VENDOR_TASKQ_USER 1
+
+/* Zephyr port: constants that vendor proj/common/* / proj/os/* headers
+ * normally provide. Mirrored from tl_zigbee_sdk vendor defaults so the
+ * SDK zb_config.c body stays bit-identical.
+ */
+#ifndef TL_RXPRIMITIVEHDR
+#define TL_RXPRIMITIVEHDR               32
+#endif
+#ifndef ZB_MAC_RX_ON_WHEN_IDLE
+#define ZB_MAC_RX_ON_WHEN_IDLE          0
+#endif
+#ifndef ZB_STACK_PROFILE
+#define ZB_STACK_PROFILE                2
+#endif
+#ifndef ZDO_MAX_PARENT_THRESHOLD_RETRY
+#define ZDO_MAX_PARENT_THRESHOLD_RETRY  10
+#endif
+#ifndef ZDO_NWK_SCAN_ATTEMPTS
+#define ZDO_NWK_SCAN_ATTEMPTS           5
+#endif
+#ifndef ZDO_NWK_TIME_BTWN_SCANS
+#define ZDO_NWK_TIME_BTWN_SCANS         100
+#endif
+#ifndef ZDO_PERMIT_JOIN_DURATION
+#define ZDO_PERMIT_JOIN_DURATION        0xff
+#endif
+#ifndef ZDO_REJOIN_TIMES
+#define ZDO_REJOIN_TIMES                3
+#endif
+#ifndef ZDO_REJOIN_DURATION
+#define ZDO_REJOIN_DURATION             60
+#endif
+#ifndef ZDO_REJOIN_BACKOFF_TIME
+#define ZDO_REJOIN_BACKOFF_TIME         (15 * 60 * 1000)
+#endif
+#ifndef ZDO_MAX_REJOIN_BACKOFF_TIME
+#define ZDO_MAX_REJOIN_BACKOFF_TIME     (15 * 60 * 1000)
+#endif
+#ifndef ZDO_REJOIN_BACKOFF_ITERATION
+#define ZDO_REJOIN_BACKOFF_ITERATION    1
+#endif
 
 sys_diagnostics_t g_sysDiags;
 
@@ -55,13 +112,17 @@ u8 APS_FRAGMEMT_PAYLOAD_SIZE = 64;
 u8 APS_MAX_FRAME_RETRIES = 3;
 u8 APS_ACK_EXPIRY = 2;//seconds
 
+#if !ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL
 /* buffer pool size for zigbee pro */
 u8 ZB_BUF_POOL_SIZE = ZB_BUF_POOL_NUM;
 zb_buf_pool_t g_mPool;
+#endif
 
+#if !ZB_ZEPHYR_NO_VENDOR_TASKQ_USER
 /* taskQ size */
 u8 ZB_TASKQ_USERUSE_SIZE = TL_ZBTASKQ_USERUSE_SIZE;
 tl_zbtaskq_user_t taskQ_user;
+#endif
 
 /* for indirect pending queue */
 u8 ZB_MAC_PENDING_TRANS_QUEUE_SIZE = ZB_MAC_PENDING_TRANS_QUEUE_NUM;
@@ -101,14 +162,8 @@ tl_zb_neighbor_entry_t g_zb_neighborTbl;
 
 /* routing table */
 #if ZB_ROUTER_ROLE
-u8 NWKC_TRANSFAILURE_CNT_THRESHOLD = TRANSFAILURE_CNT_MAX;
-u8 NWKC_INITIAL_RREQ_RETRIES = NWK_INITIAL_RREQ_RETRIES;
-u8 NWKC_RREQ_RETRIES = NWK_RREQ_RETRIES;
-u16 ROUTING_TABLE_SIZE = ROUTING_TABLE_NUM;
 #if (!ROUTING_TABLE_NUM)
-nwk_routingTabEntry_t g_routingTab[1];
 #else
-nwk_routingTabEntry_t g_routingTab[ROUTING_TABLE_NUM];
 #endif
 #endif
 
@@ -130,11 +185,13 @@ u32 NWK_BRC_JITTER = NWK_MAX_BROADCAST_JITTER;
 nwk_brcTransRecordEntry_t g_brcTransTab[NWK_BRC_TRANSTBL_NUM];
 #endif
 
-#if ZB_ED_ROLE
+/* Zephyr port: define these unconditionally — the libzigbee router
+ * build also references them from nwk_data.c (ED rejoin polling
+ * shared with the router-side endDev-timeout path).
+ */
 bool AUTO_QUICK_DATA_POLL_ENABLE = TRUE;
 u32 AUTO_QUICK_DATA_POLL_INTERVAL = POLL_RATE_QUARTERSECONDS;//ms
 u8 AUTO_QUICK_DATA_POLL_TIMES = 3;
-#endif
 
 /* choose the previous parent first when rejoin. */
 bool PRE_PARENT_FIRST_WHEN_REJOIN = TRUE;
@@ -304,6 +361,7 @@ aps_binding_entry_t *bindTblEntryGet(void)
     return &g_apsBindingTbl[0];
 }
 
+#if !ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL
 /*
  * @brief: get the size of zigbee buffer
  */
@@ -311,6 +369,7 @@ u32 zbBufferSizeGet(void)
 {
     return (sizeof(g_mPool));
 }
+#endif
 
 /*
  * @brief: get the size of the neighbor table

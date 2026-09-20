@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/zigbee/zb_types.h>
+
 
 /** @addtogroup  TELINK_COMMON_MODULE TELINK Common Module
  *  @{
@@ -54,10 +56,10 @@
 /**
  * @brief Default buffer number in each group
  */
-#define BUFFER_NUM_IN_GROUP0    8
+#define BUFFER_NUM_IN_GROUP0    4
 #define BUFFER_NUM_IN_GROUP1    8
-#define BUFFER_NUM_IN_GROUP2    8
-#define BUFFER_NUM_IN_GROUP3    2
+#define BUFFER_NUM_IN_GROUP2    4
+#define BUFFER_NUM_IN_GROUP3    1
 
 /** @addtogroup ev_buffer_typical_size EV Buffer Typical Application Size
  * Definition default buffer size for different typical usage
@@ -184,5 +186,4 @@ u8 *long_ev_buf_get(void);
 /**  @} end of group EV_BUFFER */
 
 /**  @} end of group TELINK_COMMON_MODULE */
-
 

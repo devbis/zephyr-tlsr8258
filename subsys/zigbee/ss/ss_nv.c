@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 
 
 #ifdef ZB_SECURITY
@@ -44,11 +44,6 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     u8 ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
     ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
-#if ZB_COORDINATOR_ROLE
-    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
-#else
-    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
-#endif
 
     /*
      * user can process network key(Decrypt) here :
@@ -56,6 +51,47 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
      *
      * */
 #endif
+#if ZB_COORDINATOR_ROLE
+    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+    /*
+     * Rebuild the canonical pointer defaults at runtime on every platform.
+     * The Darwin native_sim image cannot encode relocations into the packed
+     * ss_ib default initializer (Mach-O ld64 limitation). But on TC32 with
+     * Zephyr-style linking the SAME hole exists for a different reason:
+     * ss_apsSecurityME.c:120 declares an uninitialized strong
+     * `ss_info_base_t ss_ib;`, which is the canonical storage used by the
+     * Zephyr port. The pointers must be restored explicitly before
+     * ss_apsDecryptFrame derives the
+     * Transport-Key encryption key from a NULL tcLinkKey, and every
+     * inbound TC Transport-Key fails CCM (slot[47] = 0x4000000N) — the
+     * device never gets the network key. Verified via SWS read:
+     * ss_ib.tcLinkKey ptr was 0x00000000 before this fix.
+     */
+    ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+    ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+    ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+    if (ret != NV_SUCC) {
+        /*
+         * A TLSR soft reset does not clear SRAM, so ss_ib can still hold the
+         * previous session's security state even though the NV record is
+         * gone. Left in place, the stale key metadata makes a freshly
+         * received Transport-Key look preconfigured and the join fails.
+         * Drop the whole block and restore the pointer defaults.
+         */
+        memset(&ss_ib, 0, sizeof(ss_ib));
+#if ZB_COORDINATOR_ROLE
+        ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+        ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+        ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+        ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+        ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+        ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
+    }
     return ret;
 }
 

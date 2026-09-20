@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/zigbee/zb_types.h>
+
 
 enum {
     SYS_EXCEPTTION_COMMON_MEM_ACCESS                    = 0,

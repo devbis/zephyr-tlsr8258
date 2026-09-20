@@ -25,6 +25,9 @@
 #ifndef ZCL_H
 #define ZCL_H
 
+/* Forward declarations for types used in this header */
+typedef struct apsdeDataInd_s apsdeDataInd_t;
+
 
 /** @addtogroup  TELINK_ZIGBEE_STACK TELINK ZigBee Stack
  *  @{
