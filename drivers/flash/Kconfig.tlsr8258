@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FLASH_TELINK_TLSR8258
+	bool "Telink TLSR8258 on-chip flash driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_FLASH_ENABLED
+	select FLASH_HAS_DRIVER_ENABLED
+	select FLASH_HAS_EXPLICIT_ERASE
+	select FLASH_HAS_PAGE_LAYOUT
+	help
+	  Enable the flash driver for the SPI flash connected to the
+	  TLSR8258 internal MSPI controller.

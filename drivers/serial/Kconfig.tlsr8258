@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config UART_TELINK_TLSR8258
+	bool "Telink TLSR8258 UART driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_UART_ENABLED
+	select SERIAL_HAS_DRIVER
+	select SERIAL_SUPPORT_INTERRUPT
+	select SERIAL_SUPPORT_ASYNC
+	help
+	  This option enables the UART driver for Telink TLSR8258.

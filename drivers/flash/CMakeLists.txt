@@ -93,6 +93,10 @@ zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_SILABS_S2 soc_flash_silabs_series2
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_SILABS_SIWX91X soc_flash_silabs_siwx91x.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_SMARTBOND flash_smartbond.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_TELINK_B91 soc_flash_b91.c)
+zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_TELINK_TLSR8258
+			     flash_tlsr8258_paged_write.c
+			     flash_tlsr8258_entry.S
+			     flash_tlsr8258.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FLASH_XMC4XXX soc_flash_xmc4xxx.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_FLASH_AT25XV021A spi_flash_at25xv021a.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_FLASH_AT45 spi_flash_at45.c)
