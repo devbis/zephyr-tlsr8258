@@ -26,9 +26,9 @@
 /**********************************************************************
  * INCLUDES
  */
-#include "../common/includes/zb_common.h"
-#include "compiler.h"
-
+#include "tl_platform.h"
+#include "zb_common.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 #define RF_SRX_MODE                             0
 
@@ -176,7 +176,13 @@ _attribute_ram_code_ u32 mac_currentTickGet(void)
  */
 void rf_reset(void)
 {
-    rf_setTrxState(RF_STATE_OFF);
+    ZB_RADIO_INIT();
+
+    if (ZB_RADIO_TRX_STA_GET() != RF_MODE_OFF) {
+        rf_setTrxState(RF_STATE_OFF);
+    } else {
+        rfMode = RF_STATE_OFF;
+    }
 
     rf_setTxPower(g_zb_txPowerSet);
 
@@ -279,7 +285,7 @@ u8 rf_TrxStateGet(void)
  *
  * @return  none
  */
-_attribute_ram_code_ void rf_setTrxState(u8 state)
+void rf_setTrxState(u8 state)
 {
 #ifndef WIN32
     if (RF_STATE_RX == state || RF_STATE_ED == state) {
@@ -455,42 +461,24 @@ u8 rf_stopEDScan(void)
 }
 
 volatile s8 T_rssiPeak = 0;
-_attribute_ram_code_ u8 rf_performCCA(void)
+u8 rf_performCCA(void)
 {
-    if (isWLANActive()) {
+    /*
+     * Zephyr port: the IEEE 802.15.4 driver performs CSMA-CA internally
+     * inside api->tx, so the vendor 128 us register-poll CCA loop is
+     * both redundant and unsafe here. mac_csmaStart() invokes this with
+     * interrupts disabled, but ZB_RADIO_RSSI_GET() now routes through
+     * the Zephyr radio API (g_radio.api->cca) which expects IRQs to
+     * remain enabled. Spinning here therefore wedges the ZB thread on
+     * the first beacon-request TX. Always report IDLE and let Zephyr's
+     * driver gate the transmission.
+     */
+    if ((rf_busyFlag & TX_BUSY) != 0U) {
         return PHY_CCA_BUSY;
     }
 
-    u32 t1 = clock_time();
-    s8 rssi_peak = -110;
-    s8 rssi_cur = -110;
-    s32 rssiSum = 0;
-    s32 cnt = 1;
-
-    rssi_cur = ZB_RADIO_RSSI_GET();
-    rssiSum += rssi_cur;
-    while (!clock_time_exceed(t1, 128)) {
-        rssi_cur = ZB_RADIO_RSSI_GET();
-        rssiSum += rssi_cur;
-        cnt++;
-
-#if RF_SRX_MODE
-        if (ZB_RADIO_RX_DONE) {
-            ZB_RADIO_RX_DONE_CLR;
-            if (ZB_RADIO_TRX_STA_GET() == RF_MODE_AUTO) {
-                ZB_RADIO_SRX_START(clock_time());
-            }
-        }
-#endif
-    }
-    rssi_peak = rssiSum / cnt;
-    T_rssiPeak = rssi_peak;
-
-    if (rssi_peak > CCA_THRESHOLD || (rf_busyFlag & TX_BUSY)) {//Return if currently in TX state
-        return PHY_CCA_BUSY;
-    } else {
-        return PHY_CCA_IDLE;
-    }
+    T_rssiPeak = -110;
+    return PHY_CCA_IDLE;
 }
 
 void rf802154_tx_ready(u8 *buf, u8 len)
@@ -499,11 +487,26 @@ void rf802154_tx_ready(u8 *buf, u8 len)
     ZB_RADIO_DMA_HDR_BUILD(rf_tx_buf, len);
 
     rf_tx_buf[4] = len + 2;
-    memcpy(rf_tx_buf + 5, buf, len);
+    /* TC32's optimized memcpy is not safe for this unaligned DMA payload
+     * destination: the last byte of secured PSDUs can retain stale data.
+     * Keep the MAC->radio handoff byte-exact. */
+    for (u8 i = 0U; i < len; i++) {
+        rf_tx_buf[5U + i] = buf[i];
+    }
 }
 
-_attribute_ram_code_ void rf802154_tx(void)
+void rf802154_tx(void)
 {
+#if defined(CONFIG_IEEE802154_TELINK_TLSR8258) || \
+	defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
+    uint8_t psdu_len = (rf_tx_buf[4] >= 2U) ? (uint8_t)(rf_tx_buf[4] - 2U) : 0U;
+
+    if (psdu_len != 0U) {
+        (void)zb_platform_radio_send_raw_psdu(&rf_tx_buf[5], psdu_len);
+    }
+    return;
+#endif
+
     rf_setTrxState(RF_STATE_TX);
 
     ZB_RADIO_TX_DONE_CLR;
@@ -709,7 +712,7 @@ void rf_rx_irq_handler(void)
         (void)pSrcAddr;
 #endif
 
-        txDelayUs = (clock_time() - txTime) / S_TIMER_CLOCK_1US;
+        txDelayUs = (s32)clock_cycles_to_us((u32)(clock_time() - txTime));
         if (txDelayUs < ZB_TX_WAIT_US) {
             WaitUs(ZB_TX_WAIT_US - txDelayUs);
         }

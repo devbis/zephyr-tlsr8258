@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 #include "../zcl/zcl_include.h"
 #include "wwah.h"
 #ifdef ZCL_OTA

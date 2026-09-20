@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/zigbee/zb_types.h>
+
 typedef struct {
     u16 year;
     u8 month;

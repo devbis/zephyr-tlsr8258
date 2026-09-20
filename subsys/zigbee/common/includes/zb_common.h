@@ -17,6 +17,9 @@
 #define ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_COMMON_H_
 
 #include "tl_platform.h"
+#include "common/static_assert.h"
+#include "common/list.h"
+#include "common/second_clock.h"
 #include <string.h>
 #include <zephyr/random/random.h>
 
@@ -157,49 +160,58 @@ enum {
 };
 
 /* System diagnostics counters (mirrors zb_common.h sys_diagnostics_t) */
+/* diagnostics for stack */
 typedef struct {
-	u16 numberOfResets;
-	u16 persistentMemoryWrites;
-	u32 macRxBcast;
-	u32 macTxBcast;
-	u32 macRxUcast;
-	u32 macTxUcast;
-	u16 macTxUcastRetry;
-	u16 macTxUcastFail;
-	u16 nwkTxCnt;
-	u16 nwkTxEnDecryptFail;
-	u16 apsRxBcast;
-	u16 apsTxBcast;
-	u16 apsRxUcast;
-	u16 apsTxUcastSuccess;
-	u16 apsTxUcastRetry;
-	u16 apsTxUcastFail;
-	u16 routeDiscInitiated;
-	u16 neighborAdded;
-	u16 neighborRemoved;
-	u16 neighborStale;
-	u16 joinIndication;
-	u16 childMoved;
-	u32 panIdConflictCheck;
-	u16 nwkFCFailure;
-	u16 apsFCFailure;
-	u16 apsUnauthorizedKey;
-	u16 nwkDecryptFailures;
-	u16 apsDecryptFailures;
-	u16 packetBufferAllocateFailures;
-	u16 relayedUcast;
-	u16 phytoMACqueuelimitreached;
-	u16 packetValidateDropCount;
-	u8  lastMessageLQI;
-	s8  lastMessageRSSI;
-	u8  macTxIrqTimeoutCnt;
-	u8  macTxIrqCnt;
-	u8  macRxIrqCnt;
-	u32 macRxCrcFail;
-	u8  phyLengthError;
-	u8  panIdConflict;
-	u8  panIdModified;
-	u8  nwkAddrConflict;
+    u16 numberOfResets;
+    u16 persistentMemoryWrites;
+
+    u32 macRxCrcFail;
+    u32 macTxCcaFail;
+    u32 macRxBcast;
+    u32 macTxBcast;
+    u32 macRxUcast;
+    u32 macTxUcast;
+    u16 macTxUcastRetry;
+    u16 macTxUcastFail;
+
+    u16 nwkTxCnt;
+    u16 nwkTxEnDecryptFail;
+
+    u16 apsRxBcast;
+    u16 apsTxBcast;
+    u16 apsRxUcast;
+    u16 apsTxUcastSuccess;
+    u16 apsTxUcastRetry;
+    u16 apsTxUcastFail;
+
+    u16 routeDiscInitiated;
+    u16 neighborAdded;
+    u16 neighborRemoved;
+    u16 neighborStale;
+    u16 joinIndication;
+    u16 childMoved;
+
+    u32 panIdConflictCheck;
+
+    u16 nwkFCFailure;
+    u16 apsFCFailure;
+    u16 apsUnauthorizedKey;
+    u16 nwkDecryptFailures;
+    u16 apsDecryptFailures;
+    u16 packetBufferAllocateFailures;
+    u16 relayedUcast;
+    u16 phytoMACqueuelimitreached;
+    u16 packetValidateDropCount;
+
+    u8 lastMessageLQI;
+    s8 lastMessageRSSI;
+    u8 macTxIrqTimeoutCnt;
+    u8 macTxIrqCnt;
+    u8 macRxIrqCnt;
+    u8 phyLengthError;
+    u8 panIdConflict;
+    u8 panIdModified;
+    u8 nwkAddrConflict;
 } sys_diagnostics_t;
 extern sys_diagnostics_t g_sysDiags;
 
@@ -249,6 +261,9 @@ extern sys_diagnostics_t g_sysDiags;
 #endif
 
 extern const u8 g_null_securityKey[];
+extern const u8 nwkKeyDefault[];
+extern const u8 touchLinkKeyCertification[];
+extern const u8 touchLinkKeyMaster[];
 
 #ifndef ZB_IS_16BYTE_SECURITY_KEY_ZERO
 #define ZB_IS_16BYTE_SECURITY_KEY_ZERO(key) \
@@ -260,6 +275,22 @@ extern const u8 g_null_securityKey[];
 #define ZB_IEEE_ADDR_INVALID(addr)      ZB_64BIT_ADDR_COPY((addr), g_invalid_addr)
 #define ZB_IEEE_ADDR_COPY               ZB_64BIT_ADDR_COPY
 #define ZB_IEEE_ADDR_ZERO               ZB_64BIT_ADDR_ZERO
+#define ZB_EXTPANID_ZERO                ZB_64BIT_ADDR_ZERO
+
+#define SHORT_ADDR_LEN                  2 /* network/short address length */
+
+/*
+ * The vendor build places each layer in its own flash section. The Zephyr
+ * port lets the linker place code normally, so these are no-ops here, exactly
+ * as in the vendor's own non-sectioned configuration.
+ */
+#define _CODE_MAC_
+#define _CODE_APS_
+#define _CODE_AF_
+#define _CODE_SS_
+#define _CODE_BDB_
+#define _CODE_ZCL_
+
 #define ZB_IEEE_ADDR_IS_INVALID         ZB_IS_64BIT_ADDR_INVALID
 #define ZB_IEEE_ADDR_IS_ZERO            ZB_IS_64BIT_ADDR_ZERO
 #define ZB_IEEE_ADDR_CMP                ZB_64BIT_ADDR_CMP
@@ -361,5 +392,53 @@ extern const u8 linkKeyDistributedCertification[];
 extern const u8 linkKeyDistributedMaster[];
 void zb_info_save(void *arg);
 void zb_reset(void);
+
+
+
+/*
+ * Declarations the vendor zb_common.h hands out directly. They are
+ * implemented partly by the imported stack and partly by the platform layer,
+ * and the imported sources reach all of them through this header.
+ */
+extern const tl_zb_mac_pib_t macPibDefault;
+extern const nwk_nib_t nwkNibDefault;
+extern const zdo_attrCfg_t zdoCfgAttrDefault;
+
+void zb_init(void);
+void os_init(u8 isRetention);
+u8 zb_info_load(void);
+bool tl_stackBusy(void);
+
+void zb_sched_init(void);
+extern u8 ZB_TASKQ_USERUSE_SIZE;
+u8 tl_zbUserTaskQNum(void);
+
+u32 zbBufferSizeGet(void);
+u32 neighborTblSizeGet(void);
+u32 addrMapTblSizeGet(void);
+u32 brcTransRecordTblSizeGet(void);
+nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(u8 idx);
+aps_binding_entry_t *bindTblEntryGet(void);
+
+/*
+ * The vendor zb_common.h hands out the buffer API too, and the imported stack
+ * relies on that: most sources include only "zb_common.h". Pull it in last, so
+ * the buffer types above are already declared.
+ */
+/*
+ * The imported stack asserts the vendor's packed struct layout, which the
+ * vendor build gets from -fpack-struct. This port does not link vendor
+ * objects, and its translation units also see Zephyr headers, so packing them
+ * would break ABI with the kernel rather than buy compatibility. Field offsets
+ * still agree; only trailing padding differs, so the size contracts do not
+ * hold here and are not enforced.
+ *
+ * Wire formats are unaffected: the stack builds frames field by field, never
+ * by writing a struct out whole.
+ */
+#undef STATIC_ASSERT
+#define STATIC_ASSERT(X)
+
+#include "zb_buffer.h"
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_COMMON_H_ */

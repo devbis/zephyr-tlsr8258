@@ -26,10 +26,16 @@
 /**********************************************************************
  * INCLUDES
  */
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
+
+extern void app_bdb_rejoin_callback_trace_put(uint32_t tag);
+extern volatile u32 zb_nwk_ed_trace[];
 #include "../zcl/zcl_include.h"
 #include "../zcl/zll_commissioning/zcl_zll_commissioning_internal.h"
 #include "includes/bdb.h"
+
+#include <zephyr/zigbee/zb_radio_port.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 
 /**********************************************************************
@@ -50,6 +56,7 @@ typedef struct {
  * GLOBAL VARIABLES
  */
 bdb_ctx_t g_bdbCtx = {0};
+volatile u32 zb_bdb_tclk_trace[4] = {0x42444254U};
 
 /**********************************************************************
  * CONSTANT
@@ -73,9 +80,13 @@ static u8 bdb_commissioningNetworkFormation(void);
 static u8 bdb_commissioningNetworkSteer(void);
 static u8 bdb_topLevelCommissioning(u8 role);
 static u8 bdb_topLevelCommissiongConfirm(void);
+static void bdb_globalLinkKeySet(u8 *lk);
+static s32 bdb_task_delay(void *arg);
 static void bdb_retrieveTcLinkKeyTimerStop(void);
+static s32 bdb_waitTransportKeyTimeout(void *arg);
 static void bdb_touchLinkCallback(u8 status, void *arg);
 static void bdb_commssionUtilityCallback(u8 cmd, void *arg);
+static s32 bdb_ed_assoc_request_key_guard(void *arg) __attribute__((unused));
 
 extern void bdb_touchLinkPreCfg(u8 endpoint, bdb_commissionSetting_t *setting, const zcl_touchlinkAppCallbacks_t *tlCb);
 extern void bdb_coordinatorStart(void);
@@ -126,6 +137,135 @@ const zcl_touchlinkAppCallbacks_t bdb_touchlinkCb = {
     bdb_touchLinkCallback,
     bdb_commssionUtilityCallback
 };
+
+static void bdb_ed_join_complete_maybe_finish(void)
+{
+    u32 evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN;
+
+
+    if (BDB_STATE_GET() != BDB_STATE_COMMISSIONING_NETWORK_STEER ||
+        !g_bdbCtx.edRuntimeReady || !g_bdbCtx.tcLinkKeyReady) {
+        return;
+    }
+
+    BDB_STATUS_SET(BDB_COMMISSION_STA_SUCCESS);
+    g_bdbAttrs.nodeIsOnANetwork = 1;
+/* scheduled PERMITJOIN */
+    TL_SCHEDULE_TASK(bdb_task, (void *)evt);
+}
+
+/*
+ * Re-fire interval for the APS RequestKey nudge during the TCLK exchange
+ * window.  We re-send up to MAX_RETRIES times so that a transient TX failure
+ * or a coordinator that needs nudging does not consume the entire 5s TCLK
+ * timeout on a single dropped request.
+ */
+#define BDB_ED_REQUEST_KEY_RETRY_MS    1000U
+#define BDB_ED_REQUEST_KEY_MAX_RETRIES 4U
+
+static s32 bdb_ed_assoc_request_key_guard(void *arg)
+{
+	ss_apsmeRequestKeyReq_t requestKey;
+	u32 guard_flags;
+	u8 status;
+	u32 retry_count = (u32)(uintptr_t)arg;
+
+	guard_flags = ((u32)BDB_STATE_GET() << 16) |
+		      ((u32)(aps_ib.aps_authenticated ? 1U : 0U) << 8) |
+		      ((u32)(ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) ? 1U : 0U) << 9) |
+		      ((u32)(ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) ? 1U : 0U) << 10) |
+		      ((u32)((g_bdbAttrs.tcLinkKeyExchangeMethod != TCKEY_EXCHANGE_METHOD_APSRK)
+			       ? 1U : 0U) << 11) |
+		      ((retry_count & 0x7U) << 12);
+	zb_bdb_tclk_trace[2] = 0xbdb21000U | guard_flags;
+
+	if (BDB_STATE_GET() != BDB_STATE_COMMISSIONING_NETWORK_STEER ||
+	    aps_ib.aps_authenticated ||
+	    ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) ||
+	    ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) ||
+	    (g_bdbAttrs.tcLinkKeyExchangeMethod != TCKEY_EXCHANGE_METHOD_APSRK)) {
+		return -1;
+	}
+
+	TL_SETSTRUCTCONTENT(requestKey, 0);
+	requestKey.keyType = SS_KEYREQ_TYPE_TCLK;
+	requestKey.dstAddr.shortAddr = 0x0000;
+	requestKey.dstAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+
+	status = zb_apsmeRequestKeyReq(&requestKey);
+	zb_bdb_tclk_trace[1] = 0xbdb18000U | ((u32)retry_count << 12) | status;
+
+	/*
+	 * Re-arm the guard for another attempt unless we've exhausted the retry
+	 * budget.  This catches the case where the first request_key task
+	 * silently stalls or the coordinator drops the first frame; without
+	 * this, the device would sit idle until the 5s TCLK timeout fires.
+	 */
+	if (retry_count + 1U < BDB_ED_REQUEST_KEY_MAX_RETRIES) {
+		(void)TL_ZB_TIMER_SCHEDULE(bdb_ed_assoc_request_key_guard,
+					   (void *)(uintptr_t)(retry_count + 1U),
+					   BDB_ED_REQUEST_KEY_RETRY_MS);
+	}
+
+	return -1;
+}
+
+static void bdb_ed_assoc_handoff_start(void)
+{
+    bdb_retrieveTcLinkKeyTimerStop();
+    g_bdbAttrs.nodeIsOnANetwork = 1;
+    g_bdbCtx.edRuntimeReady = 0;
+    g_bdbCtx.tcLinkKeyReady = 0;
+    zb_bdb_tclk_trace[1] = 0xbdb11000U |
+                           ((u32)BDB_STATE_GET() << 16) |
+                           ((u32)(aps_ib.aps_authenticated ? 1U : 0U) << 8) |
+                           ((u32)(ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) ? 1U : 0U)
+                            << 9) |
+                           ((u32)(ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) ? 1U : 0U)
+                            << 10);
+
+    if (!aps_ib.aps_authenticated &&
+        !ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address)) {
+        /*
+         * Z3.0 initial-join flow per vendor reference (libzigbee
+         * zdo_nlme_join_confirm + ss_zdoApsmeTxKeyIndCb): after AssocResp the
+         * ED MUST passively poll and wait for the Trust Center to send an
+         * unsolicited APS Transport-Key.  The ED MUST NOT send an APS
+         * Request-Key with default TCLK encryption before it has the NWK key
+         * — EmberZNet treats that as a protocol violation and stops the
+         * Transport-Key delivery sequence (frame_pending stays high on poll
+         * ACKs but nothing is ever transmitted to the joiner).  The
+         * Request-Key path is only valid AFTER NWK key install, for the
+         * TCLK-update / Verify-Key flow, and must use NWK security ON / APS
+         * security OFF (see ss_apsmeRequestKeyReq in vendor SDK).
+         */
+        g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE(bdb_waitTransportKeyTimeout,
+                                                             NULL,
+                                                             TRANSPORT_NETWORK_KEY_WAIT_TIME);
+        bdb_globalLinkKeySet(ss_ib.tcLinkKey);
+        zb_bdb_tclk_trace[2] = 0xbdb20003U;
+    }
+}
+
+static void bdb_ed_secure_join_handoff_start(void)
+{
+    u32 evt = BDB_EVT_IDLE;
+
+    bdb_retrieveTcLinkKeyTimerStop();
+    g_bdbAttrs.nodeIsOnANetwork = 1;
+    if (!ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) && ss_ib.securityLevel != 0U) {
+        evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY;
+        bdb_globalLinkKeySet(ss_ib.tcLinkKey);
+    } else {
+        g_bdbCtx.tcLinkKeyReady = 1;
+        bdb_globalLinkKeySet(ss_ib.distributeLinkKey);
+    }
+    if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY) {
+        if (TL_ZB_TIMER_SCHEDULE(bdb_task_delay, (void *)evt, 200) == NULL) {
+            TL_SCHEDULE_TASK(bdb_task, (void *)evt);
+        }
+    }
+}
 
 
 /**********************************************************************
@@ -185,6 +325,10 @@ void bdb_globalLinkKeyFix(bool isFactoryNew)
 _CODE_BDB_ static void bdb_commissioningInfoSave(void *arg)
 {
 #if NV_ENABLE
+    if (!zb_platform_persistence_can_write()) {
+        return;
+    }
+
     nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
     zdo_ssInfoSaveToFlash();
     zb_info_save(NULL);
@@ -194,6 +338,19 @@ _CODE_BDB_ static void bdb_commissioningInfoSave(void *arg)
 #endif
     g_bdbCtx.factoryNew = 0;
     g_bdbAttrs.commissioningMode.networkSteer = 1;
+}
+
+/*
+ * Timer-callback wrapper used by bdb_mgmtPermitJoiningConfirm to defer the
+ * synchronous flash-write chain inside bdb_commissioningInfoSave until well
+ * after the post-join ZDO interview has had a chance to complete.  Returning
+ * -1 makes the ZB scheduler discard the timer so it fires exactly once.
+ */
+_CODE_BDB_ static s32 bdb_commissioning_info_save_timer(void *arg)
+{
+    ARG_UNUSED(arg);
+    bdb_commissioningInfoSave(NULL);
+    return -1;
 }
 
 /*********************************************************************
@@ -760,7 +917,8 @@ _CODE_BDB_ static u8 bdb_commissioningNetworkFormation(void)
             ss_securityModeSet(SS_SEMODE_DISTRIBUTED);
 #endif
 
-            u32 scanChannels = aps_ib.aps_channel_mask;
+            u32 scanChannels = g_bdbAttrs.primaryChannelSet ? g_bdbAttrs.primaryChannelSet :
+                               aps_ib.aps_channel_mask;
 
             /* network formation */
             zb_nwkFormation(scanChannels, g_bdbAttrs.scanDuration);
@@ -785,6 +943,8 @@ _CODE_BDB_ static u8 bdb_commissioningNetworkFormation(void)
  */
 _CODE_BDB_ static void bdb_mgmtPermitJoiningConfirm(void *arg)
 {
+    ARG_UNUSED(arg);
+
 #if ZB_ROUTER_ROLE
     /* Enable permit join for more than bdbcMinCommissioningTime seconds */
 #if ZB_COORDINATOR_ROLE
@@ -805,7 +965,22 @@ _CODE_BDB_ static void bdb_mgmtPermitJoiningConfirm(void *arg)
     }
 
     if (g_bdbAttrs.nodeIsOnANetwork) {
-        bdb_commissioningInfoSave(NULL);
+        /*
+         * Defer bdb_commissioningInfoSave by 15s instead of running it
+         * synchronously in the permit-joining confirm callback.  The save
+         * chains nv_nwkFrameCountSaveToFlash + zdo_ssInfoSaveToFlash +
+         * zb_info_save, each of which holds arch_irq_lock through a flash
+         * page program / sector erase (~100-200ms with IRQs masked).  On
+         * the Zephyr NVS backend this stalls the ZB thread long enough
+         * that the post-join Node_Desc_req / Active_EP_req / SimpleDesc_req
+         * exchange never gets serviced and Z2M marks the device FAILED.
+         * Same rationale and same 15s window as the deferred
+         * zb_info_save() in the ED join completion path — the persistence
+         * is only consulted on the next power-up, so a long delay is
+         * safe as long as we eventually save before any reset.
+         */
+        (void)TL_ZB_TIMER_SCHEDULE(bdb_commissioning_info_save_timer,
+                                   NULL, 15000U);
     }
 }
 
@@ -841,6 +1016,20 @@ _CODE_BDB_ static void bdb_retrieveTcLinkKeyTimerStop(void)
     }
 }
 
+_CODE_BDB_ static s32 bdb_waitTransportKeyTimeout(void *arg)
+{
+    ARG_UNUSED(arg);
+
+    g_bdbCtx.retrieveTcLkKeyTimer = NULL;
+    if (aps_ib.aps_authenticated && ss_ib.securityLevel != 0U) {
+        return -1;
+    }
+
+    zb_bdb_tclk_trace[3] = 0xbdb30001U;
+    bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
+    return -1;
+}
+
 /*********************************************************************
  * @fn      bdb_retrieveTcLinkKeyDone
  *
@@ -852,23 +1041,24 @@ _CODE_BDB_ static void bdb_retrieveTcLinkKeyTimerStop(void)
  */
 _CODE_BDB_ void bdb_retrieveTcLinkKeyDone(u8 status)
 {
-    /* now send permit join command */
-    u32 evt = BDB_EVT_IDLE;
     bdb_retrieveTcLinkKeyTimerStop();
     if (status == BDB_COMMISSION_STA_SUCCESS) {
-        BDB_STATUS_SET(BDB_COMMISSION_STA_SUCCESS);
-
-        g_bdbAttrs.nodeIsOnANetwork = 1;
-        evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN;
+        g_bdbCtx.tcLinkKeyReady = 1;
+        bdb_ed_join_complete_maybe_finish();
     } else {
         aps_ib.aps_authenticated = 0;
         BDB_STATUS_SET(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
-
+        g_bdbCtx.edRuntimeReady = 0;
+        g_bdbCtx.tcLinkKeyReady = 0;
         g_bdbAttrs.nodeIsOnANetwork = 0;
-        evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH;
+        TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
     }
+}
 
-    TL_SCHEDULE_TASK(bdb_task, (void *)evt);
+_CODE_BDB_ void bdb_ed_runtime_join_complete(void)
+{
+    g_bdbCtx.edRuntimeReady = 1;
+    bdb_ed_join_complete_maybe_finish();
 }
 
 /*********************************************************************
@@ -920,6 +1110,41 @@ _CODE_BDB_ static void bdb_nodeDescRespHandler(void *arg)
  */
 _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
 {
+#if defined(CONFIG_IEEE802154_RAW_MODE)
+    ARG_UNUSED(arg);
+
+    if (g_bdbAttrs.tcLinkKeyExchangeAttempts++ < g_bdbAttrs.tcLinkKeyExchangeAttemptsMax) {
+        u8 sn = 0;
+        u8 status;
+        zdo_node_descriptor_req_t req;
+
+        req.nwk_addr_interest = 0x0000;
+        status = zb_zdoNodeDescReq(0x0000, &req, &sn, bdb_nodeDescRespHandler);
+        zb_bdb_tclk_trace[2] = 0xbdb20000U |
+                               ((u32)g_bdbAttrs.tcLinkKeyExchangeAttempts << 8) |
+                               status;
+        return 0;
+    }
+
+    if (!zb_isDeviceJoinedNwk()) {
+        g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
+        g_bdbCtx.retrieveTcLkKeyTimer = NULL;
+        zb_bdb_tclk_trace[3] = 0xbdb30000U;
+        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_TCLK_EX_FAILURE);
+        return -1;
+    }
+
+    nlme_leave_req_t req;
+    ZB_IEEE_ADDR_COPY(req.deviceAddr, g_zbMacPib.extAddress);
+    req.rejoin = 0;
+    req.removeChildren = 0;
+    if (!g_bdbCtx.leaveDoing) {
+        if (RET_OK == zb_nlmeLeaveReq(&req)) {
+            g_bdbCtx.leaveDoing = 1;
+        }
+    }
+    return 3 * 1000;
+#else
     if (g_bdbAttrs.tcLinkKeyExchangeAttempts++ < g_bdbAttrs.tcLinkKeyExchangeAttemptsMax) {
         /* send node description */
         u8 sn = 0;
@@ -947,6 +1172,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
         }
         return 3 * 1000;
     }
+#endif
 }
 
 /*********************************************************************
@@ -960,6 +1186,30 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyTimeout(void *arg)
  */
 _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
 {
+#if defined(CONFIG_IEEE802154_RAW_MODE)
+    u8 sn = 0;
+    u8 status;
+    zdo_node_descriptor_req_t req;
+
+    ARG_UNUSED(arg);
+
+    if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
+        req.nwk_addr_interest = 0x0000;
+        status = zb_zdoNodeDescReq(0x0000, &req, &sn, bdb_nodeDescRespHandler);
+
+        g_bdbCtx.leaveDoing = 0;
+        g_bdbAttrs.tcLinkKeyExchangeAttempts = 0;
+        g_bdbAttrs.tcLinkKeyExchangeAttemptsMax = 3;
+        zb_bdb_tclk_trace[1] = 0xbdb10000U | status;
+        if (!g_bdbCtx.retrieveTcLkKeyTimer) {
+            g_bdbCtx.retrieveTcLkKeyTimer = TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyTimeout,
+                                                                 NULL,
+                                                                 BDBC_TC_LINK_KEY_EXCHANGE_TIMEOUT * 1000);
+        }
+    } else {
+        bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
+    }
+#else
     if (g_bdbAttrs.tcLinkKeyExchangeMethod == TCKEY_EXCHANGE_METHOD_APSRK) {
         /* send node description */
         u8 sn = 0;
@@ -979,6 +1229,7 @@ _CODE_BDB_ static s32 bdb_retrieveTcLinkKeyStart(void *arg)
     } else {
         bdb_retrieveTcLinkKeyDone(BDB_COMMISSION_STA_SUCCESS);
     }
+#endif
 
     return -1;
 }
@@ -1001,6 +1252,12 @@ _CODE_BDB_ static void bdb_networkSteerNonFactoryNew(void)
 
 _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
 {
+    u8 status;
+
+    zb_nwk_ed_trace[1]++;
+
+    /* [3]: low 16 = disc-cnf-cb hit count; bits 16..23 = zb_assocJoinReq status. */
+
 #if 0
     u8 addNebNum = g_zb_neighborTbl.additionNeighborNum;
 
@@ -1013,8 +1270,12 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
         printf("lqi = %x\n", g_zb_neighborTbl.additionNeighborTbl[i].lqi);
     }
 #endif
-
-    zb_assocJoinReq();
+    status = zb_assocJoinReq();
+    zb_nwk_ed_trace[2] = 0xBDB00000U | status;
+    if (status != SUCCESS) {
+        BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
+        TL_SCHEDULE_TASK(bdb_task, (void *)BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH);
+    }
 }
 
 
@@ -1030,8 +1291,10 @@ _CODE_BDB_ void bdb_nwkDiscCnfCb(void)
 _CODE_BDB_ static void bdb_networkSteerFactoryNew(void)
 {
     //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_IN_PROGRESS;
-    u32 scanChannels = aps_ib.aps_channel_mask;
+    u32 scanChannels = g_bdbAttrs.primaryChannelSet ? g_bdbAttrs.primaryChannelSet :
+                       aps_ib.aps_channel_mask;
     u8 scanDuration = g_bdbAttrs.scanDuration;
+
 
     /* perform join work flow */
     zb_nwkDiscovery(scanChannels, scanDuration, bdb_nwkDiscCnfCb);
@@ -1049,6 +1312,7 @@ _CODE_BDB_ static void bdb_networkSteerFactoryNew(void)
 _CODE_BDB_ static u8 bdb_commissioningNetworkSteer(void)
 {
     u8 status = BDB_STATE_IDLE;
+
     if (!g_bdbAttrs.commissioningMode.networkSteer) {
         status = bdb_commissioningNetworkFormation();
     } else {
@@ -1146,6 +1410,7 @@ static void bdb_task(void *arg)
             }
             BDB_STATE_SET(status);
         } else if (evt == BDB_STATE_REJOIN_DONE) {
+            app_bdb_rejoin_callback_trace_put((0x23U << 24) | BDB_STATUS_GET());
             bdb_topLevelCommissiongConfirm();
         }
         break;
@@ -1175,12 +1440,15 @@ static void bdb_task(void *arg)
         if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY) {
             TL_ZB_TIMER_SCHEDULE(bdb_retrieveTcLinkKeyStart, NULL, 1000);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN) {
+            u8 devAnnStatus = zb_zdoSendDevAnnance();
+			ARG_UNUSED(devAnnStatus);
 #if ZB_ROUTER_ROLE
             g_zbNwkCtx.joinAccept = 1;
-#endif
             zb_mgmtPermitJoinReq(0xfffc, BDBC_MIN_COMMISSIONING_TIME, 0x01, &sn, NULL);
+#endif
             TL_SCHEDULE_TASK(bdb_mgmtPermitJoiningConfirm,NULL);
         } else if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH) {
+            zb_nwk_ed_trace[4]++;
             status = bdb_commissioningNetworkFormation();
             if (status == BDB_STATE_IDLE) {
                 /* confirm to application */
@@ -1249,6 +1517,10 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
     u32 evt = BDB_EVT_IDLE;
     u8 state = BDB_STATE_GET();
 
+    app_bdb_rejoin_callback_trace_put((0x22U << 24) |
+                                      ((u32)state << 16) |
+                                      startDevCnf->status);
+
     switch (state) {
     case BDB_STATE_IDLE:
         /* for rejoin indication by the stack */
@@ -1304,24 +1576,29 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
 
     case BDB_STATE_COMMISSIONING_NETWORK_STEER:
         if (startDevCnf->status == SUCCESS) {
-            //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
-            g_bdbAttrs.nodeIsOnANetwork = 1;
-            BDB_STATUS_SET(BDB_COMMISSION_STA_SUCCESS);
-            if (!ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) && ss_ib.securityLevel) {
-                evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY;
-                /* add bdb_globalLinkKeySet() for the sdk later than 3.6.8.0,
-                 * because the global link maybe be changed to default key but not the pre-config key
-                 */
-                bdb_globalLinkKeySet(ss_ib.tcLinkKey);
-            } else {
-                evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_PERMITJOIN;
-                bdb_globalLinkKeySet(ss_ib.distributeLinkKey);
-            }
-
-            TL_ZB_TIMER_SCHEDULE(bdb_task_delay, (void *)evt, 200);
+#if ZB_ROUTER_ROLE
+            /*
+             * The ED TCLK-retrieval procedure is not part of the router
+             * join handoff.  A router has already completed the centralized
+             * security handoff when this confirm is delivered: the NWK
+             * Transport-Key is installed by ss_zdoTransportKeyIndHandle().
+             * Running the ED-only NodeDesc/RequestKey exchange here leaves a
+             * router in the commissioning state and, when the coordinator
+             * does not answer that optional exchange, eventually sends it
+             * through the leave/recommission path.  That is the observed
+             * "works after interview, then starts associating again" loop.
+             */
+            g_bdbCtx.edRuntimeReady = 1;
+            g_bdbCtx.tcLinkKeyReady = 1;
+            bdb_ed_join_complete_maybe_finish();
+#else
+            bdb_ed_secure_join_handoff_start();
+#endif
         } else {
             //g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_NO_NETWORK;
             BDB_STATUS_SET(BDB_COMMISSION_STA_NO_NETWORK);
+            g_bdbCtx.edRuntimeReady = 0;
+            g_bdbCtx.tcLinkKeyReady = 0;
             evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_FINISH;
             TL_SCHEDULE_TASK(bdb_task, (void *)evt);
         }
@@ -1351,6 +1628,19 @@ _CODE_BDB_ void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf)
     default:
         //TL_SCHEDULE_TASK(zb_info_save,NULL);
         break;
+    }
+}
+
+_CODE_BDB_ void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf)
+{
+    if ((startDevCnf == NULL) || (startDevCnf->status != SUCCESS)) {
+        return;
+    }
+
+    if (BDB_STATE_GET() == BDB_STATE_COMMISSIONING_NETWORK_STEER) {
+#if !ZB_ROUTER_ROLE
+        bdb_ed_assoc_handoff_start();
+#endif
     }
 }
 
@@ -1463,7 +1753,7 @@ _CODE_BDB_ static u8 bdb_topLevelCommissiongConfirm(void)
              * set channel from primaryChannelSet in bdb attributes
              * */
             ZB_TRANSCEIVER_SET_CHANNEL(g_bdbCtx.channel);
-            rf_setTrxState(RF_STATE_RX);
+            (void)zb_radio_port_set_trx_state(ZB_RADIO_PORT_TRX_RX, g_bdbCtx.channel);
         }
 #endif
     }
@@ -1998,4 +2288,3 @@ _CODE_BDB_ void bdb_preInstallCodeAdd(addrExt_t ieeeAddr, u8 *pInstallCode)
 
     ss_devKeyPairSave(&keyPair);
 }
-
