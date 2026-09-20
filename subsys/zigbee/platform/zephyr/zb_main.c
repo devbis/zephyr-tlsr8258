@@ -243,6 +243,16 @@ static void zb_core_bootstrap_once(void)
 		aps_init();
 		af_init();
 		zdo_init();
+
+		/*
+		 * Start the one-second clock. The imported stack drives every ageing
+		 * table from it — APS duplicate and ack retries, MAC indirect expiry,
+		 * route discovery and routing table ageing, broadcast records, link
+		 * status, neighbour management, parent announce and the trust centre
+		 * key pair cache. The vendor starts it from zb_init(), which this port
+		 * does not use, so start it here instead.
+		 */
+		secondClockRun();
 		/* tl_zbNwkInit() clears the transient context, including
 		 * is_factory_new.  If there is no valid persisted joined snapshot,
 		 * restore cannot leave that bit at zero: BDB would take the
