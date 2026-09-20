@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 TC32 CPU
+
+compatible: "telink,tlsr8258-tc32"
+
+include: cpu.yaml
