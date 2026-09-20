@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Telink TLSR8258 AES accelerator.
+
+  A single-block AES-128 engine.  It exposes an 8-bit control register, a
+  32-bit data register that is fed and drained four words at a time, and a
+  16-byte key register file.  The engine performs one ECB block per run and
+  signals completion through the control register; it has no interrupt and
+  no DMA.
+
+compatible: "telink,tlsr8258-aes"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
