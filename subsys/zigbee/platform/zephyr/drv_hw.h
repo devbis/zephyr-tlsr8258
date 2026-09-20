@@ -24,13 +24,13 @@
  *******************************************************************************************************/
 #pragma once
 
-#define BATTERY_SAFETY_THRESHOLD        2200//2.2v
+#include <zephyr/zigbee/zb_types.h>
+#include <zephyr/sys/reboot.h>
 
-#if defined(MCU_CORE_826x) || defined(MCU_CORE_8258) || defined(MCU_CORE_8278)
-    #define SYSTEM_RESET()              mcu_reset()
-#elif defined(MCU_CORE_B91) || defined(MCU_CORE_B92) || defined(MCU_CORE_TL721X) || defined(MCU_CORE_TL321X)
-    #define SYSTEM_RESET()              sys_reboot()
-#endif
+#define BATTERY_SAFETY_THRESHOLD        2200 /* 2.2 V */
+
+/* SYSTEM_RESET() maps to Zephyr reboot for all MCU cores */
+#define SYSTEM_RESET()              sys_reboot(SYS_REBOOT_COLD)
 
 typedef enum {
     SYSTEM_BOOT,                //power on or boot
@@ -57,3 +57,8 @@ void drv_generateRandomData(u8 *pData, u8 len);
 
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);
+
+void flash_read(u32 addr, u32 len, u8 *buf);
+void flash_write(u32 addr, u32 len, u8 *buf);
+void flash_erase(u32 addr);
+bool drv_get_primary_ieee_addr(u8 *addr);
