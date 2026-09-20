@@ -1,0 +1,23 @@
+/ {
+	chosen {
+		zephyr,ieee802154 = &zigbee_radio;
+	};
+
+	zigbee_radio: zigbee_radio {
+		compatible = "zephyr,native-sim-socket-ieee802154";
+		status = "okay";
+		local-mac-address = [01 00 02 50 e0 38 c1 a4];
+		server-host = "127.0.0.1";
+		server-port = <19011>;
+		node-id = <0x0001>;
+	};
+};
+
+/*
+ * uart1 carries the ZBHCI protocol. uart0 stays the console/debug-log UART
+ * (disabled in prj.conf on this sample, same as the other native_sim_socket_*
+ * samples, but left free here in case CONFIG_SERIAL debug needs it).
+ */
+&uart1 {
+	status = "okay";
+};
