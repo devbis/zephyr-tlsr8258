@@ -235,6 +235,12 @@ endif()
 # imported sources assert that layout. Apply it to the imported sources only:
 # the platform layer shares types with the Zephyr kernel and must keep the
 # toolchain's natural alignment.
+#
+# Only on the embedded target. The host builds have 64-bit pointers, so packing
+# a table of function pointers leaves them unaligned and the host linker
+# rejects it; nothing there talks to vendor objects, and the layout assertions
+# are 32-bit only anyway.
+if(NOT CONFIG_ARCH_POSIX)
 get_target_property(zigbee_sources subsys__zigbee SOURCES)
 foreach(zigbee_source ${zigbee_sources})
     if(NOT zigbee_source MATCHES "platform/")
@@ -242,6 +248,7 @@ foreach(zigbee_source ${zigbee_sources})
             COMPILE_OPTIONS "-fpack-struct;-fshort-enums")
     endif()
 endforeach()
+endif()
 
 
 # The Zephyr persistence layer owns zb_info_save(): it writes a versioned blob

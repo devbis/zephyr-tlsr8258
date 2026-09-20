@@ -169,11 +169,8 @@ tl_zb_neighbor_entry_t g_zb_neighborTbl;
 
 /* routing record table */
 #if ZB_COORDINATOR_ROLE
-u16 NWK_ROUTE_RECORD_TABLE_SIZE = NWK_ROUTE_RECORD_TABLE_NUM;
 #if (!NWK_ROUTE_RECORD_TABLE_NUM)
-nwk_routeRecordTabEntry_t g_routeRecTab[1];
 #else
-nwk_routeRecordTabEntry_t g_routeRecTab[NWK_ROUTE_RECORD_TABLE_NUM];
 #endif
 #endif
 
