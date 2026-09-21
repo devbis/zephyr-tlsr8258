@@ -75,6 +75,12 @@ zb_buf_t *zb_buf_allocate(void)
 	}
 
 	memset(block, 0, sizeof(zb_buf_t));
+	/* The vendor pool marks the buffer in use and counts the allocation
+	 * (zb_buf_get: "buf->hdr.used = 1; buf->allocCnt++").  Ported code tests
+	 * that flag: nwk_fwdPacket() drops a frame whose buffer reads as free,
+	 * which silently discarded every APS command the coordinator sent. */
+	((zb_buf_t *)block)->hdr.used = 1;
+	((zb_buf_t *)block)->allocCnt++;
 	{
 		u32 index;
 		k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
@@ -107,6 +113,8 @@ void zb_buf_free(zb_buf_t *buf)
 		zb_buf_mark_free(index);
 		k_spin_unlock(&zb_buf_lock, key);
 	}
+	buf->hdr.used = 0;
+	buf->freeCnt++;
 	k_mem_slab_free(&zb_buf_slab, buf);
 }
 
@@ -204,6 +212,7 @@ static zb_buf_t zb_buf_synth_scratch;
 u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
 	if (rxBuf == NULL) {
+		zb_buf_synth_scratch.hdr.used = 1;
 		return (u8 *)&zb_buf_synth_scratch;
 	}
 
