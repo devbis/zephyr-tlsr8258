@@ -12,7 +12,7 @@ the order to amend and rebase in.
 Every imported file is in exactly one category:
 
 - **as-is** — compiled straight from the import, unmodified.
-- **patched** — compiled with a Zephyr-side change, with the commit that makes it.
+- **patched** — compiled with a recorded Zephyr-side change.
 - **replaced** — not compiled; the platform layer provides the same API.
 - **unused** — not compiled, and nothing needs it.
 
@@ -35,6 +35,10 @@ Symbol-level exceptions inside otherwise as-is files:
 |---|---|---|
 | `zb_info_save` | renamed to `zb_info_save_vendor` at compile time (`set_source_files_properties` on `zbapi/zb_initialize.c`) | The Zephyr persistence layer writes a versioned blob covering the network context and the frame counter, where the imported version stores only `g_zbInfo`. |
 | `zb_init` | not called | The port runs its own bootstrap in `platform/zephyr/zb_main.c`, which calls the individual init entry points and starts the second clock itself. |
+| `rf802154_tx_ready` | Zephyr port expands the imported beacon header before radio handoff | The imported builder uses compressed PAN addressing (`0x8043`), but a standards-compliant beacon needs the source PAN field; changing only the FCF shifts the source address and beacon payload by two bytes. |
+| `mac_rxDataParse` | Keeps active-scan beacons on the queued indication path | The vendor RF path consumes these beacons before the queued parser; Zephyr has no equivalent earlier callback, so dropping them prevents NWK discovery. |
+| `tl_zbMlmeCmdBeaconReqRecvd` | Releases the received beacon-request buffer after scheduling the response | The response uses the dedicated MAC TX buffer; retaining the RX indication leaks one Zephyr buffer per request until the coordinator crashes. |
+| `zb_radio_mark_pending_data` | Native-socket RX marks matching indirect transactions ready before MAC parsing | The vendor RF IRQ performs this transition before the imported MAC callback; the native socket RX path bypasses that IRQ. |
 | `g_routingTab`, `ROUTING_TABLE_SIZE`, `NWKC_RREQ_RETRIES`, `NWKC_INITIAL_RREQ_RETRIES`, `NWKC_TRANSFAILURE_CNT_THRESHOLD`, `g_routeRecTab`, `NWK_ROUTE_RECORD_TABLE_SIZE` | taken from the imported stack; `common/zb_config.c` no longer defines them | The vendor archive does not export these, so they belong to the application. The imported stack defining them diverges from the vendor; until that is settled upstream, the application side yields. |
 
 ## tl_zigbee_sdk — the open SDK

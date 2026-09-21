@@ -483,10 +483,41 @@ u8 rf_performCCA(void)
 
 void rf802154_tx_ready(u8 *buf, u8 len)
 {
-    /* Fill the telink RF header */
-    ZB_RADIO_DMA_HDR_BUILD(rf_tx_buf, len);
+	u8 tx_len = len;
+	bool vendor_beacon = false;
 
-    rf_tx_buf[4] = len + 2;
+	/* The imported beacon builder uses a compressed-PAN FCF (0x8043), so
+	 * its short-source header is two bytes shorter than a standards-compliant
+	 * beacon header. Rebuild the header at the Zephyr MAC-to-radio boundary;
+	 * changing only the FCF would make the receiver consume the superframe
+	 * fields as the source address and shift the beacon payload. */
+	if (len >= 5U) {
+		u16 frame_ctrl = (u16)buf[0] | ((u16)buf[1] << 8);
+
+		vendor_beacon = ((frame_ctrl & 0x3fffU) == 0x0043U) &&
+			(((frame_ctrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> 14) == ADDR_MODE_SHORT);
+	}
+
+	/* Fill the telink RF header */
+	if (vendor_beacon && (len <= (u8)(UINT8_MAX - 2U))) {
+		tx_len = (u8)(len + 2U);
+	}
+	ZB_RADIO_DMA_HDR_BUILD(rf_tx_buf, tx_len);
+	rf_tx_buf[4] = tx_len + 2U;
+	if (vendor_beacon) {
+		rf_tx_buf[5] = 0U;
+		rf_tx_buf[6] = 0x80U;
+		rf_tx_buf[7] = buf[2];
+		rf_tx_buf[8] = (u8)g_zbMacPib.panId;
+		rf_tx_buf[9] = (u8)(g_zbMacPib.panId >> 8);
+		rf_tx_buf[10] = buf[3];
+		rf_tx_buf[11] = buf[4];
+		for (u8 i = 5U; i < len; i++) {
+			rf_tx_buf[5U + i + 2U] = buf[i];
+		}
+		return;
+	}
+
     /* TC32's optimized memcpy is not safe for this unaligned DMA payload
      * destination: the last byte of secured PSDUs can retain stale data.
      * Keep the MAC->radio handoff byte-exact. */
