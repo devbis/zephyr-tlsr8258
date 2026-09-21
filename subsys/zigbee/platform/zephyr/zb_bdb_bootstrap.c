@@ -546,6 +546,15 @@ int zb_platform_bdb_init_default(void)
 	 */
 	aps_ib.aps_designated_coordinator = 1;
 	ss_ib.tcPolicy.allowTCLKrequest = 1;
+	/*
+	 * ss_zdoInit() is the third half, and it is bypassed with the rest of
+	 * bdb_init() (see the note below).  Its trust-center policy is what lets
+	 * a device join through a router: without allowJoins the Update-Device
+	 * the parent relays is dropped in ss_zdoUpdateDeviceIndHandle() and the
+	 * child never receives the network key.
+	 */
+	ss_ib.tcPolicy.allowRejoins = (af_nodeDescStackRevisionGet() <= 20U);
+	ss_ib.tcPolicy.allowJoins = 1;
 #endif
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
