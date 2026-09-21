@@ -166,6 +166,23 @@ if ! rg -q 'nsduOffset >= 0 && \(size_t\)nsduOffset < sizeof\(zb_buf_t\)' \
 	report "apsTxDataSendStart() must carry over a payload outside the source buffer"
 fi
 
+# The update-device indication is built over the buffer that holds the ASDU
+# pointer, so the frame has to be read out first.
+if ! rg -q 'const u8 \*asdu = ind->asdu' subsys/zigbee/ss/ss_apsSecurityME.c; then
+	report "ss_apsUpdateDeviceCmdHandle() must read the ASDU before writing the indication"
+fi
+
+# The trust-center policy is set on both paths of ss_zdoInit(); a secured start
+# that leaves allowJoins clear makes the trust center drop every Update-Device
+# a parent relays, so no device can join through a router.
+if rg -qU --pcre2 'devKeyPairNum = 0;\n\t\}\n#if defined\(ZB_COORDINATOR_ROLE\)\n\telse \{' \
+	subsys/zigbee/ss/ss_zdoSecurityME.c; then
+	report "ss_zdoInit() must set the trust-center policy for a secured start too"
+fi
+if ! rg -q 'ss_ib\.tcPolicy\.allowJoins = 1' subsys/zigbee/platform/zephyr/zb_bdb_bootstrap.c; then
+	report "the coordinator bootstrap must allow joins through a parent"
+fi
+
 if [ "$fail" -ne 0 ]; then
 	exit 1
 fi
