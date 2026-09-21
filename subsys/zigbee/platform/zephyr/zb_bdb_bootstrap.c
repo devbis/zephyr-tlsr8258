@@ -522,6 +522,31 @@ int zb_platform_bdb_init_default(void)
 	}
 
 	(void)zdo_ssInfoInit();
+	/*
+	 * bdb_init() is bypassed here (see the ss_zdoInit() note below), so
+	 * bdb_linkKeyCfg() never runs and ss_ib.tcLinkKeyType stays at its
+	 * zeroed value, SS_UNIQUE_LINK_KEY.  A trust center reads that as
+	 * "every child has a unique link key" and ss_apsSecureFrame() then
+	 * refuses to encrypt the Transport-Key for a device that has no stored
+	 * key pair, so no joiner ever receives the network key.  Apply the
+	 * Zigbee 3.0 centralized default the vendor samples pass to bdb_init():
+	 * the well-known global trust-center link key.  A restored SSIB brings
+	 * its own value, so only configure a factory-new node.
+	 */
+	if (g_zbNwkCtx.is_factory_new != 0U) {
+		ss_ib.tcLinkKeyType = SS_GLOBAL_LINK_KEY;
+	}
+#if defined(ZB_COORDINATOR_ROLE)
+	/*
+	 * bdb_coordinatorStart() is the other half bdb_init() would have run.
+	 * Without aps_designated_coordinator the beacon builder leaves the PAN
+	 * coordinator bit clear, so a joining router files this node as a plain
+	 * router, takes the distributed-security branch on its first child and
+	 * never relays an Update-Device to the trust center.
+	 */
+	aps_ib.aps_designated_coordinator = 1;
+	ss_ib.tcPolicy.allowTCLKrequest = 1;
+#endif
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
