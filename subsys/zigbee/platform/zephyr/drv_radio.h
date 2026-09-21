@@ -168,3 +168,5 @@ static inline void WaitUs(u32 us) { k_busy_wait(us); }
 	else if ((lqi) > 45)  { (path_cost) = 5; } \
 	else                  { (path_cost) = 7; } \
 } while (0)
+
+void zb_radio_note_tx_frame(const u8 *frame);

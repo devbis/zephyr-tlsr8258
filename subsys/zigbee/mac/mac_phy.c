@@ -502,6 +502,7 @@ void rf802154_tx_ready(u8 *buf, u8 len)
 	if (vendor_beacon && (len <= (u8)(UINT8_MAX - 2U))) {
 		tx_len = (u8)(len + 2U);
 	}
+	zb_radio_note_tx_frame(buf);
 	ZB_RADIO_DMA_HDR_BUILD(rf_tx_buf, tx_len);
 	rf_tx_buf[4] = tx_len + 2U;
 	if (vendor_beacon) {
