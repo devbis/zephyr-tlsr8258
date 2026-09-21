@@ -103,6 +103,14 @@ if ! rg -q 'if \(\(neighbor == NULL && route == NULL\) \|\| nextHop == MAC_ADDR_
 	report "nwk_fwdPacket() must not treat short address 0 as an unresolved next hop"
 fi
 
+# A unicast to a neighbour that sleeps is held for its next data request.
+if ! rg -q 'neighbor->rxOnWhileIdle == 0U\) \? 1U : 0U' subsys/zigbee/nwk/nwk_data.c; then
+	report "nwk_fwdPacket() must ask for an indirect transmission to a sleeping neighbour"
+fi
+if rg -q 'u8 ack, u8 \*payload' subsys/zigbee/nwk/nwk_data.c; then
+	report "nwk_tx()'s fourth argument selects indirect transmission, not acknowledgement"
+fi
+
 # The MAC keeps the whole frame, header first.
 if rg -q 'tl_bufInitalloc\(txBuf, psduLen\)' subsys/zigbee/mac/mac_trx.c; then
 	report "tl_zbMacTx() must queue the caller's frame, not a recomputed allocation"
