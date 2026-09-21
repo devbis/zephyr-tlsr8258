@@ -6,6 +6,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
+#include "ss_security_flags.h"
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include <tlsr825x/power.h>
 #endif
@@ -564,8 +565,8 @@ int zb_platform_bdb_init_default(void)
 	 * because its other side-effects (tl_neighborFrameCntReset +
 	 * ss_devKeyPairInfoGet) wedge MAC RX on TLSR8258.
 	 */
-	ss_ib.securityLevel = 5U;
-	ss_ib.secureAllFresh = 1U;
+	ss_ib_security_level_set(5U);
+	ss_ib_secure_all_fresh_set(TRUE);
 
 #if ZB_PLATFORM_BDB_ED_RESTORE
 	zb_platform_bdb_drop_stale_joined_state_if_needed();
