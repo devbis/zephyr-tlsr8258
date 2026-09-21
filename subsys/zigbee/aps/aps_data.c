@@ -705,6 +705,8 @@ static u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
 	zb_buf_t *src;
 	nlde_data_req_t *req;
 	size_t nsduOffset;
+	uintptr_t srcAddr;
+	uintptr_t nsduAddr;
 
 	if (cache == NULL || cache->payload == NULL) {
 		return 1;
@@ -719,8 +721,30 @@ static u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
 
 	TL_COPY_BUF(buf, src);
 	req = (nlde_data_req_t *)buf;
-	nsduOffset = (size_t)(req->nsdu - src->buf);
-	req->nsdu = buf->buf + nsduOffset;
+	srcAddr = (uintptr_t)src;
+	nsduAddr = (uintptr_t)req->nsdu;
+	if (nsduAddr >= srcAddr && nsduAddr - srcAddr < sizeof(zb_buf_t)) {
+		nsduOffset = nsduAddr - srcAddr;
+		req->nsdu = (u8 *)buf + nsduOffset;
+	} else {
+		/*
+		 * A frame relayed straight out of a receive indication points into
+		 * the radio's own receive ring, not into the buffer being copied.
+		 * The vendor radio hands the MAC a buffer from the same pool, so
+		 * rebasing always works there; on this port the payload has to be
+		 * carried over explicitly or the transmitted frame is all zeroes.
+		 */
+		u8 *frame = (u8 *)tl_bufInitalloc(buf, req->nsduLen);
+
+		if (frame == NULL) {
+			zb_buf_free(buf);
+			aps_txCacheConfirm(cache, APS_STATUS_INTERNAL_BUF_FULL);
+			return 1;
+		}
+
+		memcpy(frame, req->nsdu, req->nsduLen);
+		req->nsdu = frame;
+	}
 
 	if (cache->interPAN) {
 		(void)tl_zbNwkInterPanDataReq(buf);
