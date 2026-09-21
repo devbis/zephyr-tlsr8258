@@ -918,10 +918,18 @@ void zdo_nlme_join_indication(void *arg)
 {
 	const nlme_join_ind_t *joinInd = (const nlme_join_ind_t *)arg;
 	zdo_child_auth_req_t req;
+	u16 addrMapIdx;
 
 	memset(&req, 0, sizeof(req));
 	ZB_IEEE_ADDR_COPY(req.devAddr, joinInd->extAddr);
 	req.devShortAddr = joinInd->nwkAddr;
+	if (tl_zbNwkAddrMapAdd(req.devShortAddr, req.devAddr, &addrMapIdx) != NWK_STATUS_SUCCESS) {
+		zb_buf_free((zb_buf_t *)arg);
+		return;
+	}
+#if defined(ZB_ROUTER_ROLE) && !defined(ZB_COORDINATOR_ROLE)
+	req.useParent = 1U;
+#endif
 	req.rejoinNwk = joinInd->rejoinNwk;
 	req.secureRejoin = joinInd->secureRejoin;
 
