@@ -44,6 +44,7 @@ struct zb_radio_ctx {
 	u8 current_channel;
 	u8 last_rx_len;
 	u8 last_tx_len;
+	u8 last_tx_seq;
 	u8 last_error;
 	u8 trx_state;
 	u8 tx_power;
@@ -180,6 +181,19 @@ static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
  * api->tx consumed the radio's ACK itself, so the vendor MAC would
  * otherwise sit waiting for the ACK and time out as MAC_TX_ABORTED.
  */
+/*
+ * The imported MAC keeps the sequence number it waits to see acknowledged as
+ * txBuf->buf[2]. On this port tl_bufInitalloc() hands callers the tail of the
+ * payload, so that byte is not the one that went on air; recover it from the
+ * owning buffer at the moment the MAC hands us the frame.
+ */
+void zb_radio_note_tx_frame(const u8 *frame)
+{
+	zb_buf_t *owner = zb_buf_owner_of(frame);
+
+	g_radio.last_tx_seq = (owner != NULL) ? owner->buf[2] : 0U;
+}
+
 static void zb_radio_tx_complete_deferred(void *arg)
 {
 	(void)arg;
@@ -198,7 +212,21 @@ static void zb_radio_tx_complete_deferred(void *arg)
 	 * follows the same MAC path, so this applies to both FFD and ED roles.
 	 */
 	if (mac_getTrxState() == MAC_TX_WAIT_ACK) {
-		mac_trxTask((void *)(uintptr_t)MAC_TX_EV_ACK_RECV);
+		/*
+		 * Feed it through the handler the radio uses for real frames
+		 * rather than the MAC's internal task: the vendor keeps that
+		 * task private, and the archive agrees (mac_trxTask is a local
+		 * symbol there). The handler only reads the frame control byte
+		 * and the sequence number, and matches the latter against the
+		 * frame still awaiting acknowledgement.
+		 */
+		u8 ack_frame[3] = {
+			0x02U, /* frame type ACK, as zb_radio_psdu_is_ack() reads it */
+			0U,
+			g_radio.last_tx_seq,
+		};
+
+		zb_macDataRecvHandler(NULL, ack_frame, sizeof(ack_frame), 1U, 0U, 0);
 	}
 #endif
 }
@@ -451,6 +479,7 @@ void zb_radio_init(void)
 	g_radio.current_channel = 0u;
 	g_radio.last_rx_len = 0u;
 	g_radio.last_tx_len = 0u;
+	g_radio.last_tx_seq = 0u;
 	g_radio.last_error = ZB_PLATFORM_RADIO_ERR_NOT_READY;
 	atomic_set(&g_radio.last_rx_rssi_valid, 0);
 	atomic_set(&g_radio.started, 0);

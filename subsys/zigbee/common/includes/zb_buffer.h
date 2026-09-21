@@ -48,6 +48,7 @@ u8 *tl_getRxBuf(void);
  * Buffer references keep the vendor's compact pool-index ABI; the Zephyr
  * buffer adapter owns the index mapping, so no pool object is exposed.
  */
+zb_buf_t *zb_buf_owner_of(const void *payload);
 zb_buf_t *zb_buf_from_ref(u8 ref);
 u8 zb_buf_to_ref(zb_buf_t *buf);
 

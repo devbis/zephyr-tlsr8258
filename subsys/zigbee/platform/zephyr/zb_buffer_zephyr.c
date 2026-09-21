@@ -117,6 +117,28 @@ void zb_buf_clear(zb_buf_t *p)
 	}
 }
 
+/*
+ * Map a pointer into a buffer payload back to its zb_buf.
+ *
+ * The imported MAC records the sequence number it waits to see acknowledged as
+ * txBuf->buf[2], while callers hand it a frame pointer that tl_bufInitalloc()
+ * placed near the end of the payload. On this port those are different bytes,
+ * so the radio side needs the owning buffer to read the same one the MAC did.
+ */
+zb_buf_t *zb_buf_owner_of(const void *payload)
+{
+	uintptr_t addr = (uintptr_t)payload;
+	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
+	size_t block = zb_buf_slab.info.block_size;
+	size_t total = (size_t)zb_buf_slab.info.num_blocks * block;
+
+	if ((payload == NULL) || (addr < base) || (addr >= base + total)) {
+		return NULL;
+	}
+
+	return (zb_buf_t *)(base + ((addr - base) / block) * block);
+}
+
 bool is_zb_buf(void *p)
 {
 	uintptr_t addr = (uintptr_t)p;
@@ -170,9 +192,21 @@ void *tl_bufInitalloc(zb_buf_t *p, u8 size)
  * the PSDU pointer + meta (timestamp / rssi / len) into the first
  * few bytes of buf->buf[].
  */
+/*
+ * The vendor derives the zb_buf from the radio's own RX ring, so a matched
+ * acknowledgement costs nothing: zb_macDataRecvHandler() returns without
+ * freeing it. This port allocates instead, which would leak one buffer per
+ * acknowledgement. A NULL rxBuf means the caller synthesized the frame and
+ * owns no radio buffer; hand out a scratch one that is never pooled.
+ */
+static zb_buf_t zb_buf_synth_scratch;
+
 u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
-	ARG_UNUSED(rxBuf);
+	if (rxBuf == NULL) {
+		return (u8 *)&zb_buf_synth_scratch;
+	}
+
 	return (u8 *)zb_buf_allocate();
 }
 
