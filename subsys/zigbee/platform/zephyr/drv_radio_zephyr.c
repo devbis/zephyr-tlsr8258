@@ -182,16 +182,13 @@ static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
  * otherwise sit waiting for the ACK and time out as MAC_TX_ABORTED.
  */
 /*
- * The imported MAC keeps the sequence number it waits to see acknowledged as
- * txBuf->buf[2]. On this port tl_bufInitalloc() hands callers the tail of the
- * payload, so that byte is not the one that went on air; recover it from the
- * owning buffer at the moment the MAC hands us the frame.
+ * The MAC waits for an acknowledgement carrying the sequence number of the
+ * frame it queued, which is the third byte of the frame the radio is about to
+ * send (tl_zbMacTx() reads the same byte into mac_trx_vars.ackSeqNum).
  */
 void zb_radio_note_tx_frame(const u8 *frame)
 {
-	zb_buf_t *owner = zb_buf_owner_of(frame);
-
-	g_radio.last_tx_seq = (owner != NULL) ? owner->buf[2] : 0U;
+	g_radio.last_tx_seq = (frame != NULL) ? frame[2] : 0U;
 }
 
 static void zb_radio_tx_complete_deferred(void *arg)
@@ -404,19 +401,13 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) < 0) {
 		return -EINVAL;
 	}
-	mac_len = psdu_len;
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
 	/*
-	 * The native socket medium carries the PSDU without the two FCS bytes.
-	 * The legacy MAC receive entry point receives a length including FCS and
-	 * removes those bytes before parsing the frame.
+	 * zb_radio_extract_rx_psdu() returns the DMA length field, which already
+	 * counts the two FCS bytes the MAC entry point strips.  Adding them again
+	 * left every frame two bytes too long, which only shows up where the
+	 * length is authenticated: the APS Transport-Key failed its CCM check.
 	 */
-	if (mac_len > (UINT8_MAX - 2U)) {
-		return -EINVAL;
-	}
-
-	mac_len = (uint8_t)(mac_len + 2U);
-#endif
+	mac_len = psdu_len;
 
 #if defined(ZB_ROUTER_ROLE)
 	zb_radio_mark_pending_data(psdu, psdu_len);
