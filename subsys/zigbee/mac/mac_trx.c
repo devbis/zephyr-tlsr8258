@@ -95,10 +95,9 @@ void mac_rxDataParse(void *arg)
 		return;
 	}
 
-	if (g_zbMacCtx.status == ZB_MAC_STATE_ACTIVE_SCAN && frameType == MAC_FRAME_TYPE_BEACON) {
-		zb_buf_free(buf);
-		return;
-	}
+	/* The vendor RF path consumes active-scan beacons before this queued
+	 * parser. Zephyr receives them only here, so keep them on the common
+	 * indication path for NWK discovery. */
 
 	if (g_zbMacCtx.status == ZB_MAC_STATE_ORPHAN_SCAN) {
 		/* During orphan scan only non-realignment command frames continue

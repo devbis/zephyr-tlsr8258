@@ -58,6 +58,9 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
 extern void zb_macDataSendHandler(void);
 extern void mac_trxTask(void *arg);
+#if defined(ZB_ROUTER_ROLE)
+extern u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 update);
+#endif
 #include "mac/includes/mac_trx_api.h"
 #include "zb_common.h"
 
@@ -90,6 +93,70 @@ static bool zb_radio_psdu_is_ack(const uint8_t *psdu, uint8_t psdu_len)
 {
 	return (psdu != NULL) && (psdu_len >= 3U) && ((psdu[0] & 0x07U) == 0x02U);
 }
+
+#if defined(ZB_ROUTER_ROLE)
+/*
+ * The vendor RX IRQ marks an indirect transaction READY before passing a
+ * data request to the MAC.  The Zephyr radio sink bypasses that IRQ path, so
+ * perform the same transition at the port boundary.
+ */
+static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
+{
+	uint16_t frame_ctrl;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+	uint8_t src_len;
+	uint8_t header_len;
+	uint8_t src_offset;
+	const uint8_t *src_addr;
+
+	if ((psdu == NULL) || (psdu_len < 3U)) {
+		return;
+	}
+
+	frame_ctrl = (uint16_t)psdu[0] | ((uint16_t)psdu[1] << 8);
+	if (((frame_ctrl & MAC_FCF_FRAME_TYPE_MASK) >> MAC_FCF_FRAME_TYPE_POS) !=
+	    MAC_FRAME_TYPE_COMMAND) {
+		return;
+	}
+
+	header_len = tl_zbMacHdrSize(frame_ctrl);
+	if ((header_len >= psdu_len) || (psdu[header_len] != MAC_CMD_DATA_REQUEST)) {
+		return;
+	}
+
+	dst_mode = (uint8_t)((frame_ctrl & MAC_FCF_DST_ADDR_MODE_MASK) >>
+				     MAC_FCF_DST_ADDR_MODE_POS);
+	src_mode = (uint8_t)((frame_ctrl & MAC_FCF_SRC_ADDR_MODE_MASK) >>
+				     MAC_FCF_SRC_ADDR_MODE_POS);
+	if (src_mode == ADDR_MODE_SHORT) {
+		src_len = MAC_SHORT_ADDR_FIELD_LEN;
+	} else if (src_mode == ADDR_MODE_EXT) {
+		src_len = MAC_EXT_ADDR_FIELD_LEN;
+	} else {
+		return;
+	}
+
+	src_offset = MAC_FCF_FIELD_LEN + MAC_SEQ_NUM_FIELD_LEN;
+	if (dst_mode == ADDR_MODE_SHORT) {
+		src_offset += MAC_PAN_ID_FIELD_LEN + MAC_SHORT_ADDR_FIELD_LEN;
+	} else if (dst_mode == ADDR_MODE_EXT) {
+		src_offset += MAC_PAN_ID_FIELD_LEN + MAC_EXT_ADDR_FIELD_LEN;
+	} else if (dst_mode != ADDR_MODE_NONE) {
+		return;
+	}
+
+	if ((frame_ctrl & MAC_FCF_INTRA_PAN_MASK) == 0U) {
+		src_offset += MAC_PAN_ID_FIELD_LEN;
+	}
+	if ((src_offset > psdu_len) || (src_len > (psdu_len - src_offset))) {
+		return;
+	}
+
+	src_addr = &psdu[src_offset];
+	(void)tl_zbMacPendingDataCheck(src_mode, (u8 *)src_addr, 1U);
+}
+#endif
 
 /*
  * Deferred TX completion: posted from the user task queue so it
@@ -276,6 +343,7 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 {
 	const uint8_t *psdu = NULL;
 	uint8_t psdu_len = 0U;
+	uint8_t mac_len;
 	u8 ack_pkt;
 	u8 *rx_buf = g_radio.rx_target;
 
@@ -308,9 +376,25 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) < 0) {
 		return -EINVAL;
 	}
+	mac_len = psdu_len;
+#if defined(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET)
+	/*
+	 * The native socket medium carries the PSDU without the two FCS bytes.
+	 * The legacy MAC receive entry point receives a length including FCS and
+	 * removes those bytes before parsing the frame.
+	 */
+	if (mac_len > (UINT8_MAX - 2U)) {
+		return -EINVAL;
+	}
 
+	mac_len = (uint8_t)(mac_len + 2U);
+#endif
+
+#if defined(ZB_ROUTER_ROLE)
+	zb_radio_mark_pending_data(psdu, psdu_len);
+#endif
 	ack_pkt = zb_radio_psdu_is_ack(psdu, psdu_len) ? 1U : 0U;
-	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, psdu_len, ack_pkt, 0U, rssi_dbm);
+	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, mac_len, ack_pkt, 0U, rssi_dbm);
 	return 0;
 }
 
@@ -344,10 +428,8 @@ static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len,
 		return -EINVAL;
 	}
 
-	/*
-	 * Legacy Zigbee RX path expects the incoming PSDU to still include the
-	 * FCS bytes and accounts for them internally.
-	 */
+	/* The legacy MAC callback receives a length including FCS and removes
+	 * those bytes before parsing the frame. */
 	*psdu = &dma[5];
 	*psdu_len = payload_len;
 	return 0;
