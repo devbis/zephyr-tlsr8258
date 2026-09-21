@@ -125,6 +125,10 @@ static bool zb_core_init_done;
 static bool zb_commissioning_pending;
 static bool zb_waiting_for_radio_log;
 static bool zb_persistent_rejoin_in_progress;
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+static bool zb_parenting_enabled;
+extern void zb_router_enable_parenting(u8 permit_duration);
+#endif
 static uint32_t zb_persistent_rejoin_started_ms;
 static uint32_t zb_last_commission_retry_ms;
 
@@ -480,6 +484,21 @@ static void zb_process_deferred_persistent_rejoin(void)
 	if (zb_isDeviceJoinedNwk() && zdo_ifZdoNwkManagerIdle()) {
 		zb_persistent_rejoin_in_progress = false;
 		zb_persistent_rejoin_started_ms = 0U;
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+		/*
+		 * Advertise as a parent once secure join is complete. Until this
+		 * runs the MAC answers no beacon request: tl_zbMacBeaconRequestCb()
+		 * needs devType and beaconPayloadLen, and tl_zbMlmeCmdBeaconReqRecvd()
+		 * needs joined without joined_pro. Nothing in the imported stack sets
+		 * that up, so the port does it here.
+		 */
+		if (!zb_parenting_enabled &&
+		    (g_zbNwkCtx.is_tc || aps_ib.aps_authenticated ||
+		     ss_ib.securityLevel == 0U)) {
+			zb_router_enable_parenting(0xffU);
+			zb_parenting_enabled = true;
+		}
+#endif
 	}
 
 	if (zb_persistent_rejoin_in_progress) {
