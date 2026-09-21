@@ -190,6 +190,26 @@ static void test_mac_sequence_number_position(void)
 	EXPECT_EQ(OFFSETOF(zb_buf_t, hdr), ZB_BUF_SIZE);
 }
 
+/*
+ * ss_apsUpdateDeviceCmdHandle() builds an APSME-UPDATE-DEVICE.indication over
+ * the very buffer the command arrived in, and the ASDU it parses is reached
+ * through a pointer stored in that buffer.  The indication's own fields land on
+ * top of that pointer, so every value has to be taken out of the frame before
+ * the first one is written back.  The vendor gets away with reading afterwards
+ * only because its compiler happens to keep the pointer in a register.
+ */
+static void test_update_device_indication_overlay(void)
+{
+	const size_t asdu_first = OFFSETOF(aps_data_ind_t, asdu);
+	const size_t asdu_last = asdu_first + sizeof(u8 *) - 1U;
+	const size_t ind_first = OFFSETOF(ss_apsmeUpdateDeviceInd_t, devAddr);
+	const size_t ind_last = OFFSETOF(ss_apsmeUpdateDeviceInd_t, status);
+
+	EXPECT_EQ(ind_first <= asdu_last && ind_last >= asdu_first, 1);
+	/* The source address the same handler resolves survives the write. */
+	EXPECT_EQ(OFFSETOF(aps_data_ind_t, src_short_addr) > ind_last, 1);
+}
+
 int main(void)
 {
 	test_neighbor_timer_fields();
@@ -199,6 +219,7 @@ int main(void)
 	test_nwk_ctx_state_nibbles();
 	test_beacon_pan_coordinator_bit();
 	test_mac_sequence_number_position();
+	test_update_device_indication_overlay();
 
 	if (failures != 0) {
 		printf("zigbee host_join_regressions: %d failure(s)\n", failures);
