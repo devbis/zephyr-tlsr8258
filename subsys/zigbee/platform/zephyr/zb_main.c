@@ -19,6 +19,7 @@
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include "zb_ed_sleep.h"
 #include "zdo/zdo.h"
+#include "zdo/zdo_nwk_manager.h"
 #include <tlsr825x/power.h>
 #endif
 
