@@ -46,6 +46,10 @@ struct zb_host_socket_coord {
 	 */
 	bool deliver_queued_unsolicited;
 	uint8_t last_assoc_status;
+	/* IEEE of the device whose association request is being answered. */
+	uint8_t joiner_ieee[8];
+	/* Transport-Key retries left while the joiner has not announced itself. */
+	uint8_t transport_key_retries;
 	uint16_t pan_id;
 	uint16_t next_child_short;
 	uint16_t child_short;

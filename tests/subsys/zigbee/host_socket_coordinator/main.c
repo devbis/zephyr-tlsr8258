@@ -97,7 +97,17 @@ static void test_join_and_interview_flow(void)
 	zb_host_socket_coord_init(&coord);
 	send_filter(&coord);
 
+	/*
+	 * The association response is an indirect transmission, as it is on air:
+	 * the request queues it and the joiner's poll fetches it, and the
+	 * Transport-Key follows on the poll after that. Answering the request
+	 * directly used to deliver the key while the joiner still had its radio
+	 * stopped to program the addresses it had just been given.
+	 */
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ASSOC_REQ, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	expect_single_output(&coord, &input, ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
 
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
@@ -152,11 +162,15 @@ static void test_permit_join_disabled_rejects_association(void)
 	send_filter(&coord);
 
 	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_ASSOC_REQ, NULL);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 1);
+
+	/* A refusal is indirect too: the joiner polls for it. */
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	memset(&output, 0, sizeof(output));
 	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
 	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
 		  ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
-	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 1);
 }
 
 static void test_native_assoc_request_format_is_accepted(void)
@@ -171,11 +185,14 @@ static void test_native_assoc_request_format_is_accepted(void)
 	input = make_native_assoc_req();
 	EXPECT_EQ(zb_host_socket_coord_identify_frame(input.psdu, input.psdu_len),
 		  ZB_HOST_SOCKET_FRAME_ASSOC_REQ);
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 0);
+
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	memset(&output, 0, sizeof(output));
 	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
 	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
 		  ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
-	EXPECT_EQ(zb_host_socket_coord_last_assoc_status(&coord), 0);
 }
 
 static void test_transport_key_uses_extended_mac_destination(void)
@@ -188,6 +205,10 @@ static void test_transport_key_uses_extended_mac_destination(void)
 	send_filter(&coord);
 
 	input = make_native_assoc_req();
+	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, NULL), 0);
+
+	/* First poll fetches the association response, the next one the key. */
+	input = zb_host_socket_coord_make_tx(0x2202U, 11U, ZB_HOST_SOCKET_FRAME_DATA_REQ, NULL);
 	memset(&output, 0, sizeof(output));
 	EXPECT_EQ(zb_host_socket_coord_process(&coord, &input, &output), 1);
 	EXPECT_EQ(zb_host_socket_coord_identify_frame(output.psdu, output.psdu_len),
