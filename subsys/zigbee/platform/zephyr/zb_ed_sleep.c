@@ -26,6 +26,16 @@ LOG_MODULE_REGISTER(zigbee_ed_sleep, CONFIG_ZIGBEE_LOG_LEVEL);
  */
 #define ZB_ED_SLEEP_MIN_INTERVAL_MS 20U
 
+/*
+ * The transmit queue head, NULL while the queue is empty.  The vendor SDK
+ * header declares neither this nor any other emptiness test, so the port
+ * declares it here rather than diverging from an imported header.  The count
+ * that is exported, mac_data_pending(), reports the frames queued *behind* the
+ * head and reads as zero with one frame still waiting, which is the one case
+ * this check exists for.
+ */
+tx_data_queue *get_next_data(void);
+
 enum zb_ed_sleep_reject_reason {
 	ZB_ED_SLEEP_REJECT_NOT_JOINED,
 	ZB_ED_SLEEP_REJECT_RX_ON,
@@ -63,7 +73,7 @@ static bool zb_ed_sleep_has_pending_mac_work(void)
 	return (g_zbMacCtx.status != ZB_MAC_STATE_NORMAL) ||
 	       ((rf_busyFlag & busy_flags) != 0U) ||
 	       (mac_getTrxState() != MAC_TX_IDLE) || tl_zbMacStateBusy() ||
-	       !mac_tx_queue_empty();
+	       (get_next_data() != NULL);
 }
 
 void zb_ed_sleep_maybe(void)
