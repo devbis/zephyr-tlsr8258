@@ -231,24 +231,22 @@ if(CONFIG_ZIGBEE_COORDINATOR OR CONFIG_ZIGBEE_ROUTER OR CONFIG_ZIGBEE_ED)
     zephyr_library_sources(zdo/zdo_zephyr_glue.c)
 endif()
 
-# The vendor builds the stack with packed structs and short enums, and the
-# imported sources assert that layout. Apply it to the imported sources only:
-# the platform layer shares types with the Zephyr kernel and must keep the
-# toolchain's natural alignment.
+# The whole image is built with one struct layout. The imported sources used to
+# be compiled with -fpack-struct -fshort-enums while the platform layer and the
+# application were not, which gave every type that crosses those boundaries two
+# layouts in one build: zcl_specClusterInfo_t was 20 bytes where the sample
+# defines app_cluster_info and 18 bytes where zcl_register() reads it back, so
+# the stack loaded clusterRegisterFunc from the wrong offset and branched to a
+# bogus address. On the TLSR8258 that stalls the core with no fault: the radio
+# stays silent and the device never joins.
 #
-# Only on the embedded target. The host builds have 64-bit pointers, so packing
-# a table of function pointers leaves them unaligned and the host linker
-# rejects it; nothing there talks to vendor objects, and the layout assertions
-# are 32-bit only anyway.
-if(NOT CONFIG_ARCH_POSIX)
-get_target_property(zigbee_sources subsys__zigbee SOURCES)
-foreach(zigbee_source ${zigbee_sources})
-    if(NOT zigbee_source MATCHES "platform/")
-        set_source_files_properties(${zigbee_source} PROPERTIES
-            COMPILE_OPTIONS "-fpack-struct;-fshort-enums")
-    endif()
-endforeach()
-endif()
+# Nothing here needs those flags. The vendor structures are built from u8 and
+# u8 arrays, so natural alignment already produces the layout the vendor uses;
+# the 166 STATIC_ASSERTs the imported sources carry pin exactly that and fail
+# the build if it ever stops holding. What the port does not do is link against
+# vendor objects - it compiles the reconstructed C - so there is no external
+# layout to match. The same sources have always been built unpacked for
+# native_sim, where the full secure join passes.
 
 
 # The Zephyr persistence layer owns zb_info_save(): it writes a versioned blob
