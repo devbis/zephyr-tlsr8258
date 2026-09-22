@@ -17,6 +17,7 @@
 
 #define ZB_MAC_FCF_BEACON_SHORT  0x8000u
 #define ZB_MAC_FCF_COMMAND_SHORT 0x8863u
+#define ZB_MAC_FCF_COMMAND_EXT   0xcc63u
 #define ZB_MAC_FCF_DATA_EXT_SHORT 0x8c61u
 #define ZB_MAC_CMD_BEACON_REQ    0x07u
 #define ZB_MAC_CMD_ASSOC_REQ     0x01u
@@ -568,8 +569,26 @@ static size_t encode_zdo_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_
 					payload, payload_len);
 }
 
+/*
+ * The key is addressed to the joiner's own 64-bit address: the receiving stack
+ * accepts a Transport-Key only when its destination is local. Answering every
+ * joiner with one hard-coded identity worked while the only node here was the
+ * end device, and silently rejected anything else - a router joining as
+ * ...0003 threw the key away and went back to scanning, so nothing downstream
+ * of the join could be exercised on the host at all.
+ */
+static bool ieee_is_zero(const uint8_t *ieee)
+{
+	for (size_t i = 0U; i < 8U; i++) {
+		if (ieee[i] != 0U) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t dst_short,
-					 uint16_t src_short)
+					 uint16_t src_short, const uint8_t *joiner_ieee)
 {
 	put_le16(&wire[0], ZB_MAC_FCF_DATA_EXT_SHORT);
 	wire[2] = seq;
@@ -589,7 +608,11 @@ static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t ds
 		wire[27U + i] = (uint8_t)(i + 1U);
 	}
 	wire[43] = 1U;
-	put_le64(&wire[44], ZB_DEVICE_IEEE);
+	if (joiner_ieee != NULL && !ieee_is_zero(joiner_ieee)) {
+		memcpy(&wire[44], joiner_ieee, 8U);
+	} else {
+		put_le64(&wire[44], ZB_DEVICE_IEEE);
+	}
 	put_le64(&wire[52], ZB_COORD_IEEE);
 	return 60U;
 }
@@ -761,7 +784,8 @@ enum zb_host_socket_frame_type zb_host_socket_coord_identify_frame(const uint8_t
 }
 
 static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
-			   uint16_t src, uint16_t dst, const char *model_id)
+			   uint16_t src, uint16_t dst, const char *model_id,
+			   const uint8_t *joiner_ieee)
 {
 	uint8_t payload[48];
 	size_t len = 0U;
@@ -770,12 +794,27 @@ static size_t encode_frame(enum zb_host_socket_frame_type type, uint8_t *wire,
 	case ZB_HOST_SOCKET_FRAME_BEACON:
 		return encode_beacon_frame(wire, 1U, src);
 	case ZB_HOST_SOCKET_FRAME_ASSOC_RSP:
-		len = encode_mac_command(wire, 1U, ZB_NO_SHORT_ADDR, src, ZB_MAC_CMD_ASSOC_RSP);
-		put_le16(&wire[10], dst);
-		wire[12] = 0U;
-		return len + 3U;
+		/*
+		 * 802.15.4 requires the association response to carry both parties
+		 * as 64-bit addresses: the joiner has no short address yet. A real
+		 * coordinator sends FCF 0xcc63 - command frame, ack requested, PAN
+		 * compression, both address modes extended - and the imported MAC
+		 * parses exactly that. The short-addressed form this used to send
+		 * was decoded as garbage, leaving the joiner with a nonsense PAN
+		 * and short address and sending it back to scanning, so no node
+		 * ever got as far as being interviewed here.
+		 */
+		put_le16(&wire[0], ZB_MAC_FCF_COMMAND_EXT);
+		wire[2] = 1U;
+		put_le16(&wire[3], ZB_PAN_ID);
+		memcpy(&wire[5], joiner_ieee, 8U);
+		put_le64(&wire[13], ZB_COORD_IEEE);
+		wire[21] = ZB_MAC_CMD_ASSOC_RSP;
+		put_le16(&wire[22], dst);
+		wire[24] = 0U;
+		return 25U;
 	case ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY:
-		return encode_transport_key_frame(wire, 2U, dst, src);
+		return encode_transport_key_frame(wire, 2U, dst, src, joiner_ieee);
 	case ZB_HOST_SOCKET_FRAME_END_DEVICE_TIMEOUT_RSP:
 		payload[0] = ZB_NWK_TIMEOUT_RSP;
 		payload[1] = 0x00U;
@@ -880,7 +919,7 @@ struct zb_native_sim_socket_medium_msg zb_host_socket_coord_make_tx(
 	msg.node_id = node_id;
 	msg.channel = channel;
 	msg.psdu = wire;
-	msg.psdu_len = encode_frame(type, wire, 0x2700U, ZB_COORD_SHORT_ADDR, model_id);
+	msg.psdu_len = encode_frame(type, wire, 0x2700U, ZB_COORD_SHORT_ADDR, model_id, NULL);
 
 	return msg;
 }
@@ -907,7 +946,10 @@ static void set_output(struct zb_host_socket_coord *coord,
 	output->lqi = 255U;
 	output->psdu = coord->output_psdu;
 	output->psdu_len = encode_frame(type, coord->output_psdu, ZB_COORD_SHORT_ADDR,
-					 coord->child_short, NULL);
+					 coord->child_short, NULL, coord->joiner_ieee);
+	if (type == ZB_HOST_SOCKET_FRAME_ASSOC_RSP) {
+		coord->output_psdu[24] = coord->last_assoc_status;
+	}
 	coord->output_psdu_len = output->psdu_len;
 }
 
@@ -1042,6 +1084,15 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 	{
 		bool accepted = coord->permit_join;
 
+		/*
+		 * The response is addressed to the joiner's 64-bit address, which
+		 * is the only address it has yet. With PAN compression the request
+		 * carries it at psdu[7..14]: FCF(2), seq(1), dstPAN(2), dstShort(2).
+		 */
+		if (input->psdu_len >= 15U) {
+			memcpy(coord->joiner_ieee, &input->psdu[7], 8U);
+		}
+
 		coord->last_assoc_status = accepted ? 0U : 1U;
 		/*
 		 * Cap byte is the very last byte of the AssocReq command
@@ -1054,6 +1105,19 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 			((input->psdu[input->psdu_len - 1U] & 0x08U) != 0U);
 		if (accepted) {
 			coord->child_short = coord->next_child_short++;
+			coord->transport_key_retries = 60U;
+			/*
+			 * Both of these are indirect transmissions, the way a real
+			 * coordinator answers: on air the joiner sends AssocReq,
+			 * polls with a DataReq, and only then receives AssocResp.
+			 * Handing the response back immediately put the Transport-Key
+			 * that follows it straight into the window where the joiner
+			 * has stopped its radio to reprogram the PAN, short and IEEE
+			 * filters it was just given, so the key was dropped and the
+			 * join never completed. Queueing both lets each one wait for
+			 * a poll, which is the receiver telling us it is listening.
+			 */
+			queue_frame(coord, ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
 			queue_frame(coord, ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
 			/*
 			 * Close direct permit-join after the first child (the router)
@@ -1065,28 +1129,33 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 			 */
 			coord->permit_join = false;
 		}
-		if (output != NULL) {
-			memset(output, 0, sizeof(*output));
-			output->type = ZB_NATIVE_SIM_SOCKET_MEDIUM_MSG_RX;
-			output->node_id = coord->peer.node_id;
-			output->channel = coord->peer.channel;
-			output->rssi_dbm = -40;
-			output->lqi = 255U;
-			output->psdu = coord->output_psdu;
-			output->psdu_len = encode_frame(ZB_HOST_SOCKET_FRAME_ASSOC_RSP,
-							coord->output_psdu,
-							ZB_COORD_SHORT_ADDR,
-							accepted ? coord->child_short :
-									ZB_NO_SHORT_ADDR,
-							NULL);
-			coord->output_psdu[12] = coord->last_assoc_status;
-			return 1;
+		if (!accepted) {
+			/* Nothing was queued: answer the refusal on the next poll. */
+			queue_frame(coord, ZB_HOST_SOCKET_FRAME_ASSOC_RSP);
 		}
 		return 0;
 	}
+	/*
+	 * A joiner restarts its radio as soon as it has taken the association
+	 * response: it reprograms the PAN, short and IEEE filters and only then
+	 * listens again, so a Transport-Key handed over in that window is lost.
+	 * Without the key the joiner never authenticates and starts commissioning
+	 * over, which left nothing past the join reachable from here.
+	 */
 	case ZB_HOST_SOCKET_FRAME_DATA_REQ:
 		if (output != NULL && pop_frame(coord, &queued)) {
 			set_output(coord, output, queued);
+			return 1;
+		}
+		/*
+		 * Nothing queued: if the joiner has taken its association
+		 * response but never announced itself, it never got the key.
+		 * Offer it again rather than leaving the join half finished.
+		 */
+		if (output != NULL && !coord->got_device_announce &&
+		    coord->transport_key_retries > 0U) {
+			coord->transport_key_retries--;
+			set_output(coord, output, ZB_HOST_SOCKET_FRAME_TRANSPORT_KEY);
 			return 1;
 		}
 		return 0;
