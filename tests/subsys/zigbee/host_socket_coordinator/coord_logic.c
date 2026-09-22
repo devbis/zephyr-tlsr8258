@@ -18,6 +18,13 @@
 #define ZB_MAC_FCF_BEACON_SHORT  0x8000u
 #define ZB_MAC_FCF_COMMAND_SHORT 0x8863u
 #define ZB_MAC_FCF_COMMAND_EXT   0xcc63u
+#define ZB_MAC_FCF_PANID_COMPRESSION 0x0040u
+#define ZB_MAC_FCF_DST_MODE_SHIFT    10U
+#define ZB_MAC_FCF_SRC_MODE_SHIFT    14U
+#define ZB_MAC_FCF_ADDR_MODE_MASK    0x03u
+#define ZB_MAC_ADDR_MODE_NONE        0U
+#define ZB_MAC_ADDR_MODE_SHORT       2U
+#define ZB_MAC_ADDR_MODE_EXT         3U
 #define ZB_MAC_FCF_DATA_EXT_SHORT 0x8c61u
 #define ZB_MAC_CMD_BEACON_REQ    0x07u
 #define ZB_MAC_CMD_ASSOC_REQ     0x01u
@@ -577,6 +584,52 @@ static size_t encode_zdo_frame(uint8_t *wire, uint8_t seq, uint16_t dst, uint16_
  * ...0003 threw the key away and went back to scanning, so nothing downstream
  * of the join could be exercised on the host at all.
  */
+/*
+ * Pull the joiner's 64-bit address out of an association request. The offset is
+ * not fixed: it follows the addressing modes and the PAN ID compression bit of
+ * the MAC frame control field, and a joiner that has no PAN yet sends the
+ * uncompressed form, which carries a source PAN ID the compressed form omits.
+ * Assuming the compressed layout read two bytes of source PAN as the first two
+ * bytes of the address, so every frame the coordinator addressed to the joiner
+ * - the association response and the Transport-Key that follows it - went to a
+ * device that does not exist, and the joiner dropped the key and rescanned.
+ */
+static bool assoc_req_joiner_ieee(const uint8_t *psdu, uint8_t psdu_len, uint8_t *ieee)
+{
+	uint16_t fcf;
+	uint8_t dst_mode;
+	uint8_t src_mode;
+	size_t off = 3U; /* FCF(2) + sequence number(1) */
+
+	if (psdu_len < 3U) {
+		return false;
+	}
+
+	fcf = get_le16(&psdu[0]);
+	dst_mode = (uint8_t)((fcf >> ZB_MAC_FCF_DST_MODE_SHIFT) & ZB_MAC_FCF_ADDR_MODE_MASK);
+	src_mode = (uint8_t)((fcf >> ZB_MAC_FCF_SRC_MODE_SHIFT) & ZB_MAC_FCF_ADDR_MODE_MASK);
+
+	if (src_mode != ZB_MAC_ADDR_MODE_EXT) {
+		return false;
+	}
+
+	if (dst_mode != ZB_MAC_ADDR_MODE_NONE) {
+		off += 2U; /* destination PAN ID */
+		off += (dst_mode == ZB_MAC_ADDR_MODE_SHORT) ? 2U : 8U;
+	}
+
+	if ((fcf & ZB_MAC_FCF_PANID_COMPRESSION) == 0U) {
+		off += 2U; /* source PAN ID */
+	}
+
+	if (off + 8U > psdu_len) {
+		return false;
+	}
+
+	memcpy(ieee, &psdu[off], 8U);
+	return true;
+}
+
 static bool ieee_is_zero(const uint8_t *ieee)
 {
 	for (size_t i = 0U; i < 8U; i++) {
@@ -593,7 +646,11 @@ static size_t encode_transport_key_frame(uint8_t *wire, uint8_t seq, uint16_t ds
 	put_le16(&wire[0], ZB_MAC_FCF_DATA_EXT_SHORT);
 	wire[2] = seq;
 	put_le16(&wire[3], ZB_PAN_ID);
-	put_le64(&wire[5], ZB_DEVICE_IEEE);
+	if (joiner_ieee != NULL && !ieee_is_zero(joiner_ieee)) {
+		memcpy(&wire[5], joiner_ieee, 8U);
+	} else {
+		put_le64(&wire[5], ZB_DEVICE_IEEE);
+	}
 	put_le16(&wire[13], src_short);
 	put_le16(&wire[15], 0x0008u);
 	put_le16(&wire[17], dst_short);
@@ -1086,12 +1143,9 @@ int zb_host_socket_coord_process(struct zb_host_socket_coord *coord,
 
 		/*
 		 * The response is addressed to the joiner's 64-bit address, which
-		 * is the only address it has yet. With PAN compression the request
-		 * carries it at psdu[7..14]: FCF(2), seq(1), dstPAN(2), dstShort(2).
+		 * is the only address it has yet.
 		 */
-		if (input->psdu_len >= 15U) {
-			memcpy(coord->joiner_ieee, &input->psdu[7], 8U);
-		}
+		(void)assoc_req_joiner_ieee(input->psdu, input->psdu_len, coord->joiner_ieee);
 
 		coord->last_assoc_status = accepted ? 0U : 1U;
 		/*
