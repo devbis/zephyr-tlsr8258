@@ -8,13 +8,19 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
+/* zb_common.h defines the buffer, descriptor and confirmation types the
+ * headers below declare their prototypes against, so it comes first.
+ */
+#include "zb_common.h"
+
 #include "ev_timer.h"
+#include "aps/aps_api.h"
 #include "bdb/includes/bdb.h"
 #include "mac/includes/mac_trx_api.h"
 #include "mac/includes/tl_zb_mac.h"
 #include "ss/ss_zdoSecurityME.h"
 #include "zdo/zdo.h"
-#include "zb_common.h"
+#include "zdo/zdo_nwk_manager.h"
 
 #include <tlsr825x/power.h>
 
@@ -98,7 +104,13 @@ void zb_ed_sleep_maybe(void)
 	    (g_bdbCtx.state != BDB_STATE_IDLE) ||
 	    (g_bdbAttrs.commissioningStatus == BDB_COMMISSION_STA_IN_PROGRESS) ||
 	    (ss_ib.securityLevel == 0U) ||
-	    !zdo_ifZdoNwkManagerIdle() || zdo_secure_startup_pending ||
+	    !zdo_ifZdoNwkManagerIdle() ||
+	    /* Association is not secure-join completion: until the trust centre
+	     * delivers the network key zdo_startup_complete() is still waiting
+	     * on zdo_nwkAuthTimeoutStart(), and an end device that sleeps
+	     * through that wait never receives the key.
+	     */
+	    !aps_ib.aps_authenticated ||
 	    (zdo_nwk_mngr()->savedBuf != NULL) ||
 	    (zdo_nwk_mngr()->discEvt != NULL) ||
 	    (zdo_nwk_mngr()->authEvt != NULL) ||
