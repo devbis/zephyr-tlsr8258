@@ -9,6 +9,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net/ieee802154_pkt.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/atomic.h>
@@ -727,6 +728,9 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
 		return -ENOMEM;
 	}
+	/* libzigbee supplies the complete MAC header and performs its own security. */
+	net_pkt_set_ieee802154_mac_hdr_rdy(pkt, true);
+	net_pkt_set_ieee802154_frame_secured(pkt, (psdu[0] & BIT(3)) != 0U);
 
 	g_radio.last_tx_len = psdu_len;
 	/*
