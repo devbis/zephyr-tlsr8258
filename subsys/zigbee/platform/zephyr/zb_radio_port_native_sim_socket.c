@@ -1,14 +1,23 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <errno.h>
+#include <string.h>
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
+#include <zephyr/net/net_if.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_port, CONFIG_ZIGBEE_LOG_LEVEL);
+
+#if defined(CONFIG_ARCH_POSIX)
+static const uint8_t zb_native_sim_ieee_addr[8] = {
+	CONFIG_ZIGBEE_NATIVE_SIM_IEEE_LOW, 0x00, 0x02, 0x50,
+	0xe0, 0x38, 0xc1, 0xa4,
+};
+#endif
 
 int zb_radio_port_radio_get(const struct device **dev,
 			    const struct ieee802154_radio_api **api)
@@ -27,6 +36,41 @@ int zb_radio_port_radio_get(const struct device **dev,
 	}
 
 	return 0;
+}
+
+int zb_radio_port_get_ieee_addr(uint8_t ieee_addr[8])
+{
+	if (ieee_addr == NULL) {
+		return -EINVAL;
+	}
+
+#if defined(CONFIG_ARCH_POSIX)
+	memcpy(ieee_addr, zb_native_sim_ieee_addr, sizeof(zb_native_sim_ieee_addr));
+	return 0;
+#else
+	const struct device *dev;
+	struct net_if *iface;
+	struct net_linkaddr *link_addr;
+	int rc;
+
+	rc = zb_radio_port_radio_get(&dev, NULL);
+	if (rc < 0) {
+		return rc;
+	}
+
+	iface = net_if_lookup_by_dev(dev);
+	if (iface == NULL) {
+		return -ENODEV;
+	}
+
+	link_addr = net_if_get_link_addr(iface);
+	if ((link_addr == NULL) || (link_addr->addr == NULL) || (link_addr->len != 8U)) {
+		return -EINVAL;
+	}
+
+	memcpy(ieee_addr, link_addr->addr, 8U);
+	return 0;
+#endif
 }
 
 int zb_radio_port_set_channel(uint8_t channel)

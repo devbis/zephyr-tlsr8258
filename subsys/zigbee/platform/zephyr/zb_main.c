@@ -3,6 +3,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_radio_port.h>
 #include <zephyr/zigbee/zb_types.h>
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 #include <zephyr/zigbee/zb_zbhci.h>
@@ -75,48 +76,33 @@ extern void tl_zbNwkInit(u8 coldReset);
 extern void tl_zbMacTaskProc(void);
 #endif
 
-static const addrExt_t zb_fixed_ieee_addr = {
-	/*
-	 * Use a new ED identity to bypass cached Ember NCP child-table
-	 * state for our previous IEEE.  SWS dump showed Z2M sending NWK-encrypted
-	 * frames to us right after AssocResp success — i.e. the coordinator
-	 * thought we were already joined with an NWK key, so it skipped sending
-	 * an unsolicited Transport-Key.  Z2M device/remove + bridge restart did
-	 * not clear that state, suggesting it lives in the Ember adapter NVRAM
-	 * and only a brand-new IEEE will look like a fresh joiner.
-	 */
-#if defined(CONFIG_ARCH_POSIX)
-	/* native_sim host_socket_coordinator hardcodes the joiner IEEE as
-	 * a4:c1:38:e0:50:02:00:02 in its Transport-Key dstExtAddr; match it so
-	 * ss_apsTransportKeyCmdHandle's ext_addr_is_local() check accepts the key.
-	 * The low byte is build-configurable (ZB_FIXED_IEEE_LOW, default 0x02) so a
-	 * second native_sim node (e.g. an ED joining THROUGH a router) can run on the
-	 * same medium with a distinct IEEE. */
-	CONFIG_ZIGBEE_NATIVE_SIM_IEEE_LOW, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
-#else
-	/* Keep hardware identities separate by role.  The low byte is the
-	 * role namespace: routers use 0x20..0x7f and sleepy end devices use
-	 * 0x80..0xaf.  The first fixed identity in each namespace is used by
-	 * the corresponding reference image, avoiding accidental reuse of a
-	 * router IEEE by an ED test. */
-#if defined(CONFIG_ZIGBEE_ROUTER)
-	0x20, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
-#elif defined(CONFIG_ZIGBEE_ED)
-	0x80, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
-#else
-	0x00, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
-#endif
-#endif
-};
+static addrExt_t zb_runtime_ieee_addr;
+static bool zb_runtime_ieee_addr_ready;
+static bool zb_waiting_for_ieee_addr_log;
 
 void zb_platform_apply_runtime_ieee_addr(void)
 {
-	memcpy(g_zbMacPib.extAddress, zb_fixed_ieee_addr, sizeof(g_zbMacPib.extAddress));
+	const uint8_t *ieee_addr = zb_platform_runtime_ieee_addr_get();
+
+	if (ieee_addr != NULL) {
+		memcpy(g_zbMacPib.extAddress, ieee_addr, sizeof(g_zbMacPib.extAddress));
+	}
 }
 
 const uint8_t *zb_platform_runtime_ieee_addr_get(void)
 {
-	return zb_fixed_ieee_addr;
+	int rc;
+
+	if (!zb_runtime_ieee_addr_ready) {
+		rc = zb_radio_port_get_ieee_addr(zb_runtime_ieee_addr);
+		if (rc < 0) {
+			return NULL;
+		}
+
+		zb_runtime_ieee_addr_ready = true;
+	}
+
+	return zb_runtime_ieee_addr;
 }
 
 /* Semaphore used to wake the Zigbee thread when events are ready.
@@ -205,11 +191,22 @@ bool __weak zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile
 
 static void zb_core_bootstrap_once(void)
 {
+	const uint8_t *runtime_ieee_addr = zb_platform_runtime_ieee_addr_get();
+
+	if (runtime_ieee_addr == NULL) {
+		if (!zb_waiting_for_ieee_addr_log) {
+			LOG_ERR("Zigbee bootstrap waiting for radio IEEE address");
+			zb_waiting_for_ieee_addr_log = true;
+		}
+		return;
+	}
+	zb_waiting_for_ieee_addr_log = false;
+
 	/* TLSR MCU reboot/external reset may retain SRAM, including these static
 	 * guards.  If the compatibility PIB was not rebuilt for this image, do
 	 * not let retained flags bypass the complete stack bootstrap. */
 	if ((zb_core_init_done || zb_bootstrap_done) &&
-	    memcmp(g_zbInfo.macPib.extAddress, zb_fixed_ieee_addr,
+	    memcmp(g_zbInfo.macPib.extAddress, runtime_ieee_addr,
 		   EXT_ADDR_LEN) != 0) {
 		zb_core_init_done = false;
 		zb_bootstrap_done = false;
@@ -289,7 +286,7 @@ static void zb_core_bootstrap_once(void)
 		if (g_zbMacPib.panId != MAC_INVALID_PANID &&
 		    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
 		    ((!g_zbNwkCtx.joined) ||
-		     (memcmp(g_zbMacPib.extAddress, zb_fixed_ieee_addr,
+		     (memcmp(g_zbMacPib.extAddress, runtime_ieee_addr,
 			     EXT_ADDR_LEN) != 0))) {
 			LOG_WRN("zb nvs restore: dropping split state short=0x%04x pan=0x%04x",
 				(unsigned)g_zbMacPib.shortAddress,
