@@ -16,8 +16,12 @@
 #include "mac/mac_trx.h"
 #include "mac/mac_data.h"
 
-#if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
-#error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
+#if FIXED_PARTITION_EXISTS(zigbee_nv_partition)
+#define ZB_NV_PARTITION DT_NODELABEL(zigbee_nv_partition)
+#elif FIXED_PARTITION_EXISTS(storage_partition)
+#define ZB_NV_PARTITION DT_NODELABEL(storage_partition)
+#else
+#error "Zigbee requires a fixed partition labeled zigbee_nv_partition or storage_partition"
 #endif
 
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -167,7 +171,7 @@ static bool flash_area_write_allowed(const struct flash_area *fa)
 		return false;
 	}
 
-	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(zigbee_nv_partition))) {
+	if (fa->fa_id == DT_FIXED_PARTITION_ID(ZB_NV_PARTITION)) {
 		return true;
 	}
 #if FIXED_PARTITION_EXISTS(slot1_partition)

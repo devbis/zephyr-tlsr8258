@@ -31,6 +31,9 @@ bool device_is_ready(const struct device *dev);
 #define FIXED_PARTITION_DEVICE(label) test_fixed_partition_device()
 #define FIXED_PARTITION_OFFSET(label) test_fixed_partition_offset()
 #define FIXED_PARTITION_SIZE(label) test_fixed_partition_size()
+#define PARTITION_NODE_DEVICE(node_id) test_fixed_partition_device()
+#define PARTITION_NODE_OFFSET(node_id) test_fixed_partition_offset()
+#define PARTITION_NODE_SIZE(node_id) test_fixed_partition_size()
 
 int flash_area_open(uint8_t id, const struct flash_area **fa);
 void flash_area_close(const struct flash_area *fa);
