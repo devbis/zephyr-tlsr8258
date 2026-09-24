@@ -15,6 +15,8 @@
 #include "ev_poll.h"
 #include "ev_buffer.h"
 #include "zb_common.h"
+
+void zb_platform_zdo_attr_init(void);
 #include "zdo/zdo_api.h"
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include "zb_ed_sleep.h"
@@ -100,7 +102,7 @@ static const addrExt_t zb_fixed_ieee_addr = {
 #if defined(CONFIG_ZIGBEE_ROUTER)
 	0x20, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #elif defined(CONFIG_ZIGBEE_ED)
-	0x83, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	0x80, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #else
 	0x00, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
 #endif
@@ -248,6 +250,10 @@ static void zb_core_bootstrap_once(void)
 		aps_init();
 		af_init();
 		zdo_init();
+		/* zdo_init() restores vendor defaults, so apply the platform overrides
+		 * after it and before BDB can start network discovery.
+		 */
+		zb_platform_zdo_attr_init();
 
 		/*
 		 * Start the one-second clock. The imported stack drives every ageing
