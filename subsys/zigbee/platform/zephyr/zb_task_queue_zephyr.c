@@ -22,6 +22,7 @@ struct zb_task_item {
  */
 #define ZB_TASK_POST_QUEUE_DEPTH 64U
 #define ZB_TASK_RX_QUEUE_DEPTH 64U
+#define ZB_TASK_TX_QUEUE_DEPTH 4U
 /* A callback is allowed to post another callback.  Draining until the queue
  * is empty therefore has no progress bound: a periodic/timer callback can
  * keep the ZB thread in this function forever while the RF ISR still emits
@@ -41,14 +42,30 @@ static struct zb_task_item rx_task_queue[ZB_TASK_RX_QUEUE_DEPTH];
 static u8 rx_task_wptr;
 static u8 rx_task_rptr;
 static u8 rx_task_count;
+static struct zb_task_item tx_task_queue[ZB_TASK_TX_QUEUE_DEPTH];
+static u8 tx_task_wptr;
+static u8 tx_task_rptr;
+static u8 tx_task_count;
 static struct k_spinlock task_lock;
 
 static bool zb_taskq_pop(struct zb_task_item *item)
 {
 	k_spinlock_key_t key = k_spin_lock(&task_lock);
 
-	/* RX parsing has priority: it is the only path that can turn a received
-	 * frame into a MAC/NWK response before the coordinator's retry window. */
+	/* TX completion must run before lower-priority callbacks so the MAC does
+	 * not remain in its in-flight state while RX traffic keeps arriving.
+	 */
+	if (tx_task_count != 0U) {
+		*item = tx_task_queue[tx_task_rptr];
+		tx_task_rptr = (u8)((tx_task_rptr + 1U) % ARRAY_SIZE(tx_task_queue));
+		tx_task_count--;
+		k_spin_unlock(&task_lock, key);
+		return true;
+	}
+
+	/* RX parsing remains ahead of general control callbacks to preserve the
+	 * coordinator's response window.
+	 */
 	if (rx_task_count != 0U) {
 		*item = rx_task_queue[rx_task_rptr];
 		rx_task_rptr = (u8)((rx_task_rptr + 1U) % ARRAY_SIZE(rx_task_queue));
@@ -114,6 +131,34 @@ u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg)
 	return RET_OK;
 }
 
+u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg)
+{
+	k_spinlock_key_t key;
+	u8 next;
+
+	if (fn == NULL) {
+		return RET_INVALID_PARAMETER;
+	}
+
+	key = k_spin_lock(&task_lock);
+	if (tx_task_count == ARRAY_SIZE(tx_task_queue)) {
+		k_spin_unlock(&task_lock, key);
+		return RET_BUSY;
+	}
+
+	tx_task_queue[tx_task_wptr] = (struct zb_task_item){
+		.fn = fn,
+		.arg = arg,
+	};
+	next = (u8)((tx_task_wptr + 1U) % ARRAY_SIZE(tx_task_queue));
+	tx_task_wptr = next;
+	tx_task_count++;
+	k_spin_unlock(&task_lock, key);
+
+	k_sem_give(&zb_ev_sem);
+	return RET_OK;
+}
+
 u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
 {
 	k_spinlock_key_t key;
@@ -158,6 +203,9 @@ void zb_sched_init(void)
 	rx_task_wptr = 0U;
 	rx_task_rptr = 0U;
 	rx_task_count = 0U;
+	tx_task_wptr = 0U;
+	tx_task_rptr = 0U;
+	tx_task_count = 0U;
 
 	k_spin_unlock(&task_lock, key);
 }
@@ -170,7 +218,7 @@ void zb_taskq_run_pending_for_test(void)
 bool zb_taskq_is_empty(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&task_lock);
-	bool empty = (task_count == 0U) && (rx_task_count == 0U);
+	bool empty = (task_count == 0U) && (rx_task_count == 0U) && (tx_task_count == 0U);
 
 	k_spin_unlock(&task_lock, key);
 	return empty;
