@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <errno.h>
+#include <string.h>
 
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
@@ -13,6 +14,16 @@
 #define TLSR8258_SYSTEM_TICK_REG 0x00800740u
 #define TLSR8258_SYSTEM_TICK_CYCLES_PER_US \
 	(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000U)
+
+static const uint8_t zb_tlsr_ieee_addr[8] = {
+#if defined(CONFIG_ZIGBEE_ROUTER)
+	0x20, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#elif defined(CONFIG_ZIGBEE_ED)
+	0x80, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#else
+	0x00, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+#endif
+};
 
 
 static int zb_radio_port_tlsr8258_get(const struct device **dev,
@@ -59,6 +70,16 @@ int zb_radio_port_radio_get(const struct device **dev,
 			    const struct ieee802154_radio_api **api)
 {
 	return zb_radio_port_tlsr8258_get(dev, api);
+}
+
+int zb_radio_port_get_ieee_addr(uint8_t ieee_addr[8])
+{
+	if (ieee_addr == NULL) {
+		return -EINVAL;
+	}
+
+	memcpy(ieee_addr, zb_tlsr_ieee_addr, sizeof(zb_tlsr_ieee_addr));
+	return 0;
 }
 
 int zb_radio_port_set_channel(uint8_t channel)

@@ -30,6 +30,18 @@ enum zb_radio_port_trx_state {
 
 int zb_radio_port_radio_get(const struct device **dev,
 			    const struct ieee802154_radio_api **api);
+/**
+ * @brief Get the IEEE address used by this radio port.
+ *
+ * Each radio port implementation must provide this function.
+ *
+ * @param ieee_addr Buffer that receives the 64-bit IEEE address.
+ *
+ * @retval 0 Address copied successfully.
+ * @retval -EINVAL The output buffer is invalid or the address length is unsupported.
+ * @retval -ENODEV The radio interface or its address is not ready.
+ */
+int zb_radio_port_get_ieee_addr(uint8_t ieee_addr[8]);
 int zb_radio_port_set_channel(uint8_t channel);
 int zb_radio_port_set_trx_state(enum zb_radio_port_trx_state state,
 				uint8_t channel);
