@@ -115,7 +115,7 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 	(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_SHORT_ADDR, &filter);
 
 	if (ieee_addr != NULL) {
-		filter.ieee_addr = ieee_addr;
+		filter.ieee_addr = (uint8_t *)ieee_addr;
 		(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_IEEE_ADDR, &filter);
 	}
 }
