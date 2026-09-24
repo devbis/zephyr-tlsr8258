@@ -317,6 +317,7 @@ static void zb_platform_bdb_apply_fixed_target(void)
 	return;
 #else
 	const u8 *tc_addr = NULL;
+	const u8 *nwk_key = NULL;
 
 	if (g_zbNwkCtx.joined) {
 		return;
@@ -334,12 +335,15 @@ static void zb_platform_bdb_apply_fixed_target(void)
 	if (zb_bootstrap_target.tc_addr_valid) {
 		tc_addr = zb_bootstrap_target.tc_addr;
 	}
+	if (zb_platform_bdb_key_is_set(zb_bootstrap_target.network_key)) {
+		nwk_key = zb_bootstrap_target.network_key;
+	}
 
 	zb_ed_fixed_join_target(zb_bootstrap_target.channel,
 					    zb_bootstrap_target.pan_id,
 					    zb_bootstrap_target.short_addr,
 					    zb_bootstrap_target.ext_pan_id,
-					    zb_bootstrap_target.network_key,
+					    nwk_key,
 					    tc_addr);
 	if (zb_platform_bdb_key_is_set(zb_bootstrap_target.network_key)) {
 		zb_preConfigNwkKey(zb_bootstrap_target.network_key, FALSE);
