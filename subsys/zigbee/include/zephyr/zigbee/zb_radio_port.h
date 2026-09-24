@@ -43,7 +43,13 @@ void zb_radio_port_watchdog_disable(void);
 void zb_radio_port_watchdog_init(void);
 void zb_radio_port_watchdog_feed(void);
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink);
-int zb_radio_port_native_sim_socket_register_rx_frame(
-	const struct zb_radio_rx_frame_view *frame);
+void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink);
+void zb_radio_l2_rx_poll(void);
+/**
+ * @brief Number of receive frames the custom L2 could not hand to the stack.
+ *
+ * @return Cumulative drop count since boot.
+ */
+uint32_t zb_radio_l2_rx_drop_count(void);
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_INCLUDE_ZEPHYR_ZIGBEE_ZB_RADIO_PORT_H_ */

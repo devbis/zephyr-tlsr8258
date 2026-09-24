@@ -748,6 +748,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			 * never saw them. */
 			zb_radio_port_idle_rx_guard();
 			zb_platform_radio_rx_poll();
+			zb_radio_l2_rx_poll();
 			#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
 				defined(CONFIG_ZIGBEE_ED)
 			for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
@@ -770,6 +771,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 * milliseconds, not in the 250 ms filter-guard interval below. */
 		zb_radio_port_idle_rx_guard();
 		zb_platform_radio_rx_poll();
+		zb_radio_l2_rx_poll();
 		/* The radio sink can enqueue RX callbacks after the poll pass above.
 		 * Drain once more before layer dispatch so a burst cannot fill the
 		 * dedicated RX FIFO and lose the frame that must trigger a response. */

@@ -7,17 +7,6 @@
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
-static zb_radio_port_rx_sink_t g_rx_sink;
-
-int zb_radio_port_native_sim_socket_register_rx_frame(const struct zb_radio_rx_frame_view *frame)
-{
-	if (g_rx_sink == NULL) {
-		return -ENOSYS;
-	}
-
-	return g_rx_sink(frame);
-}
-
 int zb_radio_port_radio_get(const struct device **dev,
 			    const struct ieee802154_radio_api **api)
 {
@@ -105,7 +94,7 @@ uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
 {
-	g_rx_sink = sink;
+	zb_radio_l2_register_rx_sink(sink);
 }
 
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
