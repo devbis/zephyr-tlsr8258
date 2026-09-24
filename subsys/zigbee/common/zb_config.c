@@ -134,8 +134,8 @@ u8 NWK_NEIGHBORTBL_ADD_LQITHRESHOLD = 0x45;
 /* the life time for unauthorized child table, 5 seconds */
 u32 NWK_UNAUTH_CHILD_TABLE_LIFE_TIME = (5 * 1000);
 
-/* timeout waiting for transport nwk key during association join or security rejoin, 2 seconds */
-u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = (2 * 1000);
+/* timeout waiting for transport nwk key during association join or security rejoin, 30 seconds */
+u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = (30 * 1000);
 
 /* the cost threshold for one hop */
 u8 NWK_COST_THRESHOLD_ONEHOP = 7;
