@@ -4,8 +4,11 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/zigbee/zb_radio_port.h>
+
+LOG_MODULE_REGISTER(zigbee_radio_port, CONFIG_ZIGBEE_LOG_LEVEL);
 
 int zb_radio_port_radio_get(const struct device **dev,
 			    const struct ieee802154_radio_api **api)
@@ -103,20 +106,35 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 	const struct device *dev;
 	const struct ieee802154_radio_api *api;
 	struct ieee802154_filter filter;
+	int rc = zb_radio_port_radio_get(&dev, &api);
 
-	if (zb_radio_port_radio_get(&dev, &api) < 0 || api->filter == NULL) {
+	if (rc < 0) {
+		LOG_ERR("Cannot configure IEEE 802.15.4 filters: radio unavailable (%d)", rc);
+		return;
+	}
+	if (api->filter == NULL) {
+		LOG_ERR("IEEE 802.15.4 radio does not provide filter operation");
 		return;
 	}
 
 	filter.pan_id = pan_id;
-	(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_PAN_ID, &filter);
+	rc = api->filter(dev, true, IEEE802154_FILTER_TYPE_PAN_ID, &filter);
+	if (rc < 0) {
+		LOG_ERR("IEEE 802.15.4 PAN filter failed (%d)", rc);
+	}
 
 	filter.short_addr = short_addr;
-	(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_SHORT_ADDR, &filter);
+	rc = api->filter(dev, true, IEEE802154_FILTER_TYPE_SHORT_ADDR, &filter);
+	if (rc < 0) {
+		LOG_ERR("IEEE 802.15.4 short address filter failed (%d)", rc);
+	}
 
 	if (ieee_addr != NULL) {
 		filter.ieee_addr = (uint8_t *)ieee_addr;
-		(void)api->filter(dev, true, IEEE802154_FILTER_TYPE_IEEE_ADDR, &filter);
+		rc = api->filter(dev, true, IEEE802154_FILTER_TYPE_IEEE_ADDR, &filter);
+		if (rc < 0) {
+			LOG_ERR("IEEE 802.15.4 IEEE address filter failed (%d)", rc);
+		}
 	}
 }
 
