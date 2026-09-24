@@ -323,7 +323,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	return APS_STATUS_SUCCESS;
 }
 
-static int zdo_platform_attr_init(void)
+void zb_platform_zdo_attr_init(void)
 {
 	zdo_cfg_attributes.config_nwk_indirectPollRate = 1000U;
 	zdo_cfg_attributes.config_nwk_time_btwn_scans = 100U;
@@ -339,10 +339,7 @@ static int zdo_platform_attr_init(void)
 	zdo_cfg_attributes.config_accept_nwk_update_pan_id = 0xFFFFU;
 	zdo_cfg_attributes.config_accept_nwk_update_channel = 0xFFU;
 	zdo_cfg_attributes.config_nwk_scan_duration = 5U;
-	return 0;
 }
-
-SYS_INIT(zdo_platform_attr_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 
 /*
  * Router join latch. The Zephyr bring-up path sets it while a join is in
