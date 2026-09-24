@@ -23,8 +23,12 @@
 u32 g_u32MacFlashAddr;
 u32 g_u32CfgFlashAddr;
 
-#if !FIXED_PARTITION_EXISTS(zigbee_nv_partition)
-#error "Zigbee requires a fixed partition labeled zigbee_nv_partition"
+#if FIXED_PARTITION_EXISTS(zigbee_nv_partition)
+#define ZB_NV_PARTITION DT_NODELABEL(zigbee_nv_partition)
+#elif FIXED_PARTITION_EXISTS(storage_partition)
+#define ZB_NV_PARTITION DT_NODELABEL(storage_partition)
+#else
+#error "Zigbee requires a zigbee_nv_partition or storage_partition"
 #endif
 
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
@@ -84,7 +88,7 @@ static void zb_nvs_log_degraded(const char *reason, int rc)
 
 static const struct device *zb_nvs_flash_device_get(void)
 {
-	return FIXED_PARTITION_DEVICE(zigbee_nv_partition);
+	return PARTITION_NODE_DEVICE(ZB_NV_PARTITION);
 }
 
 static int zb_nvs_geometry_init(void)
@@ -104,8 +108,8 @@ static int zb_nvs_geometry_init(void)
 		return -ENODEV;
 	}
 
-	partition_offset = FIXED_PARTITION_OFFSET(zigbee_nv_partition);
-	partition_size = FIXED_PARTITION_SIZE(zigbee_nv_partition);
+	partition_offset = PARTITION_NODE_OFFSET(ZB_NV_PARTITION);
+	partition_size = PARTITION_NODE_SIZE(ZB_NV_PARTITION);
 	zb_nvs.flash_device = flash_device;
 	zb_nvs.offset = partition_offset;
 

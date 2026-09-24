@@ -9,6 +9,8 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
@@ -487,6 +489,13 @@ void zb_radio_init(void)
 		LOG_WRN("zigbee radio API unavailable");
 		return;
 	}
+	if ((api->set_channel == NULL) || (api->start == NULL) ||
+	    (api->stop == NULL) || (api->tx == NULL) || (api->filter == NULL)) {
+		LOG_ERR("Zigbee radio lacks channel, start, stop, tx or filter operation");
+		g_radio.dev = NULL;
+		g_radio.api = NULL;
+		return;
+	}
 	zb_radio_port_register_rx_sink(zb_radio_on_rx_sink);
 }
 
@@ -688,10 +697,8 @@ void zb_radio_tx_start(u8 *tx_buf)
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 {
-	struct net_buf frag = {
-		.data = (uint8_t *)psdu,
-		.len = psdu_len,
-	};
+	struct net_if *iface;
+	struct net_pkt *pkt;
 	int ret;
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->tx == NULL)) {
@@ -700,10 +707,25 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 		return -ENODEV;
 	}
 
-	if ((psdu == NULL) || (psdu_len == 0U)) {
+	if ((psdu == NULL) || (psdu_len == 0U) || (psdu_len > 125U)) {
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_TX);
 		LOG_WRN("TX rejected: invalid PSDU");
 		return -EINVAL;
+	}
+	iface = net_if_lookup_by_dev(g_radio.dev);
+	if (iface == NULL) {
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NOT_READY);
+		return -ENODEV;
+	}
+	pkt = net_pkt_alloc_with_buffer(iface, psdu_len, NET_AF_UNSPEC, 0, K_NO_WAIT);
+	if (pkt == NULL) {
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
+		return -ENOMEM;
+	}
+	if (net_pkt_write(pkt, psdu, psdu_len) < 0) {
+		net_pkt_unref(pkt);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
+		return -ENOMEM;
 	}
 
 	g_radio.last_tx_len = psdu_len;
@@ -716,7 +738,8 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	 */
 	enum ieee802154_tx_mode tx_mode = IEEE802154_TX_MODE_DIRECT;
 	atomic_inc(&g_radio.tx_attempts);
-	ret = g_radio.api->tx(g_radio.dev, tx_mode, NULL, &frag);
+	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
+	net_pkt_unref(pkt);
 	if (ret < 0) {
 		atomic_inc(&g_radio.tx_failures);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);

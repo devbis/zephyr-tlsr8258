@@ -98,9 +98,14 @@ endif()
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258
     platform/zephyr/zb_radio_port_tlsr8258.c
 )
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_NATIVE_SIM_SOCKET
-    platform/common/zb_native_sim_socket_medium.c
+zephyr_library_sources_ifdef(CONFIG_NET_L2_CUSTOM_IEEE802154
+    platform/zephyr/zb_radio_l2.c
+)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC
     platform/zephyr/zb_radio_port_native_sim_socket.c
+)
+zephyr_library_sources_ifdef(CONFIG_IEEE802154_NATIVE_SIM_SOCKET
+    platform/common/zb_native_sim_socket_medium.c
 )
 
 # Common utilities

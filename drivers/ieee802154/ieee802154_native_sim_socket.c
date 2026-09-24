@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <zephyr/net/ieee802154.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
+#include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/byteorder.h>
 
@@ -80,6 +81,30 @@ struct native_sim_socket_data {
 	uint64_t tx_blocked_until_us;
 #endif
 };
+
+static void native_sim_socket_deliver(const struct device *dev, const uint8_t *psdu,
+				      uint8_t len, int8_t rssi)
+{
+	struct native_sim_socket_data *data = dev->data;
+	struct net_pkt *pkt;
+
+	if (data->iface == NULL) {
+		return;
+	}
+
+	pkt = net_pkt_rx_alloc_with_buffer(data->iface, len, NET_AF_UNSPEC, 0, K_NO_WAIT);
+	if (pkt == NULL) {
+		return;
+	}
+	if (net_pkt_write(pkt, psdu, len) < 0) {
+		net_pkt_unref(pkt);
+		return;
+	}
+	net_pkt_set_ieee802154_rssi_dbm(pkt, rssi);
+	if (net_recv_data(data->iface, pkt) < 0) {
+		net_pkt_unref(pkt);
+	}
+}
 
 static const char *cmd_server_host;
 static unsigned int cmd_server_port;
@@ -263,9 +288,6 @@ static bool native_sim_socket_rx_fifo_deliver_one(const struct device *dev)
 {
 	struct native_sim_socket_data *data = dev->data;
 	struct native_sim_socket_rx_fifo_entry *entry;
-	struct zb_radio_rx_frame_view frame;
-	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
-		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
 
 	if (data->rx_fifo_count == 0U) {
 		return false;
@@ -276,14 +298,7 @@ static bool native_sim_socket_rx_fifo_deliver_one(const struct device *dev)
 		return false;
 	}
 
-	memset(dma, 0, sizeof(dma));
-	dma[4] = (uint8_t)(entry->len + NATIVE_SIM_SOCKET_FCS_LENGTH);
-	memcpy(&dma[NATIVE_SIM_SOCKET_PAYLOAD_OFFSET], entry->psdu, entry->len);
-	frame.dma = dma;
-	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + entry->len +
-				      NATIVE_SIM_SOCKET_FCS_LENGTH);
-	frame.rssi_dbm = entry->rssi_dbm;
-	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
+	native_sim_socket_deliver(dev, entry->psdu, entry->len, entry->rssi_dbm);
 	#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY_TRACE)
 	printk("zb_sock_phy: worker handoff #%u fifo=%u/%u\n", entry->frame_no,
 	       (unsigned int)(data->rx_fifo_count - 1U),
@@ -451,18 +466,6 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	/* Socket RX is the simulated TLSR DMA/FIFO interrupt. The worker below
 	 * owns the copied frame and performs the later MAC handoff. */
 	(void)native_sim_socket_rx_fifo_enqueue(data, &msg);
-	#else
-	uint8_t dma[ZB_NATIVE_SIM_SOCKET_MEDIUM_MAX_PSDU_SIZE +
-		    NATIVE_SIM_SOCKET_PAYLOAD_OFFSET + NATIVE_SIM_SOCKET_FCS_LENGTH];
-	struct zb_radio_rx_frame_view frame;
-
-	memset(dma, 0, sizeof(dma));
-	dma[4] = (uint8_t)(msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
-	memcpy(&dma[NATIVE_SIM_SOCKET_PAYLOAD_OFFSET], msg.psdu, msg.psdu_len);
-	frame.dma = dma;
-	frame.len = (uint8_t)(NATIVE_SIM_SOCKET_PAYLOAD_OFFSET +
-			      msg.psdu_len + NATIVE_SIM_SOCKET_FCS_LENGTH);
-	frame.rssi_dbm = msg.rssi_dbm;
 	#endif
 	/*
 	 * TEST KNOB — off by default. Build with -DZB_RX_BEACON_JITTER_MS=N to
@@ -493,7 +496,7 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	printk("zb_sock_radio: RX IRQ node=0x%04x ch=%u len=%zu rssi=%d lqi=%u\n",
 	       msg.node_id, msg.channel, msg.psdu_len, msg.rssi_dbm, msg.lqi);
 	#if !defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
-	(void)zb_radio_port_native_sim_socket_register_rx_frame(&frame);
+	native_sim_socket_deliver(dev, msg.psdu, msg.psdu_len, msg.rssi_dbm);
 	#endif
 	return true;
 }
@@ -906,7 +909,7 @@ static const struct ieee802154_radio_api native_sim_socket_radio_api = {
 				  &native_sim_socket_data_##inst, \
 				  &native_sim_socket_cfg_##inst, \
 				  CONFIG_IEEE802154_NATIVE_SIM_SOCKET_INIT_PRIO, \
-				  &native_sim_socket_radio_api, IEEE802154_L2, \
-				  NET_L2_GET_CTX_TYPE(IEEE802154_L2), IEEE802154_MTU)
+				  &native_sim_socket_radio_api, CUSTOM_IEEE802154_L2, \
+				  NET_L2_GET_CTX_TYPE(CUSTOM_IEEE802154_L2), IEEE802154_MTU)
 
 DT_INST_FOREACH_STATUS_OKAY(NATIVE_SIM_SOCKET_DEFINE)
