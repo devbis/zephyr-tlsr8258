@@ -90,6 +90,10 @@ int zb_platform_restore_persistent_state(void)
 
 	g_zbInfo = blob.zb_info;
 	g_zbNwkCtx = blob.nwk_ctx;
+	/* The stack profile is a build-time capability and is not restored from
+	 * persistent state. Older blobs may leave it zero, rejecting every parent.
+	 */
+	g_zbInfo.nwkNib.stackProfile = nwkNibDefault.stackProfile;
 	/*
 	 * joined is transient in the vendor NWK context. A stale failure/reset can
 	 * persist a blob with joined==0 after MAC/NWK association has already
