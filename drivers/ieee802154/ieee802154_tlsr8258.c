@@ -930,6 +930,10 @@ static void tlsr8258_rf_set_rxmode_vendor(void)
 /* Restore always-RX after a synchronous TX timeout. */
 static void tlsr8258_rf_rearm_idle_rx(struct tlsr8258_radio_data *radio)
 {
+	if (radio->rx_active == NULL) {
+		radio->rx_active = radio->rx_buffer;
+	}
+
 	radio->rx_active[0] = 0u;
 	radio->rx_active[4] = 0u;
 	tlsr8258_rf_rx_buffer_set(radio->rx_active, TLSR8258_RX_DMA_SIZE);
@@ -2378,25 +2382,25 @@ static int tlsr8258_set_tx_payload_to(uint8_t *tx_buffer, const uint8_t *payload
 #define TLSR8258_SYNC_POLL_TX_DONE_STEP_US    20u
 
 /*
- * Vendor-model synchronous path for the ACK-requested DataReq association poll.
+ * Vendor-model synchronous path for frames followed by an immediate RX window.
  *
  * The async completion of this poll was non-deterministic: it finished either
  * via the RF ISR (fast, set_rxmode_vendor) OR — when the TX IRQ missed the ISR
  * — via the tx() status-poll fallback, which re-entered RX with the SLOW full
  * set_rxmode (channel reload + PLL relock). So the TX->RX turnaround timing
  * jittered run-to-run and was sometimes too slow, leaving the radio not
- * listening in the ~200 us-13 ms window when the coordinator's indirect
- * ASSOCIATION-RESPONSE lands. That variance is why reception was marginal.
+ * listening when a response lands. That variance can stall discovery and
+ * association.
  *
  * Mirror the vendor rf_tx_irq_handler instead: with the RF ISR masked, kick the
  * poll, busy-poll for TX-done, then IMMEDIATELY re-arm the RX DMA buffer and
  * switch to RX via the vendor-exact set_rxmode (no reset, no PLL reload) — a
  * single deterministic fast turnaround every time. Re-enable the ISR so the
- * normal RX path receives + MAC-ACKs the AssocResp as usual. Only the ACK-
- * requested DataReq poll takes this path; beacon-requests and all other TX stay
- * on the async path (discovery RX is unaffected).
+ * normal RX path receives follow-up frames. Beacon requests and ACK-requested
+ * DataReq polls take this path; unrelated TX remains on the async path.
  */
-static int tlsr8258_tx_sync_assoc_poll(struct tlsr8258_radio_data *radio, uint8_t tx_seq)
+static int tlsr8258_tx_sync_followup(struct tlsr8258_radio_data *radio, uint8_t tx_seq,
+				     bool expect_ack)
 {
 	uint32_t waited_us = 0u;
 	bool tx_done = false;
@@ -2411,7 +2415,7 @@ static int tlsr8258_tx_sync_assoc_poll(struct tlsr8258_radio_data *radio, uint8_
 	TLSR_REG8(0x0643) = 0u;
 	TLSR_REG32(0x0640) &= ~(BIT(4) | BIT(TLSR8258_IRQ_ZB_RT));
 	compiler_barrier();
-	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, true, false);
+	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, expect_ack, false);
 	/* C's lightweight CCA does not run the Rust perform_csma_ca() teardown.
 	 * Reproduce its set_trx_off() explicitly so the RX gate cannot remain
 	 * active while DMA3 is being handed to the LL TX state machine. */
@@ -2510,14 +2514,12 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	expect_post_tx_followup =
 		tlsr8258_core_psdu_expects_post_tx_followup(frag->data, frag->len);
 	/*
-	 * The ACK-requested DataReq association poll takes the deterministic
-	 * vendor-model synchronous turnaround so the coordinator's indirect
-	 * ASSOCIATION-RESPONSE lands in a reliably-armed RX window. Beacon
-	 * requests (post-tx-followup but not ACK-requested) and all other frames
-	 * keep the async path below.
+	 * Frames that need an immediate RX follow-up use a bounded hardware poll
+	 * and deterministic RX turnaround. The async completion path can wait
+	 * indefinitely when the RF TX-done interrupt remains latched.
 	 */
-	if (expect_post_tx_followup && expect_ack) {
-		return tlsr8258_tx_sync_assoc_poll(radio, tx_seq);
+	if (expect_post_tx_followup) {
+		return tlsr8258_tx_sync_followup(radio, tx_seq, expect_ack);
 	}
 
 	/*
