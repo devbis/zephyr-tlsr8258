@@ -759,7 +759,25 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	 * task-queue drain so the state machine has set timer_evt_state=1
 	 * before SEND_SUCC fires.
 	 */
-	(void)tl_zbTaskPost(zb_radio_tx_complete_deferred, NULL);
+	ret = tl_zbTxTaskPost(zb_radio_tx_complete_deferred, NULL);
+	if (ret != RET_OK) {
+		/*
+		 * The frame is already on air, so failing the submit would make
+		 * the MAC retransmit a duplicate and, worse, leave TX_BUSY set
+		 * forever: only zb_radio_tx_complete_deferred clears it. Running
+		 * the completion inline is not an option either -- it races the
+		 * MAC's own timer arming, which is why it is deferred at all.
+		 * Fall back to the general task queue: ordering against pending
+		 * RX callbacks degrades, delivery does not.
+		 */
+		ret = tl_zbTaskPost(zb_radio_tx_complete_deferred, NULL);
+		if (ret != RET_OK) {
+			LOG_ERR("cannot queue radio TX completion (status=%d)", ret);
+			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
+			return -ENOBUFS;
+		}
+		LOG_WRN("radio TX completion queue full, deferred to the general queue");
+	}
 	return 0;
 }
 

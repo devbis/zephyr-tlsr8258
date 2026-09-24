@@ -92,6 +92,7 @@ typedef struct zb_buf_s {
 typedef void (*tl_zb_callback_t)(void *arg);
 u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg);
 u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg);
+u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg);
 void zb_taskq_run_pending_for_test(void);
 bool zb_taskq_is_empty(void);
 bool zb_taskq_layer_queues_empty(void);
