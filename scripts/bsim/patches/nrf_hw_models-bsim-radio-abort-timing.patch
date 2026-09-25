@@ -1,0 +1,15 @@
+diff --git a/src/HW_models/NHW_RADIO.c b/src/HW_models/NHW_RADIO.c
+--- a/src/HW_models/NHW_RADIO.c
++++ b/src/HW_models/NHW_RADIO.c
+@@ -953,5 +953,10 @@ static void update_abort_struct(p2G4_abort_t *abort, bs_time_t *next_check_time){
+ static void update_abort_struct(p2G4_abort_t *abort, bs_time_t *next_check_time){
+   //We will want to recheck next time anything may decide to stop the radio, that can be SW or HW
+   //The only logical way to do so is to set it to the next timer whatever it may be as many can trigger SW interrupts
+-  *next_check_time = nsi_hws_get_next_event_time();
++  bs_time_t now = nsi_hws_get_time();
++
++  *next_check_time = nsi_hws_get_next_event_time();
++  if (*next_check_time <= now) {
++    *next_check_time = now + 1;
++  }
+   abort->recheck_time = hwll_phy_time_from_dev(*next_check_time);
