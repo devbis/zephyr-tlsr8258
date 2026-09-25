@@ -194,11 +194,20 @@ void zb_radio_note_tx_frame(const u8 *frame)
 	g_radio.last_tx_seq = (frame != NULL) ? frame[2] : 0U;
 }
 
+/*
+ * Argument of zb_radio_tx_complete_deferred() for a frame the radio sent but
+ * that no ACK confirmed: the MAC must see the TX complete and then time out
+ * waiting for the ACK, which is what drives its retries and MAC_STA_NO_ACK.
+ */
+#define ZB_RADIO_TX_DONE_NO_ACK ((void *)1)
+
 static void zb_radio_tx_complete_deferred(void *arg)
 {
-	(void)arg;
 	rf_busyFlag &= (u8)~TX_BUSY;
 	zb_macDataSendHandler();
+	if (arg == ZB_RADIO_TX_DONE_NO_ACK) {
+		return;
+	}
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
 	defined(CONFIG_ZIGBEE_ED)
 	/*
@@ -741,10 +750,15 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	 * Using DIRECT mode for all TX eliminates that race.
 	 */
 	enum ieee802154_tx_mode tx_mode = IEEE802154_TX_MODE_DIRECT;
+	void *tx_done_arg = NULL;
+
 	atomic_inc(&g_radio.tx_attempts);
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
 	net_pkt_unref(pkt);
-	if (ret < 0) {
+	if (ret == -ENOMSG) {
+		/* Sent, but not acknowledged: let the MAC's ACK timeout handle it. */
+		tx_done_arg = ZB_RADIO_TX_DONE_NO_ACK;
+	} else if (ret < 0) {
 		atomic_inc(&g_radio.tx_failures);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
 		return ret;
@@ -759,18 +773,18 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	 * task-queue drain so the state machine has set timer_evt_state=1
 	 * before SEND_SUCC fires.
 	 */
-	ret = tl_zbTxTaskPost(zb_radio_tx_complete_deferred, NULL);
+	ret = tl_zbTxTaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
 	if (ret != RET_OK) {
 		/*
-		 * The frame is already on air, so failing the submit would make
-		 * the MAC retransmit a duplicate and, worse, leave TX_BUSY set
-		 * forever: only zb_radio_tx_complete_deferred clears it. Running
-		 * the completion inline is not an option either -- it races the
-		 * MAC's own timer arming, which is why it is deferred at all.
-		 * Fall back to the general task queue: ordering against pending
-		 * RX callbacks degrades, delivery does not.
+		 * The frame is already on air. Failing the submit would leave the
+		 * MAC waiting for its TX-IRQ timer, which reports MAC_TX_ABORTED
+		 * without any retry. Running the completion inline is not an
+		 * option either -- it races the MAC's own timer arming, which is
+		 * why it is deferred at all. Fall back to the general task queue:
+		 * ordering against pending RX callbacks degrades, delivery does
+		 * not.
 		 */
-		ret = tl_zbTaskPost(zb_radio_tx_complete_deferred, NULL);
+		ret = tl_zbTaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
 		if (ret != RET_OK) {
 			LOG_ERR("cannot queue radio TX completion (status=%d)", ret);
 			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
