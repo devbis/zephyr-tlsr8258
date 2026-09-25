@@ -1,0 +1,26 @@
+diff --git a/src/HW_models/NHW_misc.c b/src/HW_models/NHW_misc.c
+--- a/src/HW_models/NHW_misc.c
++++ b/src/HW_models/NHW_misc.c
+@@ -114,10 +114,22 @@ void *nhw_convert_per_addr_hw_to_sim(void *real_addr) {
+   for (unsigned int i = 0; i < simu_real_conv_table_size; i++) {
+     intptr_t start = (intptr_t)simu_real_conv_table[i].real_add;
+     intptr_t end = start + (intptr_t)simu_real_conv_table[i].size ;
+     if (((intptr_t)real_addr >= start) && ((intptr_t)real_addr < end)) {
+       return (void *)((intptr_t)real_addr - start + (intptr_t)simu_real_conv_table[i].simu_addr);
+     }
+   }
++  if (sizeof(uintptr_t) > sizeof(uint32_t)) {
++    uint32_t host_addr = (uint32_t)(uintptr_t)real_addr;
++
++    for (unsigned int i = 0; i < simu_real_conv_table_size; i++) {
++      uint32_t sim_start = (uint32_t)(uintptr_t)simu_real_conv_table[i].simu_addr;
++      uint32_t offset = host_addr - sim_start;
++
++      if (offset < simu_real_conv_table[i].size) {
++        return (void *)((uintptr_t)simu_real_conv_table[i].simu_addr + offset);
++      }
++    }
++  }
+   bs_trace_error_time_line("%s could not find %p in between the simulated peripherals\n", __func__, real_addr); \
+   return 0;
+ }

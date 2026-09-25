@@ -160,8 +160,11 @@ _CODE_MAC_ void generateIEEEAddr(void)
             memcpy(addr + 5, startIEEEAddr, 3);
         }
 
-        flash_write(CFG_MAC_ADDRESS, 6, addr + 2);
-        flash_write(CFG_MAC_ADDRESS + 6, 2, addr);
+        u8 flash_addr[8];
+
+        memcpy(flash_addr, addr + 2, 6);
+        memcpy(flash_addr + 6, addr, 2);
+        flash_write(CFG_MAC_ADDRESS, sizeof(flash_addr), flash_addr);
 
         u8 buf[8];
         flash_read(CFG_MAC_ADDRESS, 8, buf);
