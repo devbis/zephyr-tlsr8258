@@ -162,16 +162,6 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 	tlsr8258_zigbee_update_filters(pan_id, short_addr, ieee_addr);
 }
 
-void zb_radio_port_irq_enable(void)
-{
-	/*
-	 * Open the chip-level interrupt gate (reg_irq_en) once the radio is
-	 * initialized, as the vendor main() does. On TC32 the irq_lock() key is
-	 * the value of reg_irq_en, so key 1 sets it.
-	 */
-	irq_unlock(1U);
-}
-
 void zb_radio_port_watchdog_disable(void)
 {
 	tlsr8258_watchdog_disable();

@@ -51,6 +51,7 @@ static inline u32 clock_cycles_to_us(u32 cycles)
 void zb_radio_init(void);
 bool zb_radio_is_ready(void);
 void zb_radio_reset(void);
+void zb_radio_filter_sync(bool on_tx);
 void zb_radio_trx_switch(u8 mode, u8 phy_chn);
 void zb_radio_trx_off_auto_mode(void);
 void zb_radio_tx_power_set(u8 level);

@@ -739,25 +739,39 @@ void zb_radio_tx_start(u8 *tx_buf)
 }
 
 /*
- * The MAC takes the parent's PAN ID into its PIB before it sends the
- * Association Request, but has no hook to reprogram the radio. A radio that
- * filters in hardware, such as the nRF5, then still has PAN ID 0xFFFF set and
- * drops the coordinator's Association Response, which carries the parent's
- * PAN ID. Mirror the PIB PAN ID into the radio filter while the device joins,
- * that is while it has a PAN ID but no short address yet.
+ * The MAC writes the PAN ID and the short address into its PIB but has no
+ * hook to reprogram the radio. A radio that filters in hardware, such as the
+ * nRF5, keeps the old values: while joining it still has PAN ID 0xFFFF and
+ * drops the coordinator's Association Response, and once the MAC has a short
+ * address (formation, association, rejoin, address conflict) it neither
+ * acknowledges nor delivers a unicast to it.
+ *
+ * While the device joins, other paths reset the filter, so the PAN ID is
+ * mirrored before every transmission. Once the short address is assigned,
+ * the Zigbee thread calls this on every pass and the filter is written only
+ * when the address changes.
  */
-static void zb_radio_sync_join_filter(void)
+void zb_radio_filter_sync(bool on_tx)
 {
-	if (!IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_GENERIC)) {
+	static u16 synced_pan_id = MAC_INVALID_PANID;
+	static u16 synced_short_addr = MAC_SHORT_ADDR_BROADCAST;
+
+	if (g_zbMacPib.panId == MAC_INVALID_PANID) {
 		return;
 	}
-	if ((g_zbMacPib.panId == MAC_INVALID_PANID) ||
-	    (g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED)) {
+	if (g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		if (!on_tx || !IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_GENERIC)) {
+			return;
+		}
+	} else if ((g_zbMacPib.panId == synced_pan_id) &&
+		   (g_zbMacPib.shortAddress == synced_short_addr)) {
 		return;
 	}
 
 	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
 				     g_zbMacPib.extAddress);
+	synced_pan_id = g_zbMacPib.panId;
+	synced_short_addr = g_zbMacPib.shortAddress;
 }
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
@@ -807,7 +821,7 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	enum ieee802154_tx_mode tx_mode = IEEE802154_TX_MODE_DIRECT;
 	void *tx_done_arg = NULL;
 
-	zb_radio_sync_join_filter();
+	zb_radio_filter_sync(true);
 	atomic_inc(&g_radio.tx_attempts);
 	(void)zb_radio_l2_ack_frame_pending_take();
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
