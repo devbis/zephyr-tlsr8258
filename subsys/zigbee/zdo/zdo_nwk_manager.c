@@ -965,8 +965,10 @@ void zdo_nlme_status_indication(void *arg)
 	}
 #endif
 	if (status == NWK_COMMAND_STATUS_ADDRESS_CONFLICT) {
+		/* "60: tjl tl_zbNwkStatusAddrConflictInd; 64: tj 22" - the
+		 * handler frees or reuses the indication itself.
+		 */
 		tl_zbNwkStatusAddrConflictInd(arg);
-		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
