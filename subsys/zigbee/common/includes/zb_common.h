@@ -406,6 +406,7 @@ extern const nwk_nib_t nwkNibDefault;
 extern const zdo_attrCfg_t zdoCfgAttrDefault;
 
 void zb_init(void);
+void zb_nwkKeySet(void);
 void os_init(u8 isRetention);
 u8 zb_info_load(void);
 bool tl_stackBusy(void);

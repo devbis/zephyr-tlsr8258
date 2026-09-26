@@ -7,6 +7,7 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 #include "ss_security_flags.h"
+#include "ss_zdoSecurityME.h"
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include <tlsr825x/power.h>
 #endif
@@ -539,6 +540,25 @@ int zb_platform_bdb_init_default(void)
 	 */
 	if (g_zbNwkCtx.is_factory_new != 0U) {
 		ss_ib.tcLinkKeyType = SS_GLOBAL_LINK_KEY;
+		/*
+		 * ss_zdoInit(), bypassed as well, gives a factory-new node the
+		 * 5 s lifetime of a trust center link key that waits for its
+		 * Confirm-Key.  Left at zero, the pending key expires as soon as
+		 * the Verify-Key is queued, the Confirm-Key secured with it cannot
+		 * be decrypted, and BDB never completes the key exchange.
+		 */
+		ss_ib.ssTimeoutPeriod = 5000U;
+#if defined(ZB_ROUTER_ROLE)
+		/*
+		 * zb_init(), which this port does not use either, gives a cold
+		 * started router or coordinator its network key. Without it a
+		 * coordinator forms the network with an all-zero key and sends
+		 * every command that tests for a configured key, such as the
+		 * link status, without network security.
+		 */
+		zb_nwkKeySet();
+		ss_zdoUseKey(0);
+#endif
 	}
 #if defined(ZB_COORDINATOR_ROLE)
 	/*
