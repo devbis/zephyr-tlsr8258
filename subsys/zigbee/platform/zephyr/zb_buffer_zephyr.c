@@ -211,9 +211,19 @@ static zb_buf_t zb_buf_synth_scratch;
 
 u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 {
+	zb_buf_t *owner;
+
 	if (rxBuf == NULL) {
 		zb_buf_synth_scratch.hdr.used = 1;
 		return (u8 *)&zb_buf_synth_scratch;
+	}
+
+	/* The radio captures each frame into a zb_buf of its own, see
+	 * zb_buf_rx_payload_capture(); hand that buffer to the MAC.
+	 */
+	owner = zb_buf_owner_of(rxBuf);
+	if (owner != NULL) {
+		return (u8 *)owner;
 	}
 
 	return (u8 *)zb_buf_allocate();
@@ -244,3 +254,13 @@ u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
  * adapter; the corresponding size helpers use the Zephyr slab and
  * no full-stack caller dereferences the vendor free-list storage.
  */
+
+void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src)
+{
+	if (!is_zb_buf(dst) || !is_zb_buf((void *)src)) {
+		return;
+	}
+
+	memcpy(((zb_buf_block_t *)dst)->rx_snapshot, ((const zb_buf_block_t *)src)->rx_snapshot,
+	       sizeof(((zb_buf_block_t *)dst)->rx_snapshot));
+}

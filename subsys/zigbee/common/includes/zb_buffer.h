@@ -34,6 +34,7 @@ void *tl_bufInitalloc(zb_buf_t *p, u8 size);
 #define TL_COPY_BUF(dst, src)                                                                      \
 	do {                                                                                       \
 		memcpy((dst), (src), ZB_BUF_SIZE + sizeof(zb_buf_hdr_t) - 1);                      \
+		zb_buf_rx_snapshot_copy((zb_buf_t *)(dst), (const zb_buf_t *)(src));               \
 	} while (0)
 
 void tl_zbBufferInit(void);
@@ -57,5 +58,7 @@ u8 zb_buf_to_ref(zb_buf_t *buf);
 
 u8 zb_buf_rx_free_count(void);
 u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len);
+/* Copy the received frame captured behind src, see zb_buf_rx_payload_capture(). */
+void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src);
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_BUFFER_H_ */

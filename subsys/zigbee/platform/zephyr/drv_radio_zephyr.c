@@ -458,6 +458,28 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 	zb_radio_mark_pending_data(psdu, psdu_len);
 #endif
 	ack_pkt = zb_radio_psdu_is_ack(psdu, psdu_len) ? 1U : 0U;
+	if (ack_pkt == 0U) {
+		/*
+		 * The vendor hands the MAC a receive buffer from the zb_buf pool,
+		 * and the stack keeps pointing into it: a frame relayed to a
+		 * sleeping child is rebuilt and encrypted in place and waits there
+		 * for the child's poll. The radio ring here is reused two frames
+		 * later, so give every frame a zb_buf of its own instead.
+		 */
+		zb_buf_t *zbuf = zb_buf_allocate();
+		u8 *frame;
+
+		if (zbuf == NULL) {
+			return -ENOMEM;
+		}
+		frame = zb_buf_rx_payload_capture(zbuf, psdu, psdu_len);
+		if (frame == NULL) {
+			zb_buf_free(zbuf);
+			return -EINVAL;
+		}
+		psdu = frame;
+		dma = frame;
+	}
 	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, mac_len, ack_pkt, 0U, rssi_dbm);
 	return 0;
 }
