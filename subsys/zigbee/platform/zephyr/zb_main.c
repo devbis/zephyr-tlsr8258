@@ -357,7 +357,6 @@ static void zb_core_bootstrap_once(void)
 		}
 		#endif
 		rf_init();
-		zb_radio_port_irq_enable();
 		zb_core_init_done = true;
 	}
 
@@ -646,47 +645,6 @@ __weak void zb_platform_radio_rx_poll(void)
 {
 }
 
-/*
- * Re-assert the radio short-address filter while joined. On-HW SWS reads
- * (2026-08-03) confirmed the TLSR8258 driver's radio->filter_short_addr can sit
- * at 0xFFFF while the device is joined (byte-level: joined as 0x6918 but filter
- * 0xFFFF). Address filtering is SOFTWARE, so a 0xFFFF filter rejects every
- * unicast addressed to our short while broadcasts (dst 0xFFFF) still pass — the
- * device answers nothing (interview / re-interview / commands fail) yet looks
- * alive on air. The fresh-join AssocResp handoff sets the filter (why the first
- * interview works) but it is lost afterward. Periodically push the authoritative
- * joined short/PAN back into the radio filter so any drift self-heals within
- * ~250 ms. Keep the filter update out of the association handoff: the driver
- * owns the short-address update when AssocResp arrives. The RX re-arm itself
- * is safe after radio bootstrap and must not depend on the stack's joined
- * bitfield; on TLSR8258 that bit can be transiently stale while the MAC
- * context is already live.
- */
-static void zb_radio_short_filter_guard(void)
-{
-	static uint32_t last_ms;
-	uint32_t now_ms;
-
-	now_ms = k_uptime_get_32();
-	if (last_ms != 0U && (now_ms - last_ms) < 250U) {
-		return;
-	}
-	last_ms = now_ms;
-	if (g_zbMacPib.panId != MAC_INVALID_PANID &&
-	    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
-		zb_radio_port_update_filters(g_zbMacPib.panId,
-					     g_zbMacPib.shortAddress,
-					     g_zbMacPib.extAddress);
-		/* Fast AssocResp handoff assigns the short address before the
-		 * NWK association confirm. Do not do any RF reset during that
-		 * narrow transition: the driver keeps the receiver armed and
-		 * restores it only at real TX/RX ownership handoffs. */
-		if (!g_zbNwkCtx.joined) {
-			return;
-		}
-	}
-}
-
 static void zb_thread_fn(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -795,7 +753,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		zb_process_deferred_commissioning();
 		zb_requeue_commissioning_if_needed();
 		zb_link_watchdog_tick();
-		zb_radio_short_filter_guard();
 		if (zb_commissioning_pending) {
 			k_busy_wait(1000);
 			continue;

@@ -185,16 +185,6 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 	}
 }
 
-void zb_radio_port_irq_enable(void)
-{
-	/*
-	 * Zephyr threads run with interrupts enabled and the stack pairs every
-	 * lock with an unlock, so there is nothing to enable. irq_unlock() only
-	 * takes a key from irq_lock(): on the POSIX architecture key 1 means
-	 * locked, and it kept the radio interrupt masked.
-	 */
-}
-
 void zb_radio_port_watchdog_disable(void)
 {
 }
