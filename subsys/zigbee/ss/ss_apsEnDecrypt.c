@@ -182,7 +182,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 	u8 retryKeyCount;
 	u8 publicKeyMask;
 	u8 factoryNewTransport;
-	u8 haveKeyPair;
+	ss_dev_pair_set_t *pair;
 	u16 addrMapIdx;
 	addrExt_t neighborExtAddr;
 	tl_zb_normal_neighbor_entry_t *neighbor;
@@ -213,9 +213,22 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 		cursor += EXT_ADDR_LEN;
 	}
 
-	haveKeyPair = (ss_devKeyPairFind(nonce.srcAddr, &keyPair) == NV_SUCC);
-	if (haveKeyPair != 0U) {
-		key = keyPair.linkKey;
+#if !defined(ZB_COORDINATOR_ROLE)
+	/* ED and router "98:".."b6:": the trust center link key that still waits
+	 * for its Confirm-Key lives in ss_ib.keyPairSetNew, not in NV, and the
+	 * Confirm-Key is secured with it.  When it is in use and "246:".."256:"
+	 * matches its address, the NV lookup is skipped.  The coordinator object
+	 * has no such branch.
+	 */
+	pair = &((ss_dev_keyPair_t *)ss_ib.keyPairSetNew)->keyPair;
+	if (pair->used == 0U || memcmp(pair->device_address, nonce.srcAddr, EXT_ADDR_LEN) != 0) {
+		pair = (ss_devKeyPairFind(nonce.srcAddr, &keyPair) == NV_SUCC) ? &keyPair : NULL;
+	}
+#else
+	pair = (ss_devKeyPairFind(nonce.srcAddr, &keyPair) == NV_SUCC) ? &keyPair : NULL;
+#endif
+	if (pair != NULL) {
+		key = pair->linkKey;
 	} else {
 		if (ss_ib.preConfiguredKeyType == SS_PRECONFIGURED_UNIQUELLINKKEY) {
 			return RET_ERROR;
@@ -234,11 +247,11 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 
 	SS_SET_SECURITY_LEVEL(auxStart, 5);
 
-	if (haveKeyPair != 0U && keyPair.apsLinkKeyType == SS_UNIQUE_LINK_KEY) {
-		if (keyPair.incomingFrameCounter > aux.frameCnt) {
+	if (pair != NULL && pair->apsLinkKeyType == SS_UNIQUE_LINK_KEY) {
+		if (pair->incomingFrameCounter > aux.frameCnt) {
 			return RET_ERROR;
 		}
-		keyPair.incomingFrameCounter = aux.frameCnt + 1;
+		pair->incomingFrameCounter = aux.frameCnt + 1;
 	}
 
 	if (aux.keyIdentifer != SS_SECUR_DATA_KEY) {
@@ -269,7 +282,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 			       (u8)((ind->nsdu + ind->nsduLen) - cursor), cursor);
 
 	if (factoryNewTransport != 0U && zb_isDeviceFactoryNew() != FALSE && ret != RET_OK &&
-	    retryPayload != NULL && haveKeyPair == 0U) {
+	    retryPayload != NULL && pair == NULL) {
 		u8 payloadLen = (u8)((ind->nsdu + ind->nsduLen) - cursor);
 
 		publicKeyMask = (u8)(g_zbDefaultLinkKeyEn &
