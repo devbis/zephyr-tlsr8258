@@ -251,10 +251,29 @@ void af_aps_data_entry(void *arg)
 		u8 epNum = af_availableEpNumGet();
 
 		for (u8 i = 0; i < epNum; i++) {
-			if (epList[i].ep == ad->dst_ep && epList[i].cb_rx != NULL) {
-				epList[i].cb_rx(arg);
-				return;
+			apsdeDataInd_t *ind;
+
+			if (epList[i].ep != ad->dst_ep || epList[i].cb_rx == NULL) {
+				continue;
 			}
+
+			/*
+			 * Application receive callbacks such as zcl_rx_handler()
+			 * take an apsdeDataInd_t in an event buffer, with the ASDU
+			 * behind the indication, and release it themselves.
+			 */
+			ind = (apsdeDataInd_t *)ev_buf_allocate(
+				(u16)(sizeof(*ind) + ad->asduLength));
+			if (ind == NULL) {
+				break;
+			}
+			memcpy(&ind->indInfo, ad, sizeof(ind->indInfo));
+			ind->asduLen = ad->asduLength;
+			memcpy(ind->asdu, ad->asdu, ad->asduLength);
+			ind->indInfo.asdu = ind->asdu;
+			zb_buf_free(buf);
+			epList[i].cb_rx(ind);
+			return;
 		}
 	}
 
