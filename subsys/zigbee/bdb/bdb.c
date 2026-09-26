@@ -253,6 +253,10 @@ static void bdb_ed_secure_join_handoff_start(void)
 
     bdb_retrieveTcLinkKeyTimerStop();
     g_bdbAttrs.nodeIsOnANetwork = 1;
+    /* The libzigbee end device polls its parent on its own once the join
+     * confirm is delivered, so only the link key exchange is left.
+     */
+    g_bdbCtx.edRuntimeReady = 1;
     if (!ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) && ss_ib.securityLevel != 0U) {
         evt = BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY;
         bdb_globalLinkKeySet(ss_ib.tcLinkKey);
