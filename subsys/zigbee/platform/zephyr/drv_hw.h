@@ -42,7 +42,6 @@ extern u32 sysTimerPerUs;
 
 startup_state_e drv_platform_init(void);
 
-void drv_enable_irq(void);
 u32 drv_disable_irq(void);
 u32 drv_restore_irq(u32 en);
 

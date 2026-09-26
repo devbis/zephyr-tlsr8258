@@ -10,6 +10,7 @@
 #include <zephyr/zigbee/zb_types.h>
 #include "zb_common.h"
 #include "drv_hw.h"
+#include <zephyr/zigbee/zb_radio_port.h>
 #include "drv_nv.h"
 #include "ev_timer.h"
 #include "mac/mac.h"
@@ -61,11 +62,6 @@ volatile int32_t zb_hwinfo_trace[4] = {
 startup_state_e drv_platform_init(void)
 {
 	return SYSTEM_BOOT;
-}
-
-void drv_enable_irq(void)
-{
-	irq_unlock(1);
 }
 
 u32 drv_disable_irq(void)
