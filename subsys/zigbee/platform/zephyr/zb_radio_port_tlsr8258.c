@@ -172,11 +172,6 @@ void zb_radio_port_irq_enable(void)
 	irq_unlock(1U);
 }
 
-void zb_radio_port_idle_rx_guard(void)
-{
-	tlsr8258_zigbee_idle_rx_guard();
-}
-
 void zb_radio_port_watchdog_disable(void)
 {
 	tlsr8258_watchdog_disable();

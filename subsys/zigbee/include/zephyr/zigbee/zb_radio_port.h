@@ -50,7 +50,6 @@ bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us);
 uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us);
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr);
-void zb_radio_port_idle_rx_guard(void);
 /* Called by the stack bootstrap once the radio is initialized. */
 void zb_radio_port_irq_enable(void);
 void zb_radio_port_watchdog_disable(void);

@@ -749,7 +749,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			 * before bootstrap_done; postponing the TLSR RX FIFO drain until
 			 * below made the radio ACK those frames while the Zigbee stack
 			 * never saw them. */
-			zb_radio_port_idle_rx_guard();
 			zb_platform_radio_rx_poll();
 			zb_radio_l2_rx_poll();
 			#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || \
@@ -767,12 +766,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 
 		ev_timer_process();
 		ev_poll_process();
-		/* The TLSR8258 RF/DMA latches can outlive their CPU interrupt source.
-		 * This read-only fast path repairs only that impossible state; normal
-		 * continuously-armed RX performs no register writes. Keep it at loop
-		 * cadence because the association response retry window is measured in
-		 * milliseconds, not in the 250 ms filter-guard interval below. */
-		zb_radio_port_idle_rx_guard();
 		zb_platform_radio_rx_poll();
 		zb_radio_l2_rx_poll();
 		/* The radio sink can enqueue RX callbacks after the poll pass above.
