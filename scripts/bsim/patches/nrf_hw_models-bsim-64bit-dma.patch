@@ -1,0 +1,118 @@
+diff --git a/src/HW_models/NHW_UART.c b/src/HW_models/NHW_UART.c
+--- a/src/HW_models/NHW_UART.c
++++ b/src/HW_models/NHW_UART.c
+@@ -117,0 +118,10 @@
++
++void nhw_UARTE_tx_ptr_set(uint inst, uintptr_t ptr)
++{
++  nhw_uarte_st[inst].TXD_PTR = ptr;
++}
++
++void nhw_UARTE_rx_ptr_set(uint inst, uintptr_t ptr)
++{
++  nhw_uarte_st[inst].RXD_PTR = ptr;
++}
+diff --git a/src/HW_models/NHW_UART.c b/src/HW_models/NHW_UART.c
+--- a/src/HW_models/NHW_UART.c
++++ b/src/HW_models/NHW_UART.c
+@@ -645,1 +645,3 @@
+-  u_el->RXD_PTR = NRF_UARTE_regs[inst].RXD.PTR;
++  if ((uint32_t)u_el->RXD_PTR != NRF_UARTE_regs[inst].RXD.PTR) {
++    u_el->RXD_PTR = NRF_UARTE_regs[inst].RXD.PTR;
++  }
+@@ -653,1 +655,3 @@
+-  u_el->RXD_PTR = NRF_UARTE_regs[inst].DMA.RX.PTR;
++  if ((uint32_t)u_el->RXD_PTR != NRF_UARTE_regs[inst].DMA.RX.PTR) {
++    u_el->RXD_PTR = NRF_UARTE_regs[inst].DMA.RX.PTR;
++  }
+@@ -816,1 +820,3 @@
+-  u_el->TXD_PTR = NRF_UARTE_regs[inst].TXD.PTR;
++  if ((uint32_t)u_el->TXD_PTR != NRF_UARTE_regs[inst].TXD.PTR) {
++    u_el->TXD_PTR = NRF_UARTE_regs[inst].TXD.PTR;
++  }
+@@ -824,1 +830,3 @@
+-  u_el->TXD_PTR = NRF_UARTE_regs[inst].DMA.TX.PTR;
++  if ((uint32_t)u_el->TXD_PTR != NRF_UARTE_regs[inst].DMA.TX.PTR) {
++    u_el->TXD_PTR = NRF_UARTE_regs[inst].DMA.TX.PTR;
++  }
+diff --git a/src/HW_models/NHW_UART_private.h b/src/HW_models/NHW_UART_private.h
+--- a/src/HW_models/NHW_UART_private.h
++++ b/src/HW_models/NHW_UART_private.h
+@@ -67,1 +67,1 @@
+-  uint32_t TXD_PTR;
++  uintptr_t TXD_PTR;
+@@ -72,1 +72,1 @@
+-  uint32_t RXD_PTR;
++  uintptr_t RXD_PTR;
+diff --git a/src/HW_models/NHW_UART.h b/src/HW_models/NHW_UART.h
+--- a/src/HW_models/NHW_UART.h
++++ b/src/HW_models/NHW_UART.h
+@@ -58,0 +58,3 @@
++void nhw_UARTE_tx_ptr_set(uint inst, uintptr_t ptr);
++void nhw_UARTE_rx_ptr_set(uint inst, uintptr_t ptr);
++
+diff --git a/src/nrfx/hal_replacements/hal/nrf_uarte.h b/src/nrfx/hal_replacements/hal/nrf_uarte.h
+new file mode 100644
+--- /dev/null
++++ b/src/nrfx/hal_replacements/hal/nrf_uarte.h
+@@ -0,0 +1,60 @@
++/*
++ * Copyright (c) 2026 Nordic Semiconductor ASA
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#ifndef HAL_REPLACEMENTS_HAL_NRF_UARTE_H
++#define HAL_REPLACEMENTS_HAL_NRF_UARTE_H
++
++#include <stdint.h>
++
++#define nrf_uarte_tx_ptr_set nrf_uarte_tx_ptr_set_host
++#define nrf_uarte_tx_buffer_set nrf_uarte_tx_buffer_set_host
++#define nrf_uarte_rx_ptr_set nrf_uarte_rx_ptr_set_host
++#define nrf_uarte_rx_buffer_set nrf_uarte_rx_buffer_set_host
++#include_next "hal/nrf_uarte.h"
++#undef nrf_uarte_tx_ptr_set
++#undef nrf_uarte_tx_buffer_set
++#undef nrf_uarte_rx_ptr_set
++#undef nrf_uarte_rx_buffer_set
++
++extern NRF_UARTE_Type NRF_UARTE_regs[];
++void nhw_UARTE_tx_ptr_set(unsigned int inst, uintptr_t ptr);
++void nhw_UARTE_rx_ptr_set(unsigned int inst, uintptr_t ptr);
++
++static inline uint32_t nrf_uarte_instance_get(NRF_UARTE_Type const *p_reg)
++{
++    return ((uintptr_t)p_reg - (uintptr_t)NRF_UARTE_regs) / sizeof(*p_reg);
++}
++
++static inline void nrf_uarte_tx_ptr_set(NRF_UARTE_Type *p_reg,
++                                        uint8_t const *p_buffer)
++{
++    nrf_uarte_tx_ptr_set_host(p_reg, p_buffer);
++    nhw_UARTE_tx_ptr_set(nrf_uarte_instance_get(p_reg), (uintptr_t)p_buffer);
++}
++
++static inline void nrf_uarte_tx_buffer_set(NRF_UARTE_Type *p_reg,
++                                            uint8_t const *p_buffer,
++                                            size_t length)
++{
++    nrf_uarte_tx_buffer_set_host(p_reg, p_buffer, length);
++    nhw_UARTE_tx_ptr_set(nrf_uarte_instance_get(p_reg), (uintptr_t)p_buffer);
++}
++
++static inline void nrf_uarte_rx_ptr_set(NRF_UARTE_Type *p_reg, uint8_t *p_buffer)
++{
++    nrf_uarte_rx_ptr_set_host(p_reg, p_buffer);
++    nhw_UARTE_rx_ptr_set(nrf_uarte_instance_get(p_reg), (uintptr_t)p_buffer);
++}
++
++static inline void nrf_uarte_rx_buffer_set(NRF_UARTE_Type *p_reg,
++                                            uint8_t *p_buffer,
++                                            size_t length)
++{
++    nrf_uarte_rx_buffer_set_host(p_reg, p_buffer, length);
++    nhw_UARTE_rx_ptr_set(nrf_uarte_instance_get(p_reg), (uintptr_t)p_buffer);
++}
++
++#endif /* HAL_REPLACEMENTS_HAL_NRF_UARTE_H */

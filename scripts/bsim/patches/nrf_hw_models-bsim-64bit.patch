@@ -1,0 +1,234 @@
+diff --git a/src/nrfx/hal_replacements/hal/nrf_ppi.h b/src/nrfx/hal_replacements/hal/nrf_ppi.h
+--- a/src/nrfx/hal_replacements/hal/nrf_ppi.h
++++ b/src/nrfx/hal_replacements/hal/nrf_ppi.h
+@@ -22,3 +22,2 @@
+-static inline bool _nrf_ppi_ep_is_evt(uint32_t ep) {
+-  ep = (uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)ep);
+-  return (ep & NRFX_BIT(8));
++static inline bool _nrf_ppi_ep_is_evt(uint32_t ep) {
++  return (ep & NRFX_BIT(8)) != 0U;
+diff --git a/src/HW_models/NRF_PPI.c b/src/HW_models/NRF_PPI.c
+--- a/src/HW_models/NRF_PPI.c
++++ b/src/HW_models/NRF_PPI.c
+@@ -30,0 +31 @@
++#include "NHW_misc.h"
+@@ -786 +786,4 @@
+-  if ( ( ch_nbr < 20 ) && ( (void*)NRF_PPI_regs.CH[ch_nbr].EEP != NULL ) ){
++  void *event_addr = ch_nbr >= 0 && ch_nbr < 20 &&
++      NRF_PPI_regs.CH[ch_nbr].EEP != 0U ?
++      nhw_convert_per_addr_hw_to_sim((void *)(uintptr_t)NRF_PPI_regs.CH[ch_nbr].EEP) : NULL;
++  if ( event_addr != NULL ){
+@@ -789 +791 @@
+-      if ( ppi_events_table[i].event_addr == (void*)NRF_PPI_regs.CH[ch_nbr].EEP ) {
++      if ( ppi_events_table[i].event_addr == event_addr ) {
+@@ -809,2 +811,4 @@
+-    if ( (void*)NRF_PPI_regs.CH[ch_nbr].TEP != NULL ){
+-      find_task((void*)NRF_PPI_regs.CH[ch_nbr].TEP,
++    void *task_addr = NRF_PPI_regs.CH[ch_nbr].TEP == 0U ? NULL :
++        nhw_convert_per_addr_hw_to_sim((void *)(uintptr_t)NRF_PPI_regs.CH[ch_nbr].TEP);
++    if ( task_addr != NULL ){
++      find_task(task_addr,
+@@ -823,2 +827,4 @@
+-  if ( (void*)NRF_PPI_regs.FORK[ch_nbr].TEP != NULL ){
+-    find_task((void*)NRF_PPI_regs.FORK[ch_nbr].TEP,
++  void *task_addr = NRF_PPI_regs.FORK[ch_nbr].TEP == 0U ? NULL :
++      nhw_convert_per_addr_hw_to_sim((void *)(uintptr_t)NRF_PPI_regs.FORK[ch_nbr].TEP);
++  if ( task_addr != NULL ){
++    find_task(task_addr,
+diff --git a/src/nrfx/hal_replacements/hal/nrf_radio.h b/src/nrfx/hal_replacements/hal/nrf_radio.h
+new file mode 100644
+--- /dev/null
++++ b/src/nrfx/hal_replacements/hal/nrf_radio.h
+@@ -0,0 +1,46 @@
++/*
++ * Copyright (c) 2026 Nordic Semiconductor ASA
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#ifndef HAL_REPLACEMENTS_HAL_NRF_RADIO_H
++#define HAL_REPLACEMENTS_HAL_NRF_RADIO_H
++
++#include <stdint.h>
++#include <NHW_misc.h>
++
++#define nrf_radio_packetptr_set nrf_radio_packetptr_set_host
++#define nrf_radio_task_address_get nrf_radio_task_address_get_host
++#define nrf_radio_event_address_get nrf_radio_event_address_get_host
++#include_next "hal/nrf_radio.h"
++#undef nrf_radio_packetptr_set
++#undef nrf_radio_task_address_get
++#undef nrf_radio_event_address_get
++
++#if NRF_RADIO_HAS_PACKETPTR
++void nhw_RADIO_packetptr_set(uintptr_t ptr);
++static inline void nrf_radio_packetptr_set(NRF_RADIO_Type *p_reg, void const *p_packet)
++{
++    nrf_radio_packetptr_set_host(p_reg, p_packet);
++    nhw_RADIO_packetptr_set((uintptr_t)p_packet);
++}
++#endif
++
++static inline uint32_t nrf_radio_task_address_get(NRF_RADIO_Type const *p_reg,
++                                                   nrf_radio_task_t task)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)task;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++static inline uint32_t nrf_radio_event_address_get(NRF_RADIO_Type const *p_reg,
++                                                    nrf_radio_event_t event)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)event;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++#endif /* HAL_REPLACEMENTS_HAL_NRF_RADIO_H */
+diff --git a/src/HW_models/NHW_RADIO.h b/src/HW_models/NHW_RADIO.h
+--- a/src/HW_models/NHW_RADIO.h
++++ b/src/HW_models/NHW_RADIO.h
+@@ -9,0 +10,2 @@
++#include <stdint.h>
++
+@@ -62,4 +64,7 @@
+ void nhw_RADIO_regw_sideeffects_SUBSCRIBE_CCASTART(unsigned int);
+ void nhw_RADIO_regw_sideeffects_SUBSCRIBE_CCASTOP(unsigned int);
+ void nhw_RADIO_regw_sideeffects_SUBSCRIBE_SOFTRESET(unsigned int);
++void nhw_RADIO_packetptr_set(uintptr_t ptr);
++uintptr_t nhw_RADIO_packetptr_get(void);
++
+ void nhw_RADIO_regw_sideeffects_SUBSCRIBE_PLLEN(unsigned int);
+diff --git a/src/HW_models/NHW_RADIO.c b/src/HW_models/NHW_RADIO.c
+--- a/src/HW_models/NHW_RADIO.c
++++ b/src/HW_models/NHW_RADIO.c
+@@ -223,1 +223,17 @@
+ NRF_RADIO_Type NRF_RADIO_regs;
++
++static uintptr_t nhw_radio_packetptr_host;
++
++void nhw_RADIO_packetptr_set(uintptr_t ptr)
++{
++  nhw_radio_packetptr_host = ptr;
++}
++
++uintptr_t nhw_RADIO_packetptr_get(void)
++{
++  if ((uint32_t)nhw_radio_packetptr_host != NRF_RADIO_regs.PACKETPTR) {
++    return NRF_RADIO_regs.PACKETPTR;
++  }
++
++  return nhw_radio_packetptr_host;
++}
+diff --git a/src/HW_models/NHW_RADIO_utils.c b/src/HW_models/NHW_RADIO_utils.c
+--- a/src/HW_models/NHW_RADIO_utils.c
++++ b/src/HW_models/NHW_RADIO_utils.c
+@@ -761,1 +761,1 @@
+-    tx_buf[0] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0];
++    tx_buf[0] = ((uint8_t *)nhw_RADIO_packetptr_get())[0];
+@@ -765,1 +765,1 @@
+-    tx_buf[i] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[i];
++    tx_buf[i] = ((uint8_t *)nhw_RADIO_packetptr_get())[i];
+@@ -797,1 +797,1 @@
+-  memcpy(&tx_buf[i], &((uint8_t*)NRF_RADIO_regs.PACKETPTR)[i + S1Off], copy_len);
++  memcpy(&tx_buf[i], &((uint8_t *)nhw_RADIO_packetptr_get())[i + S1Off], copy_len);
+diff --git a/src/HW_models/NHW_RADIO.c b/src/HW_models/NHW_RADIO.c
+--- a/src/HW_models/NHW_RADIO.c
++++ b/src/HW_models/NHW_RADIO.c
+@@ -1210,2 +1210,2 @@
+-      ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0] = rx_buf[0];
+-      ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1] = rx_buf[1];
++      ((uint8_t *)nhw_RADIO_packetptr_get())[0] = rx_buf[0];
++      ((uint8_t *)nhw_RADIO_packetptr_get())[1] = rx_buf[1];
+@@ -1213,1 +1213,1 @@
+-      memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + rx_status.S1Offset],
++      memcpy(&((uint8_t *)nhw_RADIO_packetptr_get())[2 + rx_status.S1Offset],
+@@ -1218,2 +1218,2 @@
+-            ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0] = rx_buf[0];
+-            memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1 + rx_status.S1Offset],
++            ((uint8_t *)nhw_RADIO_packetptr_get())[0] = rx_buf[0];
++            memcpy(&((uint8_t *)nhw_RADIO_packetptr_get())[1 + rx_status.S1Offset],
+@@ -1230,1 +1230,1 @@
+-    ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1 + rx_status.S1Offset + length] = LQI;
++    ((uint8_t *)nhw_RADIO_packetptr_get())[1 + rx_status.S1Offset + length] = LQI;
+diff --git a/src/nrfx/hal_replacements/hal/nrf_timer.h b/src/nrfx/hal_replacements/hal/nrf_timer.h
+new file mode 100644
+--- /dev/null
++++ b/src/nrfx/hal_replacements/hal/nrf_timer.h
+@@ -0,0 +1,35 @@
++/*
++ * Copyright (c) 2026 Nordic Semiconductor ASA
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#ifndef HAL_REPLACEMENTS_HAL_NRF_TIMER_H
++#define HAL_REPLACEMENTS_HAL_NRF_TIMER_H
++
++#include <stdint.h>
++#include <NHW_misc.h>
++
++#define nrf_timer_task_address_get nrf_timer_task_address_get_host
++#define nrf_timer_event_address_get nrf_timer_event_address_get_host
++#include_next "hal/nrf_timer.h"
++#undef nrf_timer_task_address_get
++#undef nrf_timer_event_address_get
++
++static inline uint32_t nrf_timer_task_address_get(NRF_TIMER_Type const *p_reg,
++                                                   nrf_timer_task_t task)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)task;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++static inline uint32_t nrf_timer_event_address_get(NRF_TIMER_Type const *p_reg,
++                                                    nrf_timer_event_t event)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)event;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++#endif /* HAL_REPLACEMENTS_HAL_NRF_TIMER_H */
+diff --git a/src/nrfx/hal_replacements/hal/nrf_egu.h b/src/nrfx/hal_replacements/hal/nrf_egu.h
+new file mode 100644
+--- /dev/null
++++ b/src/nrfx/hal_replacements/hal/nrf_egu.h
+@@ -0,0 +1,35 @@
++/*
++ * Copyright (c) 2026 Nordic Semiconductor ASA
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#ifndef HAL_REPLACEMENTS_HAL_NRF_EGU_H
++#define HAL_REPLACEMENTS_HAL_NRF_EGU_H
++
++#include <stdint.h>
++#include <NHW_misc.h>
++
++#define nrf_egu_task_address_get nrf_egu_task_address_get_host
++#define nrf_egu_event_address_get nrf_egu_event_address_get_host
++#include_next "hal/nrf_egu.h"
++#undef nrf_egu_task_address_get
++#undef nrf_egu_event_address_get
++
++static inline uint32_t nrf_egu_task_address_get(NRF_EGU_Type const *p_reg,
++                                                 nrf_egu_task_t task)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)task;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++static inline uint32_t nrf_egu_event_address_get(NRF_EGU_Type const *p_reg,
++                                                  nrf_egu_event_t event)
++{
++    uintptr_t address = (uintptr_t)p_reg + (uint32_t)event;
++
++    return (uint32_t)(uintptr_t)nhw_convert_per_addr_sim_to_hw((void *)address);
++}
++
++#endif /* HAL_REPLACEMENTS_HAL_NRF_EGU_H */
