@@ -86,9 +86,15 @@ static bdb_appCb_t zb_shell_bdb_cb = {
 	.bdbFindBindSuccessCb = zb_shell_bdb_find_bind_cb,
 };
 
+static void zb_shell_device_announce(zdo_device_annce_req_t *req)
+{
+	zb_platform_app_device_announce(req->nwk_addr_local, req->ieee_addr_local);
+}
+
 static zdo_appIndCb_t zb_shell_zdo_cb = {
 	.zdpAssocDoneCb = bdb_zdoAssocDone,
 	.zdpStartDevCnfCb = bdb_zdoStartDevCnf,
+	.zdpDevAnnounceIndCb = zb_shell_device_announce,
 };
 
 static af_simple_descriptor_t zb_shell_simple_desc = {

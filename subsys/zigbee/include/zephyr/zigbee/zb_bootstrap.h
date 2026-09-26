@@ -62,6 +62,12 @@ bool zb_platform_persistence_can_write(void);
 void zb_platform_app_network_left(void);
 
 /*
+ * Called on a router or coordinator when a device announces itself, with its
+ * network address and its IEEE address in over-the-air byte order.
+ */
+void zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[8]);
+
+/*
  * Called by zb_platform_bdb_init_default() before BDB attribute
  * initialization.  Applications may override this optional hook to call
  * zcl_init / af_endpointRegister / zcl_register for their endpoints.

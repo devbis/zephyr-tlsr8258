@@ -173,6 +173,12 @@ void __weak zb_platform_app_network_left(void)
 {
 }
 
+void __weak zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[8])
+{
+	ARG_UNUSED(nwk_addr);
+	ARG_UNUSED(ieee_addr);
+}
+
 void __weak bdb_ed_runtime_join_complete(void)
 {
 }
