@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(app_profile);
 #include "zcl/general/zcl_basic.h"
 #include "zcl/general/zcl_identify.h"
 void zcl_rx_handler(void *p);
+#include "app_interview.h"
 #endif
 
 static const u8 app_basic_zcl_ver = 3U;
@@ -108,7 +109,7 @@ static zcl_specClusterInfo_t app_cluster_info[] = {
 
 void app_profile_register(void)
 {
-	zcl_init(NULL);
+	zcl_init(app_interview_zcl_msg);
 
 	if (af_simpleDescGet(APP_PROFILE_ENDPOINT) == NULL) {
 		if (!af_endpointRegister(APP_PROFILE_ENDPOINT, &app_simple_desc,
