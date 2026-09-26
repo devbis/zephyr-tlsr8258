@@ -1852,7 +1852,11 @@ void aps_cmd_send(void *arg, u8 handle)
 				  : APS_FRAME_CTRL_FRAME_TYPE_COMMAND;
 	apsHdr[1] = apsCounter;
 
-	if (req->secure || handle != APS_CMD_HANDLE_CMD_TUNNEL) {
+	/* A key the trust center tunnels through the joining device's parent is
+	 * secured end to end with that device's link key; any other command is
+	 * APS secured only on request (the Verify-Key command never is).
+	 */
+	if (req->secure || handle == APS_CMD_HANDLE_CMD_TUNNEL) {
 		auxLen = ss_apsEnAuxHdrFill(auxHdr, req->adu, 0);
 	}
 
