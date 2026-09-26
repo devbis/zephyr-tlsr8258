@@ -762,7 +762,9 @@ void zdo_deviceAnnounceIndicate(void *arg)
 #if defined(ZB_COORDINATOR_ROLE)
 	nwkRouteRecTabEntryDstDel(req.nwk_addr_local);
 	if (g_zbNIB.isConcentrator) {
+		/* zdo_manyToOneRouteDisc() reuses the buffer as its request. */
 		tl_zbTaskPost(zdo_manyToOneRouteDisc, arg);
+		arg = NULL;
 	}
 #endif
 	zb_buf_free((zb_buf_t *)arg);
