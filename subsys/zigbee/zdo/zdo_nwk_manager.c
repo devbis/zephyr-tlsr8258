@@ -992,6 +992,10 @@ void zdo_nlme_status_indication(void *arg)
 		zdoAppIndCbLst->nwkStatusIndCb(&ind);
 	}
 
+	/* "5a: tjl <cb>; 5e: tj 1c" - the callback gets a copy, so the vendor
+	 * frees the indication afterwards.
+	 */
+	zb_buf_free((zb_buf_t *)arg);
 	return;
 #else
 	if (status == NWK_COMMAND_STATUS_BAD_FRAME_COUNTER ||
