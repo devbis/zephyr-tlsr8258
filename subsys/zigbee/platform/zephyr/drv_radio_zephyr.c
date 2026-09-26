@@ -257,6 +257,34 @@ static void zb_radio_set_promiscuous(bool enable)
 	}
 }
 
+/*
+ * The MAC queues indirect frames itself and never tells the radio which
+ * children have data pending. Use the Zigbee rule for the Frame Pending bit
+ * of the ACKs the radio generates: set it for every Data Request, unless the
+ * radio holds a record that clears it for that short address. Without it an
+ * end device turns its receiver off after polling and never receives the
+ * Association Response or any other indirect frame.
+ */
+static void zb_radio_set_auto_ack_fpb(void)
+{
+	struct ieee802154_config config = {
+		.auto_ack_fpb = {
+			.enabled = true,
+			.mode = IEEE802154_FPB_ADDR_MATCH_ZIGBEE,
+		},
+	};
+	int ret;
+
+	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->configure == NULL)) {
+		return;
+	}
+
+	ret = g_radio.api->configure(g_radio.dev, IEEE802154_CONFIG_AUTO_ACK_FPB, &config);
+	if ((ret < 0) && (ret != -ENOTSUP)) {
+		LOG_WRN("zigbee radio frame pending configuration failed (rc=%d)", ret);
+	}
+}
+
 static void zb_radio_set_error(u8 err)
 {
 	g_radio.last_error = err;
@@ -285,6 +313,7 @@ static int zb_radio_start_impl(u8 channel)
 	 * the association-response wait timer to expire first.
 	 */
 	zb_radio_set_promiscuous(false);
+	zb_radio_set_auto_ack_fpb();
 
 	g_radio.current_channel = channel;
 	g_radio.trx_state = RF_MODE_RX;
