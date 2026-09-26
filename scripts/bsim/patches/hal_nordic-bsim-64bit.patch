@@ -1,6 +1,12 @@
 diff --git a/drivers/nrf_802154/driver/src/nrf_802154_trx.c b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
 --- a/drivers/nrf_802154/driver/src/nrf_802154_trx.c
 +++ b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
+@@ -72,0 +73,5 @@
++
++/* BabbleSim defines the real peripheral address; on hardware it is the base. */
++#ifndef NRF_RADIO_BASE_REAL_HW
++#define NRF_RADIO_BASE_REAL_HW NRF_RADIO_BASE
++#endif
 @@ -240 +240 @@
 -    .event.generic.event = ((uint32_t)RADIO_BASE + (uint32_t)NRF_RADIO_EVENT_CCAIDLE)
 +    .event.generic.event = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_CCAIDLE
