@@ -45,10 +45,15 @@
  * Definition the length of each buffer group
  * @{
  */
-#define BUFFER_GROUP_0          24
-#define BUFFER_GROUP_1          60
-#define BUFFER_GROUP_2          152
-#define BUFFER_GROUP_3          512
+/* The group sizes include the 8-byte item header of a 32-bit target. Grow them
+ * by the larger header of a 64-bit host so each group keeps its payload size:
+ * otherwise, for example, the 52-byte passive acknowledgement list of a
+ * broadcast record no longer fits group 1 and exhausts group 2. */
+#define BUFFER_GROUP_HDR_GROWTH (OFFSETOF(ev_bufItem_t, data) - 8U)
+#define BUFFER_GROUP_0          (24 + BUFFER_GROUP_HDR_GROWTH)
+#define BUFFER_GROUP_1          (60 + BUFFER_GROUP_HDR_GROWTH)
+#define BUFFER_GROUP_2          (152 + BUFFER_GROUP_HDR_GROWTH)
+#define BUFFER_GROUP_3          (512 + BUFFER_GROUP_HDR_GROWTH)
 #define MAX_BUFFER_SIZE         (BUFFER_GROUP_3 - OFFSETOF(ev_bufItem_t, data))
 
 /** @} end of group ev_buffer_groups */
