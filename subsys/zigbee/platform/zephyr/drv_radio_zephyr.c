@@ -705,6 +705,28 @@ void zb_radio_tx_start(u8 *tx_buf)
 	atomic_set(&g_radio.tx_done, 1);
 }
 
+/*
+ * The MAC takes the parent's PAN ID into its PIB before it sends the
+ * Association Request, but has no hook to reprogram the radio. A radio that
+ * filters in hardware, such as the nRF5, then still has PAN ID 0xFFFF set and
+ * drops the coordinator's Association Response, which carries the parent's
+ * PAN ID. Mirror the PIB PAN ID into the radio filter while the device joins,
+ * that is while it has a PAN ID but no short address yet.
+ */
+static void zb_radio_sync_join_filter(void)
+{
+	if (!IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_GENERIC)) {
+		return;
+	}
+	if ((g_zbMacPib.panId == MAC_INVALID_PANID) ||
+	    (g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED)) {
+		return;
+	}
+
+	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
+				     g_zbMacPib.extAddress);
+}
+
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 {
 	struct net_if *iface;
@@ -752,6 +774,7 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	enum ieee802154_tx_mode tx_mode = IEEE802154_TX_MODE_DIRECT;
 	void *tx_done_arg = NULL;
 
+	zb_radio_sync_join_filter();
 	atomic_inc(&g_radio.tx_attempts);
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
 	net_pkt_unref(pkt);
