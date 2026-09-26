@@ -87,6 +87,7 @@ def main() -> int:
         (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-bsim-64bit-dma.patch"),
         (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-bsim-radio-abort-timing.patch"),
         (args.nordic_hal.resolve(), patch_dir / "hal_nordic-bsim-64bit.patch"),
+        (args.nordic_hal.resolve(), patch_dir / "hal_nordic-bsim-ack-timing.patch"),
     )
 
     for repository, patch in repositories:
