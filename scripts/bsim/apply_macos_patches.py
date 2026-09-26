@@ -61,7 +61,10 @@ def _default_paths() -> tuple[Path, Path]:
             workspace / "modules/bsim_hw_models/nrf_hw_models",
         )
     ).resolve()
-    return bsim_components, nrf_hw_models
+    nordic_hal = Path(
+        os.environ.get("ZEPHYR_HAL_NORDIC_MODULE", workspace / "modules/hal/nordic")
+    ).resolve()
+    return bsim_components, nrf_hw_models, nordic_hal
 
 
 def main() -> int:
@@ -69,6 +72,7 @@ def main() -> int:
     defaults = _default_paths()
     parser.add_argument("--bsim-components", type=Path, default=defaults[0])
     parser.add_argument("--nrf-hw-models", type=Path, default=defaults[1])
+    parser.add_argument("--nordic-hal", type=Path, default=defaults[2])
     args = parser.parse_args()
 
     if sys.platform != "darwin":
@@ -78,6 +82,10 @@ def main() -> int:
     repositories = (
         (args.bsim_components.resolve(), patch_dir / "babblesim-macos.patch"),
         (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-macos.patch"),
+        (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-bsim-64bit.patch"),
+        (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-bsim-64bit-endpoints.patch"),
+        (args.nrf_hw_models.resolve(), patch_dir / "nrf_hw_models-bsim-64bit-dma.patch"),
+        (args.nordic_hal.resolve(), patch_dir / "hal_nordic-bsim-64bit.patch"),
     )
 
     for repository, patch in repositories:
