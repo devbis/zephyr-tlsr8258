@@ -124,6 +124,9 @@ int zb_radio_port_set_trx_state(enum zb_radio_port_trx_state state,
 	return (rc == -EALREADY) ? 0 : rc;
 }
 
+/* MAC deadlines are in clock_time() units, which count microseconds here. */
+uint32_t sysTimerPerUs = 1U;
+
 uint32_t zb_radio_port_clock_time_us(void)
 {
 	return (uint32_t)k_ticks_to_us_floor32(k_uptime_ticks());

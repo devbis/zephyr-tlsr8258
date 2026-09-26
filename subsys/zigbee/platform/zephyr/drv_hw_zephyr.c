@@ -58,8 +58,6 @@ volatile int32_t zb_hwinfo_trace[4] = {
 	0x48574945, 0, 0, 0,
 };
 
-u32 sysTimerPerUs = (u32)(sys_clock_hw_cycles_per_sec() / 1000000U);
-
 startup_state_e drv_platform_init(void)
 {
 	return SYSTEM_BOOT;
