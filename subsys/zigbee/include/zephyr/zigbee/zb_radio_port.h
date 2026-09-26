@@ -59,6 +59,7 @@ void zb_radio_port_watchdog_feed(void);
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink);
 void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink);
 void zb_radio_l2_rx_poll(void);
+bool zb_radio_l2_ack_frame_pending_take(void);
 /**
  * @brief Number of receive frames the custom L2 could not hand to the stack.
  *

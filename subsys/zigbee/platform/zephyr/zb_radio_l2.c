@@ -35,6 +35,7 @@ K_MSGQ_DEFINE(zb_l2_rx_queue, sizeof(struct zb_l2_frame), ZB_L2_RX_DEPTH, 4);
 
 static zb_radio_port_rx_sink_t rx_sink;
 static atomic_t zb_l2_rx_drops;
+static atomic_t zb_l2_ack_frame_pending;
 
 uint32_t zb_radio_l2_rx_drop_count(void)
 {
@@ -125,10 +126,20 @@ void ieee802154_init(struct net_if *iface)
 	ARG_UNUSED(iface);
 }
 
+bool zb_radio_l2_ack_frame_pending_take(void)
+{
+	return atomic_clear(&zb_l2_ack_frame_pending) != 0;
+}
+
 enum net_verdict ieee802154_handle_ack(struct net_if *iface, struct net_pkt *pkt)
 {
 	ARG_UNUSED(iface);
-	ARG_UNUSED(pkt);
+
+	/* Frame Pending bit of the ACK frame control field. */
+	if ((net_pkt_get_len(pkt) > 0U) && ((net_pkt_data(pkt)[0] & BIT(4)) != 0U)) {
+		atomic_set(&zb_l2_ack_frame_pending, 1);
+	}
+
 	return NET_OK;
 }
 
