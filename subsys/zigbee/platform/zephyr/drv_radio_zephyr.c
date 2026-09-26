@@ -415,34 +415,12 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 	uint8_t psdu_len = 0U;
 	uint8_t mac_len;
 	u8 ack_pkt;
-	u8 *rx_buf = g_radio.rx_target;
 
 	if ((dma == NULL) || (dma_len == 0U)) {
 		return -EINVAL;
 	}
 
 	atomic_set(&g_radio.rx_done, 1);
-	if (rx_buf != NULL) {
-		if (dma_len > ZB_RADIO_RX_BUF_SIZE) {
-			return -EINVAL;
-		}
-
-		memcpy(rx_buf, dma, dma_len);
-		dma = rx_buf;
-		/*
-		 * Rotate to the alternate ring slot before invoking the MAC
-		 * RX handler. zb_macDataRecvHandler queues the buf for
-		 * mac_rxDataParse via tl_zbTaskPost and stashes a pointer
-		 * into the rx ring as meta->payload. If the next radio RX
-		 * fires before the queued parse runs, it would memcpy into
-		 * the same slot and clobber the still-pending frame. Two
-		 * slots is enough for the typical "ASSOC_RSP + TRANSPORT_KEY
-		 * back-to-back" delivery the host_socket_coordinator sends to
-		 * a rx-on router.
-		 */
-		g_radio.rx_target = zb_radio_ring_alternate_buf(rx_buf);
-	}
-
 	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) < 0) {
 		return -EINVAL;
 	}

@@ -20,10 +20,19 @@
  * Keep a little alignment/headroom without spending 200 bytes in every one
  * of the 36 router buffers. */
 #define ZB_BUF_RX_SNAPSHOT_SIZE 128U
+/* Room in front of a captured frame. A relayed frame is rebuilt in place over
+ * the received MAC header, which is as long as the new one; only a coordinator
+ * grows the network header of a relayed frame, by a source route subframe.
+ */
+#if defined(CONFIG_ZIGBEE_COORDINATOR)
+#define ZB_BUF_RX_HEADROOM 16U
+#else
+#define ZB_BUF_RX_HEADROOM 0U
+#endif
 
 typedef struct {
 	zb_buf_t zb;
-	u8 rx_snapshot[ZB_BUF_RX_SNAPSHOT_SIZE];
+	u8 rx_snapshot[ZB_BUF_RX_HEADROOM + ZB_BUF_RX_SNAPSHOT_SIZE];
 } zb_buf_block_t;
 
 K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
@@ -238,14 +247,14 @@ u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
 {
 	zb_buf_block_t *block = (zb_buf_block_t *)buf;
 
-	if (block == NULL || data == NULL || len > ARRAY_SIZE(block->rx_snapshot)) {
+	if (block == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
 		return NULL;
 	}
 
 	memset(block->rx_snapshot, 0, sizeof(block->rx_snapshot));
-	memcpy(block->rx_snapshot, data, len);
+	memcpy(&block->rx_snapshot[ZB_BUF_RX_HEADROOM], data, len);
 
-	return block->rx_snapshot;
+	return &block->rx_snapshot[ZB_BUF_RX_HEADROOM];
 }
 
 /*
