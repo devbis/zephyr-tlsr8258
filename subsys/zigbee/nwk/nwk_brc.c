@@ -433,11 +433,15 @@ u8 nwkBrcCheckDevMatch(u16 dstAddr)
 		return 1U;
 	}
 
+	/* "12: tsubs r2,#3; 16: tcmp r3,r2; 1c-24: capabilityInfo bit 1" - only a
+	 * full function device takes a frame sent to all routers and the
+	 * coordinator, and "14: tmovs r0,#0" rejects every other address.
+	 */
 	if (dstAddr == NWK_BROADCAST_ROUTER_COORDINATOR) {
-		return 0U;
+		return g_zbNIB.capabilityInfo.devType ? 1U : 0U;
 	}
 
-	return g_zbNIB.capabilityInfo.devType ? 0xffU : 0U;
+	return 0U;
 }
 
 #else
@@ -452,11 +456,15 @@ u8 nwkBrcCheckDevMatch(u16 dstAddr)
 		return 1U;
 	}
 
+	/* "12: tsubs r2,#3; 16: tcmp r3,r2; 1c-24: capabilityInfo bit 1" - only a
+	 * full function device takes a frame sent to all routers and the
+	 * coordinator, and "14: tmovs r0,#0" rejects every other address.
+	 */
 	if (dstAddr == NWK_BROADCAST_ROUTER_COORDINATOR) {
-		return 0U;
+		return g_zbNIB.capabilityInfo.devType ? 1U : 0U;
 	}
 
-	return g_zbNIB.capabilityInfo.devType ? 0xffU : 0U;
+	return 0U;
 }
 
 #endif
