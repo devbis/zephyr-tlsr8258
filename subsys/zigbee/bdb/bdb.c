@@ -263,6 +263,7 @@ static void bdb_ed_secure_join_handoff_start(void)
     } else {
         g_bdbCtx.tcLinkKeyReady = 1;
         bdb_globalLinkKeySet(ss_ib.distributeLinkKey);
+        bdb_ed_join_complete_maybe_finish();
     }
     if (evt == BDB_EVT_COMMISSIONING_NETWORK_STEER_RETRIEVE_TCLINK_KEY) {
         if (TL_ZB_TIMER_SCHEDULE(bdb_task_delay, (void *)evt, 200) == NULL) {
