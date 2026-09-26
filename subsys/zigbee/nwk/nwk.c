@@ -531,14 +531,17 @@ int nwk_linkStPeriodic(void *arg)
 
 u8 tl_nwkGetAverageLqi(u8 oldLqi, u8 newLqi)
 {
-	if (oldLqi == 0U) {
-		return newLqi;
-	}
+	u16 avg = newLqi;
 
 	/* "c: tshftls r3,r0,#4; e: tsubs r0,r3,r0" is oldLqi*15, and the shifts at
-	 * "12:".."1a:" are a signed divide by 16 - a 15/16 exponential average, not
-	 * a plain mean.  Both arguments are handled as s8. */
-	return (u8)(((s8)oldLqi * 15 + (s8)newLqi) / 16);
+	 * "12:".."1a:" are an int divide by 16 kept as a u16 - a 15/16 exponential
+	 * average, not a plain mean.  "0:".."6:" zero-extend both arguments, so an
+	 * LQI above 127 stays positive. */
+	if (oldLqi != 0U) {
+		avg = (u16)((oldLqi * 15 + newLqi) / 16);
+	}
+
+	return (u8)avg;
 }
 
 void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
