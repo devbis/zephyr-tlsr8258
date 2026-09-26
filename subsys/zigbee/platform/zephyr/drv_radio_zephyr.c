@@ -48,6 +48,7 @@ struct zb_radio_ctx {
 	u8 last_rx_len;
 	u8 last_tx_len;
 	u8 last_tx_seq;
+	bool last_ack_frame_pending;
 	u8 last_error;
 	u8 trx_state;
 	u8 tx_power;
@@ -230,7 +231,10 @@ static void zb_radio_tx_complete_deferred(void *arg)
 		 * frame still awaiting acknowledgement.
 		 */
 		u8 ack_frame[3] = {
-			0x02U, /* frame type ACK, as zb_radio_psdu_is_ack() reads it */
+			/* Frame type ACK, as zb_radio_psdu_is_ack() reads it, and
+			 * the Frame Pending bit of the ACK the radio received.
+			 */
+			0x02U | (g_radio.last_ack_frame_pending ? BIT(4) : 0U),
 			0U,
 			g_radio.last_tx_seq,
 		};
@@ -805,7 +809,9 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 
 	zb_radio_sync_join_filter();
 	atomic_inc(&g_radio.tx_attempts);
+	(void)zb_radio_l2_ack_frame_pending_take();
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
+	g_radio.last_ack_frame_pending = zb_radio_l2_ack_frame_pending_take();
 	net_pkt_unref(pkt);
 	if (ret == -ENOMSG) {
 		/* Sent, but not acknowledged: let the MAC's ACK timeout handle it. */
