@@ -243,7 +243,7 @@ static int write_op(void *context)
 static int write_synchronously(off_t addr, const void *data, uint8_t fill_val, size_t len)
 {
 	struct flash_context context = {
-		.data_addr = (uint32_t)data,
+		.data_addr = (uintptr_t)data,
 		.flash_addr = addr,
 		.len = len,
 		.fill_val = fill_val,

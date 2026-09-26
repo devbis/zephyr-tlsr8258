@@ -353,7 +353,7 @@ static int erase_synchronously(uint32_t addr, uint32_t size)
 static int write_synchronously(off_t addr, const void *data, size_t len)
 {
 	struct flash_context context = {
-		.data_addr = (uint32_t) data,
+		.data_addr = (uintptr_t)data,
 		.flash_addr = addr,
 		.len = len,
 		.enable_time_limit = 1 /* enable time limit */
@@ -543,7 +543,7 @@ static int erase(uint32_t addr, uint32_t size)
 static int write(off_t addr, const void *data, size_t len)
 {
 	struct flash_context context = {
-		.data_addr = (uint32_t) data,
+		.data_addr = (uintptr_t)data,
 		.flash_addr = addr,
 		.len = len,
 #ifndef CONFIG_SOC_FLASH_NRF_RADIO_SYNC_NONE
