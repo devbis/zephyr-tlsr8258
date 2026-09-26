@@ -1,0 +1,24 @@
+diff --git a/drivers/nrf_802154/driver/src/nrf_802154_trx.c b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
+--- a/drivers/nrf_802154/driver/src/nrf_802154_trx.c
++++ b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
+@@ -72,0 +73,5 @@
++
++/* BabbleSim defines the real peripheral address; on hardware it is the base. */
++#ifndef NRF_RADIO_BASE_REAL_HW
++#define NRF_RADIO_BASE_REAL_HW NRF_RADIO_BASE
++#endif
+@@ -240 +240 @@
+-    .event.generic.event = ((uint32_t)RADIO_BASE + (uint32_t)NRF_RADIO_EVENT_CCAIDLE)
++    .event.generic.event = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_CCAIDLE
+@@ -2952 +2952 @@
+-        .event_addr = (uint32_t)&NRF_RADIO->EVENTS_END
++        .event_addr = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_END
+@@ -2966 +2966 @@
+-        .event_addr = (uint32_t)&NRF_RADIO->EVENTS_READY
++        .event_addr = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_READY
+@@ -2976 +2976 @@
+-        .event_addr = (uint32_t)&NRF_RADIO->EVENTS_CRCOK,
++        .event_addr = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_CRCOK,
+@@ -2992 +2992 @@
+-        .event_addr = (uint32_t)&NRF_RADIO->EVENTS_PHYEND
++        .event_addr = NRF_RADIO_BASE_REAL_HW + (uint32_t)NRF_RADIO_EVENT_PHYEND
