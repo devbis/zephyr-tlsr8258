@@ -1,3 +1,6 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
 # Extra iterable sections to emit Mach-O boundary aliases for.
 #
 # gen_macho_iter_sections.py finds the sections whose _<name>_list_start,
