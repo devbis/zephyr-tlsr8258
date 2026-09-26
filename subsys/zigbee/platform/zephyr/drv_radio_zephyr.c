@@ -813,8 +813,11 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
 	g_radio.last_ack_frame_pending = zb_radio_l2_ack_frame_pending_take();
 	net_pkt_unref(pkt);
-	if (ret == -ENOMSG) {
-		/* Sent, but not acknowledged: let the MAC's ACK timeout handle it. */
+	if ((ret == -ENOMSG) || (ret == -EIO)) {
+		/* Sent but not acknowledged, or not sent because the radio was busy,
+		 * for example acknowledging a frame it had just received: either
+		 * way let the MAC's ACK timeout drive a retransmission.
+		 */
 		tx_done_arg = ZB_RADIO_TX_DONE_NO_ACK;
 	} else if (ret < 0) {
 		atomic_inc(&g_radio.tx_failures);
