@@ -952,12 +952,14 @@ void zdo_nlme_status_indication(void *arg)
 	if (status == NWK_COMMAND_STATUS_SOURCE_ROUTE_FAILURE ||
 	    status == NWK_COMMAND_STATUS_MANY_TO_ONE_ROUTE_FAILURE) {
 		if (g_zbNIB.isConcentrator != 0U) {
+			/* "9e: tjl nwkRouteRecTabEntryDstDel; a2: tj 7a" - both
+			 * statuses restart many-to-one route discovery.
+			 */
 			if (status == NWK_COMMAND_STATUS_SOURCE_ROUTE_FAILURE) {
 				nwkRouteRecTabEntryDstDel(shortAddr);
-			} else {
-				tl_zbTaskPost(zdo_manyToOneRouteDisc, arg);
-				return;
 			}
+			tl_zbTaskPost(zdo_manyToOneRouteDisc, arg);
+			return;
 		} else {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
