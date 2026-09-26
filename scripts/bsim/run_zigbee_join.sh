@@ -11,8 +11,13 @@ bsim_root=${BSIM_ROOT_PATH:-$workspace/tools/bsim}
 bsim_out=${BSIM_OUT_PATH:-$bsim_root}
 bsim_components=${BSIM_COMPONENTS_PATH:-$bsim_out/components}
 build_root=${BSIM_ZIGBEE_BUILD_PATH:-${TMPDIR:-/tmp}/zephyr-zigbee-bsim}
-sim_length=${BSIM_SIM_LENGTH:-60e6}
+sim_length=${BSIM_SIM_LENGTH:-90e6}
 verbosity=${BSIM_VERBOSITY:-2}
+# All nodes otherwise boot in the same simulated microsecond and the router
+# and end device scan, associate and retry in lockstep, colliding on every
+# attempt. Start the end device once the router has joined and sent its
+# first link status, without which the coordinator cannot route to it.
+ed_start_offset=${BSIM_ZIGBEE_ED_START_OFFSET:-30e6}
 sim_id=${BSIM_SIM_ID:-zigbee_join_$(date +%s)}
 west_cmd=${WEST:-west}
 case "$(uname -s)" in
@@ -47,13 +52,13 @@ export BSIM_COMPONENTS_PATH="$bsim_components"
 if [ "$(uname -s)" = Darwin ]; then
 	# The helper applies the required compatibility patches before building.
 	"$script_dir/build_macos.sh" \
-		ext_2G4_phy_v1 ext_2G4_channel_NtNcable ext_2G4_modem_magic
+		ext_2G4_phy_v1 ext_2G4_channel_multiatt ext_2G4_modem_magic
 else
 	make -C "$bsim_root" \
 		BSIM_COMPONENTS_PATH="$bsim_components" \
 		BSIM_OUT_PATH="$bsim_out" \
 		BSIM_BUILD_FAIL_ASAP=1 \
-		ext_2G4_phy_v1 ext_2G4_channel_NtNcable ext_2G4_modem_magic
+		ext_2G4_phy_v1 ext_2G4_channel_multiatt ext_2G4_modem_magic
 fi
 
 build_app() {
@@ -106,9 +111,16 @@ cd "$bsim_out/bin"
 coord_pid=$!
 ./bs_nrf52_bsim_zigbee_router -v="$verbosity" -s="$sim_id" -d=1 >"$log_dir/router.log" 2>&1 &
 router_pid=$!
-./bs_nrf52_bsim_zigbee_ed -v="$verbosity" -s="$sim_id" -d=2 >"$log_dir/ed.log" 2>&1 &
+./bs_nrf52_bsim_zigbee_ed -v="$verbosity" -s="$sim_id" -d=2 \
+	-start_offset="$ed_start_offset" >"$log_dir/ed.log" 2>&1 &
 ed_pid=$!
-./bs_2G4_phy_v1 -v="$verbosity" -s="$sim_id" -D=3 -sim_length="$sim_length" >"$log_dir/phy.log" 2>&1 &
+# Keep the end device out of the coordinator's range so that it has to join
+# through the router: device 0 is the coordinator, 2 the end device.
+att_file=$log_dir/attenuation.txt
+printf '0 2 : 200\n2 0 : 200\n' >"$att_file"
+./bs_2G4_phy_v1 -v="$verbosity" -s="$sim_id" -D=3 -sim_length="$sim_length" \
+	-channel=multiatt -argschannel -at=60 -file="$att_file" -argsmain \
+	>"$log_dir/phy.log" 2>&1 &
 phy_pid=$!
 
 status=0
@@ -131,6 +143,16 @@ for role in coordinator router ed; do
 	if ! grep -q 'zigbee_shell joined network' "$log_dir/$role.log"; then
 		cat "$log_dir"/*.log >&2
 		echo "Zigbee $role did not report joining the network" >&2
+		exit 1
+	fi
+done
+
+# The coordinator interviews each device that announces itself; the router
+# and the end device use IEEE addresses ...03 and ...02.
+for ieee in a4c138e050020003 a4c138e050020002; do
+	if ! grep -q "interview complete .*ieee=$ieee" "$log_dir/coordinator.log"; then
+		cat "$log_dir"/*.log >&2
+		echo "Zigbee coordinator did not complete the interview of $ieee" >&2
 		exit 1
 	fi
 done
