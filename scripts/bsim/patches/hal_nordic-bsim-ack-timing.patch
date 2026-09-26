@@ -1,0 +1,13 @@
+diff --git a/drivers/nrf_802154/driver/src/nrf_802154_trx.c b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
+--- a/drivers/nrf_802154/driver/src/nrf_802154_trx.c
++++ b/drivers/nrf_802154/driver/src/nrf_802154_trx.c
+@@ -1579 +1579,8 @@
+-        ((timer_cc_fem_start >= timer_cc_ramp_up_start) || (timer_cc_now > timer_cc_fem_start)))
++        ((timer_cc_fem_start >= timer_cc_ramp_up_start) || (timer_cc_now > timer_cc_fem_start)
++#if defined(CONFIG_SOC_SERIES_BSIM_NRFXX)
++         /* No simulated time passes while the CPU runs, so the capture
++          * equals the past FEM compare value instead of passing it.
++          */
++         || (timer_cc_now == timer_cc_fem_start)
++#endif
++        ))
