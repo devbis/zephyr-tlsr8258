@@ -825,8 +825,14 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 		return ret;
 	}
 
-	atomic_inc(&g_radio.tx_success);
-	zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	if (ret == -EIO) {
+		/* A frame without an ACK request is lost, as it would be on air. */
+		atomic_inc(&g_radio.tx_failures);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
+	} else {
+		atomic_inc(&g_radio.tx_success);
+		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_NONE);
+	}
 	/*
 	 * api->tx is synchronous, but the libzigbee MAC arms its TX-IRQ
 	 * wait timer AFTER our submit returns. Defer the completion (which
