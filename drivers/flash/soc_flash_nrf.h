@@ -14,7 +14,7 @@
 #define FLASH_OP_ONGOING  1
 
 struct flash_context {
-	uint32_t data_addr;  /* Address of data to write. */
+	uintptr_t data_addr; /* Host address of data to write. */
 	uint32_t flash_addr; /* Address of flash to write or erase. */
 	uint32_t len;        /* Size of data to write or erase [B]. */
 	uint8_t  fill_val;   /* Fill value used by erase emulation paths
