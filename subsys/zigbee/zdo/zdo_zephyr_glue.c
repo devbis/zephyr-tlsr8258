@@ -215,6 +215,8 @@ void zdp_init(void)
  * supported — the only modes zdo_send_req()/ZCL actually use on this build.
  */
 #define AF_APS_DATA_HDR_LEN  8U
+/* Outside the APS data (0x00..0x3f) and command (0x40..) handle ranges. */
+#define AF_DATA_SEND_NSDU_HANDLE 0xBFU
 
 static u8 zdo_announce_seq;
 
@@ -289,9 +291,14 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen,
 	req->discoverRoute = broadcast ? 0U : 1U;
 	req->securityEnable = (ss_ib.securityLevel != 0U) ? 1U : 0U;
 	/* Leave response completion is the handoff point for the subsequent local
-	 * leave. Other internal sends remain fire-and-forget. */
+	 * leave. Other sends need no confirm, but carry a handle below
+	 * NWK_INTERNAL_NSDU_HANDLE: nwk_fwdPacket() only keeps such a frame
+	 * pending while it discovers a route, and only relays such a broadcast
+	 * without an existing broadcast record. aps_nwk_data_confirm_cb()
+	 * releases the confirm of a handle APS did not issue.
+	 */
 	req->ndsuHandle = (clusterId == MGMT_LEAVE_RSP_CLID) ?
-		NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE : NWK_INTERNAL_NSDU_HANDLE;
+		NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE : AF_DATA_SEND_NSDU_HANDLE;
 	req->nsdu = aps;
 	req->nsduLen = (u8)(AF_APS_DATA_HDR_LEN + cmdPldLen);
 	req->useAlias = pDstEpInfo->useAlias;
