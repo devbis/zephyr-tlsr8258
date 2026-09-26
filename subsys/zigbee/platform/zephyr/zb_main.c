@@ -351,7 +351,7 @@ static void zb_core_bootstrap_once(void)
 		}
 		#endif
 		rf_init();
-		drv_enable_irq();
+		zb_radio_port_irq_enable();
 		zb_core_init_done = true;
 	}
 

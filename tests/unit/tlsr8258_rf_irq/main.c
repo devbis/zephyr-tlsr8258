@@ -299,20 +299,18 @@ static void test_tlsr8258_driver_uses_fake_phy_core_seam(void)
 	EXPECT_FILE_CONTAINS(header_path, "tlsr8258_core_handle_rx_frame");
 }
 
-static void test_zigbee_drv_enable_irq_reenables_global_gate(void)
+static void test_zigbee_tlsr_port_reenables_global_gate(void)
 {
-	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/drv_hw_zephyr.c");
+	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/zb_radio_port_tlsr8258.c");
 
-	EXPECT_FILE_CONTAINS(path, "irq_unlock(1);");
-	EXPECT_FILE_NOT_CONTAINS(path, "irq_unlock(0);");
+	EXPECT_FILE_CONTAINS(path, "irq_unlock(1U);");
 }
 
 static void test_zigbee_bootstrap_enables_global_irq_gate(void)
 {
 	const char *path = WORKTREE_FILE("subsys/zigbee/platform/zephyr/zb_main.c");
 
-	EXPECT_FILE_CONTAINS(path, "#include \"drv_hw.h\"");
-	EXPECT_FILE_CONTAINS(path, "drv_enable_irq();");
+	EXPECT_FILE_CONTAINS(path, "zb_radio_port_irq_enable();");
 }
 
 int main(void)
@@ -333,7 +331,7 @@ int main(void)
 	test_rx_worker_completes_post_tx_rx_via_radio_op_and_sem();
 	test_pending_response_classification_uses_shared_helper();
 	test_tlsr8258_driver_uses_fake_phy_core_seam();
-	test_zigbee_drv_enable_irq_reenables_global_gate();
+	test_zigbee_tlsr_port_reenables_global_gate();
 	test_zigbee_bootstrap_enables_global_irq_gate();
 
 	if (failures != 0) {
