@@ -7,6 +7,7 @@ target_sources(app PRIVATE
 	src/main.c
 	src/app_bdb.c
 	src/app_profile.c
+	src/app_interview.c
 )
 
 target_include_directories(app PRIVATE
