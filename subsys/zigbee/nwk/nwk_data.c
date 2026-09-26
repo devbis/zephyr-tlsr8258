@@ -473,43 +473,72 @@ void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen
 	if (ZB_NWK_IS_ADDRESS_BROADCAST(pNwkHdr->dstAddr)) {
 		nwk_brcTransRecordEntry_t *trans;
 
-		/* A broadcast is forwarded only once per source/sequence pair.  The
-		 * vendor records even received broadcasts, while locally-originated
-		 * frames use the same table when passive acknowledgements are enabled.
+		/* "166:".."1a2:" - link status and route request commands, and a
+		 * one-hop broadcast of our own, go out without a broadcast record.
+		 */
+		if (pNwkHdr->frameControl.frameType == FRAME_TYPE_COMMAND &&
+		    (payload[0] == NWK_CMD_LINK_STATUS || payload[0] == NWK_CMD_ROUTE_REQUEST)) {
+			goto brc_tx;
+		}
+		if (pNwkHdr->srcAddr == g_zbInfo.nwkNib.nwkAddr && pNwkHdr->radius == 1U) {
+			nwkTxDataPendTabEntryClear(pending);
+			goto brc_tx;
+		}
+
+		/* "194:".."1b8:", "2c4:".."2fa:" - the receive path records every
+		 * broadcast it relays, so an existing record is the normal case and
+		 * the frame still goes out.  Only an internal frame without a record
+		 * is dropped.  An internal frame takes the pending entry of the
+		 * record, any other one hands its own entry to the record.
 		 */
 		trans = nwkBrcTransEntryFind(pNwkHdr->srcAddr, pNwkHdr->seqNum);
-		if (trans != NULL) {
-			if (trans->passiveAckAddr != NULL) {
-				ev_buf_free((u8 *)trans->passiveAckAddr);
-				trans->passiveAckAddr = NULL;
+		if (trans == NULL) {
+			if (handle == NWK_INTERNAL_NSDU_HANDLE) {
+				zb_buf_free(buf);
+				return;
 			}
-			if (trans->entry != NULL) {
+			trans = nwkBrcTransEntryCreate(pending, pNwkHdr->srcAddr, pNwkHdr->seqNum);
+			if (trans == NULL) {
+				/* "3e0:".."3f6:" */
+				nwkTxDataPendTabEntryClear(pending);
+				if (handle < NWK_INTERNAL_NSDU_HANDLE) {
+					nwkNldeDataCnf(buf, NWK_STATUS_BT_TABLE_FULL, handle);
+				} else {
+					zb_buf_free(buf);
+				}
+				return;
+			}
+			pending = trans->entry;
+		} else if (handle == NWK_INTERNAL_NSDU_HANDLE) {
+			pending = trans->entry;
+		} else {
+			trans->entry = pending;
+		}
+
+		/* "1ba:".."1d8:", "350:".."3de:" - a record whose retry timer already
+		 * runs, or one without a pending entry, needs no new timers.  The
+		 * timers are started before the frame is sent; without timer room
+		 * the record drops its passive-ACK buffer and pending entry.
+		 */
+		if (pending != NULL && trans->retryTimer == NULL) {
+			if (ev_timer_enough()) {
+				if (pNwkHdr->dstAddr == NWK_BROADCAST_ALL_DEVICES &&
+				    trans->retries == 0U) {
+					nwkBrcMsgAllEndDevStart(trans);
+				}
+				nwkBrcMsgPassiveAckTimeoutStart(trans);
+			} else {
+				if (trans->passiveAckAddr != NULL) {
+					ev_buf_free((u8 *)trans->passiveAckAddr);
+					trans->passiveAckAddr = NULL;
+				}
 				nwkTxDataPendTabEntryClear(trans->entry);
 				trans->entry = NULL;
 			}
-			zb_buf_free(buf);
-			return;
 		}
 
-		trans = nwkBrcTransEntryCreate(pending, pNwkHdr->srcAddr, pNwkHdr->seqNum);
-		if (trans == NULL) {
-			if (handle < NWK_INTERNAL_NSDU_HANDLE) {
-				nwkNldeDataCnf(buf, NWK_STATUS_BT_TABLE_FULL, handle);
-			} else {
-				zb_buf_free(buf);
-			}
-			return;
-		}
-
+brc_tx:
 		nwk_tx(buf, pNwkHdr, MAC_SHORT_ADDR_BROADCAST, 0, payload, payloadLen);
-
-		if (ev_timer_enough()) {
-			if (pNwkHdr->dstAddr == NWK_BROADCAST_ALL_DEVICES) {
-				nwkBrcMsgAllEndDevStart(trans);
-			} else {
-				nwkBrcMsgPassiveAckTimeoutStart(trans);
-			}
-		}
 		return;
 	}
 
