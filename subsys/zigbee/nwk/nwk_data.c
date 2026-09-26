@@ -776,8 +776,13 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 			return;
 		}
 	} else {
+		/* "154: tcmp r2,r3; 15a: tjeq aa" - a router only rejects a unicast
+		 * it sent itself; one for another node is forwarded further down.
+		 */
 		if (nwkHdr.srcAddr == g_zbInfo.nwkNib.nwkAddr ||
+#if !defined(ZB_ROUTER_ROLE)
 		    nwkHdr.dstAddr != g_zbInfo.nwkNib.nwkAddr ||
+#endif
 		    nwkHdr.frameControl.endDevInitiator != 0U) {
 			g_sysDiags.packetValidateDropCount++;
 			zb_buf_free(buf);
