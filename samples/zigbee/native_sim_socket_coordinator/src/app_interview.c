@@ -48,6 +48,16 @@ static struct app_interview *app_interview_find(uint16_t nwk_addr)
 	return NULL;
 }
 
+static void app_interview_fail(uint16_t nwk_addr, const char *step, u8 status)
+{
+	struct app_interview *interview = app_interview_find(nwk_addr);
+
+	LOG_ERR("interview 0x%04x: %s failed (%u)", nwk_addr, step, status);
+	if (interview != NULL) {
+		interview->used = false;
+	}
+}
+
 static void app_interview_read_model_id(uint16_t nwk_addr, uint8_t ep)
 {
 	epInfo_t ep_info;
@@ -67,7 +77,7 @@ static void app_interview_read_model_id(uint16_t nwk_addr, uint8_t ep)
 	if (zcl_read(APP_PROFILE_ENDPOINT, &ep_info, ZCL_CLUSTER_GEN_BASIC,
 		     MANUFACTURER_CODE_NONE, 0U, ZCL_FRAME_CLIENT_SERVER_DIR, ZCL_SEQ_NUM,
 		     (zclReadCmd_t *)&read_cmd) != ZCL_STA_SUCCESS) {
-		LOG_ERR("interview 0x%04x: cannot read the model identifier", nwk_addr);
+		app_interview_fail(nwk_addr, "model identifier read", 0U);
 	}
 }
 
@@ -77,8 +87,7 @@ static void app_interview_simple_desc_rsp(void *arg)
 	const zdo_simple_descriptor_resp_t *rsp = (const zdo_simple_descriptor_resp_t *)ind->zpdu;
 
 	if (ind->status != ZDO_SUCCESS) {
-		LOG_ERR("interview 0x%04x: simple descriptor failed (%u)", ind->src_addr,
-			ind->status);
+		app_interview_fail(ind->src_addr, "simple descriptor", ind->status);
 		return;
 	}
 
@@ -95,8 +104,7 @@ static void app_interview_active_ep_rsp(void *arg)
 	u8 seq = 0U;
 
 	if ((ind->status != ZDO_SUCCESS) || (rsp->active_ep_count == 0U)) {
-		LOG_ERR("interview 0x%04x: active endpoints failed (%u)", ind->src_addr,
-			ind->status);
+		app_interview_fail(ind->src_addr, "active endpoints", ind->status);
 		return;
 	}
 
@@ -114,8 +122,7 @@ static void app_interview_node_desc_rsp(void *arg)
 	u8 seq = 0U;
 
 	if (ind->status != ZDO_SUCCESS) {
-		LOG_ERR("interview 0x%04x: node descriptor failed (%u)", ind->src_addr,
-			ind->status);
+		app_interview_fail(ind->src_addr, "node descriptor", ind->status);
 		return;
 	}
 
@@ -126,16 +133,23 @@ static void app_interview_node_desc_rsp(void *arg)
 
 void zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[8])
 {
-	struct app_interview *interview = app_interview_find(nwk_addr);
+	struct app_interview *interview = NULL;
 	zdo_node_descriptor_req_t req;
 	u8 seq = 0U;
 
-	if (interview == NULL) {
-		for (size_t i = 0; i < ARRAY_SIZE(interviews); i++) {
-			if (!interviews[i].used) {
-				interview = &interviews[i];
-				break;
-			}
+	/* A device that announces again, possibly with a new network address,
+	 * restarts its interview in the slot it already has.
+	 */
+	for (size_t i = 0; i < ARRAY_SIZE(interviews); i++) {
+		if (interviews[i].used &&
+		    (memcmp(interviews[i].ieee_addr, ieee_addr, sizeof(interviews[i].ieee_addr)) == 0)) {
+			interview = &interviews[i];
+			break;
+		}
+	}
+	for (size_t i = 0; (interview == NULL) && (i < ARRAY_SIZE(interviews)); i++) {
+		if (!interviews[i].used) {
+			interview = &interviews[i];
 		}
 	}
 	if (interview == NULL) {
