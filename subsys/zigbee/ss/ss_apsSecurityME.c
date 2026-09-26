@@ -314,6 +314,12 @@ void ss_apsmeRequestKeyReq(void *arg)
 	cmdReq.adu = payload;
 	cmdReq.addrMode = req->dstAddrMode;
 	cmdReq.aduLen = payloadLen;
+	/* "60: tmovs r3,#1; 62: tstorerb r3,[r5,#19]; 64: tstorerb r3,[r5,#18]" -
+	 * the request is secured at both the APS and the network layer. The
+	 * trust center drops a data frame without network security.
+	 */
+	cmdReq.secure = 1;
+	cmdReq.secureNwkLayer = 1;
 	if (req->dstAddrMode == ADDR_MODE_SHORT) {
 		cmdReq.dstAddr.shortAddr = req->dstAddr.shortAddr;
 	} else if (req->dstAddrMode == ADDR_MODE_EXT) {
