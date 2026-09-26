@@ -195,10 +195,6 @@ void zb_radio_port_irq_enable(void)
 	 */
 }
 
-void zb_radio_port_idle_rx_guard(void)
-{
-}
-
 void zb_radio_port_watchdog_disable(void)
 {
 }

@@ -352,7 +352,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 				       struct tlsr8258_radio_data *radio);
 static void tlsr8258_rx_capture_isr(uint16_t irq_status, struct tlsr8258_radio_data *radio);
 static void tlsr8258_rf_irq_reenable(void);
-static void tlsr8258_rf_irq_reenable_thread_ctx(void);
 static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size);
 static void tlsr8258_rf_set_rxmode_vendor(void);
 static void tlsr8258_rf_rearm_idle_rx(struct tlsr8258_radio_data *radio);
@@ -543,115 +542,6 @@ void tlsr8258_zigbee_update_filters(uint16_t pan_id, uint16_t short_addr,
 	}
 }
 
-/*
- * RX is armed once at radio start and is restored only at real RX/TX
- * ownership handoffs.  Do not periodically write the RF state registers from
- * the Zigbee thread: on TLSR8258 that creates an artificial TX/RX window and
- * can reset the LL state machine while a coordinator frame is arriving.
- *
- * Keep normal continuously-armed RX untouched here.  The guard repairs the
- * CPU interrupt mask if a TX handoff/arch IRQ path dropped ZB_RT, and only
- * resets RX DMA when the impossible tuple (RF_RX pending, no CPU source) is
- * observed.  This is the same CPU-side recovery contract as zigbee-rs, with
- * an additional hardware-latch escape hatch for the C port.
- */
-void tlsr8258_zigbee_idle_rx_guard(void)
-{
-	struct tlsr8258_radio_data *radio = tlsr8258_zigbee_radio_data_get();
-	uint8_t irq_en;
-	static uint8_t stuck_tx_checks;
-
-	if (radio == NULL) {
-		return;
-	}
-
-	/*
-	 * TLSR8258 can leave the RF completion latch asserted while its parent CPU
-	 * source is masked.  Recover that specific impossible state below.  Do not
-	 * periodically re-arm based only on an unchanged RX counter: register
-	 * 0x0c26 (reg_dma_rx_rdy0) reads as 0x04 while RX DMA is armed, so treating
-	 * it as a pending completion causes a reset/re-arm every 250 ms and creates
-	 * the very idle-deaf window this guard is meant to repair.
-	 */
-	/* The MAC can issue TRX_OFF during the join/interview handoff after the
-	 * RF start path has already armed RX.  In that narrow path the PHY remains
-	 * active, but the driver's software `started` bit is cleared; subsequent
-	 * API TX calls then return -ENETDOWN and the router becomes receive-only.
-	 * Recover only this coherent hardware/software mismatch. */
-	if (!tlsr8258_radio_started_get(radio) &&
-	    TLSR_REG8(0x0f02) != RF_TRX_OFF &&
-	    (TLSR_REG8(0x0c20) & DMA_CHN_RF_RX) != 0u) {
-		tlsr8258_radio_started_set(radio, true);
-	}
-	if ((TLSR_REG32(0x0640) & BIT(TLSR8258_IRQ_ZB_RT)) == 0u) {
-		tlsr8258_rf_irq_reenable_thread_ctx();
-	}
-
-	/*
-	 * The RF vector clears the chip-level IRQ gate (0x800643) on entry.
-	 * Normally tlsr8258_rf_irq_reenable() restores it from the ISR, but a
-	 * TX/RX handoff can leave the RF/DMA mask valid while the global gate is
-	 * still clear.  In that state RF completion remains pending forever and
-	 * the router is deaf even though the radio is visibly in RX mode.  This
-	 * guard runs from the normal Zigbee thread, outside an irq_lock() critical
-	 * section, so restoring the gate here is safe and does not reset the RF
-	 * state machine.
-	 */
-	irq_en = TLSR_REG8(0x0643);
-	if ((irq_en & BIT(0)) == 0u) {
-		TLSR_REG8(0x0643) = irq_en | BIT(0);
-	}
-
-	/*
-	 * A TLSR8258 RX completion can survive after the RF ISR has cleared the
-	 * parent CPU source.  In that state 0x0f20 says RX is pending, DMA2 is
-	 * still enabled, but no new CPU vector can be generated; the router then
-	 * hears beacons only intermittently until reboot.  Recover only this
-	 * inconsistent tuple.  A normal armed RX has either no RF completion or a
-	 * live CPU source, and is left completely untouched.
-	 */
-	if (tlsr8258_rf_recover_stuck_rx(radio)) {
-		tlsr8258_rf_irq_reenable_thread_ctx();
-	}
-
-	/*
-	 * A completed TX can leave the 8258 TRX state latched at TX-enable
-	 * (0x0f02 == 0x55) without a pending RF or DMA interrupt.  There is then
-	 * no ISR edge which could execute the normal TX->RX handoff, so the router
-	 * remains deaf indefinitely.  This was observed after a successful
-	 * interview: the coordinator's remove/read requests were not even
-	 * MAC-ACKed, while the software operation was COMPLETE_OK.
-	 *
-	 * Do not reset the RF while a real stack TX is in flight.  The
-	 * ack_tx_pending bit is intentionally not an exclusion here: if the RF
-	 * completion edge was lost, that bit is exactly the stale software state
-	 * which prevents the router from recovering.  Require two consecutive 1 ms
-	 * loop observations of the impossible state so a normal short ACK handoff
-	 * is left alone.  The recovery is deliberately conditional and does not
-	 * periodically re-enable RX during normal idle operation.
-	 */
-	if (tlsr8258_radio_started_get(radio) &&
-	    TLSR_REG8(0x0f02) == (RF_TRX_OFF | BIT(4)) &&
-	    TLSR_REG16(0x0f20) == 0u &&
-	    (TLSR_REG8(0x0c20) & DMA_CHN_RF_RX) != 0u &&
-	    radio->op.state != TLSR8258_RADIO_OP_TX_PENDING &&
-	    radio->op.state != TLSR8258_RADIO_OP_WAITING_POST_TX_RX &&
-	    !radio->op.ack_pending) {
-		if (stuck_tx_checks < UINT8_MAX) {
-			stuck_tx_checks++;
-		}
-		if (stuck_tx_checks >= 2u) {
-			tlsr8258_rf_rearm_idle_rx(radio);
-			/* The corresponding TX completion IRQ was lost, so no later ISR
-			 * can clear this ACK-only software latch for us. */
-			radio->op.ack_tx_pending = false;
-			stuck_tx_checks = 0u;
-		}
-	} else {
-		stuck_tx_checks = 0u;
-	}
-}
-
 static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
 {
 	for (size_t i = 0; i < len; i++) {
@@ -802,11 +692,11 @@ static inline void tlsr8258_rf_cpu_irq_sources_clear(void)
 }
 
 /*
- * Shared body, force-inlined into both callers below so each gets its own
- * complete, independent copy in its own section -- no cross-section call
- * or return between them.
+ * ISR-context callers: keep this resident in RAM so the tight ACK-turnaround
+ * window is never exposed to a flash cache-miss stall mid-sequence.
  */
-static inline __attribute__((always_inline)) void tlsr8258_rf_irq_reenable_body(void)
+__attribute__((noinline, section(".ram_code")))
+static void tlsr8258_rf_irq_reenable(void)
 {
 	uint8_t global_irq = TLSR_REG8(0x0643);
 	uint32_t irq_mask;
@@ -833,34 +723,6 @@ static inline __attribute__((always_inline)) void tlsr8258_rf_irq_reenable_body(
 	TLSR_REG32(0x0640) = irq_mask | BIT(4) | BIT(TLSR8258_IRQ_ZB_RT);
 	compiler_barrier();
 	TLSR_REG8(0x0643) = global_irq | BIT(0);
-}
-
-/* ISR-context callers: keep this resident in RAM so the tight ACK-turnaround
- * window is never exposed to a flash cache-miss stall mid-sequence. */
-__attribute__((noinline, section(".ram_code")))
-static void tlsr8258_rf_irq_reenable(void)
-{
-	tlsr8258_rf_irq_reenable_body();
-}
-
-/*
- * Thread-context caller (tlsr8258_zigbee_idle_rx_guard(), polled every
- * zb_thread loop pass -- not interrupt/timing-critical). Give it its own
- * plain-flash copy instead of jumping into the ISR's .ram_code copy from
- * ordinary flash-resident code: this project has already hit a documented
- * LLVM/TC32 defect where a flash->ram_code call from outside the expected
- * ISR calling context does not reliably return (see the historical
- * _attribute_ram_code_ / __ramfunc wedge). Confirmed on hardware: the whole
- * ZB thread loop can freeze forever (no CPU fault, just stops advancing)
- * while repeatedly polling idle_rx_guard() during an interview retry storm --
- * exactly the access pattern this call site has and the ISR call sites do
- * not. Two independent inlined copies cost a few dozen bytes of flash to
- * avoid ever making that cross-section call from thread context again.
- */
-__attribute__((noinline))
-static void tlsr8258_rf_irq_reenable_thread_ctx(void)
-{
-	tlsr8258_rf_irq_reenable_body();
 }
 
 static void tlsr8258_rf_tx_pkt(uint8_t *packet)
