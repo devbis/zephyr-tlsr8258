@@ -41,11 +41,21 @@ extern volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
 extern volatile uint32_t z_tc32_irq_lock_depth;
 extern volatile uint32_t z_tc32_irq_lock_max_depth;
 extern volatile uintptr_t z_tc32_irq_lock_overflow_ra;
+/* Set while software holds the chip gate closed (outermost irq_lock). */
+extern volatile uint8_t z_tc32_irq_soft_masked;
 
 static ALWAYS_INLINE unsigned int arch_irq_lock(void)
 {
 	uint8_t key = *TLSR8258_REG_IRQ_EN;
 
+	/* Flag the critical section before closing the gate: an interrupt
+	 * that is still taken right after the gate store must not open it
+	 * again or reschedule on its way out.
+	 */
+	if ((key & 1u) != 0u) {
+		z_tc32_irq_soft_masked = 1u;
+	}
+	__asm__ volatile("" ::: "memory");
 	*TLSR8258_REG_IRQ_EN = 0;
 	if ((key & 1u) != 0u) {
 		uintptr_t ra = (uintptr_t)__builtin_return_address(0);
@@ -74,6 +84,10 @@ static ALWAYS_INLINE void arch_irq_unlock(unsigned int key)
 			z_tc32_irq_lock_owner[slot] = 0u;
 		}
 	}
+	if ((key & 1u) != 0u) {
+		z_tc32_irq_soft_masked = 0u;
+	}
+	__asm__ volatile("" ::: "memory");
 	*TLSR8258_REG_IRQ_EN = (uint8_t)key;
 }
 

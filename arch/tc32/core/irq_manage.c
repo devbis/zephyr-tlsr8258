@@ -44,6 +44,7 @@ struct k_thread *z_tc32_switch_from;
 
 volatile uintptr_t z_tc32_irq_lock_owner[Z_TC32_IRQ_LOCK_OWNER_DEPTH];
 volatile uint32_t z_tc32_irq_lock_depth;
+volatile uint8_t z_tc32_irq_soft_masked;
 volatile uint32_t z_tc32_irq_lock_max_depth;
 volatile uintptr_t z_tc32_irq_lock_overflow_ra;
 
@@ -164,7 +165,14 @@ void *TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 		z_check_stack_sentinel();
 	}
 
-	if (!IS_ENABLED(CONFIG_MULTITHREADING) || _kernel.cpus[0].nested != 0U) {
+	/*
+	 * An interrupt can still be taken just after arch_irq_lock() closed
+	 * the gate. The interrupted code is then inside a critical section,
+	 * possibly do_swap() with _current already switched: switching away
+	 * here would park the wrong thread.
+	 */
+	if (!IS_ENABLED(CONFIG_MULTITHREADING) || _kernel.cpus[0].nested != 0U ||
+	    z_tc32_irq_soft_masked != 0u) {
 		return NULL;
 	}
 

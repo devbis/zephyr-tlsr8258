@@ -566,11 +566,17 @@ z_tc32_irq_entry:
 	/*
 	 * Same reason z_tc32_thread_start publishes the gate: this path does
 	 * not return into do_swap(), so nothing else will reopen reg_irq_en
-	 * for the thread. A thread only ever takes an interrupt with the gate
-	 * open, so 1 is the state it was interrupted in. The store is safe
+	 * for the thread. z_tc32_handle_irqs() only switches away from a
+	 * thread outside an irq_lock() section, so the gate was open and the
+	 * soft mask clear when it was interrupted. The store is safe
 	 * here and nowhere earlier: IRQ mode still holds the I bit, so the
 	 * frame below sp cannot be reused until treti drops it.
 	 */
+	tloadr r4, .Lsoft_masked_ptr
+	nop
+	nop
+	tmov r5, #0
+	tstorerb r5, [r4]
 	tloadr r4, .Lresched_irq_en
 	nop
 	nop
@@ -581,6 +587,25 @@ z_tc32_irq_entry:
 #endif
 
 .Lirq_restore:
+	/*
+	 * Handlers reopen reg_irq_en before returning. Keep it closed if the
+	 * interrupt arrived inside an irq_lock() section, see
+	 * z_tc32_irq_soft_masked.
+	 */
+	tloadr r1, .Lsoft_masked_ptr
+	nop
+	nop
+	tloadrb r0, [r1]
+	nop
+	nop
+	tcmp r0, #0
+	tjeq 1f
+	tloadr r1, .Lresched_irq_en
+	nop
+	nop
+	tmov r0, #0
+	tstorerb r0, [r1]
+1:
 	tpop {r0-r5}
 	tmov r8, r1
 	tmov r9, r2
@@ -604,4 +629,6 @@ z_tc32_irq_entry:
 	.word .Lirq_unwind
 .Lresched_irq_en:
 	.word 0x00800643
+.Lsoft_masked_ptr:
+	.word z_tc32_irq_soft_masked
 #endif

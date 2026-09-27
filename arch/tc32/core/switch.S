@@ -89,6 +89,11 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	 * the gate for it. Publish the state arch_new_thread() recorded in the
 	 * synthetic frame, the way z_tc32_switch_to_main does for main.
 	 */
+	tloadr r5, .Lthread_start_soft_masked
+	nop
+	nop
+	tmov r6, #0
+	tstorerb r6, [r5]
 	tloadr r5, .Lthread_start_irq_en
 	nop
 	nop
@@ -113,6 +118,8 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 	.align 2
 .Lthread_kernel:
 	.word _kernel
+.Lthread_start_soft_masked:
+	.word z_tc32_irq_soft_masked
 .Lthread_start_irq_en:
 	.word 0x00800643
 
