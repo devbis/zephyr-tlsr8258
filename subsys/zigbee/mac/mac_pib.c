@@ -22,7 +22,9 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "tl_platform.h"
+#include "zb_common.h"
+#include <zephyr/kernel.h>
 
 
 /* PIB access and min/max table type */
@@ -146,19 +148,23 @@ _CODE_MAC_ void generateIEEEAddr(void)
 
     if (ZB_IEEE_ADDR_IS_INVALID(addr)) {
         if (!drv_get_primary_ieee_addr(addr)) {
-            unsigned int t0 = clock_time();
-            u32 jitter = 0;
-            do {
-                jitter = drv_u32Rand() % 0x0fff;
-            } while(jitter == 0);
-            while(!clock_time_exceed(t0, jitter));
-
+            /* The vendor implementation spun on clock_time_exceed
+             * for a random jitter to randomize provisioning. That
+             * spin freezes native_sim because the simulated clock
+             * only advances when threads block; both the original
+             * busy-wait and k_busy_wait deadlock here. The jitter
+             * isn't load-bearing on Zephyr — we just need a random
+             * MAC — so skip it and seed the address directly.
+             */
             drv_generateRandomData(addr, 5);
             memcpy(addr + 5, startIEEEAddr, 3);
         }
 
-        flash_write(CFG_MAC_ADDRESS, 6, addr + 2);
-        flash_write(CFG_MAC_ADDRESS + 6, 2, addr);
+        u8 flash_addr[8];
+
+        memcpy(flash_addr, addr + 2, 6);
+        memcpy(flash_addr + 6, addr, 2);
+        flash_write(CFG_MAC_ADDRESS, sizeof(flash_addr), flash_addr);
 
         u8 buf[8];
         flash_read(CFG_MAC_ADDRESS, 8, buf);
