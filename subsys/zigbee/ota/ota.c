@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 #include "../zcl/zcl_include.h"
 #include "ota.h"
 
@@ -1051,7 +1051,7 @@ uint8_t ota_imageDataProcess(uint8_t len, uint8_t *pData)
                     for (uint8_t j = 0; j < copyLen; j += 16) {
                         memset(tmpBuf, 0xff, 16);
                         memcpy(tmpBuf, &pData[i + j], 16);
-                        drv_aes_decrypt((uint8_t *)otaAesKey, tmpBuf, &pData[i + j]);
+                        zb_aes_decrypt((uint8_t *)otaAesKey, tmpBuf, &pData[i + j]);
                     }
                 }
 
