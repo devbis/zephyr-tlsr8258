@@ -25,6 +25,8 @@
 #ifndef GP_BASE_H
 #define GP_BASE_H
 
+#include "dGP_stub.h"
+
 
 typedef struct {
     ev_timer_event_t *transmitChannelTimeoutEvt;
