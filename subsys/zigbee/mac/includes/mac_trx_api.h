@@ -94,7 +94,7 @@
 #define	MAC_CAP_GET_RXON_WHEN_IDLE(c)	((c >> 3) & 1)
 
 #if ZB_ROUTER_ROLE
-#define	TX_QUEUE_BN                     32
+#define	TX_QUEUE_BN                     8
 #else
 #define	TX_QUEUE_BN                     16
 #endif
@@ -219,7 +219,7 @@ void zb_macDataRecvHandler(uint8_t *rxBuf, uint8_t *data, uint8_t len, uint8_t a
 void zb_macDataSendHandler(void);
 
 uint8_t zb_MacHdrSize(uint16_t frameCtrl);
-bool zb_MacStateBusy(void);
+uint8_t zb_MacStateBusy(void);
 uint8_t mac_getTrxState(void);
 
 #endif	/* MAC_TRX_API_H */

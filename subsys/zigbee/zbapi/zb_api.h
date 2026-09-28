@@ -34,11 +34,14 @@
 /**        
  *  @brief Structure for parameter of apsdeDataInd callback function
  */
+#ifndef ZB_APSDE_DATA_IND_DEFINED
+#define ZB_APSDE_DATA_IND_DEFINED
 typedef struct apsdeDataInd_s {
     aps_data_ind_t indInfo;
     uint16_t asduLen;
     uint8_t  asdu[];
 } apsdeDataInd_t;
+#endif
 
 
 static inline void zb_resetDevice(void)

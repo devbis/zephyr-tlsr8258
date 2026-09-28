@@ -342,6 +342,9 @@ enum {
 };
 
 
+/* Shared with NWK headers; guard to avoid duplicate typedefs. */
+#ifndef ZB_CAPABILITY_INFO_T_DEFINED
+#define ZB_CAPABILITY_INFO_T_DEFINED
 typedef struct {
     uint8_t altPanCoord:1;
     uint8_t devType:1;
@@ -351,6 +354,7 @@ typedef struct {
     uint8_t secuCapability:1;
     uint8_t allocAddr:1;
 } capability_info_t;
+#endif
 
 /**
  *  @brief  Definition for Common security type
