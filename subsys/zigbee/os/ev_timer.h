@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/kernel.h>
+#include <zephyr/zigbee/zb_types.h>
 
 /**
  *  @brief Definition for timer event
@@ -51,6 +53,8 @@ typedef struct ev_timer_event_t {
     u8 isBusy;                          //!< Used internal
     u8 isRunning;                       //!< Used internal
     u8 used;                            //!< Used internal
+    /* Zephyr delayed work — used by the Zephyr ev_timer backend */
+    struct k_work_delayable zb_work;
 } ev_timer_event_t;
 
 typedef struct ev_timer_event_pool_s {
@@ -89,6 +93,26 @@ void ev_timer_process(void);
  * @return      None
  */
 ev_timer_event_t *ev_timer_nearestGet(void);
+
+/**
+ * @brief Check for a timer other than an explicitly allowed timer.
+ *
+ * @param allowed Timer that may remain armed, or NULL to allow none.
+ *
+ * @retval true A different timer is armed.
+ * @retval false No different timer is armed.
+ */
+bool ev_timer_has_other_than(const ev_timer_event_t *allowed);
+
+/**
+ * @brief Get the remaining time for the allowed timer.
+ *
+ * @param allowed Timer that may remain armed, or NULL to allow none.
+ *
+ * @retval 0 No allowed timer is armed.
+ * @retval >0 Remaining time in milliseconds.
+ */
+u32 ev_timer_timeout_get(const ev_timer_event_t *allowed);
 
 /**
  * @brief       Check whether a specified timer exist or not
@@ -137,6 +161,7 @@ ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_m
  * @brief       cancel timer task from task list
  *              In the timer callback function, 'return -1' should be used instead of
  *              calling ev_timer_taskCancel() to cancel the timer event itself.
+ *              This API must not be called from ISR context.
  *
  * @param[in]   evt - the pointer to the the timer event pointer
  *

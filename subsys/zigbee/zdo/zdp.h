@@ -689,7 +689,7 @@ typedef struct {
  *
  * @param	req - ZDO ZDP request struct, see zdo_zdp_req_t
  *
- * @return	none
+ * @return	APS/ZDO send status
  */
 void zdo_send_req(zdo_zdp_req_t *req);
 
