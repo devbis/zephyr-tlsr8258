@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Telink TLSR8258 system timer. A free-running 32-bit counter clocked at the
+  system tick rate with one compare register that raises the timer
+  interrupt; used as the kernel system clock.
+
+compatible: "telink,tlsr8258-stimer"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
