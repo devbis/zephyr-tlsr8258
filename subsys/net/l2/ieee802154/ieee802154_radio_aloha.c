@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(net_ieee802154_aloha, CONFIG_NET_L2_IEEE802154_LOG_LEVEL);
 
 #include "ieee802154_priv.h"
 
-static inline int aloha_channel_access(struct net_if *iface)
+ALIAS_TARGET_INLINE int aloha_channel_access(struct net_if *iface)
 {
 	ARG_UNUSED(iface);
 
