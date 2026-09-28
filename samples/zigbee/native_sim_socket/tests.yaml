@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: Zigbee on a simulated IEEE 802.15.4 medium
+common:
+  build_only: true
+  platform_allow:
+    - native_sim/native/64
+  integration_platforms:
+    - native_sim/native/64
+  tags:
+    - zigbee
+tests:
+  sample.zigbee.native_sim_socket.end_device: {}
+  sample.zigbee.native_sim_socket.router:
+    extra_args:
+      - EXTRA_CONF_FILE=router.conf
+      - EXTRA_DTC_OVERLAY_FILE=router.overlay
+  sample.zigbee.native_sim_socket.coordinator:
+    extra_args:
+      - EXTRA_CONF_FILE=coordinator.conf
+      - EXTRA_DTC_OVERLAY_FILE=coordinator.overlay
