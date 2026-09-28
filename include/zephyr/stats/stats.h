@@ -117,6 +117,20 @@ extern "C" {
  * @{
  */
 
+/** @cond INTERNAL_HIDDEN */
+/*
+ * The Mach-O linker cannot relocate a pointer stored at an unaligned
+ * address ("ld: pointer not aligned in '<symbol>'+0x2" on arm64), so the
+ * name map is not packed on Apple hosts. The map is only walked in memory;
+ * its layout is not part of any wire format.
+ */
+#if defined(__APPLE__)
+#define Z_STATS_NAME_MAP_PACKED
+#else
+#define Z_STATS_NAME_MAP_PACKED __packed
+#endif
+/** @endcond */
+
 /**
  * @brief Describe one generated statistic entry name.
  *
@@ -128,7 +142,7 @@ struct stats_name_map {
 	uint16_t snm_off;
 	const char *snm_name;
 	/** @endcond */
-} __packed;
+} Z_STATS_NAME_MAP_PACKED;
 
 /**
  * @brief Store metadata for one statistics group.
