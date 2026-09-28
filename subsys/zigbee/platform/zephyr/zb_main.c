@@ -1,0 +1,800 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/toolchain.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_radio_port.h>
+#include <zephyr/zigbee/zb_types.h>
+#if defined(CONFIG_ZIGBEE_ZBHCI_UART)
+#include <zephyr/zigbee/zb_zbhci.h>
+#endif
+#include <string.h>
+#include "zb_radio_smoke.h"
+#include "drv_hw.h"
+#include "zb_platform_internal.h"
+#include "drv_radio.h"
+#include "ev_timer.h"
+#include "ev_poll.h"
+#include "ev_buffer.h"
+#include "zb_common.h"
+
+#include "zdo/zdo_api.h"
+#include "ss_security_flags.h"
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#include "zb_ed_sleep.h"
+#include "zdo/zdo.h"
+#include "zdo/zdo_nwk_manager.h"
+#include <tlsr825x/power.h>
+#endif
+
+LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
+
+/*
+ * Bootstrap reset hooks. nwk_router_bootstrap.c provides the router and
+ * coordinator implementation; end-device builds do not compile it, so the
+ * reset is a no-op there rather than a link error.
+ */
+__weak void zb_router_runtime_reset(void)
+{
+}
+
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+extern void zdo_router_join_latch_set(void);
+extern void zdo_router_join_latch_clear(void);
+#endif
+
+void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
+{
+	ARG_UNUSED(reason);
+	ARG_UNUSED(esf);
+
+	/*
+	 * Spinning forever here turns any assert/fault into a permanent,
+	 * silent death: the radio stops responding, but the device still
+	 * reports joined=1 in retained SRAM, so nothing -- not Z2M, not an
+	 * external observer -- can tell it apart from a live, merely-quiet
+	 * sleepy end device. Confirmed on hardware: after a successful
+	 * interview, the whole ev_timer engine (and therefore the poll timer)
+	 * stopped advancing entirely -- consistent with the ZB thread having
+	 * hit this handler and spun here silently instead of recovering.
+	 * Reboot instead: the boot-time bootstrap already knows how to resume
+	 * a retained-joined ED (zb_core_bootstrap_once() / zdo_init() in this
+	 * file and zdo.c), so a reboot has a real chance of self-healing back
+	 * onto the network instead of requiring a manual power cycle.
+	 */
+	SYSTEM_RESET();
+	for (;;) {
+		/* SYSTEM_RESET() should not return; keep CPU parked if it does. */
+	}
+}
+
+extern void rf_init(void);
+extern void aps_init(void);
+extern void tl_zbMacInit(u8 coldReset);
+extern void tl_zbNwkInit(u8 coldReset);
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+extern void tl_zbMacTaskProc(void);
+#endif
+
+static addrExt_t zb_runtime_ieee_addr;
+static bool zb_runtime_ieee_addr_ready;
+static bool zb_waiting_for_ieee_addr_log;
+
+void zb_platform_apply_runtime_ieee_addr(void)
+{
+	const uint8_t *ieee_addr = zb_platform_runtime_ieee_addr_get();
+
+	if (ieee_addr != NULL) {
+		memcpy(g_zbMacPib.extAddress, ieee_addr, sizeof(g_zbMacPib.extAddress));
+	}
+}
+
+const uint8_t *zb_platform_runtime_ieee_addr_get(void)
+{
+	int rc;
+
+	if (!zb_runtime_ieee_addr_ready) {
+		rc = zb_radio_port_get_ieee_addr(zb_runtime_ieee_addr);
+		if (rc < 0) {
+			return NULL;
+		}
+
+		zb_runtime_ieee_addr_ready = true;
+	}
+
+	return zb_runtime_ieee_addr;
+}
+
+/*
+ * Wakes the Zigbee thread: given on every task post, timer arm and
+ * zb_platform_wake().
+ */
+K_SEM_DEFINE(zb_ev_sem, 0, 1);
+
+/*
+ * The native_sim socket radio, the ZBHCI UART and the stack's own poll
+ * callbacks (energy detection during a scan) are run from this thread by
+ * polling, so while any of them is active the wait is bounded. Every other
+ * source (task posts, timers, radio receive) wakes the thread through
+ * zb_platform_wake().
+ */
+#define ZB_THREAD_POLLED_SOURCES                                                                   \
+	(IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET) || IS_ENABLED(CONFIG_ZIGBEE_ZBHCI_UART))
+#define ZB_THREAD_POLL_MS 1U
+
+void zb_platform_wake(void)
+{
+	k_sem_give(&zb_ev_sem);
+}
+
+static void zb_thread_wait(void)
+{
+	ev_timer_event_t *nearest = ev_timer_nearestGet();
+	bool polled = ZB_THREAD_POLLED_SOURCES || ev_poll_any_enabled();
+	k_timeout_t timeout = polled ? K_MSEC(ZB_THREAD_POLL_MS) : K_FOREVER;
+
+	if (nearest != NULL && (!polled || nearest->timeout < ZB_THREAD_POLL_MS)) {
+		timeout = K_MSEC(nearest->timeout);
+	}
+
+	(void)k_sem_take(&zb_ev_sem, timeout);
+}
+
+static bool zb_bootstrap_done;
+static bool zb_core_init_done;
+static bool zb_commissioning_pending;
+static bool zb_waiting_for_radio_log;
+static bool zb_persistent_rejoin_in_progress;
+/* Set once a router or coordinator has been set up as a parent. */
+static bool zb_parenting_enabled;
+
+void zb_platform_network_left(void)
+{
+	/* A later join has to set the node up as a parent again. */
+	zb_parenting_enabled = false;
+	zb_platform_app_network_left();
+}
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+extern void zb_router_enable_parenting(u8 permit_duration);
+#endif
+static uint32_t zb_persistent_rejoin_started_ms;
+static uint32_t zb_last_commission_retry_ms;
+
+#define ZB_COMMISSION_RETRY_POLL_MS    5000U
+/*
+ * Maximum time the bootstrap will block on a persisted-state rejoin before
+ * giving up and letting fresh commissioning run.  Stale joined=1 with no
+ * usable Transport Key would otherwise keep the device parked here forever
+ * because the NWK manager never returns to IDLE.
+ */
+#define ZB_PERSISTENT_REJOIN_GIVEUP_MS 12000U
+
+/*
+ * Link watchdog: if the device thinks it is joined but TX activity stops
+ * succeeding for an extended period (a parent that no longer accepts our
+ * frames, MAC/security state desync after a debugger halt, etc.), trigger
+ * an NWK Rejoin. Rejoin preserves the network key and joined credentials,
+ * just refreshes the parent link — exactly what we want after probe-rs
+ * disconnect leaves the chip in a "zombie joined" state.
+ */
+#define ZB_LINK_BAD_TX_FAIL_WINDOW_MS 10000U /* 10 s of no progress */
+#define ZB_LINK_BAD_TX_FAIL_DELTA     8U     /* and at least N new failures */
+#define ZB_LINK_REJOIN_BACKOFF_MS     60000U /* don't re-fire within 60 s */
+#define ZB_LINK_REJOIN_SCAN_DURATION  3U     /* short scan: 60ms × 16 ch */
+
+extern bool zb_isDeviceJoinedNwk(void);
+
+static uint32_t zb_link_last_tx_success_count;
+static uint32_t zb_link_last_tx_success_ms;
+static uint32_t zb_link_last_tx_fail_snapshot;
+static uint32_t zb_link_last_rejoin_attempt_ms;
+static bool zb_link_baseline_set;
+
+void __weak zb_platform_app_bootstrap_ready(void)
+{
+}
+
+bool __weak zb_platform_app_enable_radio_smoke_probe(void)
+{
+	return false;
+}
+
+bool __weak zb_platform_app_should_start_commissioning(void)
+{
+	return false;
+}
+
+void __weak zb_platform_app_start_commissioning(void)
+{
+}
+
+void __weak zb_platform_app_network_left(void)
+{
+}
+
+void __weak zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[8])
+{
+	ARG_UNUSED(nwk_addr);
+	ARG_UNUSED(ieee_addr);
+}
+
+bool __weak zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
+{
+	ARG_UNUSED(target);
+	return false;
+}
+
+bool __weak zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile)
+{
+	ARG_UNUSED(profile);
+	return false;
+}
+
+static void zb_core_bootstrap_once(void)
+{
+	const uint8_t *runtime_ieee_addr = zb_platform_runtime_ieee_addr_get();
+
+	if (runtime_ieee_addr == NULL) {
+		if (!zb_waiting_for_ieee_addr_log) {
+			LOG_WRN("Zigbee bootstrap waiting for radio IEEE address");
+			zb_waiting_for_ieee_addr_log = true;
+		}
+		return;
+	}
+	zb_waiting_for_ieee_addr_log = false;
+
+	/*
+	 * TLSR MCU reboot/external reset may retain SRAM, including these static
+	 * guards.  If the compatibility PIB was not rebuilt for this image, do
+	 * not let retained flags bypass the complete stack bootstrap.
+	 */
+	if ((zb_core_init_done || zb_bootstrap_done) &&
+	    memcmp(g_zbInfo.macPib.extAddress, runtime_ieee_addr, EXT_ADDR_LEN) != 0) {
+		zb_core_init_done = false;
+		zb_bootstrap_done = false;
+	}
+
+	if (zb_bootstrap_done) {
+		return;
+	}
+
+	if (!zb_core_init_done) {
+		u8 cold_reset = TRUE;
+
+		/*
+		 * The TLSR soft-reset entry can retain transient C state.  Reset the
+		 * bootstrap owners before rebuilding the vendor runtime so stale
+		 * timer pointers and one-shot guards cannot suppress initialisation.
+		 */
+		zb_platform_bdb_runtime_reset();
+		zb_platform_app_runtime_reset();
+		zb_router_runtime_reset();
+		zb_parenting_enabled = false;
+
+		/*
+		 * The TLSR soft reboot path does not clear SRAM before jumping back
+		 * through the application reset entry.  g_zbInfo is the compatibility
+		 * snapshot used by the ported libzigbee code, so leaving it intact here
+		 * resurrects the old PAN/short address after a successful local leave,
+		 * even when the NVS item was deleted.  Start from the same zeroed BSS
+		 * state as a power-on boot; restore_persistent_state() below is the only
+		 * source allowed to bring joined state back.
+		 */
+		memset(&g_zbInfo, 0, sizeof(g_zbInfo));
+
+		/* Deterministic ED bootstrap order. */
+		ev_buf_init();
+		ev_timer_init();
+		tl_zbMacInit(cold_reset);
+		tl_zbNwkInit(cold_reset);
+		aps_init();
+		af_init();
+		zdo_init();
+		/*
+		 * zdo_init() restores vendor defaults, so apply the platform overrides
+		 * after it and before BDB can start network discovery.
+		 */
+		zb_platform_zdo_attr_init();
+
+		/*
+		 * Start the one-second clock. The imported stack drives every ageing
+		 * table from it — APS duplicate and ack retries, MAC indirect expiry,
+		 * route discovery and routing table ageing, broadcast records, link
+		 * status, neighbour management, parent announce and the trust centre
+		 * key pair cache. The vendor starts it from zb_init(), which this port
+		 * does not use, so start it here instead.
+		 */
+		secondClockRun();
+		/*
+		 * tl_zbNwkInit() clears the transient context, including
+		 * is_factory_new.  If there is no valid persisted joined snapshot,
+		 * restore cannot leave that bit at zero: BDB would take the
+		 * non-factory-new/re-steer path and never run network discovery.
+		 */
+		if (zb_platform_restore_persistent_state() != 0) {
+			g_zbNwkCtx.joined = 0U;
+			g_zbNwkCtx.is_factory_new = 1U;
+		}
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+		if (g_zbNwkCtx.joined) {
+			zdo_router_join_latch_set();
+		}
+#endif
+#if defined(ZB_ROUTER_ROLE)
+		/*
+		 * A failed/aborted join can leave a valid MAC PAN/short address in
+		 * the blob while the NWK context says factory-new. Treating that
+		 * split state as joined programs the TLSR address filter with an
+		 * address the coordinator no longer uses; the router then ACKs no
+		 * interview frames after reboot. Force a clean commissioning start
+		 * and let the next successful join persist the complete tuple.
+		 */
+		if (g_zbMacPib.panId != MAC_INVALID_PANID &&
+		    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED &&
+		    ((!g_zbNwkCtx.joined) ||
+		     (memcmp(g_zbMacPib.extAddress, runtime_ieee_addr, EXT_ADDR_LEN) != 0))) {
+			LOG_WRN("zb nvs restore: dropping split state short=0x%04x pan=0x%04x",
+				(unsigned int)g_zbMacPib.shortAddress, (unsigned int)g_zbMacPib.panId);
+			(void)zb_platform_clear_persistent_state();
+		}
+#endif
+#if defined(ZB_ROUTER_ROLE)
+		/*
+		 * A router is always an always-on FFD. Older persisted images may
+		 * contain the ED default, which would make MAC TX switch RF off after
+		 * the first response and strand the device during Z2M interview.
+		 */
+		g_zbMacPib.rxOnWhenIdle = 1U;
+		g_zbNIB.capabilityInfo.rcvOnWhenIdle = 1U;
+#endif
+		/*
+		 * Boot-time snapshot of NVS-restored Zigbee state. Lets us tell
+		 * from the very first RTT lines whether the chip thinks it's
+		 * already in a network (rejoin path) or starting fresh (steering
+		 * from scratch). Without this we have to read trace counters
+		 * post-mortem to disambiguate.
+		 */
+		LOG_INF("zb nvs restore: joined=%u short=0x%04x pan=0x%04x "
+			"coord=0x%04x nwk_addr=0x%04x",
+			(unsigned int)g_zbNwkCtx.joined, (unsigned int)g_zbMacPib.shortAddress,
+			(unsigned int)g_zbMacPib.panId, (unsigned int)g_zbMacPib.coordShortAddress,
+			(unsigned int)g_zbNIB.nwkAddr);
+		zb_platform_apply_runtime_ieee_addr();
+		/*
+		 * Push the runtime IEEE address into the TLSR8258 radio's HW
+		 * filter immediately. Otherwise filter_ieee_addr stays all-
+		 * zero until either the factory-reset path or the join-success
+		 * path runs zb_radio_port_update_filters, and the radio's
+		 * auto-ACK for ASSOCIATION-RESPONSE (sent to our extaddr by
+		 * the coordinator before we've been assigned a short addr)
+		 * fails its filter_ieee_addr memcmp — coordinator retries 4×
+		 * and we miss the short address allocation. A persisted joined
+		 * device, however, must restore its PAN/short filter here instead
+		 * of reverting to the fresh-join wildcard filter.
+		 * tlsr8258_iface_init() does this too via net_if_set_link_addr,
+		 * but our shell sample doesn't bring up a Zephyr net iface, so
+		 * iface_init never runs.
+		 */
+		if (g_zbNwkCtx.joined && g_zbMacPib.panId != MAC_INVALID_PANID &&
+		    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+			zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
+						     g_zbMacPib.extAddress);
+		} else {
+			zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
+						     g_zbMacPib.extAddress);
+		}
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+		if (tlsr8258_pm_deep_sleep_wake_pending()) {
+			tlsr8258_pm_recover_after_wake();
+			LOG_INF("TLSR8258 deep-sleep wake: reason=%u raw=0x%08x",
+				(unsigned int)tlsr8258_pm_get_wakeup_reason(),
+				(unsigned int)tlsr8258_pm_get_wakeup_raw_status());
+		}
+#endif
+		rf_init();
+		zb_core_init_done = true;
+	}
+
+	zb_radio_init();
+	if (!zb_radio_is_ready()) {
+		if (!zb_waiting_for_radio_log) {
+			LOG_WRN("Zigbee bootstrap waiting for radio readiness");
+			zb_waiting_for_radio_log = true;
+		}
+		return;
+	}
+
+	if (zb_waiting_for_radio_log) {
+		LOG_INF("Zigbee radio ready; completing bootstrap");
+		zb_waiting_for_radio_log = false;
+	}
+
+	/*
+	 * The TLSR driver can already be initialized when a soft reboot enters
+	 * this path, so the pre-init shadow update above is not sufficient: the
+	 * live radio_data filter may still contain the previous PAN/short tuple.
+	 * Re-apply the authoritative PIB after radio init for both joined and
+	 * factory-new paths.  A stale joined short address prevents a fresh router
+	 * from accepting the coordinator's Association Response; a stale joined
+	 * PAN has the same effect on all subsequent RX frames.
+	 */
+	if (g_zbNwkCtx.joined && g_zbMacPib.panId != MAC_INVALID_PANID &&
+	    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
+		zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
+					     g_zbMacPib.extAddress);
+	} else {
+		zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
+					     g_zbMacPib.extAddress);
+	}
+
+	zb_platform_app_bootstrap_ready();
+
+#if defined(ZB_ROUTER_ROLE)
+	/*
+	 * Older joined NVS blobs can contain a split runtime snapshot: the
+	 * network/PAN/short address is valid, but the MAC channel and
+	 * rxOnWhenIdle byte were saved before the router restore path repaired
+	 * them.  Starting the radio with channel 0 leaves the device deaf, and
+	 * an ED-style zero rxOnWhenIdle lets MAC TX turn RX off after a response.
+	 * Repair this after the application/BDB bootstrap as that code may copy
+	 * the persisted PIB again, but before persistent rejoin is scheduled.
+	 */
+	if (g_zbMacPib.phyChannelCur < 11U || g_zbMacPib.phyChannelCur > 26U) {
+		g_zbMacPib.phyChannelCur = (u8)CONFIG_ZIGBEE_CHANNEL;
+		g_zbInfo.macPib.phyChannelCur = g_zbMacPib.phyChannelCur;
+	}
+	/*
+	 * Apply this for a fresh/rejoin attempt too: the NWK joined bit can be
+	 * cleared by a failed stale rejoin after BDB has already restored it.
+	 */
+	g_zbMacPib.rxOnWhenIdle = 1U;
+	g_zbInfo.macPib.rxOnWhenIdle = 1U;
+	g_zbNIB.capabilityInfo.rcvOnWhenIdle = 1U;
+	if (g_zbMacPib.phyChannelCur >= 11U && g_zbMacPib.phyChannelCur <= 26U) {
+		(void)zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur);
+	}
+#endif
+
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
+	if (tlsr8258_pm_deep_sleep_wake_pending()) {
+		if (zb_platform_bdb_init_default() != 0) {
+			LOG_ERR("TLSR8258 deep-sleep wake: BDB restore init failed");
+		}
+		if (g_zbNwkCtx.joined && (g_zbMacPib.phyChannelCur >= 11U) &&
+		    (g_zbMacPib.phyChannelCur <= 26U)) {
+			uint32_t poll_rate = zdo_af_get_syn_rate();
+
+			if (poll_rate == 0U) {
+				poll_rate = 500U;
+			}
+			zdo_set_pollRate(poll_rate);
+			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
+				LOG_ERR("TLSR8258 deep-sleep wake: radio recovery failed");
+			}
+		} else {
+			LOG_WRN("TLSR8258 deep-sleep wake: no valid joined state");
+		}
+		tlsr8258_pm_deep_sleep_wake_clear();
+	} else {
+#endif
+		if (zb_platform_bdb_service_persistent_rejoin()) {
+			uint32_t started = k_uptime_get_32();
+
+			zb_persistent_rejoin_in_progress = true;
+			zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
+		}
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
+	}
+#endif
+
+	if (zb_platform_app_enable_radio_smoke_probe()) {
+		zb_radio_smoke_probe();
+	}
+
+	if (!zb_persistent_rejoin_in_progress && zb_platform_app_should_start_commissioning()) {
+		zb_commissioning_pending = true;
+	}
+
+	/*
+	 * DISABLED: three attempts at arming this hardware watchdog (timer2-
+	 * based, see ieee802154_tlsr8258.c) each produced a WORSE, faster,
+	 * unrecoverable early-boot crash loop on real hardware than not having
+	 * a watchdog at all -- every variant tried (arm-once-at-boot,
+	 * disable-then-arm-at-boot-entry, disable-then-arm-here-in-bootstrap,
+	 * self-healing re-arm-on-every-feed) reproduced the same result: the
+	 * device re-resets within seconds of boot, before zb_thread_fn's loop
+	 * can even get going, and never recovers. This means my understanding
+	 * of this SoC's timer2/watchdog register semantics (period-field
+	 * scaling, whether reg_tmr2_tick is actually resettable by software,
+	 * whatever ties the observed near-instant re-fire) is wrong in some
+	 * way I have not been able to pin down from the datasheet-less
+	 * register.h alone, without a working live debugger for this target.
+	 * Do not re-enable until that is actually understood and verified --
+	 * a watchdog that fires immediately is strictly worse than no
+	 * watchdog, since it turns a recoverable hang (external reset still
+	 * works) into a device that never boots far enough to do anything.
+	 */
+	zb_bootstrap_done = true;
+}
+
+static void zb_process_deferred_persistent_rejoin(void)
+{
+	if (!zb_bootstrap_done) {
+		return;
+	}
+
+	if (zb_isDeviceJoinedNwk() && zdo_ifZdoNwkManagerIdle()) {
+		zb_persistent_rejoin_in_progress = false;
+		zb_persistent_rejoin_started_ms = 0U;
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+		/*
+		 * Advertise as a parent once secure join is complete. Until this
+		 * runs the MAC answers no beacon request: tl_zbMacBeaconRequestCb()
+		 * needs devType and beaconPayloadLen, and tl_zbMlmeCmdBeaconReqRecvd()
+		 * needs joined without joined_pro. Nothing in the imported stack sets
+		 * that up, so the port does it here.
+		 */
+		if (!zb_parenting_enabled && (g_zbNwkCtx.is_tc || aps_ib.aps_authenticated ||
+					      ss_ib_security_level_get() == 0U)) {
+			zb_router_enable_parenting(0xffU);
+			zb_parenting_enabled = true;
+		}
+#endif
+	}
+
+	if (zb_persistent_rejoin_in_progress) {
+		/*
+		 * Give up if the persisted-state rejoin keeps the NWK manager
+		 * non-idle past the budget without delivering a real join.
+		 * Otherwise stale joined=1 in NV blocks commissioning forever.
+		 */
+		uint32_t elapsed = k_uptime_get_32() - zb_persistent_rejoin_started_ms;
+
+		if (zb_persistent_rejoin_started_ms != 0U &&
+		    elapsed > ZB_PERSISTENT_REJOIN_GIVEUP_MS && !zb_isDeviceJoinedNwk()) {
+			zb_platform_bdb_abandon_persistent_rejoin();
+			zb_persistent_rejoin_in_progress = false;
+			zb_persistent_rejoin_started_ms = 0U;
+		}
+		return;
+	}
+
+	if (zb_platform_bdb_service_persistent_rejoin()) {
+		uint32_t started = k_uptime_get_32();
+
+		zb_persistent_rejoin_in_progress = true;
+		zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
+	}
+}
+
+static void zb_process_deferred_commissioning(void)
+{
+	if (!zb_bootstrap_done || !zb_commissioning_pending) {
+		return;
+	}
+
+	if (!zdo_ifZdoNwkManagerIdle()) {
+		return;
+	}
+
+	zb_commissioning_pending = false;
+	zb_platform_app_start_commissioning();
+}
+
+static void zb_requeue_commissioning_if_needed(void)
+{
+	uint32_t now_ms;
+
+	if (!zb_bootstrap_done || zb_commissioning_pending || zb_persistent_rejoin_in_progress ||
+	    zb_isDeviceJoinedNwk()) {
+		return;
+	}
+
+	if (!zb_platform_app_should_start_commissioning()) {
+		return;
+	}
+
+	now_ms = k_uptime_get_32();
+	if ((zb_last_commission_retry_ms != 0U) &&
+	    ((now_ms - zb_last_commission_retry_ms) < ZB_COMMISSION_RETRY_POLL_MS)) {
+		return;
+	}
+
+	zb_last_commission_retry_ms = now_ms;
+	zb_commissioning_pending = true;
+}
+
+static void zb_link_watchdog_tick(void)
+{
+	struct zb_platform_radio_diag_snapshot snap;
+	uint32_t now_ms;
+
+	if (!zb_bootstrap_done || !zb_isDeviceJoinedNwk()) {
+		return;
+	}
+	if (zb_platform_radio_diag_get(&snap) < 0) {
+		return;
+	}
+
+	now_ms = k_uptime_get_32();
+
+	/* First call after join → seed the baseline, no decision yet. */
+	if (!zb_link_baseline_set) {
+		zb_link_last_tx_success_count = snap.tx_success;
+		zb_link_last_tx_success_ms = now_ms;
+		zb_link_last_tx_fail_snapshot = snap.tx_failures;
+		zb_link_baseline_set = true;
+		return;
+	}
+
+	/* Successful TX since last tick → bookmark and reset window. */
+	if (snap.tx_success != zb_link_last_tx_success_count) {
+		zb_link_last_tx_success_count = snap.tx_success;
+		zb_link_last_tx_success_ms = now_ms;
+		zb_link_last_tx_fail_snapshot = snap.tx_failures;
+		return;
+	}
+
+	uint32_t since_last_success_ms = now_ms - zb_link_last_tx_success_ms;
+	uint32_t fail_delta = snap.tx_failures - zb_link_last_tx_fail_snapshot;
+
+	if (fail_delta < ZB_LINK_BAD_TX_FAIL_DELTA) {
+		return;
+	}
+	if (since_last_success_ms < ZB_LINK_BAD_TX_FAIL_WINDOW_MS) {
+		return;
+	}
+	if ((zb_link_last_rejoin_attempt_ms != 0U) &&
+	    ((now_ms - zb_link_last_rejoin_attempt_ms) < ZB_LINK_REJOIN_BACKOFF_MS)) {
+		return;
+	}
+
+	LOG_WRN("zb link watchdog: joined but no TX success in %u ms "
+		"(failures+=%u) — triggering NWK rejoin",
+		(unsigned int)since_last_success_ms, (unsigned int)fail_delta);
+
+	zb_link_last_rejoin_attempt_ms = now_ms;
+	/* Reset baseline so the next window is measured from now. */
+	zb_link_last_tx_fail_snapshot = snap.tx_failures;
+
+#if defined(CONFIG_ZIGBEE_ED)
+	uint32_t scan_mask =
+		(((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) - ((u32)1U << TL_ZB_MAC_CHANNEL_START));
+	if (zb_rejoinReq(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION) != ZDO_SUCCESS) {
+		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
+	}
+#endif
+}
+
+/*
+ * Radio RX poll hook, called on every pass of the Zigbee thread loop. A radio
+ * backend that queues received frames overrides it to hand them to the MAC
+ * from this thread.
+ */
+__weak void zb_platform_radio_rx_poll(void)
+{
+}
+
+static void zb_thread_fn(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a);
+	ARG_UNUSED(b);
+	ARG_UNUSED(c);
+
+	/*
+	 * TLSR MCU reboot preserves parts of SRAM, including these C statics.
+	 * A restarted Zigbee thread must therefore not inherit the previous
+	 * bootstrap-complete state: doing so skips g_zbInfo sanitisation and lets
+	 * a removed PAN/short tuple become live again.  Reset all thread-owned
+	 * bootstrap/watchdog state before entering the common startup path.
+	 */
+	zb_platform_persistence_runtime_reset();
+	zb_platform_bdb_runtime_reset();
+	zb_platform_app_runtime_reset();
+	zb_router_runtime_reset();
+	zb_bootstrap_done = false;
+	zb_core_init_done = false;
+	zb_commissioning_pending = false;
+	zb_waiting_for_radio_log = false;
+	zb_persistent_rejoin_in_progress = false;
+	zb_persistent_rejoin_started_ms = 0U;
+	zb_last_commission_retry_ms = 0U;
+	zb_link_last_tx_success_count = 0U;
+	zb_link_last_tx_success_ms = 0U;
+	zb_link_last_tx_fail_snapshot = 0U;
+	zb_link_last_rejoin_attempt_ms = 0U;
+	zb_link_baseline_set = false;
+	zb_parenting_enabled = false;
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+	/*
+	 * SRAM survives the TLSR soft reset; a fresh boot must not inherit a
+	 * pre-reset latch. A valid persisted join is re-latched after restore.
+	 */
+	zdo_router_join_latch_clear();
+#endif
+
+	LOG_INF("Zigbee thread started");
+
+	while (1) {
+#if defined(CONFIG_ZIGBEE_ZBHCI_UART)
+		zb_zbhci_uart_poll();
+#endif
+		if (!zb_bootstrap_done) {
+			zb_core_bootstrap_once();
+			ev_timer_process();
+			ev_poll_process();
+			zb_taskq_process();
+			/*
+			 * The router must consume RF frames while commissioning is still
+			 * in progress.  AssocResp and the indirect Transport-Key arrive
+			 * before bootstrap_done; postponing the TLSR RX FIFO drain until
+			 * below made the radio ACK those frames while the Zigbee stack
+			 * never saw them.
+			 */
+			zb_platform_radio_rx_poll();
+			zb_radio_l2_rx_poll();
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || defined(CONFIG_ZIGBEE_ED)
+			for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
+				tl_zbNwkTaskProc();
+			}
+			tl_zbMacTaskProc();
+#endif
+			if (!zb_bootstrap_done) {
+				zb_thread_wait();
+				continue;
+			}
+		}
+
+		ev_timer_process();
+		ev_poll_process();
+		zb_platform_radio_rx_poll();
+		zb_radio_l2_rx_poll();
+		/*
+		 * The radio sink can enqueue RX callbacks after the poll pass above.
+		 * Drain once more before layer dispatch so a burst cannot fill the
+		 * dedicated RX FIFO and lose the frame that must trigger a response.
+		 */
+		zb_taskq_process();
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || defined(CONFIG_ZIGBEE_ED)
+		/*
+		 * The router and the libzigbee-based ED both pull in the
+		 * libzigbee NWK / MAC primitive dispatcher via
+		 * tl_zbNwkTaskProc(); drain the per-layer task queues on every
+		 * tick so high→NWK, MAC→NWK, and NWK→MAC primitives (active
+		 * scan requests, beacon-notify indications, association
+		 * requests, NLDE confirms) are delivered to their handlers.
+		 * The ED lifecycle adapter leaves polling to the recovered vendor
+		 * zdo_nwk_manager state machine, so it uses this same drain path.
+		 */
+		/*
+		 * A coordinator can deliver several interview requests back-to-back.
+		 * Process a bounded batch so MAC2NWK does not lag behind the RF RX
+		 * callback queue and leave the device ACKing frames it never parses.
+		 */
+		for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
+			tl_zbNwkTaskProc();
+		}
+		tl_zbMacTaskProc();
+#endif
+		zb_process_deferred_persistent_rejoin();
+		zb_process_deferred_commissioning();
+		zb_requeue_commissioning_if_needed();
+		zb_link_watchdog_tick();
+		zb_radio_filter_sync();
+		if (zb_commissioning_pending) {
+			zb_thread_wait();
+			continue;
+		}
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+		zb_ed_sleep_maybe();
+#endif
+
+		zb_thread_wait();
+	}
+}
+
+K_THREAD_DEFINE(zb_thread, CONFIG_ZIGBEE_STACK_SIZE, zb_thread_fn, NULL, NULL, NULL,
+		CONFIG_ZIGBEE_THREAD_PRIO, 0, 0);
