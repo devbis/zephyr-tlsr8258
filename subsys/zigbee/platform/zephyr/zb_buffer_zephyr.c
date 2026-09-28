@@ -1,0 +1,271 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * Zephyr-native replacement for libzigbee zb_buffer.c.
+ *
+ * The vendor implementation keeps a static array of zb_buf_t in
+ * g_mPool, linked by a free-list head + usedNum counter. The
+ * router build doesn't pull in g_mPool (it depends on
+ * zb_buf_pool_t which the Zephyr port doesn't mirror). Instead,
+ * back the same zb_buf_allocate / zb_buf_free / zb_buf_clear /
+ * is_zb_buf / tl_bufInitalloc / tl_phyRxBufTozbBuf API with a
+ * Zephyr k_mem_slab so callers stay binary-compatible with the
+ * libzigbee NWK / MAC ports.
+ */
+
+#include <zephyr/kernel.h>
+
+#include "zb_common.h"
+
+/*
+ * 127-byte PSDU + 5-byte TLSR DMA header is the complete 802.15.4 frame.
+ * Keep a little alignment/headroom without spending 200 bytes in every one
+ * of the 36 router buffers.
+ */
+#define ZB_BUF_RX_SNAPSHOT_SIZE 128U
+/*
+ * Room in front of a captured frame. A relayed frame is rebuilt in place over
+ * the received MAC header, which is as long as the new one; only a coordinator
+ * grows the network header of a relayed frame, by a source route subframe.
+ */
+#if defined(CONFIG_ZIGBEE_COORDINATOR)
+#define ZB_BUF_RX_HEADROOM 16U
+#else
+#define ZB_BUF_RX_HEADROOM 0U
+#endif
+
+typedef struct {
+	zb_buf_t zb;
+	u8 rx_snapshot[ZB_BUF_RX_HEADROOM + ZB_BUF_RX_SNAPSHOT_SIZE];
+} zb_buf_block_t;
+
+K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
+			 __alignof__(zb_buf_t));
+
+/*
+ * Track slab ownership so an invalid or duplicate free cannot corrupt the
+ * slab free list.
+ */
+static volatile u32 zb_buf_in_use[2];
+static struct k_spinlock zb_buf_lock;
+
+/* zb_buf_in_use has one bit per block; zb_buf_to_ref() reserves 0xff. */
+BUILD_ASSERT(ZB_BUF_POOL_NUM <= ARRAY_SIZE(zb_buf_in_use) * 32U,
+	     "zb_buf pool larger than its ownership bitmap");
+
+static bool zb_buf_index(const zb_buf_t *buf, u32 *index)
+{
+	uintptr_t addr = (uintptr_t)buf;
+	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
+	size_t span = (size_t)zb_buf_slab.info.num_blocks * zb_buf_slab.info.block_size;
+
+	if (buf == NULL || addr < base || addr >= base + span ||
+	    ((addr - base) % zb_buf_slab.info.block_size) != 0U) {
+		return false;
+	}
+
+	*index = (u32)((addr - base) / zb_buf_slab.info.block_size);
+	return *index < ZB_BUF_POOL_NUM;
+}
+
+static inline bool zb_buf_owned(u32 index)
+{
+	return (zb_buf_in_use[index >> 5] & BIT(index & 31U)) != 0U;
+}
+
+static inline void zb_buf_mark_owned(u32 index)
+{
+	zb_buf_in_use[index >> 5] |= BIT(index & 31U);
+}
+
+static inline void zb_buf_mark_free(u32 index)
+{
+	zb_buf_in_use[index >> 5] &= ~BIT(index & 31U);
+}
+
+zb_buf_t *zb_buf_allocate(void)
+{
+	void *block = NULL;
+
+	if (k_mem_slab_alloc(&zb_buf_slab, &block, K_NO_WAIT) != 0) {
+		g_sysDiags.packetBufferAllocateFailures++;
+		return NULL;
+	}
+
+	memset(block, 0, sizeof(zb_buf_t));
+	/*
+	 * The vendor pool marks the buffer in use. Ported code tests that
+	 * flag: nwk_fwdPacket() drops a frame whose buffer reads as free.
+	 */
+	((zb_buf_t *)block)->hdr.used = 1;
+	{
+		u32 index;
+		k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
+
+		if (zb_buf_index((zb_buf_t *)block, &index)) {
+			zb_buf_mark_owned(index);
+		}
+		k_spin_unlock(&zb_buf_lock, key);
+	}
+	return (zb_buf_t *)block;
+}
+
+void zb_buf_free(zb_buf_t *buf)
+{
+	if (buf == NULL) {
+		return;
+	}
+	{
+		u32 index;
+		k_spinlock_key_t key;
+
+		if (!zb_buf_index(buf, &index)) {
+			return;
+		}
+		key = k_spin_lock(&zb_buf_lock);
+		if (!zb_buf_owned(index)) {
+			k_spin_unlock(&zb_buf_lock, key);
+			return;
+		}
+		zb_buf_mark_free(index);
+		k_spin_unlock(&zb_buf_lock, key);
+	}
+	buf->hdr.used = 0;
+	k_mem_slab_free(&zb_buf_slab, buf);
+}
+
+void zb_buf_clear(zb_buf_t *p)
+{
+	if (p != NULL) {
+		memset(p, 0, sizeof(*p));
+	}
+}
+
+/*
+ * Map a pointer into a buffer payload back to its zb_buf.
+ *
+ * The imported MAC records the sequence number it waits to see acknowledged as
+ * txBuf->buf[2], while callers hand it a frame pointer that tl_bufInitalloc()
+ * placed near the end of the payload. On this port those are different bytes,
+ * so the radio side needs the owning buffer to read the same one the MAC did.
+ */
+zb_buf_t *zb_buf_owner_of(const void *payload)
+{
+	uintptr_t addr = (uintptr_t)payload;
+	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
+	size_t block = zb_buf_slab.info.block_size;
+	size_t total = (size_t)zb_buf_slab.info.num_blocks * block;
+
+	if ((payload == NULL) || (addr < base) || (addr >= base + total)) {
+		return NULL;
+	}
+
+	return (zb_buf_t *)(base + ((addr - base) / block) * block);
+}
+
+bool is_zb_buf(void *p)
+{
+	uintptr_t addr = (uintptr_t)p;
+	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
+	size_t total = (size_t)zb_buf_slab.info.num_blocks * zb_buf_slab.info.block_size;
+
+	return (p != NULL) && (addr >= base) && (addr < base + total) &&
+	       ((addr - base) % zb_buf_slab.info.block_size == 0U);
+}
+
+zb_buf_t *zb_buf_from_ref(u8 ref)
+{
+	if (ref >= ZB_BUF_POOL_NUM) {
+		return NULL;
+	}
+
+	return (zb_buf_t *)((u8 *)zb_buf_slab.buffer + ((size_t)ref * zb_buf_slab.info.block_size));
+}
+
+u8 zb_buf_to_ref(zb_buf_t *buf)
+{
+	u32 index;
+
+	return zb_buf_index(buf, &index) ? (u8)index : 0xffU;
+}
+
+/*
+ * Bytes tl_bufInitalloc() keeps free after an allocation, as the vendor does:
+ * ported MAC/NWK/security code appends security material after it.
+ */
+#define ZB_BUF_TAIL_RESERVE 8U
+
+/*
+ * The vendor TL_BUF_INITIAL_ALLOC pattern hands back the tail of the
+ * buf->buf[] payload area minus `size` bytes, 4-byte aligned. libzigbee
+ * callers then write headers there and grow forward.
+ */
+void *tl_bufInitalloc(zb_buf_t *p, u8 size)
+{
+	if (p == NULL || (size_t)size + ZB_BUF_TAIL_RESERVE > ZB_BUF_SIZE) {
+		return NULL;
+	}
+
+	return &p->buf[(ZB_BUF_SIZE - ZB_BUF_TAIL_RESERVE - size) & ~3U];
+}
+
+/*
+ * Convert a raw radio rxBuf (the DMA region exposed by
+ * drv_radio_zephyr.c::zb_radio_on_rx_sink) into a freshly allocated
+ * zb_buf_t. libzigbee mac_trx.c::zb_macDataRecvHandler then writes
+ * the PSDU pointer + meta (timestamp / rssi / len) into the first
+ * few bytes of buf->buf[].
+ */
+u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
+{
+	zb_buf_t *owner;
+
+	/*
+	 * The radio captures each frame into a zb_buf of its own, see
+	 * zb_buf_rx_payload_capture(); hand that buffer to the MAC.
+	 */
+	owner = zb_buf_owner_of(rxBuf);
+	if (owner != NULL) {
+		return (u8 *)owner;
+	}
+
+	return (u8 *)zb_buf_allocate();
+}
+
+u8 zb_buf_rx_free_count(void)
+{
+	return (u8)k_mem_slab_num_free_get(&zb_buf_slab);
+}
+
+u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
+{
+	zb_buf_block_t *block = (zb_buf_block_t *)buf;
+
+	if (block == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
+		return NULL;
+	}
+
+	memset(block->rx_snapshot, 0, sizeof(block->rx_snapshot));
+	memcpy(&block->rx_snapshot[ZB_BUF_RX_HEADROOM], data, len);
+
+	return &block->rx_snapshot[ZB_BUF_RX_HEADROOM];
+}
+
+/*
+ * Vendor zb_buffer.c also exports g_mPool / ZB_BUF_POOL_SIZE etc.
+ * Those pool symbols are intentionally omitted from the Zephyr
+ * adapter; the corresponding size helpers use the Zephyr slab and
+ * no full-stack caller dereferences the vendor free-list storage.
+ */
+
+void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src)
+{
+	if (!is_zb_buf(dst) || !is_zb_buf((void *)src)) {
+		return;
+	}
+
+	memcpy(((zb_buf_block_t *)dst)->rx_snapshot, ((const zb_buf_block_t *)src)->rx_snapshot,
+	       sizeof(((zb_buf_block_t *)dst)->rx_snapshot));
+}
