@@ -1,0 +1,14 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&zigbee_radio {
+	local-mac-address = [01 00 02 50 e0 38 c1 a4];
+	node-id = <0x0001>;
+};
+
+/* uart1 carries the ZBHCI protocol. */
+&uart1 {
+	status = "okay";
+};
