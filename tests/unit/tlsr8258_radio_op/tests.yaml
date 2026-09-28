@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+tests:
+  drivers.ieee802154.tlsr8258.radio_op:
+    tags:
+      - ieee802154
+    type: unit
