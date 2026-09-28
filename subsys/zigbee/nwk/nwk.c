@@ -149,12 +149,14 @@ void zb_NwkNibInit(uint8_t coldReset)
 		memcpy(&g_zbNIB, &nwkNibDefault, sizeof(g_zbNIB));
 		ZB_EXTPANID_ZERO(g_zbNIB.extPANId);
 		g_zbNwkCtx.is_factory_new = 1;
-		return;
+	} else {
+		g_zbNwkCtx.is_factory_new = 0;
 	}
 
-	g_zbNwkCtx.is_factory_new = 0;
+	/* Stack profile is a compile-time network capability, not retained state. */
+	g_zbNIB.stackProfile = nwkNibDefault.stackProfile;
 
-	if (af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) {
+	if (!coldReset && af_nodeDevTypeGet() == DEVICE_TYPE_COORDINATOR) {
 		g_zbNwkCtx.is_tc = 1;
 	}
 }
