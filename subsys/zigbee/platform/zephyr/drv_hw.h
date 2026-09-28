@@ -24,13 +24,13 @@
  *******************************************************************************************************/
 #pragma once
 
-#define BATTERY_SAFETY_THRESHOLD        2200//2.2v
+#include <zephyr/zigbee/zb_types.h>
+#include <zephyr/sys/reboot.h>
 
-#if defined(MCU_CORE_826x) || defined(MCU_CORE_8258) || defined(MCU_CORE_8278)
-    #define SYSTEM_RESET()              mcu_reset()
-#elif defined(MCU_CORE_B91) || defined(MCU_CORE_B92) || defined(MCU_CORE_TL721X) || defined(MCU_CORE_TL321X)
-    #define SYSTEM_RESET()              sys_reboot()
-#endif
+#define BATTERY_SAFETY_THRESHOLD        2200 /* 2.2 V */
+
+/* SYSTEM_RESET() maps to Zephyr reboot for all MCU cores */
+#define SYSTEM_RESET()              sys_reboot(SYS_REBOOT_COLD)
 
 typedef enum {
     SYSTEM_BOOT,                //power on or boot
@@ -42,7 +42,6 @@ extern uint32_t sysTimerPerUs;
 
 startup_state_e drv_platform_init(void);
 
-void drv_enable_irq(void);
 uint32_t drv_disable_irq(void);
 uint32_t drv_restore_irq(uint32_t en);
 
@@ -57,3 +56,24 @@ void drv_generateRandomData(uint8_t *pData, uint8_t len);
 
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);
+
+void flash_read(uint32_t addr, uint32_t len, uint8_t *buf);
+void flash_write(uint32_t addr, uint32_t len, uint8_t *buf);
+void flash_erase(uint32_t addr);
+bool drv_get_primary_ieee_addr(uint8_t *addr);
+
+/*
+ * Hardware timer hook used by the MAC. The vendor SDK declares this in its
+ * own drv_hw.h; the Zephyr backend in drv_hw_zephyr.c implements it on top
+ * of the event timer.
+ */
+typedef int (*timerCb_t)(void *arg);
+int drv_hwTmr_set(uint8_t tmrIdx, uint32_t t_us, timerCb_t func, void *arg);
+
+/*
+ * Outgoing frame counter retained across deep sleep. The vendor keeps it in a
+ * retention register; this port restores it from NV instead, so waking never
+ * rewinds the counter. Declared here because the stack reaches it through the
+ * vendor drv_pm.h, which this port does not import.
+ */
+uint32_t drv_pm_deepSleep_frameCnt_get(void);

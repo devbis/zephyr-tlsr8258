@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 
 
 #if defined(ZB_COORDINATOR_ROLE) && (ZB_COORDINATOR_ROLE == 1)
@@ -398,7 +398,7 @@ _CODE_AF_ bool af_profileIdMatched(uint16_t profileID, af_simple_descriptor_t *p
         return FALSE;
     }
 
-    if ((profileID == 0xFFFF) || (profileID == pSimpleDesc->app_profile_id)) {
+	if ((profileID == WILDCARD_PROFILE_ID) || (profileID == pSimpleDesc->app_profile_id)) {
         return TRUE;
     } else {
         return FALSE;
@@ -449,7 +449,8 @@ _CODE_AF_ bool af_endpointUnregister(uint8_t ep)
         if (aed[i].ep == ep) {
             ZB_SETSTRUCTCONTENT(aed[i], 0);
             if ((i + 1) != available_active_ep_num) {
-                memcpy((uint8_t *)&aed[i], (uint8_t *)&aed[i + 1], sizeof(aed[i]) * (available_active_ep_num - i));
+                memmove((uint8_t *)&aed[i], (uint8_t *)&aed[i + 1],
+                        sizeof(aed[i]) * (available_active_ep_num - i - 1U));
             }
             available_active_ep_num--;
             return TRUE;
