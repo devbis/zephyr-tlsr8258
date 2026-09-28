@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: Zigbee end device or router
+common:
+  build_only: true
+  platform_allow:
+    - tlsr8258_tb03f
+    - nrf52840dk/nrf52840
+  tags:
+    - zigbee
+tests:
+  sample.zigbee.node.end_device: {}
+  sample.zigbee.node.router:
+    extra_args:
+      - EXTRA_CONF_FILE=router.conf

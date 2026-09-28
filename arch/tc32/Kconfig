@@ -22,7 +22,7 @@ config ARCH_HAS_SINGLE_THREAD_SUPPORT
 
 config TC32_BOOT_MIRROR_SIZE
 	hex "TC32 boot mirror SRAM reserve size"
-	default 0x4000
+	default 0x2000
 	help
 	  Size of the low SRAM window reserved for the TLSR boot-ROM flash
 	  mirror. Under the current XIP startup flow this window must cover the
