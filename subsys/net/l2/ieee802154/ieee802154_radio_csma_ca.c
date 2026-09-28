@@ -26,7 +26,7 @@ BUILD_ASSERT(CONFIG_NET_L2_IEEE802154_RADIO_CSMA_CA_MIN_BE <=
 	     "The CSMA/CA min backoff exponent must be less or equal max backoff exponent.");
 
 /* See section 6.2.5.1. */
-static inline int unslotted_csma_ca_channel_access(struct net_if *iface)
+ALIAS_TARGET_INLINE int unslotted_csma_ca_channel_access(struct net_if *iface)
 {
 	struct ieee802154_context *ctx = net_if_l2_data(iface);
 	uint8_t be = CONFIG_NET_L2_IEEE802154_RADIO_CSMA_CA_MIN_BE;
