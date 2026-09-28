@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: tlsr8258_generic
+name: Telink TLSR8258 Generic
+type: mcu
+arch: tc32
+toolchain:
+  - llvm
+ram: 64
+flash: 512
+supported:
+  - gpio
+  - uart
+  - watchdog
+  - flash
+  - netif:ieee802154
+vendor: telink

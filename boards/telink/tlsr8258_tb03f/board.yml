@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+board:
+  name: tlsr8258_tb03f
+  full_name: Telink TLSR8258 TB03F
+  vendor: telink
+  socs:
+  - name: tlsr8258
