@@ -29,4 +29,6 @@ tests:
       - kit_pse84_eval/pse846gps2dbzc4a/m55
       - kit_pse84_ai/pse846gps2dbzc4a/m33
       - kit_pse84_ai/pse846gps2dbzc4a/m55
+      - tlsr8258_generic
+      - tlsr8258_tb03f
     tags: crypto

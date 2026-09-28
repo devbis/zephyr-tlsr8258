@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config CRYPTO_TLSR8258
+	bool "Telink TLSR8258 AES accelerator"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_AES_ENABLED
+	help
+	  Enable the driver for the AES-128 block engine of the Telink
+	  TLSR8258. The engine performs a single ECB block per run in both
+	  directions; chained modes have to be built on top of it.
+
+config CRYPTO_TLSR8258_MAX_SESSION
+	int "Maximum number of concurrent TLSR8258 AES sessions"
+	default 2
+	range 1 8
+	depends on CRYPTO_TLSR8258
+	help
+	  Number of cipher contexts the driver can keep open at once. The
+	  engine holds no per-session state of its own, so each session only
+	  costs a cached key.
