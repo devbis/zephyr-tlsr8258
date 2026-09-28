@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_TELINK_TLSR8258
+	bool "Telink TLSR8258 IEEE 802.15.4 RF driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_ZB_ENABLED
+	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	help
+	  Enable the IEEE 802.15.4 RF driver for the Telink TLSR8258
+	  (2.4 GHz O-QPSK, 250 kbit/s).
+
+if IEEE802154_TELINK_TLSR8258
+
+config IEEE802154_TLSR8258_INIT_PRIO
+	int "TLSR8258 IEEE 802.15.4 initialization priority"
+	default 80
+
+config IEEE802154_TLSR8258_TX_WAIT_US
+	int "TLSR8258 RF TX wait timeout"
+	default 10000
+	help
+	  Maximum time in microseconds to poll the RF TX done status in direct
+	  transmission mode.
+
+config IEEE802154_TLSR8258_TX_DONE_POLL_US
+	int "TLSR8258 RF TX done status poll after a missed interrupt"
+	default 5000
+	help
+	  Time in microseconds to keep polling the RF TX status after the TX
+	  wait timed out without a TX-done interrupt. Zero reports the timeout
+	  immediately. A completion found this way is reported as success only
+	  for frames that do not request an ACK.
+
+config IEEE802154_TLSR8258_CCA_RSSI_THRESHOLD
+	int "TLSR8258 CCA RSSI threshold in dBm"
+	default -50
+
+endif # IEEE802154_TELINK_TLSR8258
