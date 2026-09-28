@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config WDT_TLSR8258
+	bool "Telink TLSR8258 watchdog driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_WATCHDOG_ENABLED
+	help
+	  Enable the timer2-based watchdog of the Telink TLSR8258. Expiry
+	  always resets the SoC.
