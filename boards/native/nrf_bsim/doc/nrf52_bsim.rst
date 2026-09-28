@@ -186,6 +186,24 @@ Run them with ``-help`` for more information.
 You can find more information about how to run BabbleSim simulations in
 `this BabbleSim example <https://babblesim.github.io/example_2g4.html>`_.
 
+Running the Zigbee coordinator-router-end-device scenario
+=========================================================
+
+The Zigbee socket samples can also use the nRF52 BabbleSim radio. Run the
+following command from a configured west workspace to build and run a three
+node network. The script builds the BabbleSim PHY and channel components,
+builds the coordinator, router and end-device applications, then checks that
+all three report joining the same network:
+
+.. code-block:: console
+
+   ${ZEPHYR_BASE}/scripts/bsim/run_zigbee_join.sh
+
+Set ``BSIM_SIM_LENGTH`` to change the simulation duration in microseconds
+(default: ``60e6``). Build output and per-node logs are stored under
+``/tmp/zephyr-zigbee-bsim`` by default; set ``BSIM_ZIGBEE_BUILD_PATH`` to use
+another directory.
+
 Running an application using the console
 ========================================
 
