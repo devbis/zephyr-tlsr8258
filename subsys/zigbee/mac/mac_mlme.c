@@ -198,7 +198,15 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
 		ZB_IEEE_ADDR_COPY(cnf->parentAddress, mhr->srcAddr.extAddr);
 	}
 
-	if (g_zbMacCtx.status != ZB_MAC_STATE_INDIRECT_DATA || associationReqOrigBuffer == NULL) {
+	/*
+	 * The vendor also requires the indirect-data wait here, which its TX
+	 * interrupt enters as soon as the poll's ACK reports a pending frame.
+	 * On this port the poll completion is handled later on the Zigbee
+	 * thread, and the response, which follows the ACK within a few
+	 * milliseconds, can be parsed first. The outstanding request is what
+	 * ties the response to this device.
+	 */
+	if (associationReqOrigBuffer == NULL) {
 		zb_buf_free(buf);
 		return;
 	}
