@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+zephyr_library()
+
+zephyr_library_sources(
+  cpu_idle.c
+  compiler_builtins.c
+  fatal.c
+  irq_manage.c
+  prep_c.c
+  reboot.c
+  reset.S
+  switch.S
+  thread.c
+)
+
+zephyr_library_sources_ifdef(CONFIG_IRQ_OFFLOAD irq_offload.c)
