@@ -29,6 +29,10 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_ESP32 ieee802154_esp32.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_KW41Z ieee802154_kw41z.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_MCR20A ieee802154_mcr20a.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_MCXW ieee802154_mcxw.c ieee802154_mcxw_utils.c)
+zephyr_library_sources_ifdef(CONFIG_IEEE802154_NATIVE_SIM_SOCKET
+  ieee802154_native_sim_socket.c
+  ieee802154_native_sim_socket_medium.c
+)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_NRF5 ieee802154_nrf5.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_RF2XX ieee802154_rf2xx.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_RF2XX ieee802154_rf2xx_iface.c)
@@ -44,3 +48,7 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8258
 )
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_UPIPE ieee802154_uart_pipe.c)
 # zephyr-keep-sorted-stop
+
+if(CONFIG_IEEE802154_NATIVE_SIM_SOCKET)
+  target_sources(native_simulator INTERFACE ieee802154_native_sim_socket_bottom.c)
+endif()
