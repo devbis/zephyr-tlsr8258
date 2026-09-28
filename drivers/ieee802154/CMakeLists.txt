@@ -35,5 +35,12 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_RF2XX ieee802154_rf2xx_iface.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_SILABS_EFR32 ieee802154_silabs_efr32.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_STM32WBA ieee802154_stm32wba.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_B91 ieee802154_b91.c)
+zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8258
+  ieee802154_tlsr8258.c
+  ieee802154_tlsr8258_radio_op.c
+  ieee802154_tlsr8258_rf_irq.c
+  ieee802154_tlsr8258_rx_queue.c
+  ieee802154_tlsr8258_tx_irq.c
+)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_UPIPE ieee802154_uart_pipe.c)
 # zephyr-keep-sorted-stop
