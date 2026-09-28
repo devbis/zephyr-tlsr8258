@@ -140,6 +140,7 @@ typedef struct {
     u8 status;
 } zdo_nwk_status_ind_t;
 
+typedef void (*zdo_startDveAssocCb_t)(zdo_start_device_confirm_t *p);
 typedef void (*zdo_startDveCnfCb_t)(zdo_start_device_confirm_t *p);
 typedef void (*zdo_nlmeResetCnfCb_t)(nlme_reset_cnf_t *p);
 typedef void (*zdo_dveAnnceIndCb_t)(zdo_device_annce_req_t *p);
@@ -153,6 +154,7 @@ typedef void (*zdo_tcFrameCntReachedCb_t)(void);
 typedef void (*zdo_nwkStatusIndCb_t)(zdo_nwk_status_ind_t *p);
 
 typedef struct {
+    zdo_startDveAssocCb_t zdpAssocDoneCb;
     zdo_startDveCnfCb_t zdpStartDevCnfCb;
     zdo_nlmeResetCnfCb_t zdpResetCnfCb;
     zdo_dveAnnceIndCb_t zdpDevAnnounceIndCb;

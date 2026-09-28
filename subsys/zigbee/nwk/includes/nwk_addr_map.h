@@ -78,6 +78,7 @@ typedef struct {
 
 extern u16 TL_ZB_NWK_ADDR_MAP_SIZE;
 extern tl_zb_addr_map_t g_nwkAddrMap;
+u32 addrMapTblSizeGet(void);
 
 #define zb_addressTableNumGet()         (g_nwkAddrMap.validNum)
 
