@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_NATIVE_SIM_SOCKET
+	bool "native_sim socket IEEE 802.15.4 driver"
+	depends on BOARD_NATIVE_SIM_NATIVE_64
+	depends on DT_HAS_ZEPHYR_NATIVE_SIM_SOCKET_IEEE802154_ENABLED
+	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	help
+	  Experimental IEEE 802.15.4 driver for native_sim/native/64 that
+	  exchanges PSDUs with a host-side medium process over a UDP socket.
+	  The driver has no receive thread; the application calls
+	  ieee802154_native_sim_socket_poll() from the thread that owns the
+	  radio.
+
+if IEEE802154_NATIVE_SIM_SOCKET
+
+config IEEE802154_NATIVE_SIM_SOCKET_INIT_PRIO
+	int "native_sim socket IEEE 802.15.4 initialization priority"
+	default 80
+
+config IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+	bool "Model a radio RX FIFO and deferred frame handoff"
+	help
+	  Insert a bounded, delayed RX FIFO between the socket medium and the
+	  network stack. It models a radio that buffers received frames for a
+	  deferred worker: FIFO depth, worker latency, RX/TX turnaround and
+	  deterministic frame drops.
+
+if IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_FIFO_SIZE
+	int "behavioral PHY RX FIFO depth"
+	default 8
+	range 2 32
+	help
+	  Number of complete PSDUs retained between the simulated RX ISR and
+	  worker. Frames arriving while this FIFO is full are dropped.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_WORKER_DELAY_US
+	int "behavioral PHY RX worker delay"
+	default 1000
+	range 0 1000000
+	help
+	  Delay between the simulated DMA/FIFO enqueue and stack handoff.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_TURNAROUND_US
+	int "behavioral PHY RX/TX turnaround"
+	default 192
+	range 0 1000000
+	help
+	  Minimum RX re-arm delay after a simulated TX, in microseconds. 192 us
+	  is the IEEE 802.15.4 aTurnaroundTime at 2.4 GHz.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_FRAME
+	int "behavioral PHY frame number to drop"
+	default 0
+	range 0 1000000
+	help
+	  Drop exactly this one received frame number. Zero disables the fault.
+
+config IEEE802154_NATIVE_SIM_SOCKET_RX_DROP_EVERY_N
+	int "behavioral PHY periodic RX drop"
+	default 0
+	range 0 1000000
+	help
+	  Drop every Nth received frame. Zero disables the fault. This is applied
+	  after the exact-frame fault and before FIFO-overflow handling.
+
+endif # IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY
+
+endif # IEEE802154_NATIVE_SIM_SOCKET
