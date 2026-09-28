@@ -125,8 +125,11 @@ static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw)
 	}
 
 	g_zbMacCtx.beaconTriesNum = 3;
-	/* Intentionally keep arg alive here to match the vendor router object. */
 	tl_zbMacBeaconRequestCb();
+	/* Beacon transmission uses the dedicated MAC TX buffer, not this RX
+	 * indication buffer. Release it after the synchronous callback so
+	 * repeated beacon requests cannot exhaust the Zephyr buffer slab. */
+	zb_buf_free((zb_buf_t *)arg);
 }
 #endif
 
