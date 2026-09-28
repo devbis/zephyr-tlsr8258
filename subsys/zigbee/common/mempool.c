@@ -24,6 +24,7 @@
  *******************************************************************************************************/
 #include "mempool.h"
 #include "utility.h"
+#include <stddef.h>
 
 mem_pool_t *mempool_init(mem_pool_t *pool, void *mem, int itemsize, int itemcount)
 {
@@ -33,11 +34,11 @@ mem_pool_t *mempool_init(mem_pool_t *pool, void *mem, int itemsize, int itemcoun
 
     pool->free_list = (mem_block_t *)mem;
 
-    unsigned int block_size = (unsigned int)(MEMPOOL_ITEMSIZE_2_BLOCKSIZE(itemsize));
+    size_t block_size = MEMPOOL_ITEMSIZE_2_BLOCKSIZE(itemsize);
     mem_block_t *tmp = (mem_block_t *)mem;
     int i;
     for (i = 0; i < itemcount - 1; ++i) {
-        tmp = tmp->next_block = (mem_block_t *)(((unsigned int)tmp) + block_size);
+        tmp = tmp->next_block = (mem_block_t *)((char *)tmp + block_size);
     }
     tmp->next_block = 0;
     return pool;
@@ -45,7 +46,7 @@ mem_pool_t *mempool_init(mem_pool_t *pool, void *mem, int itemsize, int itemcoun
 
 mem_block_t *mempool_header(char *pd)
 {
-    return (mem_block_t *)(pd - OFFSETOF(mem_block_t, data));
+    return (mem_block_t *)(pd - offsetof(mem_block_t, data));
 }
 
 void *mempool_alloc(mem_pool_t *pool)

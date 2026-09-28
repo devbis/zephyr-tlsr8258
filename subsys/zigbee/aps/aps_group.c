@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 
 
 #define APS_GROUP_EP_INVALID    0xff

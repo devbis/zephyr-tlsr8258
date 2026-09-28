@@ -26,7 +26,7 @@
 #define ZCL_CONFIG_H
 
 
-#include "tl_common.h"
+#include "zb_common.h"
 
 
 #define ZCL_READ

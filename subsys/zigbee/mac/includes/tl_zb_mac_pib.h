@@ -140,6 +140,8 @@ typedef struct {
 
 #define MAC_IB()        g_zbMacPib
 
+extern tl_zb_mac_pib_t g_zbMacPib;
+
 
 
 void generateIEEEAddr(void);
