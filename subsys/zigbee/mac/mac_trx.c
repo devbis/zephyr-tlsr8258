@@ -148,8 +148,14 @@ static void mac_csmaStart(void *arg)
 
 		mac_trx_vars.state = MAC_TX_UNDERWAY;
 		rf_busyFlag |= TX_BUSY;
-		rf802154_tx();
 		drv_restore_irq(r);
+		/*
+		 * The platform transmits synchronously and waits for the radio
+		 * interrupt, so the transmission cannot run with interrupts locked
+		 * as in the vendor code. Its completion is posted to this thread
+		 * and handled only after the TX wait below is armed.
+		 */
+		rf802154_tx();
 
 		r = drv_disable_irq();
 		if (g_macTimerEvt.state != MAC_TIMER_EVENT_IDLE) {
@@ -651,7 +657,7 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 _attribute_ram_code_ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt,
 						u32 timestamp, s8 rssi)
 {
-	zb_buf_t *buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+	zb_buf_t *buf;
 
 	if (ackPkt != 0U) {
 		u8 frameCtrl = data[0];
@@ -663,9 +669,14 @@ _attribute_ram_code_ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 
 				    ((u32)seqNum << 24);
 
 			mac_trxTask((void *)(uintptr_t)event);
-		} else {
-			zb_buf_free(buf);
 		}
+		return;
+	}
+
+	buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+
+	if (buf == NULL) {
+		rf_busyFlag &= (u8)~RX_BUSY;
 		return;
 	}
 
