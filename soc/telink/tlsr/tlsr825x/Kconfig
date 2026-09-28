@@ -5,6 +5,7 @@ config SOC_SERIES_TLSR825X
 	bool
 	select TC32
 	select HAS_TELINK_DRIVERS
+	select HAS_PM
 	select HAS_SEGGER_RTT if ZEPHYR_SEGGER_MODULE
 	select ARCH_HAS_RAMFUNC_SUPPORT
 	select SOC_EARLY_INIT_HOOK
@@ -15,5 +16,29 @@ if SOC_SERIES_TLSR825X
 
 config SOC_TLSR8258
 	bool
+
+config SOC_SERIES_TLSR825X_PM
+	bool "TLSR825x system power management"
+	default y
+	depends on PM
+	help
+	  Suspend the SoC from the idle loop when the PM policy selects
+	  PM_STATE_SUSPEND_TO_IDLE, and provide the suspend and deep-sleep
+	  helpers declared in power.h.
+
+config TLSR8258_PM_TIMER_WAKEUP
+	bool "32 kHz timer wakeup"
+	default y
+	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Arm the 32 kHz timer as a wakeup source for suspend and deep sleep.
+
+config TLSR8258_PM_GPIO_WAKEUP
+	bool "GPIO wakeup"
+	default y
+	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Arm the GPIO pins configured with
+	  tlsr8258_pm_configure_gpio_wakeup() as wakeup sources.
 
 endif # SOC_SERIES_TLSR825X
