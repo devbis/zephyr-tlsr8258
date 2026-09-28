@@ -409,7 +409,8 @@ typedef struct {
     uint8_t leaveDoing:1;
     uint8_t forceJoin:1;
     uint8_t securityDisable:1;
-    uint8_t resv:3;
+    uint8_t tcLinkKeyReady:1;
+    uint8_t resv:2;
     uint8_t initResult;
 } bdb_ctx_t;
 /** @} end of group zb_bdb_ctx */
@@ -543,6 +544,16 @@ bool bdb_addIdentifyActiveEpForFB(findBindDst_t dstInfo);
  * @return      status_t
  */
 status_t bdb_defaultReportingCfg(uint8_t endpoint, uint16_t profileID, uint16_t clusterID, uint16_t attrID, uint16_t minReportInt, uint16_t maxReportInt, uint8_t *reportableChange);
+
+/*
+ * @fn      bdb_zdoAssocDone
+ *
+ * @brief   association/interview handoff handle
+ *
+ * @param   startDevCnf
+ *
+ */
+void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
 
 /*
  * @fn      bdb_zdoStartDevCnf
