@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 
 
 #ifdef ZB_SECURITY
@@ -44,11 +44,6 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     u8 ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
     ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
-#if ZB_COORDINATOR_ROLE
-    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
-#else
-    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
-#endif
 
     /*
      * user can process network key(Decrypt) here :
@@ -56,6 +51,38 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
      *
      * */
 #endif
+#if ZB_COORDINATOR_ROLE
+    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+    /*
+     * ss_ib is stored in NV whole, pointer members included, and it has no
+     * static initializer in this port. Point the key pointers at the
+     * built-in keys after every restore: a stored pointer is meaningless
+     * after a rebuild, and a NULL tcLinkKey makes every Transport-Key fail
+     * to decrypt.
+     */
+    ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+    ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+    ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+    if (ret != NV_SUCC) {
+        /*
+         * A soft reset keeps SRAM, so without an NV record ss_ib can still
+         * hold the previous session, and a new Transport-Key would look
+         * preconfigured. Start from a cleared block.
+         */
+        memset(&ss_ib, 0, sizeof(ss_ib));
+#if ZB_COORDINATOR_ROLE
+        ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+#else
+        ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+#endif
+        ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
+        ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
+        ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+        ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
+    }
     return ret;
 }
 
