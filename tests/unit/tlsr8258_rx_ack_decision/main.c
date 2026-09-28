@@ -1,0 +1,158 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The RX interrupt's MAC acknowledgment decision (self-originated, ACK
+ * requested, destination matches the filter), as implemented by
+ * tlsr8258_core_rx_ack_decision(), fed with captured and synthetic frames.
+ */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <zephyr/ztest.h>
+
+#include "ieee802154_tlsr8258_fake_phy_core.h"
+
+/* Our own IEEE (a4:c1:38:e0:50:02:00:0c), little-endian on air. */
+static const uint8_t our_ieee[8] = {0x0c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4};
+/* Our assigned short 0x38d9 and the PAN 0x1a62 from the capture, little-endian. */
+static const uint8_t our_short[2] = {0xd9, 0x38};
+static const uint8_t wild_short[2] = {0xff, 0xff};
+static const uint8_t pan[2] = {0x62, 0x1a};
+
+/*
+ * REAL coordinator(0x0000)->us(0x38d9) ack-requested Node-Desc-Req PSDU,
+ * captured on air from a Zigbee coordinator, FCS trimmed. FCF=0x8861:
+ * DATA type, ack-request bit set, short dst 0x38d9, short src 0x0000.
+ */
+static const uint8_t real_coord_to_us[] = {
+	0x61, 0x88, 0x3d, 0x62, 0x1a, 0xd9, 0x38, 0x00, 0x00, 0x08, 0x00, 0xd9, 0x38, 0x00, 0x00,
+	0x1e, 0x9a, 0x21, 0xe7, 0x30, 0x04, 0x50, 0x00, 0x00, 0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16,
+};
+
+/*
+ * Captured successful Association Response to our IEEE (a4:c1:38:e0:50:02:00:0c),
+ * with stale PAN/short filters.  During this frame we do not own the assigned
+ * short yet, so the ACK decision must use the exact IEEE destination.
+ * FCF=0xcc63: MAC command, ACK requested, extended dst/src, PAN compressed.
+ */
+static const uint8_t assoc_resp_to_us[] = {
+	0x63, 0xcc, 0x7f, 0x62, 0x1a, 0x0c, 0x00, 0x02, 0x50, 0xe0, 0x38, 0xc1, 0xa4,
+	0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16, 0xa7, 0x20, 0x02, 0x5a, 0x22, 0x00,
+};
+
+ZTEST(tlsr8258_rx_ack_decision, test_real_coord_req_gets_acked)
+{
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = pan, .short_addr = our_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+
+	tlsr8258_core_rx_ack_decision(real_coord_to_us, sizeof(real_coord_to_us), &f, &d);
+
+	zassert_true(!d.self_originated, "real coord req must not be self-originated (DATA type)");
+	zassert_true(d.ack_requested, "real coord req has FCF ack-request bit set");
+	zassert_true(d.filter_match, "real coord req dst 0x38d9 == our short -> filter match");
+	zassert_true(d.should_ack, "we MUST MAC-ACK the coordinator's Node-Desc-Req");
+}
+
+ZTEST(tlsr8258_rx_ack_decision, test_same_req_before_join_not_ours)
+{
+	/* Pre-join our short is 0xffff; the frame's dst 0x38d9 is not us nor bcast. */
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = pan, .short_addr = wild_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+
+	tlsr8258_core_rx_ack_decision(real_coord_to_us, sizeof(real_coord_to_us), &f, &d);
+
+	zassert_true(d.ack_requested, "ack-request bit still set");
+	zassert_true(!d.filter_match, "dst 0x38d9 != our (unassigned) short -> no match");
+	zassert_true(!d.should_ack, "must not ACK a unicast to a short we do not own");
+}
+
+ZTEST(tlsr8258_rx_ack_decision, test_assoc_resp_to_ieee_is_acked_with_stale_short)
+{
+	const uint8_t stale_pan[2] = {0x34, 0x12};
+	const uint8_t stale_short[2] = {0xc0, 0xc4};
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = stale_pan, .short_addr = stale_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+	struct tlsr8258_core_rx_result rx;
+
+	tlsr8258_core_rx_ack_decision(assoc_resp_to_us, sizeof(assoc_resp_to_us), &f, &d);
+
+	zassert_true(!d.self_originated, "coordinator Association Response is not our own command");
+	zassert_true(d.ack_requested, "Association Response requests a MAC ACK");
+	zassert_true(d.assoc_resp_to_ieee, "Association Response is addressed to our IEEE");
+	zassert_true(d.filter_match, "association handoff must bypass stale short filter");
+	zassert_true(d.should_ack, "we MUST MAC-ACK our Association Response");
+
+	/*
+	 * The same exception must wake the synchronous Data-Request follow-up
+	 * state machine; otherwise the ED ACKs the response but retries AssocReq.
+	 */
+	tlsr8258_core_handle_rx_frame(assoc_resp_to_us, sizeof(assoc_resp_to_us), 0x7fu, &f, &rx);
+	zassert_true(rx.assoc_resp_to_ieee, "RX classifier recognizes our Association Response");
+	zassert_true(rx.ack_eligible, "Association Response is an eligible pending response");
+	zassert_true(rx.is_pending_response, "Association Response completes poll follow-up");
+}
+
+ZTEST(tlsr8258_rx_ack_decision, test_unicast_to_other_short_not_acked)
+{
+	uint8_t frame[sizeof(real_coord_to_us)];
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = pan, .short_addr = our_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+
+	memcpy(frame, real_coord_to_us, sizeof(frame));
+	frame[5] = 0x34; /* dst short -> 0x1234 (someone else) */
+	frame[6] = 0x12;
+
+	tlsr8258_core_rx_ack_decision(frame, sizeof(frame), &f, &d);
+
+	zassert_true(d.ack_requested, "ack-request bit set");
+	zassert_true(!d.filter_match, "dst 0x1234 is another node -> no match");
+	zassert_true(!d.should_ack, "must not ACK another node's unicast");
+}
+
+ZTEST(tlsr8258_rx_ack_decision, test_broadcast_matches_filter)
+{
+	uint8_t frame[sizeof(real_coord_to_us)];
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = pan, .short_addr = our_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+
+	memcpy(frame, real_coord_to_us, sizeof(frame));
+	frame[5] = 0xff; /* dst short -> 0xffff broadcast */
+	frame[6] = 0xff;
+
+	tlsr8258_core_rx_ack_decision(frame, sizeof(frame), &f, &d);
+
+	zassert_true(d.filter_match, "broadcast dst always matches the filter");
+}
+
+ZTEST(tlsr8258_rx_ack_decision, test_own_data_request_is_self_originated)
+{
+	/*
+	 * Our own Data-Request poll echo: MAC command (type 3), ack-request set,
+	 * dst=coord short 0x0000, src=our short 0x38d9, PAN-compressed, cmd 0x04.
+	 * FCF=0x8863.
+	 */
+	const uint8_t own_poll[] = {
+		0x63, 0x88, 0x11, 0x62, 0x1a, 0x00, 0x00, 0xd9, 0x38, 0x04,
+	};
+	struct tlsr8258_core_filter_ctx f = {
+		.pan_id = pan, .short_addr = our_short, .ieee_addr = our_ieee};
+	struct tlsr8258_core_rx_ack_decision d;
+
+	tlsr8258_core_rx_ack_decision(own_poll, sizeof(own_poll), &f, &d);
+
+	zassert_true(d.self_originated, "our own data-request echo is self-originated");
+	zassert_true(!d.ack_requested, "self-originated frames are never treated as ack-requested");
+	zassert_true(!d.should_ack, "must not ACK our own echoed poll");
+}
+
+ZTEST_SUITE(tlsr8258_rx_ack_decision, NULL, NULL, NULL, NULL, NULL);
