@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+tests:
+  zigbee.radio_adapter_map:
+    tags:
+      - zigbee
+    type: unit
