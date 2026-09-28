@@ -19,3 +19,6 @@ properties:
 
   clocks:
     required: true
+    description: |
+      Clock the system tick counts. Its clock-frequency is the tick rate,
+      SYS_CLOCK_HW_CYCLES_PER_SEC.
