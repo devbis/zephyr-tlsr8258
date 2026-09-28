@@ -26,7 +26,7 @@
 /**********************************************************************
  * INCLUDES
  */
-#include "../common/includes/zb_common.h"
+#include "zb_common.h"
 #include "../zcl/zcl_include.h"
 #include "gp_base.h"
 #include "gp.h"

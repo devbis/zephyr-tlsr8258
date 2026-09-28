@@ -23,7 +23,7 @@
  *
  *******************************************************************************************************/
 #include "ringbuffer.h"
-#include "types.h"
+#include <zephyr/zigbee/zb_types.h>
 #include "string.h"
 
 ringbuffer_t *ringbuffer_init(ringbuffer_t *ringbuf, unsigned char *buf, unsigned int size)
