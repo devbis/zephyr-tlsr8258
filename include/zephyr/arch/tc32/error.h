@@ -1,0 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef ZEPHYR_INCLUDE_ARCH_TC32_ERROR_H_
+#define ZEPHYR_INCLUDE_ARCH_TC32_ERROR_H_
+
+#endif /* ZEPHYR_INCLUDE_ARCH_TC32_ERROR_H_ */
