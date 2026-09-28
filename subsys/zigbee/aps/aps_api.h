@@ -535,6 +535,9 @@ aps_status_t aps_search_dst_from_bind_tbl(aps_data_req_t *apsreq, bind_dst_list_
  **************************************************************************/
 aps_binding_entry_t *aps_bindingTblEntryGet(void);
 
+/* Defined in subsys/zigbee/common/zb_config.c (SDK copy). */
+aps_binding_entry_t *bindTblEntryGet(void);
+
 /***********************************************************************//**
  * @brief   get binding table number
  *

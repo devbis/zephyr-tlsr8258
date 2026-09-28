@@ -22,7 +22,7 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#include "types.h"
+#include <zephyr/zigbee/zb_types.h>
 #include "list.h"
 
 struct list {

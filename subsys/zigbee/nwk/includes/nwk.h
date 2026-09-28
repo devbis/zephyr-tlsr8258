@@ -25,6 +25,27 @@
 #ifndef NWK_H
 #define NWK_H
 
+#ifndef MAX_ED_SCAN_RESULTS_SUPPORTED
+#define MAX_ED_SCAN_RESULTS_SUPPORTED           16
+#endif
+
+/* Some translation units include nwk.h without pulling MAC/OS headers first. */
+#ifndef ZB_CAPABILITY_INFO_T_DEFINED
+#define ZB_CAPABILITY_INFO_T_DEFINED
+typedef struct {
+	u8 altPanCoord:1;
+	u8 devType:1;
+	u8 powerSrc:1;
+	u8 rcvOnWhenIdle:1;
+	u8 reserved:2;
+	u8 secuCapability:1;
+	u8 allocAddr:1;
+} capability_info_t;
+#endif
+
+typedef struct nebTbl_t tl_zb_normal_neighbor_entry_t;
+typedef struct ev_timer_event_t ev_timer_event_t;
+
 
 /***************************************************************************
 * @brief	NWK Mesh route stuff: routing table size
@@ -157,6 +178,8 @@ typedef enum {
     NWK_INTERNAL_ROUTE_RECORD_CMD_HANDLE,
     NWK_INTERNAL_ENDDEVTIMEOUT_REQ_CMD_HANDLE,
     NWK_INTERNAL_ENDDEVTIMEOUT_RSP_CMD_HANDLE,
+    /* Reserved for the response-before-self-leave handoff. */
+    NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE = 0xD0,
     //MAC_HANDLE_MIN = 0xDF,
 } nwk_internal_handle_t;
 
@@ -417,6 +440,7 @@ typedef struct {
 
     u32 rxTime;
     u16 srcMacAddr;
+    s8 rssi;
 } nlde_data_ind_t;
 
 /***************************************************************************

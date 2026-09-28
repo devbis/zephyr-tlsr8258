@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <zephyr/zigbee/zb_types.h>
+
 
 /** @addtogroup  TELINK_COMMON_MODULE TELINK Common Module
  *  @{

@@ -24,6 +24,8 @@
  *******************************************************************************************************/
 #pragma once
 
+#include <stddef.h>
+
 #define abs(a)                          (((a) > 0) ? ((a)) : (-(a)))
 #define absSub(a, b)                    ((a) > (b) ? ((a) - (b)) : ((b) - (a)))
 
@@ -47,7 +49,9 @@
 #endif
 
 #define LENGTHOF(s, m)                  (sizeof(((s*)0)->m))
-#define OFFSETOF(s, m)                  ((unsigned int) &((s *)0)->m)
+#ifndef OFFSETOF
+#define OFFSETOF(s, m)                  offsetof(s, m)
+#endif
 #define ROUND_INT(x, r)                 (((x) + (r) - 1) / (r) * (r))
 #define ROUND_TO_POW2(x, r)             (((x) + (r) - 1) & ~((r) - 1))
 
@@ -99,7 +103,9 @@
 //  round robbin foreach
 #define foreach_hint(i, n, h)           for(int i = 0, ++h, h = h < n ? h : 0; i < n; ++h, h = h < n ? h : 0)
 
+#ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a)                   (sizeof(a) / sizeof(*a))
+#endif
 
 #define everyN(i, n)                    ++(i); (i)=((i) < N ? (i) : 0); if(0 == (i))
 
