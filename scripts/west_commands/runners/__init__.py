@@ -74,6 +74,7 @@ _names = [
     'stm32flash',
     'sy1xx',
     'teensy',
+    'tlsrpgm',
     'trace32',
     'uf2',
     'vegadude',
