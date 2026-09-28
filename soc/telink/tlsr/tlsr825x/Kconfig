@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_TLSR825X
+	bool
+	select TC32
+	select HAS_TELINK_DRIVERS
+	select HAS_SEGGER_RTT if ZEPHYR_SEGGER_MODULE
+	select ARCH_HAS_RAMFUNC_SUPPORT
+	select SOC_EARLY_INIT_HOOK
+	select SOC_PREP_HOOK
+	select XIP
+
+if SOC_SERIES_TLSR825X
+
+config SOC_TLSR8258
+	bool
+
+endif # SOC_SERIES_TLSR825X
