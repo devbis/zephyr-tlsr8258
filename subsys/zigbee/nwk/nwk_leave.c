@@ -10,6 +10,9 @@
 #include "zdo_nwk_manager.h"
 #include "ss_security_flags.h"
 
+/* nwk_leaveCmdSendCnf() reads the confirmation status by byte offset. */
+ZB_ASSERT_FIELD_OFFSET(zb_mscp_data_conf_t, status, 9);
+
 static void nwk_nlmeLeaveCnf(void *arg, uint8_t status, addrExt_t extAddr)
 {
 	nlme_leave_cnf_t *cnf = (nlme_leave_cnf_t *)arg;

@@ -15,6 +15,9 @@
 #include "mac_mlme.h"
 #include "mac_trx.h"
 
+/* The association response handler copies the device address from byte 2 of the request. */
+ZB_ASSERT_FIELD_OFFSET(zb_mlme_associate_resp_t, devAddress, 2);
+
 static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
 

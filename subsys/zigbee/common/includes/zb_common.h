@@ -1,0 +1,460 @@
+/*
+ * Copyright The Zephyr Project Contributors
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Zephyr replacement for the vendor zigbee/common/includes/zb_common.h.
+ *
+ * The vendor header reaches straight into the chip_8258 platform, so this
+ * port supplies its own under the same name and include path: the imported
+ * stack keeps including "zb_common.h" unchanged and resolves to this file.
+ * It declares everything those sources expect to find through it, including
+ * the buffer and task queue types the Zephyr platform layer implements.
+ */
+#ifndef ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_COMMON_H_
+#define ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_COMMON_H_
+
+#include "tl_platform.h"
+#include "common/static_assert.h"
+#include "common/list.h"
+#include "common/second_clock.h"
+#include <string.h>
+#include <zephyr/random/random.h>
+
+#ifndef ZB_BUF_SIZE
+#define ZB_BUF_SIZE 192
+#endif
+
+/* zb_buf_t / zb_buf_hdr_t mirror the SDK layout (tl_zigbee_sdk
+ * zigbee/common/includes/zb_buffer.h). The struct stays binary
+ * compatible with libzigbee's zb_buffer.c so router NWK sources can
+ * reach into buf->hdr.handle / buf->hdr.used the way the vendor code
+ * expects.
+ */
+typedef struct {
+	uint8_t id;              /* primitive id */
+	uint8_t handle;
+	int8_t rssi;
+	uint8_t used:1;
+	uint8_t macTxFifo:1;
+	uint8_t leaveRejoin:1;
+	uint8_t active:1;        /* only for mac command buffer */
+	uint8_t pending:1;       /* only for endDev: parent has pending data */
+	uint8_t rejoinStartAgain:1;
+	uint8_t resvHdr:2;
+} zb_buf_hdr_t;
+
+typedef struct zb_buf_s {
+	uint8_t  buf[ZB_BUF_SIZE];
+	zb_buf_hdr_t hdr;
+	struct zb_buf_s *next;
+	uint32_t allocCnt;
+	uint32_t freeCnt;
+} zb_buf_t;
+
+#ifndef ZB_BUF_POOL_NUM
+/*
+ * Vendor SDK (tl_zigbee_sdk zb_buffer.h) uses 36 blocks for a ROUTER, 18 for an
+ * ED. This was cut to 24 during the RAM crunch, on the (now disproven) belief
+ * that buffer exhaustion was not an interview factor. On-HW counter reads
+ * (2026-08-03) of a SUCCESSFUL interview showed zb_nwk_ed_trace[47]=9 —
+ * zb_phyRxBufTozbBuf() returned NULL 9 times because the pool ran dry during the
+ * interview-request burst, dropping frames at the driver->stack boundary and
+ * contributing to interview flakiness. The rx_worker strip freed ~2.2 KB RAM, so
+ * Keep the router pool at 33: the vendor value is 36, but the Zephyr buffer
+ * carries a 128-byte RX snapshot in each block and the 48 KiB TLSR RAM cannot
+ * fit all 36 blocks together with the router runtime. 33 retains the burst
+ * headroom while fitting the actual Zephyr layout.
+ */
+#if defined(ZB_ROUTER_ROLE) || defined(CONFIG_ZIGBEE_ROUTER)
+#define ZB_BUF_POOL_NUM 33
+#else
+#define ZB_BUF_POOL_NUM 18
+#endif
+#endif
+
+/*
+ * Slab headroom the RX path leaves free so TX responses (af_dataSend) can always
+ * allocate even when an inbound interview-retry flood is consuming the pool.
+ * Inbound data frames are dropped before allocation once free blocks fall to
+ * this level, preserving capacity for locally generated interview responses.
+ */
+#ifndef ZB_BUF_RX_RESERVE
+#define ZB_BUF_RX_RESERVE 2U
+#endif
+#ifndef SEC_KEY_LEN
+#define SEC_KEY_LEN 16
+#endif
+
+/* Task queue API matching SDK's zb_callback_t / zb_TaskPost signature */
+typedef void (*zb_callback_t)(void *arg);
+uint8_t zb_TaskPost(zb_callback_t fn, void *arg);
+uint8_t zb_RxTaskPost(zb_callback_t fn, void *arg);
+uint8_t zb_TxTaskPost(zb_callback_t fn, void *arg);
+void zb_taskq_process(void);
+bool zb_taskq_is_empty(void);
+bool zb_taskq_layer_queues_empty(void);
+#define ZB_SCHEDULE_TASK zb_TaskPost
+
+/* Layer-queue identifiers used by the SDK macros wrapping
+ * zb_PrimitivePost(layerQ, primitive, arg). Matches
+ * tl_zigbee_sdk/zigbee/common/includes/zb_task_queue.h.
+ */
+enum {
+	ZB_Q_EV_TASK = 0,
+	ZB_Q_MAC2NWK,
+	ZB_Q_NWK2MAC,
+	ZB_Q_HIGH2NWK,
+	ZB_Q_NWK2HIGH,
+	ZB_Q_TYPE_MAX,
+};
+
+uint8_t zb_PrimitivePost(uint8_t layerQ, uint8_t primitive, void *arg);
+
+/* Task queue entry mirroring the SDK's zb_task_t. Stays
+ * binary-compatible with libzigbee's zb_task_queue.c so ported NWK
+ * sources can pop entries from the queue the way the vendor expects.
+ */
+typedef struct zb_task_s {
+	zb_callback_t tlCb;
+	void *data;
+} zb_task_t;
+
+zb_task_t *zb_TaskQPop(uint8_t idx, zb_task_t *taskInfo);
+
+/* NWK protocol version (mirrors tl_zigbee_sdk
+ * zigbee/common/includes/zb_config.h).
+ */
+#ifndef ZB_PROTOCOL_VERSION
+#define ZB_PROTOCOL_VERSION    2
+#endif
+
+/* A Green Power frame carries its own protocol version. */
+#ifndef ZB_PROTOCOL_VERSION_GP
+#define ZB_PROTOCOL_VERSION_GP 3
+#endif
+
+extern const uint8_t g_zero_addr[8];
+extern uint32_t g_secondCnt;
+
+/* Generic return codes used broadly across SDK sources. */
+enum {
+	RET_OK = 0,
+	RET_ERROR,
+	RET_BLOCKED,
+	RET_EXIT,
+	RET_BUSY,
+	RET_EOF,
+	RET_OUT_OF_RANGE,
+	RET_EMPTY,
+	RET_CANCELLED,
+	RET_PENDING,
+	RET_NO_MEMORY,
+	RET_INVALID_PARAMETER,
+	RET_OPERATION_FAILED,
+	RET_BUFFER_TOO_SMALL,
+	RET_END_OF_LIST,
+	RET_ALREADY_EXISTS,
+	RET_NOT_FOUND,
+};
+
+/* System diagnostics counters (mirrors zb_common.h sys_diagnostics_t) */
+/* diagnostics for stack */
+typedef struct {
+    uint16_t numberOfResets;
+    uint16_t persistentMemoryWrites;
+
+    uint32_t macRxCrcFail;
+    uint32_t macTxCcaFail;
+    uint32_t macRxBcast;
+    uint32_t macTxBcast;
+    uint32_t macRxUcast;
+    uint32_t macTxUcast;
+    uint16_t macTxUcastRetry;
+    uint16_t macTxUcastFail;
+
+    uint16_t nwkTxCnt;
+    uint16_t nwkTxEnDecryptFail;
+
+    uint16_t apsRxBcast;
+    uint16_t apsTxBcast;
+    uint16_t apsRxUcast;
+    uint16_t apsTxUcastSuccess;
+    uint16_t apsTxUcastRetry;
+    uint16_t apsTxUcastFail;
+
+    uint16_t routeDiscInitiated;
+    uint16_t neighborAdded;
+    uint16_t neighborRemoved;
+    uint16_t neighborStale;
+    uint16_t joinIndication;
+    uint16_t childMoved;
+
+    uint32_t panIdConflictCheck;
+
+    uint16_t nwkFCFailure;
+    uint16_t apsFCFailure;
+    uint16_t apsUnauthorizedKey;
+    uint16_t nwkDecryptFailures;
+    uint16_t apsDecryptFailures;
+    uint16_t packetBufferAllocateFailures;
+    uint16_t relayedUcast;
+    uint16_t phytoMACqueuelimitreached;
+    uint16_t packetValidateDropCount;
+
+    uint8_t lastMessageLQI;
+    int8_t lastMessageRSSI;
+    uint8_t macTxIrqTimeoutCnt;
+    uint8_t macTxIrqCnt;
+    uint8_t macRxIrqCnt;
+    uint8_t phyLengthError;
+    uint8_t panIdConflict;
+    uint8_t panIdModified;
+    uint8_t nwkAddrConflict;
+} sys_diagnostics_t;
+extern sys_diagnostics_t g_sysDiags;
+
+/* ─── Common address/utility macros (mirrors zb_common.h) ─────────────── */
+#include "common/utility.h"
+
+#define EXT_ADDR_LEN                    8
+#define SRC_ID_LEN                      4
+#define ZB_SETSTRUCTCONTENT(s, v)       (memset((uint8_t *)&(s), (v), sizeof(s)))
+#define COPY_U16TOBUFFER(buf, data)     do { \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
+} while (0)
+#define COPY_BUFFERTOU16(data, buf)     do { \
+	(data) = ((buf)[0]) + (((buf)[1]) << 8); \
+} while (0)
+#define COPY_U24TOBUFFER(buf, data)     do { \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
+	(((uint8_t *)(buf))[2]) = (uint8_t)((data) >> 16); \
+} while (0)
+#define COPY_U32TOBUFFER(buf, data)     do { \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
+	(((uint8_t *)(buf))[2]) = (uint8_t)((data) >> 16); \
+	(((uint8_t *)(buf))[3]) = (uint8_t)((data) >> 24); \
+} while (0)
+#define ZB_IS_64BIT_ADDR_ZERO(addr)     (!memcmp((addr), g_zero_addr, EXT_ADDR_LEN))
+#define ZB_IS_64BIT_ADDR_INVALID(addr)  (!memcmp((addr), g_invalid_addr, EXT_ADDR_LEN))
+#define ZB_64BIT_ADDR_ZERO(addr)        (memset((addr), 0, EXT_ADDR_LEN))
+#define ZB_64BIT_ADDR_COPY(dst, src)    (memcpy((dst), (src), EXT_ADDR_LEN))
+#define ZB_64BIT_ADDR_CMP(a, b)         ((bool)!memcmp((a), (b), EXT_ADDR_LEN))
+
+/* Channel mask covering 802.15.4 channels 11..26 (bits 11..26 set).
+ * Mirrors tl_zigbee_sdk zigbee/common/includes/zb_common.h.
+ */
+#ifndef ZB_TRANSCEIVER_ALL_CHANNELS_MASK
+#define ZB_TRANSCEIVER_ALL_CHANNELS_MASK   0x07FFF800UL
+#endif
+
+#ifndef ZB_CCM_M
+#define ZB_CCM_M                          4
+#endif
+
+#ifndef ZB_RETURN_INVALID
+#define ZB_RETURN_INVALID                 0xff
+#endif
+
+extern const uint8_t g_null_securityKey[];
+extern const uint8_t nwkKeyDefault[];
+extern const uint8_t touchLinkKeyCertification[];
+extern const uint8_t touchLinkKeyMaster[];
+
+#ifndef ZB_IS_16BYTE_SECURITY_KEY_ZERO
+#define ZB_IS_16BYTE_SECURITY_KEY_ZERO(key) \
+	(!memcmp((key), g_null_securityKey, SEC_KEY_LEN))
+#endif
+#define ZB_EXTPANID_IS_ZERO             ZB_IS_64BIT_ADDR_ZERO
+#define ZB_EXTPANID_COPY                ZB_64BIT_ADDR_COPY
+#define ZB_EXTPANID_CMP                 ZB_64BIT_ADDR_CMP
+#define ZB_IEEE_ADDR_INVALID(addr)      ZB_64BIT_ADDR_COPY((addr), g_invalid_addr)
+#define ZB_IEEE_ADDR_COPY               ZB_64BIT_ADDR_COPY
+#define ZB_IEEE_ADDR_ZERO               ZB_64BIT_ADDR_ZERO
+#define ZB_EXTPANID_ZERO                ZB_64BIT_ADDR_ZERO
+
+#define SHORT_ADDR_LEN                  2 /* network/short address length */
+
+/*
+ * The vendor build places each layer in its own flash section. The Zephyr
+ * port lets the linker place code normally, so these are no-ops here, exactly
+ * as in the vendor's own non-sectioned configuration.
+ */
+#define _CODE_MAC_
+#define _CODE_APS_
+#define _CODE_AF_
+#define _CODE_SS_
+#define _CODE_BDB_
+#define _CODE_ZCL_
+
+#define ZB_IEEE_ADDR_IS_INVALID         ZB_IS_64BIT_ADDR_INVALID
+#define ZB_IEEE_ADDR_IS_ZERO            ZB_IS_64BIT_ADDR_ZERO
+#define ZB_IEEE_ADDR_CMP                ZB_64BIT_ADDR_CMP
+#define ZB_SEC_KEY_IS_NULL              ZB_IS_16BYTE_SECURITY_KEY_ZERO
+extern const addrExt_t g_invalid_addr;
+extern const addrExt_t g_zero_addr;
+
+/* Frame header sizes (mirrors zb_common.h) */
+#ifndef ZB_MAC_FRAME_HEADER
+#define ZB_MAC_FRAME_HEADER             (9 + 2)
+#endif
+#ifndef ZB_NWK_FRAME_HEADER
+#define ZB_NWK_FRAME_HEADER             (8 + NWK_MAX_SOURCE_ROUTE * 2 + 14 + 4)
+#endif
+#ifndef ZB_APS_FRAME_HEADER
+#define ZB_APS_FRAME_HEADER             10
+#endif
+
+/* Telink manufacturer code */
+#ifndef MANUFACTURER_CODE_TELINK
+#define MANUFACTURER_CODE_TELINK        0x1141
+#endif
+
+#ifndef DEBUG
+#define DEBUG(...)                      do { } while (0)
+#endif
+
+#include <zephyr/zigbee/zb_config.h>
+#include "os/ev_buffer.h"
+#include "os/ev_queue.h"
+#include "os/ev_timer.h"
+#include "os/ev_poll.h"
+#include "os/ev.h"
+#include "drv_hw.h"
+#include "zb_aes.h"
+#include "drv_radio.h"
+#include "drv_nv.h"
+#include "mac/includes/mac_phy.h"
+#include "mac/includes/mac_trx_api.h"
+#include "mac/includes/tl_zb_mac.h"
+#include "mac/includes/tl_zb_mac_pib.h"
+#include "nwk/includes/nwk_addr_map.h"
+#include "nwk/includes/nwk_neighbor.h"
+#include "nwk/includes/nwk.h"
+#include "nwk/includes/nwk_nib.h"
+#include "nwk/includes/nwk_ctx.h"
+#include "aps/aps_api.h"
+
+/* Define apsdeDataInd_t here so af/zb_af.h can use OFFSETOF(apsdeDataInd_t, asdu).
+ * zbapi/zb_api.h will skip its own copy when it sees the guard. */
+#ifndef ZB_APSDE_DATA_IND_DEFINED
+#define ZB_APSDE_DATA_IND_DEFINED
+typedef struct apsdeDataInd_s {
+	aps_data_ind_t indInfo;
+	uint16_t asduLen;
+	uint8_t  asdu[];
+} apsdeDataInd_t;
+#endif
+
+/* Include order matters: af → ss → zdo/zdp → zdo/zdo_api → zbapi/zb_api */
+#include "af/zb_af.h"
+#include "ss/security_service.h"
+#include "zdo/zdp.h"
+#include "zdo/zdo_api.h"
+#include "zbapi/zb_api.h"
+#include "bdb/includes/bdb.h"
+#include "zcl/zll_commissioning/zcl_touchlink_attr.h"
+#include "gp/cGP_stub.h"
+#include "gp/dGP_stub.h"
+
+enum {
+	REJOIN_INSECURITY,
+	REJOIN_SECURITY,
+};
+
+static inline uint16_t zb_random(void)
+{
+	return (uint16_t)sys_rand32_get();
+}
+
+#define ZB_RANDOM() zb_random()
+
+/* Global stack state shape expected by open Zigbee sources. */
+typedef struct {
+	zb_mac_pib_t macPib;
+	nwk_nib_t nwkNib;
+	touchlink_attr_t touchlinkAttr;
+	bdb_attr_t bdbAttr;
+} zb_info_t;
+extern zb_info_t g_zbInfo;
+
+#define g_zbMacPib      g_zbInfo.macPib
+#define g_zbNIB         g_zbInfo.nwkNib
+#define g_touchlinkAttr g_zbInfo.touchlinkAttr
+#define g_bdbAttrs      g_zbInfo.bdbAttr
+
+extern const uint8_t tcLinkKeyCentralDefault[];
+extern const uint8_t linkKeyDistributedCertification[];
+extern const uint8_t linkKeyDistributedMaster[];
+void zb_info_save(void *arg);
+void zb_reset(void);
+
+
+
+/*
+ * Declarations the vendor zb_common.h hands out directly. They are
+ * implemented partly by the imported stack and partly by the platform layer,
+ * and the imported sources reach all of them through this header.
+ */
+extern const zb_mac_pib_t macPibDefault;
+extern const nwk_nib_t nwkNibDefault;
+extern const zdo_attrCfg_t zdoCfgAttrDefault;
+
+void zb_init(void);
+void zb_nwkKeySet(void);
+void os_init(uint8_t isRetention);
+uint8_t zb_info_load(void);
+bool zb_stackBusy(void);
+
+void zb_sched_init(void);
+extern uint8_t ZB_TASKQ_USERUSE_SIZE;
+uint8_t zb_UserTaskQNum(void);
+
+uint32_t zbBufferSizeGet(void);
+uint32_t neighborTblSizeGet(void);
+uint32_t addrMapTblSizeGet(void);
+uint32_t brcTransRecordTblSizeGet(void);
+nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(uint8_t idx);
+aps_binding_entry_t *bindTblEntryGet(void);
+
+/*
+ * The vendor zb_common.h hands out the buffer API too, and the imported stack
+ * relies on that: most sources include only "zb_common.h". Pull it in last, so
+ * the buffer types above are already declared.
+ */
+/*
+ * The imported stack asserts the vendor's packed struct layout, which the
+ * vendor build gets from -fpack-struct. This port does not link vendor
+ * objects, and its translation units also see Zephyr headers, so packing them
+ * would break ABI with the kernel rather than buy compatibility. Field offsets
+ * agree for structures made of u8 members and u8 arrays; where a u16, u32,
+ * pointer or union member follows an odd offset, the natural layout moves it
+ * (mac_mlme_poll_ind_t.devAddr sits at byte 1 packed and at byte 2 here), and
+ * trailing padding differs, so the size contracts do not hold and are not
+ * enforced.
+ *
+ * The imported sources were written for packed structures and sometimes fill
+ * a buffer by byte offset where another function reads it through a
+ * structure, or the other way round. Both sides must use the same layout: fill
+ * a buffer through its structure, and where a raw offset is unavoidable state
+ * it with ZB_ASSERT_FIELD_OFFSET so a layout that moves the field fails to
+ * build.
+ *
+ * Wire formats are unaffected: the stack builds frames field by field, never
+ * by writing a struct out whole.
+ */
+#undef STATIC_ASSERT
+#define STATIC_ASSERT(X)
+
+#define ZB_ASSERT_FIELD_OFFSET(type, member, offset)                                              \
+	BUILD_ASSERT(offsetof(type, member) == (offset),                                           \
+		     #type "." #member " is not at the byte offset the code assumes")
+
+#include "zb_buffer.h"
+
+#endif /* ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_COMMON_H_ */
