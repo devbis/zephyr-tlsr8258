@@ -28,6 +28,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/random/random.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_config.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
@@ -40,7 +41,7 @@ LOG_MODULE_REGISTER(zigbee_nwk_router_bootstrap, CONFIG_ZIGBEE_LOG_LEVEL);
  */
 #define NWK_ROUTER_MINIMAL_DEFAULT_PAN_ID   0xc6c6U
 #define NWK_ROUTER_MINIMAL_DEFAULT_NWK_ADDR 0x0000U /* coordinator */
-#define NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL  DEFAULT_CHANNEL
+#define NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL  ZB_CHANNEL_INITIAL
 
 extern zdo_appIndCb_t *zdoAppIndCbLst;
 extern u8 zb_zdoSendDevAnnance(void);
