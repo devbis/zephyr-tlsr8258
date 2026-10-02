@@ -15,6 +15,17 @@ Enable it with :kconfig:option:`CONFIG_ZIGBEE` and select the device role with
 in the ``zigbee_nv_partition`` flash partition, or in ``storage_partition``
 when no other storage backend uses it.
 
+Channels
+********
+
+By default a router or end device scans all channels (11 to 26) when it
+joins, and a coordinator picks the least busy of them when it forms a network.
+Restrict this with :kconfig:option:`CONFIG_ZIGBEE_CHANNEL_MASK`, a bit mask
+where bit N selects channel N. A single bit pins the node to one channel. An
+application can override the mask at run time through
+``zb_platform_app_get_join_profile()``. A node that is already
+joined first rejoins on its stored channel.
+
 Radios
 ******
 
