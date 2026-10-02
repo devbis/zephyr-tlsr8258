@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 #include "ss_security_flags.h"
 #include "ss_zdoSecurityME.h"
@@ -686,6 +687,13 @@ int zb_platform_bdb_init_default(void)
 		bdb_outgoingFrameCountUpdate(1U);
 	}
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
+	/*
+	 * The BDB default primary set is the touchlink channel set, so the
+	 * configured scan mask is applied first; the application's fixed
+	 * target and join profile override it.
+	 */
+	g_bdbAttrs.primaryChannelSet = (u32)ZB_CHANNEL_SCAN_MASK;
+	g_bdbAttrs.secondaryChannelSet = 0U;
 	zb_platform_bdb_apply_fixed_target();
 	zb_platform_bdb_apply_join_profile();
 	BDB_STATE_SET(BDB_STATE_IDLE);
@@ -711,7 +719,7 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 	{
 		uint8_t scan_channel = (g_zbMacPib.phyChannelCur != 0U)
 					       ? g_zbMacPib.phyChannelCur
-					       : (uint8_t)CONFIG_ZIGBEE_CHANNEL;
+					       : (uint8_t)ZB_CHANNEL_INITIAL;
 
 		(void)zb_platform_radio_start_on_channel(scan_channel);
 	}
@@ -735,7 +743,7 @@ uint8_t zb_platform_bdb_network_formation_start(void)
 	}
 
 	scan_channel = (g_zbMacPib.phyChannelCur != 0U) ? g_zbMacPib.phyChannelCur
-							: (uint8_t)CONFIG_ZIGBEE_CHANNEL;
+							: (uint8_t)ZB_CHANNEL_INITIAL;
 	if (zb_platform_radio_start_on_channel(scan_channel) != 0) {
 		LOG_ERR("zb bdb formation: radio start failed on channel %u", scan_channel);
 		return 0xFFU;

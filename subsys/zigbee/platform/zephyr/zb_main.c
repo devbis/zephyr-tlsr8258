@@ -6,6 +6,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 #include <zephyr/zigbee/zb_types.h>
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
@@ -443,7 +444,7 @@ static void zb_core_bootstrap_once(void)
 	 * the persisted PIB again, but before persistent rejoin is scheduled.
 	 */
 	if (g_zbMacPib.phyChannelCur < 11U || g_zbMacPib.phyChannelCur > 26U) {
-		g_zbMacPib.phyChannelCur = (u8)CONFIG_ZIGBEE_CHANNEL;
+		g_zbMacPib.phyChannelCur = (u8)ZB_CHANNEL_INITIAL;
 		g_zbInfo.macPib.phyChannelCur = g_zbMacPib.phyChannelCur;
 	}
 	/*
