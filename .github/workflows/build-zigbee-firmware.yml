@@ -142,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           build_dir="$RUNNER_TEMP/build-${SOC}-${ROLE}"
-          cmake_args=(-DCONFIG_ZIGBEE_CHANNEL=11)
+          cmake_args=()
 
           case "$ROLE" in
             router)
@@ -178,7 +178,7 @@ jobs:
 
           config_file="$build_dir/zephyr/.config"
           grep -Fx "$ROLE_SYMBOL=y" "$config_file"
-          grep -Fx 'CONFIG_ZIGBEE_CHANNEL=11' "$config_file"
+          grep -Fx 'CONFIG_ZIGBEE_CHANNEL_MASK=0x07FFF800' "$config_file"
           if [[ "$SOC" == tlsr8258 ]]; then
             grep -Fx 'CONFIG_MINIMAL_LIBC=y' "$config_file"
             ! grep -q '^CONFIG_USE_SEGGER_RTT=y$' "$config_file"
