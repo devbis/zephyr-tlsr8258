@@ -1,0 +1,255 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Build Zigbee firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - zigbee-generic-stack
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zigbee-firmware-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TC32_TOOLCHAIN_VERSION: 23.1.2-tc32-20260930
+  ARM_GNU_TOOLCHAIN_VERSION: 15.3.rel1
+  RELEASE_TAG_PREFIX: zephyr-zigbee
+
+jobs:
+  build-firmware:
+    name: ${{ matrix.soc }} / ${{ matrix.role }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - soc: tlsr8258
+            board: tlsr8258_tb03f/tlsr8258
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: host
+          - soc: tlsr8258
+            board: tlsr8258_tb03f/tlsr8258
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: host
+          - soc: tlsr8258
+            board: tlsr8258_tb03f/tlsr8258
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: host
+          - soc: nrf52840
+            board: nrf52840dk/nrf52840
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: nrf52840
+            board: nrf52840dk/nrf52840
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: gnuarmemb
+          - soc: nrf52840
+            board: nrf52840dk/nrf52840
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: gnuarmemb
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements-base.txt
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            cmake device-tree-compiler g++ gcc gperf make ninja-build \
+            python3-dev xz-utils
+          python -m pip install -r scripts/requirements-base.txt
+
+      - name: Initialize west workspace
+        run: |
+          git config --global http.version HTTP/1.1
+          west init -l .
+          west config manifest.group-filter -- +ci,-optional
+          west update -o=--depth=1 -n || west update -o=--depth=1 -n
+          west zephyr-export
+
+      - name: Install TC32 LLVM toolchain
+        if: matrix.soc == 'tlsr8258'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/tc32-llvm-toolchain.tar.gz"
+          install_dir="$RUNNER_TEMP/tc32-llvm-toolchain"
+          url="https://github.com/modern-tc32/llvm-project/releases/download/${TC32_TOOLCHAIN_VERSION}/tc32-llvm-toolchain-linux-amd64.tar.gz"
+          curl --fail --location --retry 3 --retry-delay 2 "$url" --output "$archive"
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir"
+          clang_path="$(find "$install_dir" \( -type f -o -type l \) \
+            -path '*/bin/clang' -print -quit)"
+          if [[ -z "$clang_path" ]]; then
+            echo "clang was not found in the TC32 toolchain archive" >&2
+            exit 1
+          fi
+          toolchain_path="${clang_path%/bin/clang}"
+          test -x "$toolchain_path/bin/ld.lld"
+          echo "LLVM_TOOLCHAIN_PATH=$toolchain_path" >> "$GITHUB_ENV"
+          echo "$toolchain_path/bin" >> "$GITHUB_PATH"
+          "$toolchain_path/bin/clang" --version
+
+      - name: Install Arm GNU Toolchain
+        if: matrix.soc == 'nrf52840'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="arm-gnu-toolchain-${ARM_GNU_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+          archive="$RUNNER_TEMP/$archive_name"
+          install_dir="$RUNNER_TEMP/arm-gnu-toolchain"
+          url="https://gitlab.arm.com/api/v4/projects/10698/packages/generic/gnu-toolchain/${ARM_GNU_TOOLCHAIN_VERSION}/${archive_name}"
+          curl --fail --location --retry 3 --retry-delay 2 "$url" --output "$archive"
+          mkdir -p "$install_dir"
+          tar -xJf "$archive" --strip-components=1 -C "$install_dir"
+          test -x "$install_dir/bin/arm-none-eabi-gcc"
+          echo "GNUARMEMB_TOOLCHAIN_PATH=$install_dir" >> "$GITHUB_ENV"
+          echo "$install_dir/bin" >> "$GITHUB_PATH"
+          "$install_dir/bin/arm-none-eabi-gcc" --version
+
+      - name: Build firmware
+        shell: bash
+        env:
+          BOARD: ${{ matrix.board }}
+          ROLE: ${{ matrix.role }}
+          ROLE_SYMBOL: ${{ matrix.role_symbol }}
+          SOC: ${{ matrix.soc }}
+          ZEPHYR_BASE: ${{ github.workspace }}
+          ZEPHYR_TOOLCHAIN_VARIANT: ${{ matrix.toolchain_variant }}
+        run: |
+          set -euo pipefail
+          build_dir="$RUNNER_TEMP/build-${SOC}-${ROLE}"
+          cmake_args=(-DCONFIG_ZIGBEE_CHANNEL=11)
+
+          case "$ROLE" in
+            router)
+              cmake_args+=(-DEXTRA_CONF_FILE=router.conf)
+              ;;
+            end-device)
+              cmake_args+=(-DCONFIG_ZIGBEE_ED=y)
+              ;;
+            coordinator)
+              cmake_args+=(-DCONFIG_ZIGBEE_COORDINATOR=y)
+              ;;
+            *)
+              echo "Unknown Zigbee role: $ROLE" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "$SOC" == tlsr8258 ]]; then
+            cmake_args+=(
+              -DTOOLCHAIN_VARIANT_COMPILER=llvm
+              "-DLLVM_TOOLCHAIN_PATH=$LLVM_TOOLCHAIN_PATH"
+              -DCONFIG_USE_SEGGER_RTT=n
+              -DCONFIG_RTT_CONSOLE=n
+            )
+          fi
+
+          west build -p always \
+            -b "$BOARD" \
+            -d "$build_dir" \
+            samples/zigbee/zigbee_shell \
+            -- "${cmake_args[@]}"
+
+          config_file="$build_dir/zephyr/.config"
+          grep -Fx "$ROLE_SYMBOL=y" "$config_file"
+          grep -Fx 'CONFIG_ZIGBEE_CHANNEL=11' "$config_file"
+          if [[ "$SOC" == tlsr8258 ]]; then
+            ! grep -q '^CONFIG_USE_SEGGER_RTT=y$' "$config_file"
+            ! grep -q '^CONFIG_RTT_CONSOLE=y$' "$config_file"
+          fi
+
+          firmware="$build_dir/zephyr/zephyr.bin"
+          test -s "$firmware"
+          mkdir -p "$RUNNER_TEMP/firmware"
+          install -m 0644 "$firmware" \
+            "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firmware-${{ matrix.soc }}-${{ matrix.role }}
+          path: ${{ runner.temp }}/firmware/${{ matrix.soc }}-${{ matrix.role }}.bin
+          if-no-files-found: error
+
+  publish-prerelease:
+    name: Publish firmware prerelease
+    needs: build-firmware
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: firmware-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Set release tag and notes
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
+          mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
+          if [[ "${#firmware_files[@]}" -ne 6 ]]; then
+            echo "Expected six firmware images, found ${#firmware_files[@]}" >&2
+            exit 1
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          cat > release-notes.md <<EOF
+          Zigbee firmware prerelease for commit \`$GITHUB_SHA\`.
+
+          Toolchains:
+          - TLSR8258: TC32 LLVM \`$TC32_TOOLCHAIN_VERSION\`
+          - nRF52840: Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
+
+          The release contains router, end-device, and coordinator images for both targets.
+          EOF
+          printf '%s\n' "${firmware_files[@]}"
+
+      - name: Create or update GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ steps.release.outputs.tag }}'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" \
+              --title "$tag" \
+              --notes-file release-notes.md \
+              --prerelease
+            gh release upload "$tag" release-artifacts/*.bin --clobber
+          else
+            gh release create "$tag" release-artifacts/*.bin \
+              --title "$tag" \
+              --notes-file release-notes.md \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
