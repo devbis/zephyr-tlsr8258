@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TC32_TOOLCHAIN_VERSION: 23.1.2-tc32-20260930
+  TC32_TOOLCHAIN_VERSION: 23.1.2-tc32-20261002
   ARM_GNU_TOOLCHAIN_VERSION: 15.3.rel1
   RELEASE_TAG_PREFIX: zephyr-zigbee
 
