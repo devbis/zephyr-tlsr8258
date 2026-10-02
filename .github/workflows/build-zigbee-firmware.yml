@@ -242,14 +242,17 @@ jobs:
         run: |
           set -euo pipefail
           tag='${{ steps.release.outputs.tag }}'
-          if gh release view "$tag" >/dev/null 2>&1; then
+          repo="$GITHUB_REPOSITORY"
+          if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
             gh release edit "$tag" \
+              --repo "$repo" \
               --title "$tag" \
               --notes-file release-notes.md \
               --prerelease
-            gh release upload "$tag" release-artifacts/*.bin --clobber
+            gh release upload "$tag" release-artifacts/*.bin --repo "$repo" --clobber
           else
             gh release create "$tag" release-artifacts/*.bin \
+              --repo "$repo" \
               --title "$tag" \
               --notes-file release-notes.md \
               --prerelease \
