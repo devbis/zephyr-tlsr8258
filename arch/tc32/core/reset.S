@@ -208,6 +208,13 @@ z_tc32_irq_entry:
 
 	tmov r5, #TC32_MODE_SVC
 	tmcsr r5
+	/*
+	 * r14 is banked: the frame holds the IRQ-mode return address, not the
+	 * thread's own lr. A leaf function keeps its return address only in lr,
+	 * so it is lost unless it is read here. r8 is dead (its interrupted
+	 * value is in the frame) and survives until the park below.
+	 */
+	tmov r8, r14
 	tmov r5, r13
 	tmov r6, #TC32_IRQ_FRAME_SIZE
 	tsub r5, r5, r6
@@ -245,6 +252,13 @@ z_tc32_irq_entry:
 	nop
 	nop
 	tstorer r2, [r1, #_thread_offset_to_lr]
+	/*
+	 * The real r12 is in the frame and comes back with it, so this slot is
+	 * free to carry the thread's lr: TC32_THREAD_RESUME loads it into r12 and
+	 * .Lirq_unwind moves it back into lr.
+	 */
+	tmov r2, r8
+	tstorer r2, [r1, #_thread_offset_to_r12]
 
 	/*
 	 * Hand over the way every other switch in this port does: with
@@ -273,6 +287,9 @@ z_tc32_irq_entry:
  * frame on its own stack. Put it back where treti expects to find it.
  */
 .Lirq_unwind:
+	/* Put back the lr the thread was preempted with, see the park above. */
+	tmov r14, r12
+
 	tmov r4, r13
 	tmov r5, #TC32_IRQ_FRAME_SIZE
 	tadd r5, r4, r5
