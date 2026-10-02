@@ -13,6 +13,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_config.h>
 
 #include "app_bdb.h"
@@ -31,9 +32,9 @@ static void zigbee_shell_radio_probe(struct k_work *work)
 
 	ARG_UNUSED(work);
 
-	rc = zb_platform_radio_start_on_channel(CONFIG_ZIGBEE_CHANNEL);
+	rc = zb_platform_radio_start_on_channel(ZB_CHANNEL_INITIAL);
 	if (rc < 0) {
-		LOG_ERR("radio probe start failed (ch=%d rc=%d)", CONFIG_ZIGBEE_CHANNEL, rc);
+		LOG_ERR("radio probe start failed (ch=%d rc=%d)", ZB_CHANNEL_INITIAL, rc);
 		goto reschedule;
 	}
 
@@ -55,11 +56,6 @@ reschedule:
 }
 #endif
 
-bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
-{
-	return app_bdb_get_fixed_join_target(target);
-}
-
 bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 {
 	return app_bdb_get_join_profile(profile);
@@ -73,7 +69,7 @@ void zb_platform_app_bootstrap_ready(void)
 		radio_validation_started = true;
 		(void)k_work_schedule(&radio_probe_work, K_MSEC(250));
 		LOG_INF("zigbee_shell radio validation scheduled on channel %d",
-			CONFIG_ZIGBEE_CHANNEL);
+			ZB_CHANNEL_INITIAL);
 	}
 #endif
 	app_bdb_bootstrap_ready();

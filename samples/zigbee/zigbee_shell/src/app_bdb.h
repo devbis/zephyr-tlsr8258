@@ -23,4 +23,3 @@ void app_bdb_start_commissioning(void);
 void app_bdb_network_left(void);
 void app_bdb_commissioning_status(uint8_t status, bool joinedNetwork);
 bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile);
-bool app_bdb_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target);

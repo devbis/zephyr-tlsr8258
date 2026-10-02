@@ -35,6 +35,7 @@
  * tables would just sit unused.
  */
 #include "zb_common.h"
+#include <zephyr/zigbee/zb_channel.h>
 #include "aps/aps_api.h"
 #include "nwk/includes/nwk.h"
 #include "nwk/includes/nwk_addr_map.h"
@@ -243,7 +244,7 @@ const tl_zb_mac_pib_t macPibDefault = {
     .panId                              = DEFAULT_PANID,
     .shortAddress                       = MAC_SHORT_ADDR_BROADCAST,
     .respWaitTime                       = ZB_MAC_WAIT_RESP_TIME_DEFAULT,
-    .phyChannelCur                      = DEFAULT_CHANNEL,
+    .phyChannelCur                      = ZB_CHANNEL_INITIAL,
     .autoReq                            = 0,
 #if ZB_ED_ROLE
     .minBe                              = 0,
