@@ -164,6 +164,7 @@ jobs:
             cmake_args+=(
               -DTOOLCHAIN_VARIANT_COMPILER=llvm
               "-DLLVM_TOOLCHAIN_PATH=$LLVM_TOOLCHAIN_PATH"
+              -DCONFIG_MINIMAL_LIBC=y
               -DCONFIG_USE_SEGGER_RTT=n
               -DCONFIG_RTT_CONSOLE=n
             )
@@ -179,6 +180,7 @@ jobs:
           grep -Fx "$ROLE_SYMBOL=y" "$config_file"
           grep -Fx 'CONFIG_ZIGBEE_CHANNEL=11' "$config_file"
           if [[ "$SOC" == tlsr8258 ]]; then
+            grep -Fx 'CONFIG_MINIMAL_LIBC=y' "$config_file"
             ! grep -q '^CONFIG_USE_SEGGER_RTT=y$' "$config_file"
             ! grep -q '^CONFIG_RTT_CONSOLE=y$' "$config_file"
           fi
