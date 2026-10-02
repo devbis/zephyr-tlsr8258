@@ -46,10 +46,15 @@ config ZIGBEE_NATIVE_SIM_IEEE_LOW
 	  distinct value so multiple native_sim Zigbee nodes (e.g. an End Device
 	  joining THROUGH a router) can share one socket medium.
 
-config ZIGBEE_CHANNEL
-	int "Default Zigbee channel"
-	default 15
-	range 11 26
+config ZIGBEE_CHANNEL_MASK
+	hex "Zigbee channel mask"
+	default 0x07FFF800
+	help
+	  Channels (bit N = channel N, valid 11..26) that a router or end
+	  device scans when joining, and that a coordinator chooses from when
+	  forming a network. The default is all channels. A coordinator picks
+	  the least busy channel of a multi-channel mask. Set a single bit
+	  (for example 0x800 for channel 11) to pin the node to one channel.
 
 config ZIGBEE_STACK_SIZE
 	int "Zigbee thread stack size"

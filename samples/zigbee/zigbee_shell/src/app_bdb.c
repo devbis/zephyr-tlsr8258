@@ -17,6 +17,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_config.h>
 
 #if !defined(ZDO_ZCL_STUBS_H_)
@@ -66,14 +67,6 @@ static struct ev_timer_event_t *commissioning_retry_timer;
 static const uint8_t app_bdb_fixed_tc_addr[8] = {
 	0x0c, 0x80, 0x1e, 0xfe, 0xff, 0x16, 0xa7, 0x20,
 };
-static const uint8_t app_bdb_fixed_ext_pan_id[8] = {
-	0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
-};
-#define APP_BDB_FIXED_CHANNEL CONFIG_ZIGBEE_CHANNEL
-#define APP_BDB_FIXED_PAN_ID  0x1a62U
-#ifndef APP_BDB_FIXED_PARENT
-#define APP_BDB_FIXED_PARENT 0x0000U
-#endif
 
 extern bool zb_isDeviceJoinedNwk(void);
 extern bool zdo_ifZdoNwkManagerIdle(void);
@@ -170,40 +163,6 @@ void zb_platform_app_runtime_reset(void)
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
-bool app_bdb_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
-{
-#if !defined(CONFIG_ZIGBEE_BDB)
-	ARG_UNUSED(target);
-	return false;
-#else
-	if (target == NULL) {
-		return false;
-	}
-
-	memset(target, 0, sizeof(*target));
-	target->channel = APP_BDB_FIXED_CHANNEL;
-	target->pan_id = APP_BDB_FIXED_PAN_ID;
-	memcpy(target->ext_pan_id, app_bdb_fixed_ext_pan_id, sizeof(app_bdb_fixed_ext_pan_id));
-
-	if (APP_BDB_ROLE_ROUTER) {
-		/*
-		 * Router reuses this hook to publish its static-formation
-		 * parameters. short_addr is the address the router will
-		 * assume on the formed PAN; TC is left invalid (the router
-		 * is the trust center in a distributed network).
-		 */
-		target->short_addr = 0x0000U;
-		return true;
-	}
-
-	target->short_addr = APP_BDB_FIXED_PARENT;
-	memcpy(target->tc_addr, app_bdb_fixed_tc_addr, sizeof(app_bdb_fixed_tc_addr));
-	target->tc_addr_valid = true;
-
-	return true;
-#endif
-}
-
 bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 {
 #if !defined(CONFIG_ZIGBEE_BDB)
@@ -215,7 +174,7 @@ bool app_bdb_get_join_profile(struct zb_platform_bdb_join_profile *profile)
 	}
 
 	memset(profile, 0, sizeof(*profile));
-	profile->channel_mask = ((uint32_t)1U << CONFIG_ZIGBEE_CHANNEL);
+	profile->channel_mask = (uint32_t)ZB_CHANNEL_SCAN_MASK;
 	/*
 	 * Real network joins must learn the NWK key during interview via the
 	 * Trust Center Transport Key exchange.  Do not preload a test key
