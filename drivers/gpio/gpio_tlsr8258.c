@@ -13,7 +13,7 @@
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 #define TLSR8258_GPIO_MAX_PIN           7u
 #define TLSR8258_GPIO_CORE_INTERRUPT_EN BIT(3)
@@ -177,7 +177,7 @@ static void tlsr8258_gpio_ie_update(const struct device *dev, uint8_t mask, bool
 
 static void tlsr8258_gpio_clear_source(void)
 {
-	tlsr8258_irq_clear_parent(TLSR8258_IRQ_GPIO);
+	tlsr82xx_irq_clear_parent(TLSR82XX_IRQ_GPIO);
 }
 
 static void tlsr8258_gpio_dispatch(const struct device *dev)
@@ -222,7 +222,7 @@ static void tlsr8258_gpio_irq_handler(const void *unused)
 
 static void tlsr8258_gpio_irq_connect(void)
 {
-	IRQ_CONNECT(TLSR8258_IRQ_GPIO, 0, tlsr8258_gpio_irq_handler, NULL, 0);
+	IRQ_CONNECT(TLSR82XX_IRQ_GPIO, 0, tlsr8258_gpio_irq_handler, NULL, 0);
 }
 
 static bool tlsr8258_gpio_any_interrupt_enabled(void)
@@ -406,7 +406,7 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev, gpio_
 	if (mode == GPIO_INT_MODE_DISABLED) {
 		tlsr8258_gpio_clear_source();
 		if (!tlsr8258_gpio_any_interrupt_enabled()) {
-			irq_disable(TLSR8258_IRQ_GPIO);
+			irq_disable(TLSR82XX_IRQ_GPIO);
 		}
 		irq_unlock(key);
 		return 0;
@@ -446,7 +446,7 @@ static int tlsr8258_gpio_pin_interrupt_configure(const struct device *dev, gpio_
 	data->pin_int_en |= mask;
 	regs->irq_en |= mask;
 	tlsr8258_gpio_clear_source();
-	irq_enable(TLSR8258_IRQ_GPIO);
+	irq_enable(TLSR82XX_IRQ_GPIO);
 
 	irq_unlock(key);
 	return 0;
