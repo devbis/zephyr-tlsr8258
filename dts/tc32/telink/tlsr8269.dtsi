@@ -83,6 +83,8 @@
 		uart0: serial@800090 {
 			compatible = "telink,tlsr8269-uart";
 			reg = <0x00800090 0x00000010>;
+			interrupts = <4>;
+			interrupt-parent = <&intc>;
 			clocks = <&sys_clk>;
 			current-speed = <115200>;
 			pinctrl-0 = <&uart0_tx_default &uart0_rx_default>;
