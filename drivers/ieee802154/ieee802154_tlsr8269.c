@@ -4,13 +4,17 @@
  */
 
 /*
- * TLSR826x IEEE 802.15.4 radio, first increment: RF initialisation, channel
- * selection, immediate TX and RX delivery. The register sequences follow the
- * vendor RF_Init(), RF_ModeSet(), RF_TrxStateSet(), RF_TxPkt() and
- * RF_rx_cfg() in libdrivers_826x.a, and the RX/TX interrupt flow of
- * zigbee/mac/mac_phy.c for MCU_CORE_826x. ACK generation, frame filtering and
- * CCA are not implemented yet; the Zephyr ACK and CCA entry points return
- * -ENOTSUP.
+ * TLSR826x IEEE 802.15.4 radio. Register sequences follow the vendor
+ * RF_Init(), RF_ModeSet(), RF_TrxStateSet(), RF_TxPkt() and RF_rx_cfg() in
+ * libdrivers_826x.a. The RX/TX interrupt flow and the ACK path follow
+ * zigbee/mac/mac_phy.c for MCU_CORE_826x (rf_rx_irq_handler,
+ * rf_tx_irq_handler, rf_mac_ack_build).
+ *
+ * Received frames are checked, filtered against the PAN, short and IEEE
+ * address set through tlsr8269_radio_update_filters(), acknowledged when the
+ * frame requests it, and queued for tlsr8269_radio_rx_poll(), which hands them
+ * to the registered sink in the Zigbee L2 layout. The Zephyr network-stack
+ * path (NET_L2_IEEE802154) is not implemented; it is only the raw-mode entry.
  */
 
 #define DT_DRV_COMPAT telink_tlsr8269_zb
@@ -21,14 +25,22 @@
 #include <string.h>
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/ieee802154/tlsr8269.h>
+#include <zephyr/drivers/flash.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/random/random.h>
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 #include <tlsr82xx/irq.h>
+
+LOG_MODULE_REGISTER(ieee802154_tlsr8269, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
 #define TLSR8269_REG8(addr)  (*(volatile uint8_t *)(addr))
 #define TLSR8269_REG16(addr) (*(volatile uint16_t *)(addr))
@@ -43,48 +55,56 @@
 #define TLSR8269_FLD_ANA_RW    BIT(5)
 #define TLSR8269_FLD_ANA_CYC0  BIT(6)
 
-#define TLSR8269_REG_RF_IRQ_MASK   TLSR8269_REG16(0x00800f1cu)
-#define TLSR8269_REG_RF_IRQ_STATUS TLSR8269_REG16(0x00800f20u)
-#define TLSR8269_REG_RF_TRX_CMD    TLSR8269_REG8(0x00800f02u)
-#define TLSR8269_REG_RF_LL_CTRL    TLSR8269_REG8(0x00800f16u)
-#define TLSR8269_REG_RF_SRX_CTRL   TLSR8269_REG8(0x00800f03u)
-#define TLSR8269_REG_RF_CMD        TLSR8269_REG8(0x00800f00u)
-#define TLSR8269_REG_RF_RX_MODE    TLSR8269_REG8(0x00800428u)
-#define TLSR8269_REG_RF_FREQ       TLSR8269_REG16(0x008004d6u)
-#define TLSR8269_REG_RF_AGC_BASE   0x00800480u
-#define TLSR8269_REG_RF_TRX_MASK_RF TLSR8269_REG8(0x00800f0cu)
+#define TLSR8269_REG_RF_IRQ_MASK    TLSR8269_REG16(0x00800f1cu)
+#define TLSR8269_REG_RF_IRQ_STATUS  TLSR8269_REG16(0x00800f20u)
+#define TLSR8269_REG_RF_TRX_CMD     TLSR8269_REG8(0x00800f02u)
+#define TLSR8269_REG_RF_LL_CTRL     TLSR8269_REG8(0x00800f16u)
+#define TLSR8269_REG_RF_SRX_CTRL    TLSR8269_REG8(0x00800f03u)
+#define TLSR8269_REG_RF_RX_MODE     TLSR8269_REG8(0x00800428u)
+#define TLSR8269_REG_RF_FREQ        TLSR8269_REG16(0x008004d6u)
+#define TLSR8269_REG_RF_AGC_BASE    0x00800480u
 
-#define TLSR8269_REG_DMA_CHN_EN    TLSR8269_REG8(0x00800520u)
-#define TLSR8269_REG_DMA_CHN_MSK   TLSR8269_REG8(0x00800521u)
-#define TLSR8269_REG_DMA_TX_RDY0   TLSR8269_REG8(0x00800524u)
-#define TLSR8269_REG_DMA_RX_RDY0   TLSR8269_REG8(0x00800526u)
+#define TLSR8269_REG_DMA_CHN_EN     TLSR8269_REG8(0x00800520u)
+#define TLSR8269_REG_DMA_CHN_MSK    TLSR8269_REG8(0x00800521u)
+#define TLSR8269_REG_DMA_TX_RDY0    TLSR8269_REG8(0x00800524u)
 #define TLSR8269_REG_DMA_RF_RX_ADDR TLSR8269_REG16(0x00800508u)
 #define TLSR8269_REG_DMA_RF_RX_SIZE TLSR8269_REG8(0x0080050au)
 #define TLSR8269_REG_DMA_RF_RX_MODE TLSR8269_REG8(0x0080050bu)
 #define TLSR8269_REG_DMA_RF_TX_ADDR TLSR8269_REG16(0x0080050cu)
 
-#define TLSR8269_FLD_RF_IRQ_RX     BIT(0)
-#define TLSR8269_FLD_RF_IRQ_TX     BIT(1)
-#define TLSR8269_FLD_DMA_RF_RX     BIT(2)
-#define TLSR8269_FLD_DMA_RF_TX     BIT(3)
-#define TLSR8269_FLD_TRX_RX        BIT(5)
-#define TLSR8269_FLD_TRX_TX        BIT(4)
-#define TLSR8269_FLD_TRX_MASK      (BIT(4) | BIT(5))
-#define TLSR8269_RF_MODE_RX_EN     BIT(0)
-#define TLSR8269_RF_TRX_OFF_CODE   0x29u
-#define TLSR8269_RF_BASE_MHZ       2400u
-#define TLSR8269_RF_TX_RDY_DMA3    BIT(3)
+#define TLSR8269_FLD_RF_IRQ_RX      BIT(0)
+#define TLSR8269_FLD_RF_IRQ_TX      BIT(1)
+#define TLSR8269_FLD_DMA_RF_RX      BIT(2)
+#define TLSR8269_FLD_DMA_RF_TX      BIT(3)
+#define TLSR8269_FLD_TRX_TX         BIT(4)
+#define TLSR8269_FLD_TRX_RX         BIT(5)
+#define TLSR8269_FLD_TRX_MASK       (BIT(4) | BIT(5))
+#define TLSR8269_RF_MODE_RX_EN      BIT(0)
+#define TLSR8269_RF_TRX_OFF_CODE    0x29u
+#define TLSR8269_RF_BASE_MHZ        2400u
+#define TLSR8269_RF_TX_RDY_DMA3     BIT(3)
 
-#define TLSR8269_PHY_MAX_PSDU      127u
-#define TLSR8269_FCS_LEN           2u
-#define TLSR8269_RX_BUF_SIZE       144u
-#define TLSR8269_TX_BUF_SIZE       (TLSR8269_PHY_MAX_PSDU + 5u + 4u)
-#define TLSR8269_RX_HDR_LEN        13u
-#define TLSR8269_TX_HDR_LEN        5u
-#define TLSR8269_TX_TIMEOUT_MS     10u
+#define TLSR8269_PHY_MAX_PSDU       127u
+#define TLSR8269_FCS_LEN            2u
+#define TLSR8269_RX_BUF_SIZE        144u
+#define TLSR8269_RX_HDR_LEN         13u
+#define TLSR8269_TX_HDR_LEN         5u
+#define TLSR8269_TX_BUF_SIZE        (TLSR8269_TX_HDR_LEN + TLSR8269_PHY_MAX_PSDU)
+#define TLSR8269_ACK_BUF_SIZE       12u
+#define TLSR8269_RX_QUEUE_DEPTH     4u
+#define TLSR8269_RX_FRAME_MAX       (TLSR8269_RX_FRAME_PSDU_OFFSET + TLSR8269_PHY_MAX_PSDU)
+#define TLSR8269_TX_TIMEOUT_MS      10u
+#define TLSR8269_ACK_TX_WAIT_US     120u
+#define TLSR8269_ACK_TX_DONE_US     1000u
 
-#define TLSR8269_CHANNEL_MIN       11u
-#define TLSR8269_CHANNEL_MAX       26u
+#define TLSR8269_CHANNEL_MIN        11u
+#define TLSR8269_CHANNEL_MAX        26u
+
+#define TLSR8269_FCF_ACK_REQ        BIT(5)
+#define TLSR8269_FRAME_TYPE_ACK     0x02u
+#define TLSR8269_ADDR_MODE_SHORT    0x02u
+#define TLSR8269_ADDR_MODE_EXT      0x03u
+#define TLSR8269_DMA_WINDOW_HI      0x80u
 
 struct tlsr8269_rf_tbl {
 	uint16_t adr;
@@ -126,18 +146,6 @@ static const uint8_t tlsr8269_agc[26] = {
 	0x31, 0x32, 0x33, 0x30, 0x38, 0x3c, 0x2c, 0x18, 0x1c, 0x0c, 0x0c, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x0a, 0x0f, 0x15, 0x1b, 0x21, 0x27, 0x2e, 0x32, 0x38, 0x3e,
 };
-
-struct tlsr8269_radio_data {
-	struct net_if *iface;
-	uint8_t channel;
-	bool started;
-	struct k_sem tx_done;
-	uint8_t rx_buf[TLSR8269_RX_BUF_SIZE] __aligned(16);
-	uint8_t tx_buf[TLSR8269_TX_BUF_SIZE] __aligned(4);
-	uint8_t tx_len;
-};
-
-static struct tlsr8269_radio_data tlsr8269_radio_data_0;
 
 static void tlsr8269_analog_write(uint8_t addr, uint8_t value)
 {
@@ -192,6 +200,34 @@ static void tlsr8269_rf_init(void)
 	TLSR8269_REG8(0x0080043du) = 0xfdu;
 	TLSR8269_REG8(0x00800438u) = 0x37u;
 }
+
+
+struct tlsr8269_rx_slot {
+	uint8_t dma[TLSR8269_RX_FRAME_MAX];
+	uint8_t len;
+	int8_t rssi_dbm;
+};
+
+struct tlsr8269_radio_data {
+	struct net_if *iface;
+	uint8_t channel;
+	bool started;
+	struct k_sem tx_done;
+	uint16_t pan_id;
+	uint16_t short_addr;
+	uint8_t ieee_addr[8];
+	uint8_t rx_buf[TLSR8269_RX_BUF_SIZE] __aligned(16);
+	uint8_t tx_buf[TLSR8269_TX_BUF_SIZE] __aligned(4);
+	uint8_t ack_buf[TLSR8269_ACK_BUF_SIZE] __aligned(4);
+	struct tlsr8269_rx_slot rx_queue[TLSR8269_RX_QUEUE_DEPTH];
+	uint8_t rx_head;
+	uint8_t rx_count;
+};
+
+static struct tlsr8269_radio_data tlsr8269_radio_data_0;
+static tlsr8269_rx_sink_t tlsr8269_rx_sink;
+static tlsr8269_rx_notify_t tlsr8269_rx_notify;
+
 
 /* Vendor RF_TrxStateSet(): retune to a physical offset (MHz - 2400). */
 static void tlsr8269_trx_state_set(bool tx, uint8_t channel)
@@ -248,28 +284,177 @@ static bool tlsr8269_rx_crc_ok(const uint8_t *p)
 	return (p[p[0] + 3u] & 0x51u) == 0x10u;
 }
 
-static void tlsr8269_rx_handle(struct tlsr8269_radio_data *data)
+static bool tlsr8269_addr_is_zero(const uint8_t *a)
 {
-	const uint8_t *p = data->rx_buf;
-
-	if (tlsr8269_rx_length_ok(p) && tlsr8269_rx_crc_ok(p)) {
-		uint8_t len = p[12];
-		const uint8_t *psdu = &p[TLSR8269_RX_HDR_LEN];
-		uint8_t rssi = p[4];
-
-		/* RX delivery through the network stack is added with the net-stack glue. */
-		ARG_UNUSED(len);
-		ARG_UNUSED(psdu);
-		ARG_UNUSED(rssi);
+	for (size_t i = 0; i < 8; i++) {
+		if (a[i] != 0u) {
+			return false;
+		}
 	}
-
-	tlsr8269_rx_rearm(data);
+	return true;
 }
 
 /*
- * ZB_RT interrupt (IRQ 13): the RF RX-done bit is served first, then TX-done.
- * Each is cleared by writing the bit back, as the vendor RxFinishClearFlag()
- * and TxFinishClearFlag() do.
+ * Destination check for a PSDU without FCS. Frames without a destination
+ * address (beacons) are accepted; PAN 0xffff and short 0xffff are broadcast.
+ */
+static bool tlsr8269_filter_match(const struct tlsr8269_radio_data *data, const uint8_t *psdu,
+				  uint8_t len)
+{
+	uint8_t mode;
+	uint16_t pan;
+	uint16_t dst;
+
+	if (len < 2u) {
+		return false;
+	}
+
+	mode = (psdu[1] >> 2) & 0x03u;
+	if (mode == 0u) {
+		return true;
+	}
+
+	if (len < 5u) {
+		return false;
+	}
+	pan = sys_get_le16(&psdu[3]);
+	if (pan != 0xffffu && pan != data->pan_id) {
+		return false;
+	}
+
+	if (mode == TLSR8269_ADDR_MODE_SHORT) {
+		if (len < 7u) {
+			return false;
+		}
+		dst = sys_get_le16(&psdu[5]);
+		return (dst == 0xffffu) || (dst == data->short_addr);
+	}
+
+	if (mode == TLSR8269_ADDR_MODE_EXT) {
+		if (len < 13u || tlsr8269_addr_is_zero(data->ieee_addr)) {
+			return false;
+		}
+		return memcmp(&psdu[5], data->ieee_addr, 8) == 0;
+	}
+
+	return false;
+}
+
+/* True when the frame asks for an ACK and is addressed to this node by unicast. */
+static bool tlsr8269_ack_needed(const struct tlsr8269_radio_data *data, const uint8_t *psdu,
+				uint8_t len)
+{
+	uint8_t mode;
+
+	if (len < 3u || (psdu[0] & TLSR8269_FCF_ACK_REQ) == 0u ||
+	    (psdu[0] & 0x07u) == TLSR8269_FRAME_TYPE_ACK) {
+		return false;
+	}
+
+	mode = (psdu[1] >> 2) & 0x03u;
+	if (mode == TLSR8269_ADDR_MODE_SHORT && len >= 7u) {
+		return sys_get_le16(&psdu[5]) == data->short_addr;
+	}
+	if (mode == TLSR8269_ADDR_MODE_EXT && len >= 13u) {
+		return memcmp(&psdu[5], data->ieee_addr, 8) == 0;
+	}
+
+	return false;
+}
+
+/*
+ * Vendor rf_mac_ack_build() and the ACK branch of rf_rx_irq_handler(): switch
+ * to TX, wait ZB_TX_WAIT_US, start the ACK DMA, poll TX-done, return to RX.
+ * The ZB_RT line is masked for the duration, as the vendor code does.
+ */
+static void tlsr8269_send_ack(struct tlsr8269_radio_data *data, uint8_t seq)
+{
+	uint32_t waited = 0u;
+
+	/* ACK DMA header: length 4 (psdu 3 + 1), PHY length 5 (psdu 3 + FCS). */
+	memset(data->ack_buf, 0, sizeof(data->ack_buf));
+	data->ack_buf[0] = 4u;
+	data->ack_buf[4] = 5u;
+	data->ack_buf[5] = TLSR8269_FRAME_TYPE_ACK;
+	data->ack_buf[6] = 0u;
+	data->ack_buf[7] = seq;
+
+	irq_disable(TLSR82XX_IRQ_ZB_RT);
+	tlsr8269_trx_state_set(true, data->channel);
+	k_busy_wait(TLSR8269_ACK_TX_WAIT_US);
+
+	TLSR8269_REG_DMA_RF_TX_ADDR = (uint16_t)(uintptr_t)data->ack_buf;
+	TLSR8269_REG_DMA_TX_RDY0 |= TLSR8269_RF_TX_RDY_DMA3;
+
+	while ((TLSR8269_REG_RF_IRQ_STATUS & TLSR8269_FLD_RF_IRQ_TX) == 0u &&
+	       waited < TLSR8269_ACK_TX_DONE_US) {
+		k_busy_wait(1u);
+		waited++;
+	}
+	TLSR8269_REG_RF_IRQ_STATUS = TLSR8269_FLD_RF_IRQ_TX;
+
+	tlsr8269_trx_state_set(false, data->channel);
+	irq_enable(TLSR82XX_IRQ_ZB_RT);
+}
+
+static void tlsr8269_rx_queue_push(struct tlsr8269_radio_data *data, const uint8_t *p,
+				   uint8_t phy_len)
+{
+	struct tlsr8269_rx_slot *slot;
+	uint8_t idx;
+
+	if (data->rx_count >= TLSR8269_RX_QUEUE_DEPTH) {
+		return;
+	}
+
+	idx = (uint8_t)((data->rx_head + data->rx_count) % TLSR8269_RX_QUEUE_DEPTH);
+	slot = &data->rx_queue[idx];
+
+	memset(slot->dma, 0, TLSR8269_RX_FRAME_PSDU_OFFSET);
+	slot->dma[4] = phy_len;
+	memcpy(&slot->dma[TLSR8269_RX_FRAME_PSDU_OFFSET], &p[TLSR8269_RX_HDR_LEN], phy_len);
+	slot->len = (uint8_t)(TLSR8269_RX_FRAME_PSDU_OFFSET + phy_len);
+	slot->rssi_dbm = (int8_t)(p[4] - 110);
+	data->rx_count++;
+}
+
+static void tlsr8269_rx_handle(struct tlsr8269_radio_data *data)
+{
+	const uint8_t *p = data->rx_buf;
+	uint8_t phy_len;
+
+	if (!tlsr8269_rx_length_ok(p) || !tlsr8269_rx_crc_ok(p)) {
+		tlsr8269_rx_rearm(data);
+		return;
+	}
+
+	phy_len = p[12];
+	if (phy_len < TLSR8269_FCS_LEN + 3u || phy_len > TLSR8269_PHY_MAX_PSDU) {
+		tlsr8269_rx_rearm(data);
+		return;
+	}
+
+	if (!tlsr8269_filter_match(data, &p[TLSR8269_RX_HDR_LEN], phy_len - TLSR8269_FCS_LEN)) {
+		tlsr8269_rx_rearm(data);
+		return;
+	}
+
+	if (tlsr8269_ack_needed(data, &p[TLSR8269_RX_HDR_LEN], phy_len - TLSR8269_FCS_LEN)) {
+		tlsr8269_send_ack(data, p[TLSR8269_RX_HDR_LEN + 2u]);
+	}
+
+	tlsr8269_rx_queue_push(data, p, phy_len);
+	tlsr8269_rx_rearm(data);
+
+	if (tlsr8269_rx_notify != NULL) {
+		tlsr8269_rx_notify();
+	}
+}
+
+/*
+ * ZB_RT interrupt (IRQ 13): RX-done is served first, then TX-done. Each is
+ * cleared by writing the bit back, as the vendor RxFinishClearFlag() and
+ * TxFinishClearFlag() do.
  */
 static void tlsr8269_rf_isr(const void *arg)
 {
@@ -285,16 +470,124 @@ static void tlsr8269_rf_isr(const void *arg)
 	}
 }
 
-static enum ieee802154_hw_caps tlsr8269_get_capabilities(const struct device *dev)
+void tlsr8269_radio_register_rx_sink(tlsr8269_rx_sink_t sink)
 {
-	ARG_UNUSED(dev);
-	return IEEE802154_HW_FCS;
+	tlsr8269_rx_sink = sink;
 }
+
+void tlsr8269_radio_register_rx_notify(tlsr8269_rx_notify_t notify)
+{
+	tlsr8269_rx_notify = notify;
+}
+
+void tlsr8269_radio_rx_poll(void)
+{
+	struct tlsr8269_rx_slot local;
+	struct tlsr8269_rx_frame_view view;
+	bool have;
+
+	for (;;) {
+		unsigned int key = irq_lock();
+
+		have = tlsr8269_radio_data_0.rx_count > 0u;
+		if (have) {
+			memcpy(&local, &tlsr8269_radio_data_0.rx_queue[tlsr8269_radio_data_0.rx_head],
+			       sizeof(local));
+			tlsr8269_radio_data_0.rx_head =
+				(uint8_t)((tlsr8269_radio_data_0.rx_head + 1u) %
+					  TLSR8269_RX_QUEUE_DEPTH);
+			tlsr8269_radio_data_0.rx_count--;
+		}
+		irq_unlock(key);
+
+		if (!have) {
+			break;
+		}
+
+		if (tlsr8269_rx_sink != NULL) {
+			view.dma = local.dma;
+			view.len = local.len;
+			view.rssi_dbm = local.rssi_dbm;
+			(void)tlsr8269_rx_sink(&view);
+		}
+	}
+}
+
+void tlsr8269_radio_update_filters(uint16_t pan_id, uint16_t short_addr, const uint8_t *ieee_addr)
+{
+	unsigned int key = irq_lock();
+
+	tlsr8269_radio_data_0.pan_id = pan_id;
+	tlsr8269_radio_data_0.short_addr = short_addr;
+	if (ieee_addr != NULL) {
+		memcpy(tlsr8269_radio_data_0.ieee_addr, ieee_addr, sizeof(tlsr8269_radio_data_0.ieee_addr));
+	}
+	irq_unlock(key);
+}
+
+/* Persistent IEEE address from the ieee-addr partition; generated once when erased. */
+static void tlsr8269_ieee_addr_load(uint8_t mac[8])
+{
+#if defined(CONFIG_FLASH_MAP) && FIXED_PARTITION_EXISTS(ieee_addr_partition)
+	const struct flash_area *fa;
+	int rc;
+
+	rc = flash_area_open(FIXED_PARTITION_ID(ieee_addr_partition), &fa);
+	if (rc == 0) {
+		rc = flash_area_read(fa, 0, mac, 8);
+	}
+
+	if (rc == 0) {
+		bool erased = true;
+
+		for (size_t i = 0; i < 8; i++) {
+			if (mac[i] != 0xffu) {
+				erased = false;
+				break;
+			}
+		}
+		if (!erased) {
+			flash_area_close(fa);
+			return;
+		}
+	}
+
+	sys_rand_get(mac, 8);
+	mac[0] = (mac[0] & (uint8_t)~BIT(0)) | BIT(1);
+	if (rc == 0) {
+		rc = flash_area_write(fa, 0, mac, 8);
+		flash_area_close(fa);
+	}
+	if (rc != 0) {
+		LOG_WRN("IEEE address not persisted (%d)", rc);
+	}
+#else
+	sys_rand_get(mac, 8);
+	mac[0] = (mac[0] & (uint8_t)~BIT(0)) | BIT(1);
+#endif
+}
+
+int tlsr8269_radio_get_ieee_addr(uint8_t ieee_addr[8])
+{
+	if (ieee_addr == NULL) {
+		return -EINVAL;
+	}
+
+	memcpy(ieee_addr, tlsr8269_radio_data_0.ieee_addr, 8);
+	return 0;
+}
+
 
 static int tlsr8269_cca(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	return -ENOTSUP;
+}
+
+static enum ieee802154_hw_caps tlsr8269_get_capabilities(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+	return IEEE802154_HW_FCS;
 }
 
 static int tlsr8269_set_channel(const struct device *dev, uint16_t channel)
@@ -334,6 +627,10 @@ static int tlsr8269_start(const struct device *dev)
 {
 	struct tlsr8269_radio_data *data = dev->data;
 
+	if (data->started) {
+		return -EALREADY;
+	}
+
 	tlsr8269_rx_cfg();
 	tlsr8269_trx_state_set(false, data->channel);
 	TLSR8269_REG_DMA_CHN_EN |= TLSR8269_FLD_DMA_RF_RX;
@@ -346,6 +643,10 @@ static int tlsr8269_start(const struct device *dev)
 static int tlsr8269_stop(const struct device *dev)
 {
 	struct tlsr8269_radio_data *data = dev->data;
+
+	if (!data->started) {
+		return -EALREADY;
+	}
 
 	irq_disable(TLSR82XX_IRQ_ZB_RT);
 	tlsr8269_trx_off();
@@ -372,11 +673,12 @@ static int tlsr8269_tx(const struct device *dev, enum ieee802154_tx_mode mode, s
 	ARG_UNUSED(pkt);
 	len = (uint8_t)frag->len;
 
+	/* DMA header (psdu + 1) and PHY length (psdu + FCS), as in rf_mac_ack_build(). */
 	data->tx_buf[0] = len + 1u;
 	data->tx_buf[1] = 0u;
 	data->tx_buf[2] = 0u;
 	data->tx_buf[3] = 0u;
-	data->tx_buf[4] = len;
+	data->tx_buf[4] = len + TLSR8269_FCS_LEN;
 	memcpy(&data->tx_buf[TLSR8269_TX_HDR_LEN], frag->data, len);
 
 	k_sem_reset(&data->tx_done);
@@ -423,9 +725,7 @@ static int tlsr8269_attr_get(const struct device *dev, enum ieee802154_attr attr
 
 static void tlsr8269_iface_init(struct net_if *iface)
 {
-	struct tlsr8269_radio_data *data = &tlsr8269_radio_data_0;
-
-	data->iface = iface;
+	tlsr8269_radio_data_0.iface = iface;
 }
 
 static const struct ieee802154_radio_api tlsr8269_radio_api = {
@@ -443,18 +743,26 @@ static const struct ieee802154_radio_api tlsr8269_radio_api = {
 	.attr_get = tlsr8269_attr_get,
 };
 
+static bool tlsr8269_buf_in_window(const void *buf)
+{
+	return (((uintptr_t)buf) >> 16) == TLSR8269_DMA_WINDOW_HI;
+}
+
 static int tlsr8269_init(const struct device *dev)
 {
 	struct tlsr8269_radio_data *data = dev->data;
 
-	/* The DMA address registers are 16 bits wide; the buffers must lie in the 0x80xxxx window. */
-	if ((((uintptr_t)data->rx_buf) >> 16) != 0x80u || (((uintptr_t)data->tx_buf) >> 16) != 0x80u) {
+	if (!tlsr8269_buf_in_window(data->rx_buf) || !tlsr8269_buf_in_window(data->tx_buf) ||
+	    !tlsr8269_buf_in_window(data->ack_buf)) {
 		return -EINVAL;
 	}
 
 	k_sem_init(&data->tx_done, 0, 1);
 	data->channel = TLSR8269_CHANNEL_MIN;
 	data->started = false;
+	data->pan_id = 0xffffu;
+	data->short_addr = 0xffffu;
+	tlsr8269_ieee_addr_load(data->ieee_addr);
 
 	tlsr8269_rf_init();
 	tlsr8269_trx_off();
@@ -468,9 +776,14 @@ static int tlsr8269_init(const struct device *dev)
 #if defined(CONFIG_IEEE802154_RAW_MODE)
 DEVICE_DT_INST_DEFINE(0, tlsr8269_init, NULL, &tlsr8269_radio_data_0, NULL, POST_KERNEL,
 		      CONFIG_IEEE802154_TLSR8269_INIT_PRIO, &tlsr8269_radio_api);
-#else
+#elif defined(CONFIG_NET_L2_IEEE802154)
+NET_DEVICE_DT_INST_DEFINE(0, tlsr8269_init, NULL, &tlsr8269_radio_data_0, NULL,
+			  CONFIG_IEEE802154_TLSR8269_INIT_PRIO, &tlsr8269_radio_api, IEEE802154_L2,
+			  NET_L2_GET_CTX_TYPE(IEEE802154_L2),
+			  TLSR8269_PHY_MAX_PSDU - TLSR8269_FCS_LEN);
+#elif defined(CONFIG_NET_L2_CUSTOM_IEEE802154)
 NET_DEVICE_DT_INST_DEFINE(0, tlsr8269_init, NULL, &tlsr8269_radio_data_0, NULL,
 			  CONFIG_IEEE802154_TLSR8269_INIT_PRIO, &tlsr8269_radio_api,
-			  IEEE802154_L2, NET_L2_GET_CTX_TYPE(IEEE802154_L2),
+			  CUSTOM_IEEE802154_L2, NET_L2_GET_CTX_TYPE(CUSTOM_IEEE802154_L2),
 			  TLSR8269_PHY_MAX_PSDU - TLSR8269_FCS_LEN);
 #endif
