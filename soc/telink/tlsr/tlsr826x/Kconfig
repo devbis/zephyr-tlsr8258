@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_SERIES_TLSR826X
+
+config SOC_TLSR8269
+	bool
+
+endif # SOC_SERIES_TLSR826X

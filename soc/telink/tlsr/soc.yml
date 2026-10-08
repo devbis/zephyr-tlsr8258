@@ -7,3 +7,6 @@ family:
       - name: tlsr825x
         socs:
           - name: tlsr8258
+      - name: tlsr826x
+        socs:
+          - name: tlsr8269
