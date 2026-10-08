@@ -11,6 +11,10 @@ properties:
   reg:
     required: true
 
+  interrupts:
+    required: true
+    description: DMA line that reports RX-ready and TX-done (IRQ 4).
+
   clock-frequency:
     required: true
     description: Peripheral clock feeding the baud rate divider.
