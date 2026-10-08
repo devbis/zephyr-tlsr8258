@@ -10,6 +10,8 @@
  * drivers before they can be added.
  */
 
+#include <zephyr/dt-bindings/pinctrl/tlsr8269-pinctrl.h>
+
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -19,6 +21,23 @@
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <24000000>;
+		};
+	};
+
+	pinctrl: pinctrl {
+		compatible = "telink,tlsr8269-pinctrl";
+
+		/* UART pins of the vendor EVK (board_826x_evk.h). */
+		uart0_tx_default: uart0_tx_default {
+			pinmux = <TLSR8269_PINMUX(TLSR8269_GPIO_PC2,
+						  TLSR8269_FUNC_UART)>;
+			output-enable;
+		};
+
+		uart0_rx_default: uart0_rx_default {
+			pinmux = <TLSR8269_PINMUX(TLSR8269_GPIO_PC3,
+						  TLSR8269_FUNC_UART)>;
+			input-enable;
 		};
 	};
 
