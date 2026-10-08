@@ -24,7 +24,12 @@ LOG_MODULE_REGISTER(zigbee_radio_l2, CONFIG_ZIGBEE_LOG_LEVEL);
  * burst that carries AssocResp/Transport-Key.  Keep it at least as deep as the
  * deepest driver-side queue.
  */
+#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
+/* 32 KB SRAM part: each queued frame costs ~127 bytes of RAM. */
+#define ZB_L2_RX_DEPTH 6
+#else
 #define ZB_L2_RX_DEPTH 16
+#endif
 /* The L2 hands over the PSDU without its FCS. */
 #define ZB_L2_PSDU_MAX (IEEE802154_MAX_PHY_PACKET_SIZE - IEEE802154_FCS_LENGTH)
 

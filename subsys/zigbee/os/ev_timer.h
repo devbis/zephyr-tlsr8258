@@ -30,7 +30,12 @@
 /**
  *  @brief Definition for timer event
  */
+#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
+/* 32 KB SRAM part: fewer software timers. */
+#define TIMER_EVENT_NUM         (16)
+#else
 #define TIMER_EVENT_NUM         (24)
+#endif
 #define TIMER_EVENT_ENOUGH_NUM  (TIMER_EVENT_NUM - 4)
 
 /**
