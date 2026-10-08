@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_TELINK_TLSR8269
+	bool "Telink TLSR8269 IEEE 802.15.4 RF driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8269_ZB_ENABLED
+	help
+	  Enable the IEEE 802.15.4 RF driver for the Telink TLSR8269 (2.4 GHz
+	  O-QPSK, 250 kbit/s). ACK, frame filtering and CCA are not implemented.
+
+if IEEE802154_TELINK_TLSR8269
+
+config IEEE802154_TLSR8269_INIT_PRIO
+	int "TLSR8269 IEEE 802.15.4 initialization priority"
+	default 80
+
+endif # IEEE802154_TELINK_TLSR8269
