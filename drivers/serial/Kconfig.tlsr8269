@@ -6,6 +6,8 @@ config UART_TELINK_TLSR8269
 	default y
 	depends on DT_HAS_TELINK_TLSR8269_UART_ENABLED
 	select SERIAL_HAS_DRIVER
+	select SERIAL_SUPPORT_INTERRUPT
 	select PINCTRL
 	help
-	  This option enables the polled UART driver for Telink TLSR8269.
+	  This option enables the UART driver for Telink TLSR8269, polled and
+	  interrupt-driven. The async API is not implemented.

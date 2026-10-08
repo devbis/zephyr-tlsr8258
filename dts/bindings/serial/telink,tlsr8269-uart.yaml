@@ -11,6 +11,10 @@ properties:
   reg:
     required: true
 
+  interrupts:
+    required: true
+    description: DMA line that reports RX-ready and TX-done (IRQ 4).
+
   clocks:
     required: true
     description: |
