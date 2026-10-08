@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8269 UART
+
+compatible: "telink,tlsr8269-uart"
+
+include: [uart-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clock-frequency:
+    required: true
+    description: Peripheral clock feeding the baud rate divider.
