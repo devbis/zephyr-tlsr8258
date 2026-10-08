@@ -1,0 +1,11 @@
+identifier: tlsr8269_generic
+name: Telink TLSR8269 Generic
+type: mcu
+arch: tc32
+toolchain:
+  - llvm
+ram: 32
+flash: 512
+supported:
+  - gpio
+  - flash

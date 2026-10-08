@@ -1,0 +1,59 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <telink/tlsr8269.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Telink TLSR8269 Generic";
+	compatible = "telink,tlsr8269-generic";
+
+	aliases {
+		led0 = &led0;
+	};
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash;
+		zephyr,code-partition = &app_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led_0 {
+			gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&flash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		app_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 0x00076000>;
+		};
+
+		ieee_addr_partition: partition@76000 {
+			label = "ieee-addr";
+			reg = <0x00076000 0x00001000>;
+		};
+
+		zigbee_nv_partition: partition@7c000 {
+			label = "zigbee_nv";
+			reg = <0x0007c000 0x00004000>;
+		};
+	};
+};
+
+&gpioa {
+	status = "okay";
+};

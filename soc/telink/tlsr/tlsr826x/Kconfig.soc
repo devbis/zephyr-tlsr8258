@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_TLSR826X
+	bool
+	select SOC_FAMILY_TELINK_TLSR
+	select TC32
+	select HAS_PM
+	select HAS_SEGGER_RTT if ZEPHYR_SEGGER_MODULE
+	select ARCH_HAS_RAMFUNC_SUPPORT
+	select SOC_EARLY_INIT_HOOK
+	select SOC_PREP_HOOK
+	select XIP
+	help
+	  Telink TLSR826x
+
+config SOC_TLSR8269
+	bool
+	select SOC_SERIES_TLSR826X
+	help
+	  Telink TLSR8269
+
+config SOC_SERIES
+	default "tlsr826x" if SOC_SERIES_TLSR826X
+
+config SOC
+	default "tlsr8269" if SOC_TLSR8269
