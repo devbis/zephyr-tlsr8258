@@ -26,7 +26,7 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 #include <tlsr825x/power.h>
 
 #include "ieee802154_tlsr8258_tx_irq.h"
@@ -391,7 +391,7 @@ static void tlsr8258_rf_rx_buffer_set(uint8_t *buffer, uint16_t size)
 
 static bool tlsr8258_rf_recover_stuck_rx(struct tlsr8258_radio_data *radio)
 {
-	const uint32_t cpu_rx_sources = BIT(TLSR8258_IRQ_DMA) | BIT(TLSR8258_IRQ_ZB_RT);
+	const uint32_t cpu_rx_sources = BIT(TLSR82XX_IRQ_DMA) | BIT(TLSR82XX_IRQ_ZB_RT);
 	bool rf_rx_pending = (TLSR_REG16(0x0f20) & RF_IRQ_RX) != 0u;
 
 	/*
@@ -400,7 +400,7 @@ static bool tlsr8258_rf_recover_stuck_rx(struct tlsr8258_radio_data *radio)
 	 * asserted, no vector will ever consume it: clear the module status and
 	 * arm a fresh buffer without resetting the RF state machine.
 	 */
-	if (radio == NULL || !rf_rx_pending || (*TLSR8258_REG_IRQ_SRC & cpu_rx_sources) != 0u) {
+	if (radio == NULL || !rf_rx_pending || (*TLSR82XX_REG_IRQ_SRC & cpu_rx_sources) != 0u) {
 		return false;
 	}
 
@@ -447,8 +447,8 @@ __attribute__((noinline, section(".ram_code"))) static void tlsr8258_rf_irq_reen
 	if ((TLSR_REG16(0x0f20) & RF_IRQ_RX_EVENTS) == 0u) {
 		tlsr8258_rf_cpu_irq_sources_clear();
 	}
-	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() | BIT(TLSR8258_IRQ_DMA) |
-				BIT(TLSR8258_IRQ_ZB_RT));
+	tlsr82xx_irq_mask_write(tlsr82xx_irq_mask_read() | BIT(TLSR82XX_IRQ_DMA) |
+				BIT(TLSR82XX_IRQ_ZB_RT));
 	irq_unlock(key);
 }
 
@@ -1649,7 +1649,7 @@ static int tlsr8258_stop(const struct device *dev)
 		return -EALREADY;
 	}
 
-	irq_disable(TLSR8258_IRQ_ZB_RT);
+	irq_disable(TLSR82XX_IRQ_ZB_RT);
 	TLSR_REG16(0x0f1c) = 0u;
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	tlsr8258_rf_off();
@@ -1738,8 +1738,8 @@ static int tlsr8258_tx_sync_followup(struct tlsr8258_radio_data *radio, uint8_t 
 	 * again by tlsr8258_rf_irq_reenable() below.
 	 */
 	key = irq_lock();
-	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() &
-				~(BIT(TLSR8258_IRQ_DMA) | BIT(TLSR8258_IRQ_ZB_RT)));
+	tlsr82xx_irq_mask_write(tlsr82xx_irq_mask_read() &
+				~(BIT(TLSR82XX_IRQ_DMA) | BIT(TLSR82XX_IRQ_ZB_RT)));
 	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, expect_ack, false);
 	/*
 	 * Leave RX so that the RX gate is not active while DMA3 is handed to
@@ -1879,7 +1879,7 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode, s
 	saved_irq_mask = TLSR_REG16(0x0f1c);
 	session_irq_mask = tlsr8258_tx_irq_session_mask(saved_irq_mask, expect_post_tx_followup);
 
-	irq_disable(TLSR8258_IRQ_ZB_RT);
+	irq_disable(TLSR82XX_IRQ_ZB_RT);
 	k_sem_reset(&radio->tx_wait);
 	tlsr8258_radio_op_prepare_tx(&radio->op, tx_seq, expect_ack, expect_post_tx_rx);
 	tlsr8258_rf_prepare_normal_tx();
@@ -2031,7 +2031,7 @@ static const struct ieee802154_radio_api tlsr8258_radio_api = {
 	.attr_get = tlsr8258_attr_get,
 };
 
-static void tlsr8258_irq_config(const struct device *dev)
+static void tlsr82xx_irq_config(const struct device *dev)
 {
 	/*
 	 * rf_irq_reenable() enables both the RF ZB_RT source (IRQ 13) and
@@ -2043,10 +2043,10 @@ static void tlsr8258_irq_config(const struct device *dev)
 	 * first when both are pending and will enter here again for IRQ 4 if
 	 * the DMA latch remains set.
 	 */
-	IRQ_CONNECT(TLSR8258_IRQ_DMA, 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
+	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
 	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
-	irq_disable(TLSR8258_IRQ_DMA);
-	irq_disable(TLSR8258_IRQ_ZB_RT);
+	irq_disable(TLSR82XX_IRQ_DMA);
+	irq_disable(TLSR82XX_IRQ_ZB_RT);
 	ARG_UNUSED(dev);
 }
 
@@ -2061,7 +2061,7 @@ void tlsr8258_radio_rx_poll(void)
 }
 
 static const struct tlsr8258_radio_config tlsr8258_radio_config_0 = {
-	.irq_config_func = tlsr8258_irq_config,
+	.irq_config_func = tlsr82xx_irq_config,
 };
 
 static int tlsr8258_init(const struct device *dev)

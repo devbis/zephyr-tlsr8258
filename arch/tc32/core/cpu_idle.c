@@ -6,7 +6,7 @@
 #include <zephyr/irq.h>
 #include <zephyr/tracing/tracing.h>
 
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 /*
  * Both entry points return only once an interrupt has been taken, which is
