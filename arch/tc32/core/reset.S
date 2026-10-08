@@ -7,8 +7,8 @@
 #include <zephyr/linker/sections.h>
 #include <offsets_short.h>
 #include <tc32_context.h>
-#include <tlsr825x/irq.h>
-#include <tlsr825x/soc.h>
+#include <tlsr82xx/irq.h>
+#include <tlsr82xx/soc.h>
 
 /*
  * CPSR values for IRQ and SVC mode with the I bit set, used to step between
@@ -88,11 +88,12 @@ __reset:
 	 * word store spans both. It is safe only because it stores a constant
 	 * zero, which is what the byte store above already put in the gate;
 	 * anything that reads the mask back and writes it again has to use the
-	 * byte accessors in <tlsr825x/irq.h> instead.
+	 * byte accessors in <tlsr82xx/irq.h> instead.
 	 */
 	tloadr r0, .Lirq_mask
 	tstorer r1, [r0]
 
+#ifdef CONFIG_SOC_SERIES_TLSR825X
 	/* Clear the instruction cache tags and lock the image head lines. */
 	tloadr r0, .Lictag_start
 	tloadr r1, .Lictag_end
@@ -119,6 +120,7 @@ __reset:
 	tmov r2, #1
 	tadd r0, r0, r2
 	tstorerb r0, [r1, #1]
+#endif /* CONFIG_SOC_SERIES_TLSR825X */
 
 	/*
 	 * Release the flash from deep power-down (command 0xab) and give it
@@ -126,8 +128,8 @@ __reset:
 	 */
 	tloadr r1, .Lmspi_data
 	tmov r0, #0
-	tstorerb r0, [r1, #TLSR8258_MSPI_CTRL_OFFSET]
-	tmov r0, #TLSR8258_FLASH_CMD_RELEASE_PD
+	tstorerb r0, [r1, #TLSR82XX_MSPI_CTRL_OFFSET]
+	tmov r0, #TLSR82XX_FLASH_CMD_RELEASE_PD
 	tstorerb r0, [r1]
 	tmov r3, #7
 .Lflash_wakeup_delay:
@@ -139,8 +141,8 @@ __reset:
 	tsub r3, r3, r2
 	tj .Lflash_wakeup_delay
 .Lflash_wakeup_done:
-	tmov r0, #TLSR8258_MSPI_CTRL_CS
-	tstorerb r0, [r1, #TLSR8258_MSPI_CTRL_OFFSET]
+	tmov r0, #TLSR82XX_MSPI_CTRL_CS
+	tstorerb r0, [r1, #TLSR82XX_MSPI_CTRL_OFFSET]
 
 	/* Leave the SRAM copy: z_prep_c() is linked at its flash address. */
 	tloadr r0, .Lprep_c
@@ -156,9 +158,10 @@ __reset:
 .Lstack_end:
 	.word z_interrupt_stacks + __z_interrupt_stack_SIZEOF
 .Lirq_en:
-	.word TLSR8258_REG_IRQ_EN_ADDR
+	.word TLSR82XX_REG_IRQ_EN_ADDR
 .Lirq_mask:
-	.word TLSR8258_REG_IRQ_MASK_ADDR
+	.word TLSR82XX_REG_IRQ_MASK_ADDR
+#ifdef CONFIG_SOC_SERIES_TLSR825X
 .Lictag_start:
 	.word _ictag_start_
 .Lictag_end:
@@ -166,9 +169,10 @@ __reset:
 .Licache_lines:
 	.word _tc32_icache_lines_
 .Licache_ctrl:
-	.word TLSR8258_REG_ICACHE_CTRL_ADDR
+	.word TLSR82XX_REG_ICACHE_CTRL_ADDR
+#endif /* CONFIG_SOC_SERIES_TLSR825X */
 .Lmspi_data:
-	.word TLSR8258_REG_MSPI_DATA_ADDR
+	.word TLSR82XX_REG_MSPI_DATA_ADDR
 .Lprep_c:
 	.word z_prep_c
 
@@ -377,7 +381,7 @@ z_tc32_irq_entry:
 .Lirq_unwind_ptr:
 	.word .Lirq_unwind
 .Lresched_irq_en:
-	.word TLSR8258_REG_IRQ_EN_ADDR
+	.word TLSR82XX_REG_IRQ_EN_ADDR
 .Lsoft_masked_ptr:
 	.word z_tc32_irq_soft_masked
 #endif
