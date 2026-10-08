@@ -67,6 +67,11 @@
 #define TLSR8269_FLD_DMA_TX_DONE  BIT(1)
 #define TLSR8269_REG_DMA_IRQ_MSK  TLSR8269_REG8(0x00800521u)
 #define TLSR8269_UART_MIN_BWPC    3u
+#define TLSR8269_UART_RX_MIN_LEN  16u
+#define TLSR8269_UART_RX_MAX_LEN  4080u
+#define TLSR8269_DMA_WINDOW_HI    0x80u
+#define TLSR8269_FLD_UART_RX_ERR_MSK BIT(7)
+#define TLSR8269_FLD_UART_CLR_ERR    BIT(6)
 
 struct tlsr8269_uart_config {
 	uint32_t clock_frequency;
@@ -81,6 +86,16 @@ struct tlsr8269_uart_data {
 	uint8_t tx_pkt[TLSR8269_UART_PKT_HDR + TLSR8269_UART_TX_MAX] __aligned(4);
 	uint8_t rx_buf[TLSR8269_UART_RX_BUF_SIZE] __aligned(16);
 	uint16_t rx_pos;
+
+	uart_callback_t async_callback;
+	void *async_user_data;
+	const uint8_t *async_tx_buf;
+	size_t async_tx_len;
+	size_t async_tx_pos;
+	uint8_t *async_rx_buf;
+	size_t async_rx_len;
+	uint8_t *async_rx_next_buf;
+	size_t async_rx_next_len;
 };
 
 static bool tlsr8269_uart_is_prime(uint32_t n)
@@ -160,6 +175,11 @@ static void tlsr8269_uart_cal_div_and_bwpc(uint32_t baudrate, uint32_t clock,
 }
 
 
+static bool tlsr8269_dma_addr_ok(uintptr_t addr)
+{
+	return (addr >> 16) == TLSR8269_DMA_WINDOW_HI;
+}
+
 static int tlsr8269_uart_hw_init(const struct tlsr8269_uart_config *config,
 				 struct tlsr8269_uart_data *data)
 {
@@ -167,8 +187,8 @@ static int tlsr8269_uart_hw_init(const struct tlsr8269_uart_config *config,
 	uint8_t bwpc = 0u;
 	uintptr_t rx_addr = (uintptr_t)data->rx_buf;
 
-	/* The DMA address registers are 16 bits wide. */
-	if ((rx_addr >> 16) != 0u) {
+	/* The DMA address registers are 16 bits wide; the buffer must lie in the 0x80xxxx window. */
+	if (!tlsr8269_dma_addr_ok(rx_addr)) {
 		return -EINVAL;
 	}
 
@@ -262,7 +282,7 @@ static int tlsr8269_uart_err_check(const struct device *dev)
 		return 0;
 	}
 
-	TLSR8269_REG_UART_STATUS0 |= TLSR8269_FLD_UART_STATUS0_CLR_ERR;
+	TLSR8269_REG_UART_STATUS0 |= TLSR8269_FLD_UART_CLR_ERR;
 
 	return UART_ERROR_FRAMING;
 }
@@ -285,7 +305,6 @@ static int tlsr8269_uart_fifo_fill(const struct device *dev, const uint8_t *tx_d
 
 static int tlsr8269_uart_fifo_read(const struct device *dev, uint8_t *rx_data, const int size)
 {
-	struct tlsr8269_uart_data *data = dev->data;
 	int num = 0;
 	unsigned char c;
 
@@ -356,6 +375,26 @@ static int tlsr8269_uart_irq_rx_ready(const struct device *dev)
 	return (TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_RX_UART) != 0u ? 1 : 0;
 }
 
+static void tlsr8269_uart_irq_err_enable(const struct device *dev)
+{
+	unsigned int key = irq_lock();
+
+	ARG_UNUSED(dev);
+	TLSR8269_REG_UART_RX_TO1 &= (uint8_t)~TLSR8269_FLD_UART_RX_ERR_MSK;
+	irq_enable(TLSR82XX_IRQ_UART);
+	irq_unlock(key);
+}
+
+static void tlsr8269_uart_irq_err_disable(const struct device *dev)
+{
+	unsigned int key = irq_lock();
+
+	ARG_UNUSED(dev);
+	TLSR8269_REG_UART_RX_TO1 |= TLSR8269_FLD_UART_RX_ERR_MSK;
+	irq_disable(TLSR82XX_IRQ_UART);
+	irq_unlock(key);
+}
+
 static int tlsr8269_uart_irq_is_pending(const struct device *dev)
 {
 	ARG_UNUSED(dev);
@@ -363,9 +402,11 @@ static int tlsr8269_uart_irq_is_pending(const struct device *dev)
 	bool rx_pending = (TLSR8269_REG_DMA_IRQ_MSK & TLSR8269_FLD_UART_IRQ_RX) != 0u &&
 			  (TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_RX_UART) != 0u;
 	bool tx_pending = (TLSR8269_REG_DMA_IRQ_MSK & TLSR8269_FLD_UART_IRQ_TX) != 0u &&
-			  (TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_TX_DONE) != 0u;
+			  tlsr8269_uart_tx_idle();
+	bool err_pending = (TLSR8269_REG_UART_RX_TO1 & TLSR8269_FLD_UART_RX_ERR_MSK) == 0u &&
+			   (TLSR8269_REG_UART_STATUS0 & TLSR8269_FLD_UART_STATUS0_RX_ERR) != 0u;
 
-	return (rx_pending || tx_pending) ? 1 : 0;
+	return (rx_pending || tx_pending || err_pending) ? 1 : 0;
 }
 
 static void tlsr8269_uart_irq_update(const struct device *dev)
@@ -382,31 +423,309 @@ static void tlsr8269_uart_irq_callback_set(const struct device *dev,
 	data->callback_data = user_data;
 }
 
+static void tlsr8269_uart_event(const struct device *dev, struct uart_event *evt)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+
+	if (data->async_callback != NULL) {
+		data->async_callback(dev, evt, data->async_user_data);
+	}
+}
+
+static void tlsr8269_uart_rx_arm(uint8_t *buf, size_t len)
+{
+	TLSR8269_REG_DMA0_ADDR = (uint16_t)(uintptr_t)buf;
+	TLSR8269_REG_DMA0_SIZE = (uint8_t)(len >> 4);
+}
+
+/* Send the next chunk of the async TX buffer, or report completion. */
+static void tlsr8269_uart_async_tx_isr(const struct device *dev)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	struct uart_event evt;
+	size_t n;
+
+	if (data->async_tx_buf == NULL) {
+		return;
+	}
+
+	if (data->async_tx_pos < data->async_tx_len) {
+		n = MIN(data->async_tx_len - data->async_tx_pos, (size_t)TLSR8269_UART_TX_MAX);
+		memcpy(&data->tx_pkt[TLSR8269_UART_PKT_HDR],
+		       &data->async_tx_buf[data->async_tx_pos], n);
+		data->async_tx_pos += n;
+		tlsr8269_uart_tx_start(data, (uint32_t)n);
+		return;
+	}
+
+	evt.type = UART_TX_DONE;
+	evt.data.tx.buf = data->async_tx_buf;
+	evt.data.tx.len = data->async_tx_len;
+
+	data->async_tx_buf = NULL;
+	data->async_tx_len = 0u;
+	data->async_tx_pos = 0u;
+	tlsr8269_uart_irq_enable_dma(TLSR8269_FLD_UART_IRQ_TX, false);
+	tlsr8269_uart_event(dev, &evt);
+}
+
+/* One RX packet landed in the async buffer: report it and re-arm DMA. */
+static void tlsr8269_uart_async_rx_isr(const struct device *dev)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	struct uart_event evt;
+	uint32_t len;
+
+	len = (uint32_t)data->async_rx_buf[0] | ((uint32_t)data->async_rx_buf[1] << 8) |
+	      ((uint32_t)data->async_rx_buf[2] << 16) | ((uint32_t)data->async_rx_buf[3] << 24);
+	if (len > data->async_rx_len - TLSR8269_UART_PKT_HDR) {
+		len = data->async_rx_len - TLSR8269_UART_PKT_HDR;
+	}
+
+	TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_RX_UART;
+
+	if (len > 0u) {
+		evt.type = UART_RX_RDY;
+		evt.data.rx.buf = data->async_rx_buf;
+		evt.data.rx.offset = TLSR8269_UART_PKT_HDR;
+		evt.data.rx.len = len;
+		tlsr8269_uart_event(dev, &evt);
+	}
+
+	if (data->async_rx_buf == NULL) {
+		return;
+	}
+
+	if (data->async_rx_next_buf != NULL) {
+		data->async_rx_buf = data->async_rx_next_buf;
+		data->async_rx_len = data->async_rx_next_len;
+		data->async_rx_next_buf = NULL;
+		data->async_rx_next_len = 0u;
+	} else {
+		evt.type = UART_RX_BUF_REQUEST;
+		tlsr8269_uart_event(dev, &evt);
+	}
+
+	tlsr8269_uart_rx_arm(data->async_rx_buf, data->async_rx_len);
+}
+
 /*
- * The DMA line is shared by RX-ready and TX-done. TX-done is acknowledged here
- * because nothing else waits for it. RX-ready stays set until fifo_read()
- * consumes the packet, so the line is level-held while RX interrupts are on.
- * With RX interrupts off the packet is dropped here, which keeps the line
- * from re-firing.
+ * DMA line: RX-ready (0x526[0]) and TX-done (0x526[1]). TX-done is always
+ * acknowledged here so the line drops. RX-ready stays set until the packet is
+ * consumed, except that with RX interrupts off and no async RX buffer the
+ * packet is dropped, which keeps the line from re-firing.
  */
-static void tlsr8269_uart_isr(const void *arg)
+static void tlsr8269_uart_dma_isr(const void *arg)
 {
 	const struct device *dev = arg;
 	struct tlsr8269_uart_data *data = dev->data;
 	uint8_t mask = TLSR8269_REG_DMA_IRQ_MSK;
 
-	if ((TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_RX_UART) != 0u &&
-	    (mask & TLSR8269_FLD_UART_IRQ_RX) == 0u) {
-		data->rx_pos = 0u;
-		TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_RX_UART;
+	if ((TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_TX_DONE) != 0u) {
+		TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_TX_DONE;
+		tlsr8269_uart_async_tx_isr(dev);
 	}
 
-	/* TX-done is latched in 0x526[1]; acknowledge it so the line drops. */
-	TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_TX_DONE;
+	if ((TLSR8269_REG_DMA_RX_RDY0 & TLSR8269_FLD_DMA_RX_UART) != 0u) {
+		if (data->async_rx_buf != NULL) {
+			tlsr8269_uart_async_rx_isr(dev);
+		} else if ((mask & TLSR8269_FLD_UART_IRQ_RX) == 0u) {
+			data->rx_pos = 0u;
+			TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_RX_UART;
+		}
+	}
 
 	if (data->callback != NULL) {
 		data->callback(dev, data->callback_data);
 	}
+}
+
+/* UART line: RX error. The flag is cleared, and async RX is reported as stopped. */
+static void tlsr8269_uart_err_isr(const void *arg)
+{
+	const struct device *dev = arg;
+	struct tlsr8269_uart_data *data = dev->data;
+	struct uart_event evt;
+
+	if ((TLSR8269_REG_UART_STATUS0 & TLSR8269_FLD_UART_STATUS0_RX_ERR) != 0u) {
+		TLSR8269_REG_UART_STATUS0 |= TLSR8269_FLD_UART_CLR_ERR;
+
+		if (data->async_rx_buf != NULL) {
+			evt.type = UART_RX_STOPPED;
+			evt.data.rx_stop.reason = UART_ERROR_FRAMING;
+			evt.data.rx_stop.data.buf = data->async_rx_buf;
+			evt.data.rx_stop.data.offset = 0u;
+			evt.data.rx_stop.data.len = 0u;
+			tlsr8269_uart_event(dev, &evt);
+		}
+	}
+
+	if (data->callback != NULL) {
+		data->callback(dev, data->callback_data);
+	}
+}
+
+static int tlsr8269_uart_async_callback_set(const struct device *dev, uart_callback_t callback,
+					    void *user_data)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+
+	data->async_callback = callback;
+	data->async_user_data = user_data;
+
+	return 0;
+}
+
+static int tlsr8269_uart_async_tx(const struct device *dev, const uint8_t *buf, size_t len,
+				  int32_t timeout)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	unsigned int key;
+
+	ARG_UNUSED(timeout);
+
+	if (buf == NULL || len == 0u) {
+		return -EINVAL;
+	}
+
+	key = irq_lock();
+	if (data->async_tx_buf != NULL || !tlsr8269_uart_tx_idle()) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+
+	data->async_tx_buf = buf;
+	data->async_tx_len = len;
+	data->async_tx_pos = 0u;
+
+	tlsr8269_uart_irq_enable_dma(TLSR8269_FLD_UART_IRQ_TX, true);
+	tlsr8269_uart_async_tx_isr(dev);
+	irq_unlock(key);
+
+	return 0;
+}
+
+static int tlsr8269_uart_async_tx_abort(const struct device *dev)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	struct uart_event evt;
+	unsigned int key = irq_lock();
+
+	if (data->async_tx_buf == NULL) {
+		irq_unlock(key);
+		return -EFAULT;
+	}
+
+	evt.type = UART_TX_ABORTED;
+	evt.data.tx.buf = data->async_tx_buf;
+	evt.data.tx.len = data->async_tx_pos;
+
+	data->async_tx_buf = NULL;
+	data->async_tx_len = 0u;
+	data->async_tx_pos = 0u;
+	tlsr8269_uart_irq_enable_dma(TLSR8269_FLD_UART_IRQ_TX, false);
+	irq_unlock(key);
+
+	tlsr8269_uart_event(dev, &evt);
+
+	return 0;
+}
+
+static int tlsr8269_uart_async_rx_enable(const struct device *dev, uint8_t *buf, size_t len,
+					 int32_t timeout)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	unsigned int key;
+
+	ARG_UNUSED(timeout);
+
+	if (buf == NULL || len < TLSR8269_UART_RX_MIN_LEN || len > TLSR8269_UART_RX_MAX_LEN ||
+	    !tlsr8269_dma_addr_ok((uintptr_t)buf)) {
+		return -EINVAL;
+	}
+
+	key = irq_lock();
+	if (data->async_rx_buf != NULL) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+
+	data->async_rx_buf = buf;
+	data->async_rx_len = len;
+	data->async_rx_next_buf = NULL;
+	data->async_rx_next_len = 0u;
+
+	TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_RX_UART;
+	tlsr8269_uart_rx_arm(buf, len);
+	tlsr8269_uart_irq_enable_dma(TLSR8269_FLD_UART_IRQ_RX, true);
+	irq_unlock(key);
+
+	return 0;
+}
+
+static int tlsr8269_uart_async_rx_buf_rsp(const struct device *dev, uint8_t *buf, size_t len)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	unsigned int key;
+
+	if (buf == NULL || len < TLSR8269_UART_RX_MIN_LEN || len > TLSR8269_UART_RX_MAX_LEN ||
+	    !tlsr8269_dma_addr_ok((uintptr_t)buf)) {
+		return -EINVAL;
+	}
+
+	key = irq_lock();
+	if (data->async_rx_buf == NULL) {
+		irq_unlock(key);
+		return -EACCES;
+	}
+	if (data->async_rx_next_buf != NULL) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+
+	data->async_rx_next_buf = buf;
+	data->async_rx_next_len = len;
+	irq_unlock(key);
+
+	return 0;
+}
+
+static int tlsr8269_uart_async_rx_disable(const struct device *dev)
+{
+	struct tlsr8269_uart_data *data = dev->data;
+	struct uart_event evt;
+	uint8_t *buf;
+	uint8_t *next;
+	unsigned int key = irq_lock();
+
+	if (data->async_rx_buf == NULL) {
+		irq_unlock(key);
+		return -EFAULT;
+	}
+
+	buf = data->async_rx_buf;
+	next = data->async_rx_next_buf;
+
+	data->async_rx_buf = NULL;
+	data->async_rx_len = 0u;
+	data->async_rx_next_buf = NULL;
+	data->async_rx_next_len = 0u;
+	tlsr8269_uart_irq_enable_dma(TLSR8269_FLD_UART_IRQ_RX, false);
+	TLSR8269_REG_DMA_RX_RDY0 = TLSR8269_FLD_DMA_RX_UART;
+	irq_unlock(key);
+
+	evt.type = UART_RX_BUF_RELEASED;
+	evt.data.rx_buf.buf = buf;
+	tlsr8269_uart_event(dev, &evt);
+	if (next != NULL) {
+		evt.data.rx_buf.buf = next;
+		tlsr8269_uart_event(dev, &evt);
+	}
+
+	evt.type = UART_RX_DISABLED;
+	tlsr8269_uart_event(dev, &evt);
+
+	return 0;
 }
 
 static int tlsr8269_uart_init(const struct device *dev)
@@ -418,6 +737,15 @@ static int tlsr8269_uart_init(const struct device *dev)
 	data->rx_pos = 0u;
 	data->callback = NULL;
 	data->callback_data = NULL;
+	data->async_callback = NULL;
+	data->async_user_data = NULL;
+	data->async_tx_buf = NULL;
+	data->async_tx_len = 0u;
+	data->async_tx_pos = 0u;
+	data->async_rx_buf = NULL;
+	data->async_rx_len = 0u;
+	data->async_rx_next_buf = NULL;
+	data->async_rx_next_len = 0u;
 	memset(data->rx_buf, 0, sizeof(data->rx_buf));
 
 	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
@@ -430,9 +758,7 @@ static int tlsr8269_uart_init(const struct device *dev)
 		return ret;
 	}
 
-	if (config->irq_config_func != NULL) {
-		config->irq_config_func(dev);
-	}
+	config->irq_config_func(dev);
 
 	return 0;
 }
@@ -450,16 +776,27 @@ static DEVICE_API(uart, tlsr8269_uart_driver_api) = {
 	.irq_rx_enable = tlsr8269_uart_irq_rx_enable,
 	.irq_rx_disable = tlsr8269_uart_irq_rx_disable,
 	.irq_rx_ready = tlsr8269_uart_irq_rx_ready,
+	.irq_err_enable = tlsr8269_uart_irq_err_enable,
+	.irq_err_disable = tlsr8269_uart_irq_err_disable,
 	.irq_is_pending = tlsr8269_uart_irq_is_pending,
 	.irq_update = tlsr8269_uart_irq_update,
 	.irq_callback_set = tlsr8269_uart_irq_callback_set,
+#ifdef CONFIG_UART_ASYNC_API
+	.callback_set = tlsr8269_uart_async_callback_set,
+	.tx = tlsr8269_uart_async_tx,
+	.tx_abort = tlsr8269_uart_async_tx_abort,
+	.rx_enable = tlsr8269_uart_async_rx_enable,
+	.rx_buf_rsp = tlsr8269_uart_async_rx_buf_rsp,
+	.rx_disable = tlsr8269_uart_async_rx_disable,
+#endif
 };
 
 #define TLSR8269_UART_INIT(n)                                                                     \
 	PINCTRL_DT_INST_DEFINE(n);                                                               \
 	static void tlsr8269_uart_irq_config_##n(const struct device *dev)                       \
 	{                                                                                         \
-		IRQ_CONNECT(DT_INST_IRQN(n), 0, tlsr8269_uart_isr, DEVICE_DT_INST_GET(n), 0);   \
+		IRQ_CONNECT(DT_INST_IRQN(n), 0, tlsr8269_uart_dma_isr, DEVICE_DT_INST_GET(n), 0); \
+		IRQ_CONNECT(TLSR82XX_IRQ_UART, 0, tlsr8269_uart_err_isr, DEVICE_DT_INST_GET(n), 0); \
 		ARG_UNUSED(dev);                                                                  \
 	}                                                                                         \
 	static struct tlsr8269_uart_data tlsr8269_uart_data_##n;                                 \
