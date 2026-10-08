@@ -58,3 +58,7 @@
 &gpioa {
 	status = "okay";
 };
+
+&zb {
+	status = "okay";
+};
