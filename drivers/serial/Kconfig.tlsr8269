@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config UART_TELINK_TLSR8269
+	bool "Telink TLSR8269 UART driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8269_UART_ENABLED
+	select SERIAL_HAS_DRIVER
+	select PINCTRL
+	help
+	  This option enables the polled UART driver for Telink TLSR8269.
