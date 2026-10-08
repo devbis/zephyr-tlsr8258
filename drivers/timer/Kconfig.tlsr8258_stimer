@@ -3,7 +3,7 @@
 
 config TLSR8258_STIMER
 	bool "TLSR8258 system timer"
-	depends on SOC_SERIES_TLSR825X
+	depends on SOC_SERIES_TLSR825X || SOC_SERIES_TLSR826X
 	select TICKLESS_CAPABLE
 	default y
 	depends on DT_HAS_TELINK_TLSR8258_STIMER_ENABLED
