@@ -7,7 +7,7 @@
 #include <zephyr/linker/sections.h>
 #include <offsets_short.h>
 #include <tc32_context.h>
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 GTEXT(z_tc32_switch)
 GTEXT(z_tc32_thread_start)
@@ -77,7 +77,7 @@ SECTION_FUNC(TEXT, z_tc32_thread_start)
 .Lthread_start_soft_masked:
 	.word z_tc32_irq_soft_masked
 .Lthread_start_irq_en:
-	.word TLSR8258_REG_IRQ_EN_ADDR
+	.word TLSR82XX_REG_IRQ_EN_ADDR
 
 /* void z_tc32_switch_to_main(char *stack_ptr, k_thread_entry_t entry) */
 SECTION_FUNC(TEXT, z_tc32_switch_to_main)
@@ -102,4 +102,4 @@ SECTION_FUNC(TEXT, z_tc32_switch_to_main)
 .Lswitch_main_soft_masked:
 	.word z_tc32_irq_soft_masked
 .Lswitch_main_irq_en:
-	.word TLSR8258_REG_IRQ_EN_ADDR
+	.word TLSR82XX_REG_IRQ_EN_ADDR

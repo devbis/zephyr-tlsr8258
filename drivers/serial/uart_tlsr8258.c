@@ -13,7 +13,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 #define TLSR8258_REG8(addr)  (*(volatile uint8_t *)(addr))
 #define TLSR8258_REG16(addr) (*(volatile uint16_t *)(addr))
@@ -239,7 +239,7 @@ static uint8_t tlsr8258_uart_rx_count(void)
 static void tlsr8258_uart_clear_irq_status(uint8_t mask)
 {
 	TLSR8258_REG_UART_STATUS1 = mask;
-	tlsr8258_irq_clear_parent(TLSR8258_IRQ_UART);
+	tlsr82xx_irq_clear_parent(TLSR82XX_IRQ_UART);
 }
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
@@ -347,9 +347,9 @@ static void tlsr8258_uart_parent_irq_update(void)
 {
 	if ((TLSR8258_REG_UART_CTRL0 & (FLD_UART_RX_IRQ_EN | FLD_UART_TX_IRQ_EN)) != 0u ||
 	    (TLSR8258_REG_UART_RX_TIMEOUT1 & FLD_UART_MASK_ERR_IRQ) == 0u) {
-		irq_enable(TLSR8258_IRQ_UART);
+		irq_enable(TLSR82XX_IRQ_UART);
 	} else {
-		irq_disable(TLSR8258_IRQ_UART);
+		irq_disable(TLSR82XX_IRQ_UART);
 	}
 }
 #endif
@@ -400,7 +400,7 @@ static int tlsr8258_uart_init(const struct device *dev)
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 	config->irq_config_func(dev);
-	irq_disable(TLSR8258_IRQ_UART);
+	irq_disable(TLSR82XX_IRQ_UART);
 #endif
 
 	return 0;

@@ -418,12 +418,12 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 
 	TLSR8258_REG_TMR1_TICK = 0u;
 	TLSR8258_REG_TMR1_CAPT = interval_us * TLSR8258_PM_SYS_TICK_PER_US;
-	*TLSR8258_REG_TMR_STA = TLSR8258_FLD_TMR_STA_TMR1;
+	*TLSR82XX_REG_TMR_STA = TLSR8258_FLD_TMR_STA_TMR1;
 	TLSR8258_REG_TMR_CTRL8 &= (uint8_t)~TLSR8258_FLD_TMR1_MODE;
 	TLSR8258_REG_TMR_CTRL8 |= TLSR8258_FLD_TMR1_EN;
 
 	TLSR8258_REG_MCU_WAKEUP_MASK |= wakeup_src;
-	tlsr8258_irq_mask_write(tlsr8258_irq_mask_read() &
+	tlsr82xx_irq_mask_write(tlsr82xx_irq_mask_read() &
 		~(TLSR8258_FLD_IRQ_TMR1_EN | TLSR8258_FLD_IRQ_ZB_RT_EN));
 	TLSR8258_REG_PWDN_CTRL = TLSR8258_FLD_PWDN_CTRL_SLEEP;
 
@@ -435,7 +435,7 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 
 	uint32_t status = TLSR8258_REG_PM_MISC_DUMMY;
 
-	*TLSR8258_REG_TMR_STA = TLSR8258_FLD_TMR_STA_TMR1;
+	*TLSR82XX_REG_TMR_STA = TLSR8258_FLD_TMR_STA_TMR1;
 	TLSR8258_REG_RF_IRQ_STATUS = 0xffffu;
 
 	arch_irq_unlock(irq_key);

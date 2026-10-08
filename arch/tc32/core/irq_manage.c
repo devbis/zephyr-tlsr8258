@@ -9,11 +9,11 @@
 #include <zephyr/linker/section_tags.h>
 #include <ksched.h>
 #include <kswap.h>
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
-#define TC32_IRQ_MAX_DRAIN (TLSR8258_NUM_IRQS * 2U)
+#define TC32_IRQ_MAX_DRAIN (TLSR82XX_NUM_IRQS * 2U)
 
 volatile uint32_t z_tc32_irq_count;
 volatile uint8_t z_tc32_irq_soft_masked;
@@ -49,19 +49,19 @@ static ALWAYS_INLINE void enter_irq(unsigned int irq)
 
 static ALWAYS_INLINE bool irq_is_valid(unsigned int irq)
 {
-	return tlsr8258_irq_is_valid(irq);
+	return tlsr82xx_irq_is_valid(irq);
 }
 
 static ALWAYS_INLINE bool irq_clear_is_arch_owned(unsigned int irq)
 {
-	return (tlsr8258_irq_bit(irq) & TLSR8258_IRQ_TIMER_MASK) != 0U;
+	return (tlsr82xx_irq_bit(irq) & TLSR82XX_IRQ_TIMER_MASK) != 0U;
 }
 
 static ALWAYS_INLINE void irq_clear_arch_owned(unsigned int irq)
 {
 	/* Vendor order for TMR0..TMR2: clear IRQSRC first, then TMR_STATUS. */
-	tlsr8258_irq_clear_parent(irq);
-	*TLSR8258_REG_TMR_STA = BIT(irq);
+	tlsr82xx_irq_clear_parent(irq);
+	*TLSR82XX_REG_TMR_STA = BIT(irq);
 }
 
 static ALWAYS_INLINE unsigned int pending_lsb_index(uint32_t pending)
@@ -88,19 +88,19 @@ void *TC32_BOOT_RAM_MIRROR_CODE z_tc32_handle_irqs(void)
 	/*
 	 * Handlers run with the CPU I bit set, there is no nesting. All
 	 * pending sources are drained in one entry, lowest line first, except
-	 * TLSR8258_IRQ_PREFERRED: when it is pending it runs first and ends
+	 * TLSR82XX_IRQ_PREFERRED: when it is pending it runs first and ends
 	 * the entry, and the other sources are taken on the next one.
 	 */
 	_kernel.cpus[0].nested++;
 	z_tc32_irq_count++;
 
-	while ((pending = (*TLSR8258_REG_IRQ_SRC & tlsr8258_irq_mask_read() &
-			  TLSR8258_IRQ_VALID_MASK)) != 0U) {
+	while ((pending = (*TLSR82XX_REG_IRQ_SRC & tlsr82xx_irq_mask_read() &
+			  TLSR82XX_IRQ_VALID_MASK)) != 0U) {
 		unsigned int irq;
-		bool preferred = (pending & BIT(TLSR8258_IRQ_PREFERRED)) != 0U;
+		bool preferred = (pending & BIT(TLSR82XX_IRQ_PREFERRED)) != 0U;
 
 		if (preferred) {
-			irq = TLSR8258_IRQ_PREFERRED;
+			irq = TLSR82XX_IRQ_PREFERRED;
 		} else {
 			irq = pending_lsb_index(pending);
 		}

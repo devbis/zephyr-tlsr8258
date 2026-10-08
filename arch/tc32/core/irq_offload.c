@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
-#include <tlsr825x/irq.h>
+#include <tlsr82xx/irq.h>
 
 /*
  * The chip has no software-triggerable vector: reg_irq_src is write-to-clear,
@@ -70,11 +70,11 @@ void arch_irq_offload(irq_offload_routine_t routine, const void *parameter)
 	*TLSR8258_REG_TMR_CTRL &= ~FLD_TMR0_MODE;
 	*TLSR8258_REG_TMR0_TICK = 0u;
 	*TLSR8258_REG_TMR0_CAPT = TMR0_OFFLOAD_CYCLES;
-	*TLSR8258_REG_TMR_STA = (uint8_t)BIT(TLSR8258_IRQ_TMR0);
-	tlsr8258_irq_clear_parent(TLSR8258_IRQ_TMR0);
+	*TLSR82XX_REG_TMR_STA = (uint8_t)BIT(TLSR82XX_IRQ_TMR0);
+	tlsr82xx_irq_clear_parent(TLSR82XX_IRQ_TMR0);
 	*TLSR8258_REG_TMR_CTRL |= FLD_TMR0_EN;
 
-	irq_enable(TLSR8258_IRQ_TMR0);
+	irq_enable(TLSR82XX_IRQ_TMR0);
 
 	/*
 	 * The routine has to reach ISR context, so the gate is opened for the
@@ -85,19 +85,19 @@ void arch_irq_offload(irq_offload_routine_t routine, const void *parameter)
 	if (arch_irq_unlocked(key)) {
 		arch_irq_unlock(key);
 	} else {
-		*TLSR8258_REG_IRQ_EN = 1U;
+		*TLSR82XX_REG_IRQ_EN = 1U;
 	}
 
 	while (offload_routine != NULL) {
 	}
 
-	irq_disable(TLSR8258_IRQ_TMR0);
+	irq_disable(TLSR82XX_IRQ_TMR0);
 	(void)arch_irq_lock();
 	arch_irq_unlock(key);
 }
 
 void arch_irq_offload_init(void)
 {
-	IRQ_CONNECT(TLSR8258_IRQ_TMR0, 0, tc32_irq_offload_isr, NULL, 0);
+	IRQ_CONNECT(TLSR82XX_IRQ_TMR0, 0, tc32_irq_offload_isr, NULL, 0);
 	tmr0_stop();
 }
