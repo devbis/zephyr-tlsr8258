@@ -216,6 +216,7 @@ void zb_radio_note_tx_frame(const u8 *frame)
  */
 #define ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN                                                         \
 	(IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258) ||                                          \
+	 IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) ||                                          \
 	 IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET))
 
 static bool zb_radio_psdu_is_data_request(const u8 *psdu, u8 psdu_len)
