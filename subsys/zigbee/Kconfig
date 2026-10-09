@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+DT_CHOSEN_ZIGBEE_RETAINED_MEM := zigbee,retained-mem
+
 menuconfig ZIGBEE
 	bool "Zigbee protocol support"
 	depends on ZIGBEE_RADIO_PORT
@@ -68,18 +70,47 @@ config ZIGBEE_BDB
 	bool "Base Device Behavior"
 	default y
 
-config ZIGBEE_ED_DEEP_SLEEP
-	bool "Automatic sleepy end-device deep sleep"
+config ZIGBEE_SLEEPY
+	bool "Sleepy end device"
 	depends on ZIGBEE_ED
 	depends on ZIGBEE_BDB
-	depends on ZIGBEE_RADIO_PORT_TLSR8258
-	depends on SOC_SERIES_TLSR825X_PM
+	depends on PM
+	depends on TICKLESS_KERNEL
 	default y
 	help
-	  Allow a joined sleepy end device to enter TLSR8258 deep sleep when
-	  the Zigbee stack is idle. Wakeup uses the configured 32 kHz timer and
-	  optional GPIO wake source. Routers and coordinators never use this
-	  policy.
+	  Let a joined end device sleep between parent polls. A battery powered
+	  device sleeps by default; disable this for a device that must stay
+	  reachable, for example while debugging. Routers and coordinators never
+	  sleep: they hold every power state for the whole run.
+
+if ZIGBEE_SLEEPY
+
+choice ZIGBEE_SLEEPY_MODE
+	prompt "Sleepy end device sleep mode"
+	default ZIGBEE_SLEEPY_DEEP
+
+config ZIGBEE_SLEEPY_DEEP
+	bool "Deep sleep (the device restarts on wake)"
+	depends on HAS_PM_STATE_SOFT_OFF
+	depends on $(dt_chosen_enabled,$(DT_CHOSEN_ZIGBEE_RETAINED_MEM))
+	select RETAINED_MEM
+	help
+	  Enter PM_STATE_SOFT_OFF between polls. RAM is not kept: every wake
+	  boots the firmware, restores the network state from non-volatile
+	  storage and polls the parent. The outgoing security frame counter
+	  survives in the retained memory chosen by zigbee,retained-mem. Pick
+	  this for battery powered devices.
+
+config ZIGBEE_SLEEPY_LIGHT
+	bool "Light sleep (RAM is kept, execution resumes in place)"
+	help
+	  Suspend between polls without a restart. Use it where a boot costs
+	  more energy than the device can spare, for example a switch powered
+	  through the load it controls.
+
+endchoice
+
+endif # ZIGBEE_SLEEPY
 
 config ZIGBEE_ED_POLL_INTERVAL_MS
 	int "Sleepy end-device parent poll interval"

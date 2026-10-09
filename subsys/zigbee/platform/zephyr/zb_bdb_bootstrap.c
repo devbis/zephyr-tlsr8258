@@ -12,8 +12,8 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 #include "ss_security_flags.h"
 #include "ss_zdoSecurityME.h"
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-#include <tlsr825x/power.h>
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+#include "zb_ed_sleep.h"
 #endif
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -587,9 +587,9 @@ int zb_platform_bdb_init_default(void)
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-	if (tlsr8258_pm_deep_sleep_wake_pending()) {
-		if (tlsr8258_pm_get_retained_frame_counter(&frameCounter) == 0) {
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+	if (zb_ed_sleep_woke_from_deep()) {
+		if (zb_ed_sleep_retained_frame_counter(&frameCounter) == 0) {
 			ss_ib.outgoingFrameCounter = frameCounter;
 			LOG_INF("zb bdb: restored frame counter from deep-sleep retention: %u",
 				(unsigned int)frameCounter);
