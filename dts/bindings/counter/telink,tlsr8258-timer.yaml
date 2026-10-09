@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Telink TLSR8258 hardware timer 0, 1 or 2. The timer index is the interrupt
+  number: interrupts = <0> selects timer 0, <1> timer 1 and <2> timer 2.
+  Timer 2 is used by the watchdog when it is enabled, and timer 0 by IRQ
+  offload.
+
+compatible: "telink,tlsr8258-timer"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
+    description: Base of the timer block (reg_tmr_ctrl at 0x00800620).
+
+  interrupts:
+    required: true
+    description: Timer index, 0 to 2.
+
+  clock-frequency:
+    type: int
+    default: 16000000
+    description: |
+      Timer clock frequency in Hz. The timer counts at the system clock,
+      which is 16 MHz with the 16 MHz crystal.
