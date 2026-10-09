@@ -25,6 +25,8 @@
 
 #include <tlsr825x/power.h>
 
+#include "zb_ed_sleep.h"
+
 LOG_MODULE_REGISTER(zigbee_ed_sleep, CONFIG_ZIGBEE_LOG_LEVEL);
 
 /*
@@ -53,6 +55,7 @@ enum zb_ed_sleep_reject_reason {
 	ZB_ED_SLEEP_REJECT_NO_DEADLINE,
 	ZB_ED_SLEEP_REJECT_SHORT_INTERVAL,
 	ZB_ED_SLEEP_REJECT_RADIO,
+	ZB_ED_SLEEP_REJECT_FAST_POLL,
 	ZB_ED_SLEEP_REJECT_MAX,
 };
 
@@ -127,6 +130,11 @@ void zb_ed_sleep_maybe(void)
 
 	if (!zb_taskq_is_empty() || !zb_taskq_layer_queues_empty()) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TASK_QUEUE);
+		return;
+	}
+
+	if (zb_ed_poll_fast_active()) {
+		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_FAST_POLL);
 		return;
 	}
 
