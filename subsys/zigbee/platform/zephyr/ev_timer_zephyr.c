@@ -205,6 +205,32 @@ u32 ev_timer_timeout_get(const ev_timer_event_t *allowed)
 	return allowed->timeout;
 }
 
+bool ev_timer_expire_in(ev_timer_event_t *evt, u32 remaining_ms)
+{
+	ev_timer_event_t *existing = NULL;
+	bool changed = false;
+	u32 irq_state;
+
+	if (evt == NULL) {
+		return false;
+	}
+
+	irq_state = drv_disable_irq();
+	LIST_EXIST(ev_timer_ctrl.timer_head, evt, existing);
+	if ((existing != NULL) && (existing->timeout > remaining_ms)) {
+		existing->timeout = remaining_ms;
+		ev_timer_nearest_update();
+		changed = true;
+	}
+	drv_restore_irq(irq_state);
+
+	if (changed) {
+		k_sem_give(&zb_ev_sem);
+	}
+
+	return changed;
+}
+
 bool ev_timer_enough(void)
 {
 	return true;

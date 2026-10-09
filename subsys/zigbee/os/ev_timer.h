@@ -120,6 +120,20 @@ bool ev_timer_has_other_than(const ev_timer_event_t *allowed);
 u32 ev_timer_timeout_get(const ev_timer_event_t *allowed);
 
 /**
+ * @brief Shorten the remaining time of an armed timer.
+ *
+ * The timer period is not changed, so a periodic timer keeps its cadence
+ * after the shortened interval has elapsed.
+ *
+ * @param evt Timer to shorten.
+ * @param remaining_ms New remaining time in milliseconds.
+ *
+ * @retval true The remaining time was set.
+ * @retval false The timer is not armed or already expires sooner.
+ */
+bool ev_timer_expire_in(ev_timer_event_t *evt, u32 remaining_ms);
+
+/**
  * @brief       Check whether a specified timer exist or not
  *
  * @param[in]   evt  - The specified timer event
