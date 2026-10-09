@@ -95,6 +95,21 @@ void tlsr8258_radio_update_filters(uint16_t pan_id, uint16_t short_addr,
 				   const uint8_t *ieee_addr);
 
 /**
+ * @brief Get the Frame Pending bit of the last ACK the radio received.
+ *
+ * The ACK of a transmitted frame arrives after tx() has returned, so its
+ * Frame Pending bit cannot be part of the tx() result. The receive interrupt
+ * records it instead.
+ *
+ * @param seq Sequence number of the frame the ACK must acknowledge.
+ * @param pending Receives the Frame Pending bit.
+ *
+ * @retval true The last received ACK carried @p seq and @p pending is set.
+ * @retval false No ACK with that sequence number has been received.
+ */
+bool tlsr8258_radio_ack_frame_pending_get(uint8_t seq, bool *pending);
+
+/**
  * @brief Get the extended address of the radio.
  *
  * The address is read from the ieee_addr_partition factory data when the
