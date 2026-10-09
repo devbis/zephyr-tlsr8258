@@ -11,6 +11,7 @@
 #include <zephyr/arch/tc32/arch.h>
 #include <zephyr/kernel.h>
 #include <zephyr/pm/pm.h>
+#include <zephyr/pm/policy.h>
 #include <zephyr/pm/state.h>
 #include <zephyr/sys/util.h>
 
@@ -647,6 +648,30 @@ static int tlsr8258_pm_enter_suspend_to_idle(void)
 	return (status & TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM) != 0u ? -EIO : 0;
 }
 
+static int tlsr8258_pm_enter_soft_off(void)
+{
+	uint32_t wakeup_src = tlsr8258_pm_current_wakeup_sources();
+	uint32_t wakeup_tick = TLSR8258_REG_SYSTEM_TICK_IRQ;
+	uint32_t status;
+
+	if (wakeup_src == 0u || !tlsr8258_pm_radio_can_suspend()) {
+		return -ENOTSUP;
+	}
+
+	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_DEEP, wakeup_tick, wakeup_src);
+
+	/*
+	 * A successful entry never returns: wake is a reset. Reaching this line
+	 * means entry was rejected, so the marker must not make a later ordinary
+	 * reset look like a deep-sleep wake.
+	 */
+	tlsr8258_pm_last_raw_status = status;
+	tlsr8258_pm_last_reason = tlsr8258_pm_reason_from_status(status);
+	tlsr8258_pm_deep_sleep_wake_clear();
+
+	return (status & TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM) != 0u ? -EIO : 0;
+}
+
 void pm_state_set(enum pm_state state, uint8_t substate_id)
 {
 	ARG_UNUSED(substate_id);
@@ -669,6 +694,14 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 		 * no explicit resync is needed here.
 		 */
 		(void)tlsr8258_pm_enter_suspend_to_idle();
+		break;
+	case PM_STATE_SOFT_OFF:
+		/*
+		 * Deep sleep without retention, timed by the kernel's next
+		 * timeout. The state is locked by default (see
+		 * tlsr8258_pm_soft_off_lock_init()).
+		 */
+		(void)tlsr8258_pm_enter_soft_off();
 		break;
 	default:
 		break;
@@ -839,3 +872,17 @@ static int tlsr8258_pm_init(void)
 }
 
 SYS_INIT(tlsr8258_pm_init, PRE_KERNEL_2, CONFIG_SYSTEM_CLOCK_INIT_PRIORITY);
+
+/*
+ * Deep sleep restarts the SoC, so entering it is never transparent to the
+ * running firmware. Hold the state back until code that can restore itself
+ * releases the lock with pm_policy_state_lock_put().
+ */
+static int tlsr8258_pm_soft_off_lock_init(void)
+{
+	pm_policy_state_lock_get(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
+
+	return 0;
+}
+
+SYS_INIT(tlsr8258_pm_soft_off_lock_init, POST_KERNEL, 0);
