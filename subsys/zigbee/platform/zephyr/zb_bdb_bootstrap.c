@@ -12,8 +12,8 @@
 #include <zephyr/zigbee/zb_radio_port.h>
 #include "ss_security_flags.h"
 #include "ss_zdoSecurityME.h"
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-#include <tlsr825x/power.h>
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+#include "zb_ed_sleep.h"
 #endif
 
 LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -202,7 +202,7 @@ static bool zb_platform_bdb_restore_joined_target(void)
 	}
 
 	zb_ed_fixed_join_target(g_zbMacPib.phyChannelCur, g_zbMacPib.panId,
-				g_zbMacPib.coordShortAddress, g_zbNIB.extPANId, nwkKey,
+				g_zbMacPib.shortAddress, g_zbNIB.extPANId, nwkKey,
 				ss_ib.trust_center_address);
 	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
 				     g_zbMacPib.extAddress);
@@ -587,9 +587,9 @@ int zb_platform_bdb_init_default(void)
 	if (nv_nwkFrameCountFromFlash(&frameCounter) == NV_SUCC) {
 		ss_ib.outgoingFrameCounter = frameCounter;
 	}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-	if (tlsr8258_pm_deep_sleep_wake_pending()) {
-		if (tlsr8258_pm_get_retained_frame_counter(&frameCounter) == 0) {
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+	if (zb_ed_sleep_woke_from_deep()) {
+		if (zb_ed_sleep_retained_frame_counter(&frameCounter) == 0) {
 			ss_ib.outgoingFrameCounter = frameCounter;
 			LOG_INF("zb bdb: restored frame counter from deep-sleep retention: %u",
 				(unsigned int)frameCounter);
@@ -635,6 +635,14 @@ int zb_platform_bdb_init_default(void)
 	zb_platform_bdb_repair_joined_flag_if_needed();
 	zb_bdb_restore_joined_target_pending =
 		g_zbNwkCtx.joined && zb_platform_bdb_has_valid_join_context();
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+	/* A timed wake resumes parent polling without starting a new network join. */
+	if (zb_bdb_restore_joined_target_pending && zb_ed_sleep_woke_from_deep()) {
+		aps_ib.aps_authenticated = TRUE;
+		aps_ib.aps_use_insecure_join = FALSE;
+		zb_bdb_restore_joined_target_pending = false;
+	}
+#endif
 #elif defined(ZB_ROUTER_ROLE)
 	/*
 	 * A reset may retain PAN/security state while losing the allocated short
@@ -681,10 +689,16 @@ int zb_platform_bdb_init_default(void)
 	g_bdbAttrs.nodeIsOnANetwork = g_zbNwkCtx.joined ? 1U : 0U;
 	if (g_bdbAttrs.nodeIsOnANetwork != 0U) {
 		/*
-		 * Match vendor bdb_init(repower=1): reserve a fresh NWK security
-		 * frame-counter range before any restored-network traffic.
+		 * Reserve a fresh frame-counter range after a normal reset. A timed
+		 * wake already restored its counter from retained memory.
 		 */
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+		if (!zb_ed_sleep_woke_from_deep()) {
+			bdb_outgoingFrameCountUpdate(1U);
+		}
+#else
 		bdb_outgoingFrameCountUpdate(1U);
+#endif
 	}
 	g_bdbAttrs.commissioningStatus = BDB_COMMISSION_STA_SUCCESS;
 	/*
