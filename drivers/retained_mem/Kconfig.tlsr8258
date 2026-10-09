@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config RETAINED_MEM_TLSR8258_ANALOG
+	bool "TLSR8258 analog register retained memory driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_ANALOG_RETAINED_ENABLED
+	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Enable driver for retained memory kept in TLSR8258 analog registers.
