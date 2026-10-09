@@ -174,6 +174,11 @@ void zb_platform_radio_rx_poll(void)
 	tlsr8258_radio_rx_poll();
 }
 
+bool zb_radio_port_ack_frame_pending_get(uint8_t seq, bool *pending)
+{
+	return tlsr8258_radio_ack_frame_pending_get(seq, pending);
+}
+
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr)
 {
