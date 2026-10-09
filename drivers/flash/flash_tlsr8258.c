@@ -53,6 +53,9 @@
 #define TLSR8258_FLASH_WAIT_DONE_MAX_POLLS 10000000u
 #define TLSR8258_FLASH_STATUS_WIP BIT(0)
 #define TLSR8258_FLASH_CMD_READ 0x03u
+#define TLSR8258_FLASH_CMD_READ_JEDEC_ID    0x9fu
+#define TLSR8258_FLASH_CMD_WRITE_STATUS     0x01u
+#define TLSR8258_FLASH_CMD_READ_STATUS_HIGH 0x35u
 /* MSPI_CTRL value that starts automatic read of one byte per data access. */
 #define TLSR8258_MSPI_CTRL_AUTO_READ 0x0au
 
@@ -455,6 +458,135 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_FLASH_TLSR8258_BLOCK_PROTECT
+/*
+ * Status and identification transactions for the block-protect logic. They
+ * run with interrupts masked, like the program/erase paths above.
+ */
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_read_mid_ram(uint32_t *mid)
+{
+	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
+	uint8_t key = tlsr8258_flash_irq_disable();
+	uint8_t raw[3] = {0u, 0u, 0u};
+	int ret;
+
+	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_READ_JEDEC_ID);
+	for (size_t i = 0; (ret == 0) && (i < sizeof(raw)); i++) {
+		tlsr8258_mspi_write(0u);
+		if (tlsr8258_mspi_wait() != 0) {
+			ret = -ETIMEDOUT;
+			break;
+		}
+		raw[i] = tlsr8258_mspi_get();
+	}
+	tlsr8258_mspi_high();
+	TLSR8258_REG_MSPI_MODE = saved_mode;
+	tlsr8258_flash_irq_restore(key);
+
+	/* Little-endian: manufacturer, memory type, capacity code. */
+	*mid = (uint32_t)raw[0] | ((uint32_t)raw[1] << 8) | ((uint32_t)raw[2] << 16);
+	return ret;
+}
+
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_read_status_ram(uint8_t cmd, uint8_t *value)
+{
+	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
+	int ret;
+
+	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
+	ret = tlsr8258_flash_send_cmd(cmd);
+	if (ret == 0) {
+		tlsr8258_mspi_write(0u);
+		if (tlsr8258_mspi_wait() != 0) {
+			ret = -ETIMEDOUT;
+		} else {
+			*value = tlsr8258_mspi_get();
+		}
+	}
+	tlsr8258_mspi_high();
+	TLSR8258_REG_MSPI_MODE = saved_mode;
+	return ret;
+}
+
+/* Write 'width' bytes (1 or 2) of status with a single WRSR command. */
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_write_status_ram(const uint8_t *data, size_t width)
+{
+	uint8_t saved_mode = TLSR8258_REG_MSPI_MODE;
+	int ret;
+
+	TLSR8258_REG_MSPI_MODE = tlsr8258_mspi_mode_manual(saved_mode);
+	ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_ENABLE);
+	if (ret == 0) {
+		ret = tlsr8258_flash_send_cmd(TLSR8258_FLASH_CMD_WRITE_STATUS);
+	}
+	for (size_t i = 0; (ret == 0) && (i < width); i++) {
+		tlsr8258_mspi_write(data[i]);
+		ret = tlsr8258_mspi_wait();
+	}
+	if (ret == 0) {
+		tlsr8258_mspi_high();
+		ret = tlsr8258_flash_wait_done();
+	}
+
+	tlsr8258_mspi_high();
+	TLSR8258_REG_MSPI_MODE = saved_mode;
+	return ret;
+}
+
+/*
+ * Set the block-protect bits to 'value' under 'mask' and read them back.
+ * Mirrors the vendor flash_write_status_mid*(): the status register is only
+ * rewritten when the protected range is not already the requested one.
+ */
+static TLSR8258_FLASH_EXEC int tlsr8258_flash_set_protect_ram(uint8_t width, uint16_t mask,
+							      uint16_t value)
+{
+	uint8_t key = tlsr8258_flash_irq_disable();
+	uint8_t lo = 0u;
+	uint8_t hi = 0u;
+	uint16_t status;
+	uint8_t wr[2];
+	int ret;
+
+	ret = tlsr8258_flash_read_status_ram(TLSR8258_FLASH_CMD_READ_STATUS, &lo);
+	if ((ret == 0) && (width == 2u)) {
+		ret = tlsr8258_flash_read_status_ram(TLSR8258_FLASH_CMD_READ_STATUS_HIGH, &hi);
+	}
+	if (ret != 0) {
+		goto out;
+	}
+
+	status = (uint16_t)(lo | ((uint16_t)hi << 8));
+	if ((status & mask) != value) {
+		status = (uint16_t)(value | (status & (uint16_t)~mask));
+		wr[0] = (uint8_t)status;
+		wr[1] = (uint8_t)(status >> 8);
+		ret = tlsr8258_flash_write_status_ram(wr, width);
+		if (ret != 0) {
+			goto out;
+		}
+
+		lo = 0u;
+		hi = 0u;
+		ret = tlsr8258_flash_read_status_ram(TLSR8258_FLASH_CMD_READ_STATUS, &lo);
+		if ((ret == 0) && (width == 2u)) {
+			ret = tlsr8258_flash_read_status_ram(TLSR8258_FLASH_CMD_READ_STATUS_HIGH,
+							     &hi);
+		}
+		if (ret != 0) {
+			goto out;
+		}
+		status = (uint16_t)(lo | ((uint16_t)hi << 8));
+	}
+
+	ret = ((status & mask) == value) ? 0 : -EIO;
+out:
+	tlsr8258_flash_irq_restore(key);
+	return ret;
+}
+#endif /* CONFIG_FLASH_TLSR8258_BLOCK_PROTECT */
+
 static bool tlsr8258_flash_range_valid(const struct tlsr8258_flash_config *config,
 				       off_t offset, size_t len)
 {
@@ -638,15 +770,72 @@ static void tlsr8258_flash_page_layout(const struct device *dev,
 }
 #endif
 
+#ifdef CONFIG_FLASH_TLSR8258_BLOCK_PROTECT
+/* Veneer into .ram_code, see flash_tlsr8258_entry.S. */
+int tlsr8258_flash_call_protect_boot(void);
+
+/*
+ * Block-protect settings per supported MID, from the vendor flash_list[]
+ * (platform/chip_8258/flash/flash_common.c). 'value' is the vendor
+ * FLASH_LOCK_LOW_256K_* code, i.e. the lowest 256 KiB is read-only.
+ */
+struct tlsr8258_flash_bp {
+	uint32_t mid;
+	uint8_t width;
+	uint16_t mask;
+	uint16_t value;
+};
+
+static const struct tlsr8258_flash_bp tlsr8258_flash_bp_table[] = {
+	{0x13325eu, 1u, 0x001cu, 0x0018u},  /* ZB25WD40B */
+	{0x134051u, 1u, 0x001cu, 0x0018u},  /* MD25D40D */
+	{0x1360c8u, 1u, 0x001cu, 0x0018u},  /* GD25LD40C/E */
+	{0x136085u, 2u, 0x407cu, 0x002cu},  /* P25Q40L, P25D40SU */
+	{0x1360ebu, 2u, 0x407cu, 0x002cu},  /* TH25D40LA/UA */
+};
+
+/*
+ * Apply the vendor boot-time lock (drv_flash.c flash_loadOpt()/flash_lock()).
+ * Runs from .ram_code and is reached through the veneer in
+ * flash_tlsr8258_entry.S. Best effort: an unknown MID or a failed status
+ * write leaves the device unprotected, as the vendor SDK does.
+ */
+TLSR8258_FLASH_EXEC int tlsr8258_flash_protect_boot(void)
+{
+	uint32_t mid = 0u;
+
+	if (tlsr8258_flash_read_mid_ram(&mid) != 0) {
+		return -EIO;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(tlsr8258_flash_bp_table); i++) {
+		const struct tlsr8258_flash_bp *bp = &tlsr8258_flash_bp_table[i];
+
+		if (bp->mid == mid) {
+			return tlsr8258_flash_set_protect_ram(bp->width, bp->mask, bp->value);
+		}
+	}
+
+	return -ENOTSUP;
+}
+#endif /* CONFIG_FLASH_TLSR8258_BLOCK_PROTECT */
+
 static int tlsr8258_flash_init(const struct device *dev)
 {
 	const struct tlsr8258_flash_config *config = dev->config;
 	struct tlsr8258_flash_data *data = dev->data;
+	int ret;
 
 	k_sem_init(&data->lock, 1, 1);
 	data->layout.pages_count = config->size / TLSR8258_FLASH_SECTOR_SIZE;
 	data->layout.pages_size = TLSR8258_FLASH_SECTOR_SIZE;
-	return tlsr8258_flash_apply_vdd_calibration(config);
+	ret = tlsr8258_flash_apply_vdd_calibration(config);
+#ifdef CONFIG_FLASH_TLSR8258_BLOCK_PROTECT
+	if (ret == 0) {
+		(void)tlsr8258_flash_call_protect_boot();
+	}
+#endif
+	return ret;
 }
 
 static DEVICE_API(flash, tlsr8258_flash_api) = {
