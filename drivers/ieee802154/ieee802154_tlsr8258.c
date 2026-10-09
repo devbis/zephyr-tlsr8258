@@ -291,6 +291,26 @@ int tlsr8258_radio_get_ieee_addr(uint8_t ieee_addr[8])
 	return 0;
 }
 
+/*
+ * Sequence number and Frame Pending bit of the last ACK received. The receive
+ * interrupt writes them; ack_valid is written last and cleared by the reader's
+ * caller through a newer sequence number, so a stale pair is never matched to
+ * a different frame.
+ */
+static volatile uint8_t tlsr8258_last_ack_seq;
+static volatile bool tlsr8258_last_ack_fp;
+static volatile bool tlsr8258_last_ack_valid;
+
+bool tlsr8258_radio_ack_frame_pending_get(uint8_t seq, bool *pending)
+{
+	if (!tlsr8258_last_ack_valid || (tlsr8258_last_ack_seq != seq)) {
+		return false;
+	}
+
+	*pending = tlsr8258_last_ack_fp;
+	return true;
+}
+
 void tlsr8258_radio_update_filters(uint16_t pan_id, uint16_t short_addr, const uint8_t *ieee_addr)
 {
 	struct tlsr8258_radio_data *radio = &tlsr8258_radio_data_0;
@@ -928,6 +948,15 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	}
 
 	uint8_t length = tlsr8258_dma_payload_len_get(rx, (uint16_t)rx[0] + 4u);
+
+	if (((payload[TLSR8258_FRAME_TYPE_OFFSET] & 0x07u) == 0x02u) &&
+	    (length >= TLSR8258_MIN_FRAME_LENGTH)) {
+		tlsr8258_last_ack_valid = false;
+		tlsr8258_last_ack_seq = payload[2];
+		tlsr8258_last_ack_fp = (payload[0] & TLSR8258_FRAME_PENDING) != 0u;
+		tlsr8258_last_ack_valid = true;
+	}
+
 	uint32_t ack_prepared_at_cycles = 0u;
 	bool ack_mode_prepared = false;
 	bool ack_requested_early = tlsr8258_ack_requested(payload, length);
