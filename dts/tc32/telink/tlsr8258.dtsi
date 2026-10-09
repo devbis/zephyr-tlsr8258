@@ -45,6 +45,45 @@
 			bias-pull-up;
 			input-enable;
 		};
+
+		/*
+		 * PA3 and PA4 are shared by i2c0 and spi0. Enable only one of
+		 * them: both nodes are disabled by default, and the pinctrl
+		 * groups above select the pin function when a node is enabled.
+		 */
+		i2c0_sda_default: i2c0_sda_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA3,
+						  TLSR8258_FUNC_I2C)>;
+			bias-pull-up;
+			input-enable;
+			output-enable;
+		};
+
+		i2c0_scl_default: i2c0_scl_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA4,
+						  TLSR8258_FUNC_I2C)>;
+			bias-pull-up;
+			input-enable;
+			output-enable;
+		};
+
+		spi0_sdo_default: spi0_sdo_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA2,
+						  TLSR8258_FUNC_SPI)>;
+			output-enable;
+		};
+
+		spi0_sdi_default: spi0_sdi_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA3,
+						  TLSR8258_FUNC_SPI)>;
+			input-enable;
+		};
+
+		spi0_sck_default: spi0_sck_default {
+			pinmux = <TLSR8258_PINMUX(TLSR8258_GPIO_PA4,
+						  TLSR8258_FUNC_SPI)>;
+			output-enable;
+		};
 	};
 
 	cpus {
@@ -110,11 +149,50 @@
 			status = "disabled";
 		};
 
+		i2c0: i2c@800000 {
+			compatible = "telink,tlsr8258-i2c";
+			reg = <0x00800000 0x00000008>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clocks = <&sys_clk>;
+			clock-frequency = <100000>;
+			pinctrl-0 = <&i2c0_sda_default &i2c0_scl_default>;
+			pinctrl-names = "default";
+			status = "disabled";
+		};
+
+		spi0: spi@800008 {
+			compatible = "telink,tlsr8258-spi";
+			reg = <0x00800008 0x00000004>;
+			clocks = <&sys_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			pinctrl-0 = <&spi0_sck_default &spi0_sdo_default &spi0_sdi_default>;
+			pinctrl-names = "default";
+			status = "disabled";
+		};
+
+		adc0: adc {
+			compatible = "telink,tlsr8258-adc";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#io-channel-cells = <1>;
+			status = "disabled";
+		};
+
 		zb: ieee802154@800f00 {
 			compatible = "telink,tlsr8258-zb";
 			reg = <0x00800f00 0x00000040>;
 			interrupts = <13>;
 			interrupt-parent = <&intc>;
+			status = "disabled";
+		};
+
+		pwm0: pwm@800780 {
+			compatible = "telink,tlsr8258-pwm";
+			reg = <0x00800780 0x00000030>;
+			clocks = <&sys_clk>;
+			#pwm-cells = <3>;
 			status = "disabled";
 		};
 
