@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SPI_TELINK_TLSR8258
+	bool "Telink TLSR8258 SPI master driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_SPI_ENABLED
+	select PINCTRL
+	help
+	  Enable the SPI master driver for the Telink TLSR8258 SPI block.
+	  Only the single-line, polled, MSB-first master mode is supported.
