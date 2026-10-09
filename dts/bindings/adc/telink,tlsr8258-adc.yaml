@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 SAR ADC
+
+compatible: "telink,tlsr8258-adc"
+
+include: adc-controller.yaml
+
+properties:
+  "#io-channel-cells":
+    const: 1
+
+child-binding:
+  description: |
+    One miscellaneous-channel input. Pins are selected by their vendor index:
+    1..8 are PB0..PB7, 9 is PC4 and 10 is PC5.
+
+  properties:
+    zephyr,input-positive:
+      type: int
+      required: true
+      enum:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+      description: Vendor pin index (1..8 = PB0..PB7, 9 = PC4, 10 = PC5).
+
+    telink,vbat-mode:
+      type: boolean
+      description: |
+        Drive the pin high and sample it as the battery-voltage input (vendor
+        VBAT mode). Without it the pin is a plain base-mode input.
+
+io-channel-cells:
+  - input
