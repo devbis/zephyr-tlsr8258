@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 PWM controller
+
+compatible: "telink,tlsr8258-pwm"
+
+include: [pwm-controller.yaml, pinctrl-device.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clock-frequency:
+    type: int
+    required: true
+    description: |
+      Frequency of the system clock the PWM divider works from, in Hz.
+
+  prescaler:
+    type: int
+    default: 0
+    description: |
+      Value written to PWM_CLKDIV. The PWM tick rate is
+      clock-frequency / (prescaler + 1). The divider is shared by all
+      channels and cannot change at runtime. Range 0 to 255.
+
+  "#pwm-cells":
+    const: 3
+
+pwm-cells:
+  - channel
+  - period
+  - flags

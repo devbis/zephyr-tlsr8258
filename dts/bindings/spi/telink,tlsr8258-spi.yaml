@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 SPI master controller
+
+compatible: "telink,tlsr8258-spi"
+
+include: [spi-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clock-frequency:
+    type: int
+    required: true
+    description: |
+      System clock frequency in Hz. The SPI clock is derived from it as
+      system clock / (2 * (div + 1)).
