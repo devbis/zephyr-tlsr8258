@@ -7,6 +7,7 @@
 
 GTEXT(tlsr8258_flash_call_write_pages)
 GTEXT(tlsr8258_flash_call_erase_sector_locked)
+GTEXT(tlsr8258_flash_call_protect_boot)
 
 /*
  * Small .ram_code veneers that jump straight into the high-RAM __ramfunc
@@ -50,3 +51,16 @@ SECTION_FUNC(ram_code, tlsr8258_flash_call_erase_sector_locked)
 .align 2
 .Lerase_sector_target:
 	.word tlsr8258_flash_erase_sector_locked
+
+SECTION_FUNC(ram_code, tlsr8258_flash_call_protect_boot)
+	tpush {r0}
+	tloadr r0, .Lprotect_boot_target
+	nop
+	nop
+	tmov r12, r0
+	tpop {r0}
+	tjex r12
+
+.align 2
+.Lprotect_boot_target:
+	.word tlsr8258_flash_protect_boot
