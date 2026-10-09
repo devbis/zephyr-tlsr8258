@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config COUNTER_TLSR8258
+	bool "Telink TLSR8258 hardware timer counter driver"
+	default y
+	depends on SOC_SERIES_TLSR825X || SOC_SERIES_TLSR826X
+	depends on DT_HAS_TELINK_TLSR8258_TIMER_ENABLED
+	help
+	  Enable the counter API for the TLSR8258 hardware timers 0, 1 and 2.
+	  Timer 2 conflicts with the watchdog and timer 0 with IRQ offload.
