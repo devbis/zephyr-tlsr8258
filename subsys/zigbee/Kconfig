@@ -81,6 +81,35 @@ config ZIGBEE_ED_DEEP_SLEEP
 	  optional GPIO wake source. Routers and coordinators never use this
 	  policy.
 
+config ZIGBEE_ED_POLL_INTERVAL_MS
+	int "Sleepy end-device parent poll interval"
+	depends on ZIGBEE_ED
+	range 50 60000
+	default 500
+	help
+	  Interval between data requests to the parent in the stable joined
+	  state. It is also the sleep time of one deep-sleep cycle.
+
+config ZIGBEE_ED_FAST_POLL_INTERVAL_MS
+	int "Sleepy end-device fast poll interval"
+	depends on ZIGBEE_ED
+	range 20 10000
+	default 100
+	help
+	  Poll interval used while the parent is delivering data, so that a
+	  request/response exchange (interview, commands) does not wait a
+	  whole slow interval for every frame.
+
+config ZIGBEE_ED_FAST_POLL_WINDOW_MS
+	int "Sleepy end-device fast poll window"
+	depends on ZIGBEE_ED
+	range 0 60000
+	default 3000
+	help
+	  Time the end device keeps the fast poll interval, and stays out of
+	  deep sleep, after the last frame received from the parent. Zero
+	  disables the fast poll window.
+
 config ZIGBEE_ZCL
 	bool "Zigbee Cluster Library"
 	default y

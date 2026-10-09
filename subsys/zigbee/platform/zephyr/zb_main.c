@@ -24,8 +24,10 @@
 
 #include "zdo/zdo_api.h"
 #include "ss_security_flags.h"
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#if defined(CONFIG_ZIGBEE_ED)
 #include "zb_ed_sleep.h"
+#endif
+#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 #include "zdo/zdo.h"
 #include "zdo/zdo_nwk_manager.h"
 #include <tlsr825x/power.h>
@@ -470,12 +472,25 @@ static void zb_core_bootstrap_once(void)
 			uint32_t poll_rate = zdo_af_get_syn_rate();
 
 			if (poll_rate == 0U) {
-				poll_rate = 500U;
+				poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
 			}
+			/*
+			 * zb_platform_zdo_attr_init() resets the indirect poll rate to 1000 ms on
+			 * every boot, so zdo_set_pollRate() would take its unchanged-rate early
+			 * return and never create the poll timer. Clear the cached rate so the
+			 * call arms it.
+			 */
+			zdo_af_set_syn_rate(0U);
 			zdo_set_pollRate(poll_rate);
 			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
 				LOG_ERR("TLSR8258 deep-sleep wake: radio recovery failed");
 			}
+			/*
+			 * The wake was the poll deadline, but zdo_set_pollRate() armed
+			 * a full interval. Without this the device would sleep for
+			 * that interval again and never poll its parent.
+			 */
+			zb_ed_poll_poll_now();
 		} else {
 			LOG_WRN("TLSR8258 deep-sleep wake: no valid joined state");
 		}
@@ -790,6 +805,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			zb_thread_wait();
 			continue;
 		}
+#if defined(CONFIG_ZIGBEE_ED)
+		zb_ed_poll_service();
+#endif
 #if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
 		zb_ed_sleep_maybe();
 #endif
