@@ -51,6 +51,19 @@ bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us);
 uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us);
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr);
+/**
+ * @brief Get the Frame Pending bit of the ACK of a transmitted frame.
+ *
+ * Optional: a port whose radio reports the bit provides it, the others keep
+ * the weak default that reports that the bit is unknown.
+ *
+ * @param seq Sequence number of the transmitted frame.
+ * @param pending Receives the Frame Pending bit.
+ *
+ * @retval true The ACK was received and @p pending is valid.
+ * @retval false The bit is unknown.
+ */
+bool zb_radio_port_ack_frame_pending_get(uint8_t seq, bool *pending);
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink);
 void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink);
 void zb_radio_l2_rx_poll(void);
