@@ -11,3 +11,14 @@ config SOC_FLASH_TELINK_TLSR8258
 	help
 	  Enable the flash driver for the SPI flash connected to the
 	  TLSR8258 internal MSPI controller.
+
+config FLASH_TLSR8258_BLOCK_PROTECT
+	bool "Write-protect the lowest 256 KiB at boot"
+	default n
+	depends on SOC_FLASH_TELINK_TLSR8258
+	help
+	  Set the block-protect bits of the external flash status register to
+	  cover the lowest 256 KiB, as the vendor SDK does at boot when
+	  FLASH_PROTECT_ENABLE is set. Only the MIDs in the vendor table are
+	  handled; other flashes are left unprotected. The bits persist across
+	  reboots, so external programmers must clear them before erasing.
