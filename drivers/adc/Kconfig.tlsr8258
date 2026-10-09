@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config ADC_TLSR8258
+	bool "Telink TLSR8258 ADC driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_ADC_ENABLED
+	select ADC_CONFIGURABLE_INPUTS
+	help
+	  Enable the on-chip SAR ADC of the TLSR8258. Each channel samples one
+	  GPIO (PB0..PB7, PC4, PC5) either as a base-mode input or in VBAT mode.
