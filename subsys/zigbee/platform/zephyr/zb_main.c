@@ -2,8 +2,10 @@
  * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/policy.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_channel.h>
@@ -27,10 +29,9 @@
 #if defined(CONFIG_ZIGBEE_ED)
 #include "zb_ed_sleep.h"
 #endif
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
 #include "zdo/zdo.h"
 #include "zdo/zdo_nwk_manager.h"
-#include <tlsr825x/power.h>
 #endif
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -145,6 +146,22 @@ static void zb_thread_wait(void)
 
 	(void)k_sem_take(&zb_ev_sem, timeout);
 }
+
+#if defined(CONFIG_PM) && !defined(CONFIG_ZIGBEE_SLEEPY)
+/*
+ * A router, a coordinator and an end device that is not configured sleepy are
+ * always-on receivers. Hold every power state so that enabling PM for the
+ * rest of the application cannot put the radio to sleep.
+ */
+static int zb_always_on_lock(void)
+{
+	pm_policy_state_all_lock_get();
+
+	return 0;
+}
+
+SYS_INIT(zb_always_on_lock, POST_KERNEL, 0);
+#endif
 
 static bool zb_bootstrap_done;
 static bool zb_core_init_done;
@@ -390,14 +407,6 @@ static void zb_core_bootstrap_once(void)
 			zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
 						     g_zbMacPib.extAddress);
 		}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-		if (tlsr8258_pm_deep_sleep_wake_pending()) {
-			tlsr8258_pm_recover_after_wake();
-			LOG_INF("TLSR8258 deep-sleep wake: reason=%u raw=0x%08x",
-				(unsigned int)tlsr8258_pm_get_wakeup_reason(),
-				(unsigned int)tlsr8258_pm_get_wakeup_raw_status());
-		}
-#endif
 		rf_init();
 		zb_core_init_done = true;
 	}
@@ -462,10 +471,10 @@ static void zb_core_bootstrap_once(void)
 	}
 #endif
 
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
-	if (tlsr8258_pm_deep_sleep_wake_pending()) {
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP) && !defined(ZB_ROUTER_ROLE)
+	if (zb_ed_sleep_woke_from_deep()) {
 		if (zb_platform_bdb_init_default() != 0) {
-			LOG_ERR("TLSR8258 deep-sleep wake: BDB restore init failed");
+			LOG_ERR("deep-sleep wake: BDB restore init failed");
 		}
 		if (g_zbNwkCtx.joined && (g_zbMacPib.phyChannelCur >= 11U) &&
 		    (g_zbMacPib.phyChannelCur <= 26U)) {
@@ -483,7 +492,7 @@ static void zb_core_bootstrap_once(void)
 			zdo_af_set_syn_rate(0U);
 			zdo_set_pollRate(poll_rate);
 			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
-				LOG_ERR("TLSR8258 deep-sleep wake: radio recovery failed");
+				LOG_ERR("deep-sleep wake: radio recovery failed");
 			}
 			/*
 			 * The wake was the poll deadline, but zdo_set_pollRate() armed
@@ -492,9 +501,9 @@ static void zb_core_bootstrap_once(void)
 			 */
 			zb_ed_poll_poll_now();
 		} else {
-			LOG_WRN("TLSR8258 deep-sleep wake: no valid joined state");
+			LOG_WRN("deep-sleep wake: no valid joined state");
 		}
-		tlsr8258_pm_deep_sleep_wake_clear();
+		zb_ed_sleep_wake_clear();
 	} else {
 #endif
 		if (zb_platform_bdb_service_persistent_rejoin()) {
@@ -503,7 +512,7 @@ static void zb_core_bootstrap_once(void)
 			zb_persistent_rejoin_in_progress = true;
 			zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 		}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP) && !defined(ZB_ROUTER_ROLE)
 	}
 #endif
 
@@ -808,7 +817,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 #if defined(CONFIG_ZIGBEE_ED)
 		zb_ed_poll_service();
 #endif
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
 		zb_ed_sleep_maybe();
 #endif
 
