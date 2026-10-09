@@ -4,7 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <zephyr/device.h>
+#include <zephyr/drivers/retained_mem.h>
+#include <zephyr/init.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/policy.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
@@ -22,8 +27,6 @@
 #include "zdo/zdo.h"
 #include "zdo/zdo_nwk_manager.h"
 #include "ss_security_flags.h"
-
-#include <tlsr825x/power.h>
 
 #include "zb_ed_sleep.h"
 
@@ -86,21 +89,20 @@ static bool zb_ed_sleep_has_pending_mac_work(void)
 	       (get_next_data() != NULL);
 }
 
-void zb_ed_sleep_maybe(void)
+static bool zb_ed_sleep_ready(void)
 {
 	ev_timer_event_t *poll_evt;
 	ev_timer_event_t *nearest_evt;
 	uint32_t sleep_ms;
-	int rc;
 
 	if (g_zbNwkCtx.joined == 0U) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_NOT_JOINED);
-		return;
+		return false;
 	}
 
 	if (g_zbMacPib.rxOnWhenIdle != 0U) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_RX_ON);
-		return;
+		return false;
 	}
 
 	if ((g_zbNwkCtx.state != NLME_STATE_IDLE) ||
@@ -120,76 +122,196 @@ void zb_ed_sleep_maybe(void)
 	    (zdo_nwk_mngr()->authEvt != NULL) ||
 	    (zdo_nwk_mngr()->backoffEvt != NULL)) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_NETWORK_BUSY);
-		return;
+		return false;
 	}
 
 	if (zb_ed_sleep_has_pending_mac_work()) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_MAC_BUSY);
-		return;
+		return false;
 	}
 
 	if (!zb_taskq_is_empty() || !zb_taskq_layer_queues_empty()) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TASK_QUEUE);
-		return;
+		return false;
 	}
 
 	if (zb_ed_poll_fast_active()) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_FAST_POLL);
-		return;
+		return false;
 	}
 
 	poll_evt = zdo_nwk_mngr()->pollEvt;
 	if ((poll_evt == NULL) || !ev_timer_exist(poll_evt)) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_NO_DEADLINE);
-		return;
+		return false;
 	}
 
 	if (ev_timer_has_other_than(poll_evt)) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TRANSIENT_TIMER);
-		return;
+		return false;
 	}
 
 	nearest_evt = ev_timer_nearestGet();
 	if (nearest_evt != poll_evt) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TRANSIENT_TIMER);
-		return;
-	}
-
-	if (!IS_ENABLED(CONFIG_TLSR8258_PM_TIMER_WAKEUP)) {
-		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_NO_DEADLINE);
-		return;
+		return false;
 	}
 
 	sleep_ms = ev_timer_timeout_get(poll_evt);
 	if (sleep_ms < ZB_ED_SLEEP_MIN_INTERVAL_MS) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_SHORT_INTERVAL);
+		return false;
+	}
+
+	return true;
+}
+
+/*
+ * Layout of the record kept in the retained memory across a deep sleep: a
+ * magic byte, the outgoing frame counter and an XOR checksum over both.
+ */
+#define ZB_ED_SLEEP_RECORD_MAGIC 0xa5U
+#define ZB_ED_SLEEP_RECORD_SIZE  6U
+
+static const struct device *const zb_ed_sleep_retained =
+	DEVICE_DT_GET(DT_CHOSEN(zigbee_retained_mem));
+
+/* True while the SoC may pick PM_STATE_SOFT_OFF; the SoC starts with it locked. */
+static bool zb_ed_sleep_allowed;
+
+static uint8_t zb_ed_sleep_record_checksum(const uint8_t *record)
+{
+	uint8_t sum = 0x5aU;
+
+	for (size_t i = 0U; i < (ZB_ED_SLEEP_RECORD_SIZE - 1U); i++) {
+		sum ^= record[i];
+	}
+
+	return sum;
+}
+
+static void zb_ed_sleep_record_store(uint32_t frame_counter)
+{
+	uint8_t record[ZB_ED_SLEEP_RECORD_SIZE];
+
+	record[0] = ZB_ED_SLEEP_RECORD_MAGIC;
+	record[1] = (uint8_t)frame_counter;
+	record[2] = (uint8_t)(frame_counter >> 8);
+	record[3] = (uint8_t)(frame_counter >> 16);
+	record[4] = (uint8_t)(frame_counter >> 24);
+	record[5] = zb_ed_sleep_record_checksum(record);
+
+	(void)retained_mem_write(zb_ed_sleep_retained, 0, record, sizeof(record));
+}
+
+static bool zb_ed_sleep_record_load(uint32_t *frame_counter)
+{
+	uint8_t record[ZB_ED_SLEEP_RECORD_SIZE];
+
+	if (retained_mem_read(zb_ed_sleep_retained, 0, record, sizeof(record)) != 0) {
+		return false;
+	}
+
+	if ((record[0] != ZB_ED_SLEEP_RECORD_MAGIC) ||
+	    (record[5] != zb_ed_sleep_record_checksum(record))) {
+		return false;
+	}
+
+	*frame_counter = (uint32_t)record[1] | ((uint32_t)record[2] << 8) |
+			 ((uint32_t)record[3] << 16) | ((uint32_t)record[4] << 24);
+
+	return true;
+}
+
+/*
+ * The notifier runs in the idle thread just before the SoC enters the state,
+ * so the counter saved here is the last one the device used.
+ */
+static void zb_ed_sleep_state_entry(enum pm_state state)
+{
+	if (state == PM_STATE_SOFT_OFF) {
+		zb_ed_sleep_record_store(ss_ib.outgoingFrameCounter);
+	}
+}
+
+/* Reached only when the SoC returned without restarting. */
+static void zb_ed_sleep_state_exit(enum pm_state state)
+{
+	if (state == PM_STATE_SOFT_OFF) {
+		(void)retained_mem_clear(zb_ed_sleep_retained);
+	}
+}
+
+static struct pm_notifier zb_ed_sleep_notifier = {
+	.state_entry = zb_ed_sleep_state_entry,
+	.state_exit = zb_ed_sleep_state_exit,
+};
+
+static int zb_ed_sleep_init(void)
+{
+	if (!device_is_ready(zb_ed_sleep_retained)) {
+		LOG_ERR("SED deep sleep: retained memory not ready");
+		return -ENODEV;
+	}
+
+	pm_notifier_register(&zb_ed_sleep_notifier);
+
+	return 0;
+}
+
+/* After the retained memory driver, which initializes at POST_KERNEL 40. */
+BUILD_ASSERT(CONFIG_RETAINED_MEM_INIT_PRIORITY < 99);
+SYS_INIT(zb_ed_sleep_init, POST_KERNEL, 99);
+
+bool zb_ed_sleep_woke_from_deep(void)
+{
+	uint32_t frame_counter;
+
+	return zb_ed_sleep_record_load(&frame_counter);
+}
+
+int zb_ed_sleep_retained_frame_counter(uint32_t *frame_counter)
+{
+	if (frame_counter == NULL) {
+		return -EINVAL;
+	}
+
+	return zb_ed_sleep_record_load(frame_counter) ? 0 : -ENOENT;
+}
+
+void zb_ed_sleep_wake_clear(void)
+{
+	(void)retained_mem_clear(zb_ed_sleep_retained);
+}
+
+static void zb_ed_sleep_allow(bool allow)
+{
+	if (allow == zb_ed_sleep_allowed) {
 		return;
 	}
 
-	/*
-	 * The radio driver owns RF IRQ, DMA and the started state. Stop it only
-	 * after every stack-busy check has passed, immediately before PM entry.
-	 */
-	rc = zb_platform_radio_stop();
-	if (rc != 0) {
-		LOG_WRN("SED deep sleep: radio stop failed rc=%d", rc);
-		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_RADIO);
-		return;
-	}
+	if (allow) {
+		/*
+		 * The radio driver owns RF IRQ, DMA and the started state. Stop it
+		 * only after every stack-busy check has passed, immediately before
+		 * the SoC may enter the state.
+		 */
+		int rc = zb_platform_radio_stop();
 
-	rc = tlsr8258_pm_save_frame_counter(ss_ib.outgoingFrameCounter);
-	if (rc != 0) {
-		LOG_ERR("SED deep sleep: frame counter retention failed rc=%d", rc);
-		(void)zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur);
-		return;
-	}
-
-	rc = tlsr8258_pm_deep_sleep_for_ms(sleep_ms);
-	if (rc != 0) {
-		LOG_WRN("SED deep sleep entry failed rc=%d interval=%u ms", rc,
-			(unsigned int)sleep_ms);
-		if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
-			LOG_ERR("SED deep sleep: radio recovery failed");
+		if (rc != 0) {
+			LOG_WRN("SED deep sleep: radio stop failed rc=%d", rc);
+			zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_RADIO);
+			return;
 		}
+		pm_policy_state_lock_put(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
+	} else {
+		pm_policy_state_lock_get(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
 	}
+
+	zb_ed_sleep_allowed = allow;
+}
+
+void zb_ed_sleep_maybe(void)
+{
+	zb_ed_sleep_allow(zb_ed_sleep_ready());
 }
