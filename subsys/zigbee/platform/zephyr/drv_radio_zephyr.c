@@ -76,6 +76,9 @@ extern u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 update);
 #endif
 #include "mac/includes/mac_trx_api.h"
 #include "zb_common.h"
+#if defined(CONFIG_ZIGBEE_ED)
+#include "zb_ed_sleep.h"
+#endif
 
 /*
  * A router is an always-on 802.15.4 receiver.  The vendor MAC still uses
@@ -480,6 +483,9 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 #endif
 	ack_pkt = zb_radio_psdu_is_ack(psdu, psdu_len) ? 1U : 0U;
 	if (ack_pkt == 0U) {
+#if defined(CONFIG_ZIGBEE_ED)
+		zb_ed_poll_note_activity();
+#endif
 		/*
 		 * The vendor hands the MAC a receive buffer from the zb_buf pool,
 		 * and the stack keeps pointing into it: a frame relayed to a
