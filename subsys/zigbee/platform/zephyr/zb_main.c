@@ -2,8 +2,10 @@
  * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/policy.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_channel.h>
@@ -24,11 +26,13 @@
 
 #include "zdo/zdo_api.h"
 #include "ss_security_flags.h"
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#if defined(CONFIG_ZIGBEE_ED)
+#include "nwk/includes/nwk_addr_map.h"
 #include "zb_ed_sleep.h"
+#endif
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
 #include "zdo/zdo.h"
 #include "zdo/zdo_nwk_manager.h"
-#include <tlsr825x/power.h>
 #endif
 
 LOG_MODULE_REGISTER(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -144,6 +148,22 @@ static void zb_thread_wait(void)
 	(void)k_sem_take(&zb_ev_sem, timeout);
 }
 
+#if defined(CONFIG_PM) && !defined(CONFIG_ZIGBEE_SLEEPY)
+/*
+ * A router, a coordinator and an end device that is not configured sleepy are
+ * always-on receivers. Hold every power state so that enabling PM for the
+ * rest of the application cannot put the radio to sleep.
+ */
+static int zb_always_on_lock(void)
+{
+	pm_policy_state_all_lock_get();
+
+	return 0;
+}
+
+SYS_INIT(zb_always_on_lock, POST_KERNEL, 0);
+#endif
+
 static bool zb_bootstrap_done;
 static bool zb_core_init_done;
 static bool zb_commissioning_pending;
@@ -151,6 +171,10 @@ static bool zb_waiting_for_radio_log;
 static bool zb_persistent_rejoin_in_progress;
 /* Set once a router or coordinator has been set up as a parent. */
 static bool zb_parenting_enabled;
+
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+static void zb_ed_join_save_restored(void);
+#endif
 
 void zb_platform_network_left(void)
 {
@@ -388,14 +412,6 @@ static void zb_core_bootstrap_once(void)
 			zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
 						     g_zbMacPib.extAddress);
 		}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
-		if (tlsr8258_pm_deep_sleep_wake_pending()) {
-			tlsr8258_pm_recover_after_wake();
-			LOG_INF("TLSR8258 deep-sleep wake: reason=%u raw=0x%08x",
-				(unsigned int)tlsr8258_pm_get_wakeup_reason(),
-				(unsigned int)tlsr8258_pm_get_wakeup_raw_status());
-		}
-#endif
 		rf_init();
 		zb_core_init_done = true;
 	}
@@ -460,26 +476,40 @@ static void zb_core_bootstrap_once(void)
 	}
 #endif
 
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
-	if (tlsr8258_pm_deep_sleep_wake_pending()) {
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP) && !defined(ZB_ROUTER_ROLE)
+	if (zb_ed_sleep_woke_from_deep()) {
 		if (zb_platform_bdb_init_default() != 0) {
-			LOG_ERR("TLSR8258 deep-sleep wake: BDB restore init failed");
+			LOG_ERR("deep-sleep wake: BDB restore init failed");
 		}
 		if (g_zbNwkCtx.joined && (g_zbMacPib.phyChannelCur >= 11U) &&
 		    (g_zbMacPib.phyChannelCur <= 26U)) {
 			uint32_t poll_rate = zdo_af_get_syn_rate();
 
+			zb_ed_join_save_restored();
 			if (poll_rate == 0U) {
-				poll_rate = 500U;
+				poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
 			}
+			/*
+			 * zb_platform_zdo_attr_init() resets the indirect poll rate to 1000 ms on
+			 * every boot, so zdo_set_pollRate() would take its unchanged-rate early
+			 * return and never create the poll timer. Clear the cached rate so the
+			 * call arms it.
+			 */
+			zdo_af_set_syn_rate(0U);
 			zdo_set_pollRate(poll_rate);
 			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
-				LOG_ERR("TLSR8258 deep-sleep wake: radio recovery failed");
+				LOG_ERR("deep-sleep wake: radio recovery failed");
 			}
+			/*
+			 * The wake was the poll deadline, but zdo_set_pollRate() armed
+			 * a full interval. Without this the device would sleep for
+			 * that interval again and never poll its parent.
+			 */
+			zb_ed_poll_poll_now();
 		} else {
-			LOG_WRN("TLSR8258 deep-sleep wake: no valid joined state");
+			LOG_WRN("deep-sleep wake: no valid joined state");
 		}
-		tlsr8258_pm_deep_sleep_wake_clear();
+		zb_ed_sleep_wake_clear();
 	} else {
 #endif
 		if (zb_platform_bdb_service_persistent_rejoin()) {
@@ -488,7 +518,7 @@ static void zb_core_bootstrap_once(void)
 			zb_persistent_rejoin_in_progress = true;
 			zb_persistent_rejoin_started_ms = (started == 0U) ? 1U : started;
 		}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP) && !defined(ZB_ROUTER_ROLE)
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP) && !defined(ZB_ROUTER_ROLE)
 	}
 #endif
 
@@ -680,6 +710,57 @@ __weak void zb_platform_radio_rx_poll(void)
 {
 }
 
+#if defined(CONFIG_ZIGBEE_ED)
+/*
+ * An end device never opens permit join, so the commissioning save that
+ * bdb_mgmtPermitJoiningConfirm() schedules on the parent never runs for it.
+ * Save the joined state once per join, as soon as the stack is idle. A delay
+ * here let deep sleep start first, so the state never reached flash and the
+ * device woke without a joined network. The idle checks in
+ * zb_ed_join_save_service() keep the flash write out of the join exchange.
+ */
+#define ZB_ED_JOIN_SAVE_DELAY_MS 0U
+
+static bool zb_ed_join_save_was_joined;
+static bool zb_ed_join_save_armed;
+static uint32_t zb_ed_join_save_at;
+
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+static void zb_ed_join_save_restored(void)
+{
+	/* The joined state and parent already exist in NV on a timed wake. */
+	zb_ed_join_save_was_joined = true;
+	zb_ed_join_save_armed = false;
+}
+#endif
+
+static void zb_ed_join_save_service(void)
+{
+	bool joined = (g_zbNwkCtx.joined != 0U) && (aps_ib.aps_authenticated != 0U);
+
+	if (!joined) {
+		zb_ed_join_save_was_joined = false;
+		zb_ed_join_save_armed = false;
+		return;
+	}
+
+	if (!zb_ed_join_save_was_joined) {
+		zb_ed_join_save_was_joined = true;
+		zb_ed_join_save_armed = true;
+		zb_ed_join_save_at = k_uptime_get_32() + ZB_ED_JOIN_SAVE_DELAY_MS;
+		return;
+	}
+
+	if (zb_ed_join_save_armed && ((int32_t)(zb_ed_join_save_at - k_uptime_get_32()) <= 0) &&
+	    zdo_ifZdoNwkManagerIdle() && zb_taskq_is_empty()) {
+		zb_ed_join_save_armed = false;
+		/* Parent polling after a reset needs the persisted neighbor entry too. */
+		(void)nwk_parentNodeInfoStore();
+		zb_info_save(NULL);
+	}
+}
+#endif
+
 static void zb_thread_fn(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -721,6 +802,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	LOG_INF("Zigbee thread started");
 
 	while (1) {
+#if defined(CONFIG_ZIGBEE_ED)
+		zb_ed_join_save_service();
+#endif
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 		zb_zbhci_uart_poll();
 #endif
@@ -790,7 +874,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			zb_thread_wait();
 			continue;
 		}
-#if defined(CONFIG_ZIGBEE_ED_DEEP_SLEEP)
+#if defined(CONFIG_ZIGBEE_ED)
+		zb_ed_poll_service();
+#endif
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
 		zb_ed_sleep_maybe();
 #endif
 
