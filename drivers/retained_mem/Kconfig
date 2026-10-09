@@ -38,6 +38,7 @@ source "drivers/retained_mem/Kconfig.gd32"
 source "drivers/retained_mem/Kconfig.nrf"
 source "drivers/retained_mem/Kconfig.rv3028"
 source "drivers/retained_mem/Kconfig.silabs"
+source "drivers/retained_mem/Kconfig.tlsr8258"
 source "drivers/retained_mem/Kconfig.zephyr"
 # zephyr-keep-sorted-stop
 
