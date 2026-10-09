@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telink TLSR8258 I2C controller (controller mode)
+
+compatible: "telink,tlsr8258-i2c"
+
+include: [i2c-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+    description: |
+      System clock the I2C divider is derived from. Its clock-frequency
+      selects the divider: I2C clock = system clock / (4 * divider).
+
+  pinctrl-0:
+    required: true
+    description: |
+      SDA and SCL pin states using TLSR8258_FUNC_I2C. Supported pairs are
+      PA3/PA4, PB6/PD7, PC0/PC1 and PC2/PC3.

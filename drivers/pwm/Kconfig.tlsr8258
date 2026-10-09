@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config PWM_TLSR8258
+	bool "Telink TLSR8258 PWM driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_PWM_ENABLED
+	select PINCTRL
+	help
+	  Enable the Telink TLSR8258 PWM driver. The controller provides six
+	  continuous-mode PWM channels (PWM0..PWM5) sharing one clock divider.

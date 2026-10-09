@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config I2C_TELINK_TLSR8258
+	bool "Telink TLSR8258 I2C controller driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_I2C_ENABLED
+	select PINCTRL
+	help
+	  Enable the polled controller-mode I2C driver for the TLSR8258 hardware
+	  I2C block. Target mode uses the hardware mapping buffer and needs
+	  CONFIG_I2C_TARGET; it is not verified on hardware.
