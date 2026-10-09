@@ -10,6 +10,14 @@ config HAS_PM
 	  This option must be selected by SoCs that provide PM hooks, that is,
 	  calls to configure low-power states.
 
+config HAS_PM_STATE_SOFT_OFF
+	bool
+	depends on HAS_PM
+	help
+	  This option must be selected by SoCs that implement PM_STATE_SOFT_OFF in
+	  pm_state_set() as a timed deep sleep: the SoC wakes from the next kernel
+	  timeout and restarts through a reset, so no RAM contents are kept.
+
 config HAS_PM_S2RAM_CUSTOM_MARKING
 	bool
 	depends on HAS_PM
