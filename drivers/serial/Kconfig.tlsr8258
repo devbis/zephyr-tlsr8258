@@ -11,3 +11,14 @@ config UART_TELINK_TLSR8258
 	select PINCTRL
 	help
 	  This option enables the UART driver for Telink TLSR8258.
+
+config UART_TLSR8258_DMA
+	bool "Telink TLSR8258 UART DMA for the async API"
+	default n
+	depends on UART_TELINK_TLSR8258 && UART_ASYNC_API
+	depends on !IEEE802154_TELINK_TLSR8258
+	help
+	  Move async UART TX and RX through DMA1 and DMA0 instead of the
+	  interrupt-driven FIFO path. The UART DMA completion interrupt shares
+	  the DMA IRQ line with the 802.15.4 radio, so this option cannot be
+	  enabled together with IEEE802154_TELINK_TLSR8258.
