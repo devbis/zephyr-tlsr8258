@@ -216,6 +216,9 @@ add_subdirectory_ifdef(CONFIG_ZIGBEE_ZCL zcl)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
   nwk/nwk_ed_libzigbee.c
 )
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
+  platform/zephyr/zb_ed_poll.c
+)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED_DEEP_SLEEP
   platform/zephyr/zb_ed_sleep.c
 )
