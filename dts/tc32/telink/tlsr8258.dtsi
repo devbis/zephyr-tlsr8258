@@ -73,6 +73,16 @@
 		};
 	};
 
+	/*
+	 * Analog registers 0x35..0x3a are not reset by a deep-sleep wake and
+	 * hold six bytes for the firmware.
+	 */
+	retained_analog: retained-analog {
+		compatible = "telink,tlsr8258-analog-retained";
+		analog-address = <0x35>;
+		size = <6>;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -81,7 +91,7 @@
 			compatible = "telink,tlsr8258-tc32";
 			reg = <0>;
 			clock-frequency = <24000000>;
-			cpu-power-states = <&tlsr8258_suspend>;
+			cpu-power-states = <&tlsr8258_suspend &tlsr8258_soft_off>;
 		};
 
 		power-states {
@@ -90,6 +100,20 @@
 				power-state-name = "suspend-to-idle";
 				min-residency-us = <1000>;
 				exit-latency-us = <250>;
+			};
+
+			/*
+			 * Deep sleep without retention: wake is a reset. The residency
+			 * is a conservative placeholder until the boot time to the
+			 * first radio operation is measured on hardware. The SoC holds
+			 * a policy lock on this state, so only code that opts in with
+			 * pm_policy_state_lock_put() can ever enter it.
+			 */
+			tlsr8258_soft_off: state1 {
+				compatible = "zephyr,power-state";
+				power-state-name = "soft-off";
+				min-residency-us = <100000>;
+				exit-latency-us = <50000>;
 			};
 		};
 	};
