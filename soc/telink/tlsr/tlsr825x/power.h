@@ -42,43 +42,6 @@ int tlsr8258_pm_suspend_for_ms(uint32_t duration_ms);
 int tlsr8258_pm_deep_sleep_for_ms(uint32_t duration_ms);
 int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low, bool enable);
 
-/**
- * @brief Save a Zigbee outgoing security frame counter for deep sleep.
- *
- * @param frame_counter Counter to retain in analog registers 0x35..0x39.
- *
- * @retval 0 Counter saved.
- */
-int tlsr8258_pm_save_frame_counter(uint32_t frame_counter);
-
-/**
- * @brief Read the validated frame counter retained across deep sleep.
- *
- * @param frame_counter Destination for the retained counter.
- *
- * @retval 0 Counter returned.
- * @retval -EINVAL frame_counter is NULL.
- * @retval -ENOENT No valid retained counter is present.
- */
-int tlsr8258_pm_get_retained_frame_counter(uint32_t *frame_counter);
-
-/**
- * @brief Report whether the last reset followed TLSR8258 deep sleep.
- *
- * @retval true Deep-sleep wake marker is pending.
- * @retval false No deep-sleep wake marker is pending.
- */
-bool tlsr8258_pm_deep_sleep_wake_pending(void);
-
-/**
- * @brief Consume the deep-sleep wake marker.
- */
-void tlsr8258_pm_deep_sleep_wake_clear(void);
-
-/**
- * @brief Restore timer/tick blocks after a deep-sleep reset.
- */
-void tlsr8258_pm_recover_after_wake(void);
 bool tlsr8258_pm_radio_can_suspend(void);
 enum tlsr8258_pm_wakeup_reason tlsr8258_pm_get_wakeup_reason(void);
 uint32_t tlsr8258_pm_get_wakeup_raw_status(void);
