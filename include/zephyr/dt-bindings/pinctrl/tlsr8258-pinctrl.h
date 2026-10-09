@@ -57,6 +57,22 @@
 
 #define TLSR8258_FUNC_GPIO 0
 #define TLSR8258_FUNC_UART 3
+#define TLSR8258_FUNC_I2C  4
+#define TLSR8258_FUNC_SPI  5
+
+/* PWM output functions; values match the vendor GPIO_FuncTypeDef AS_PWMx. */
+#define TLSR8258_FUNC_PWM0   20
+#define TLSR8258_FUNC_PWM1   21
+#define TLSR8258_FUNC_PWM2   22
+#define TLSR8258_FUNC_PWM3   23
+#define TLSR8258_FUNC_PWM4   24
+#define TLSR8258_FUNC_PWM5   25
+#define TLSR8258_FUNC_PWM0_N 26
+#define TLSR8258_FUNC_PWM1_N 27
+#define TLSR8258_FUNC_PWM2_N 28
+#define TLSR8258_FUNC_PWM3_N 29
+#define TLSR8258_FUNC_PWM4_N 30
+#define TLSR8258_FUNC_PWM5_N 31
 
 #define TLSR8258_PINMUX(pin, func) (((func) << 16) | (pin))
 
