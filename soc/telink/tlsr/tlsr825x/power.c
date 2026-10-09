@@ -886,3 +886,19 @@ static int tlsr8258_pm_soft_off_lock_init(void)
 }
 
 SYS_INIT(tlsr8258_pm_soft_off_lock_init, POST_KERNEL, 0);
+
+/*
+ * Leave the timer and tick blocks in their post-reset configuration and
+ * consume the deep-sleep marker before any application code starts.
+ */
+static int tlsr8258_pm_post_wake_init(void)
+{
+	if (tlsr8258_pm_deep_wake_pending) {
+		tlsr8258_pm_recover_after_wake();
+		tlsr8258_pm_deep_sleep_wake_clear();
+	}
+
+	return 0;
+}
+
+SYS_INIT(tlsr8258_pm_post_wake_init, APPLICATION, 0);
