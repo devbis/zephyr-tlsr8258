@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Retained memory in TLSR8258 analog registers. The registers keep their
+  value across deep-sleep wake, which resets the core and the SRAM.
+
+compatible: "telink,tlsr8258-analog-retained"
+
+include: base.yaml
+
+properties:
+  analog-address:
+    type: int
+    required: true
+    description: Analog register address of the first retained byte.
+
+  size:
+    type: int
+    required: true
+    description: Number of retained bytes.
