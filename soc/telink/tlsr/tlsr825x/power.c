@@ -17,6 +17,7 @@
 
 #include <zephyr/arch/tc32/irq.h>
 
+#include "clock_cal.h"
 #include "power.h"
 
 extern void start_suspend(void);
@@ -43,13 +44,6 @@ extern void start_suspend(void);
 #define TLSR8258_REG_SYSTEM_32K_TICK_RD  TLSR8258_REG16(0x00800750u)
 #define TLSR8258_REG_SYSTEM_32K_TICK_CAL TLSR8258_REG32(0x00800754u)
 
-#define TLSR8258_REG_ANA_ADDR TLSR8258_REG8(0x008000b8u)
-#define TLSR8258_REG_ANA_DATA TLSR8258_REG8(0x008000b9u)
-#define TLSR8258_REG_ANA_CTRL TLSR8258_REG8(0x008000bau)
-
-#define TLSR8258_FLD_ANA_BUSY BIT(0)
-#define TLSR8258_FLD_ANA_RW   BIT(5)
-#define TLSR8258_FLD_ANA_CYC0 BIT(6)
 
 #define TLSR8258_FLD_GPIO_CORE_WAKEUP_EN    BIT(2)
 #define TLSR8258_FLD_GPIO_CORE_INTERRUPT_EN BIT(3)
@@ -88,11 +82,6 @@ extern void start_suspend(void);
 #define TLSR8258_AREG_0X7E           0x7eu
 #define TLSR8258_AREG_WAKEUP_STATUS  0x44u
 #define TLSR8258_AREG_PM_STATUS      0x7fu
-#define TLSR8258_AREG_FRAME_COUNTER0 0x35u
-#define TLSR8258_AREG_FRAME_COUNTER1 0x36u
-#define TLSR8258_AREG_FRAME_COUNTER2 0x37u
-#define TLSR8258_AREG_FRAME_COUNTER3 0x38u
-#define TLSR8258_AREG_FRAME_COUNTER_CSUM 0x39u
 #define TLSR8258_AREG_DEEP_SLEEP_MARKER 0x3au
 #define TLSR8258_PM_DEEP_SLEEP_MARKER 0xa5u
 
@@ -139,8 +128,6 @@ static volatile enum tlsr8258_pm_wakeup_reason tlsr8258_pm_last_reason =
 static volatile uint32_t tlsr8258_pm_last_raw_status;
 static volatile uint32_t tlsr8258_pm_gpio_wakeup_mask;
 static volatile bool tlsr8258_pm_deep_wake_pending;
-static volatile bool tlsr8258_pm_retained_counter_valid;
-static volatile uint32_t tlsr8258_pm_retained_counter;
 
 __weak bool tlsr8258_pm_radio_can_suspend(void)
 {
@@ -156,94 +143,14 @@ static void tlsr8258_pm_vendor_clock_dly(uint32_t cycles)
 	}
 }
 
-static void tlsr8258_pm_analog_wait(void)
+static void tlsr8258_pm_deep_sleep_wake_clear(void)
 {
-	while ((TLSR8258_REG_ANA_CTRL & TLSR8258_FLD_ANA_BUSY) != 0u) {
-	}
-}
-
-static uint8_t tlsr8258_pm_analog_read(uint8_t addr)
-{
-	unsigned int key = arch_irq_lock();
-	uint8_t data;
-
-	TLSR8258_REG_ANA_ADDR = addr;
-	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0;
-	tlsr8258_pm_analog_wait();
-	data = TLSR8258_REG_ANA_DATA;
-	TLSR8258_REG_ANA_CTRL = 0u;
-	arch_irq_unlock(key);
-
-	return data;
-}
-
-static void tlsr8258_pm_analog_write(uint8_t addr, uint8_t value)
-{
-	unsigned int key = arch_irq_lock();
-
-	TLSR8258_REG_ANA_ADDR = addr;
-	TLSR8258_REG_ANA_DATA = value;
-	TLSR8258_REG_ANA_CTRL = TLSR8258_FLD_ANA_CYC0 | TLSR8258_FLD_ANA_RW;
-	tlsr8258_pm_analog_wait();
-	TLSR8258_REG_ANA_CTRL = 0u;
-	arch_irq_unlock(key);
-}
-
-static uint8_t tlsr8258_pm_frame_counter_checksum(uint32_t frame_counter)
-{
-	return (uint8_t)(frame_counter ^ (frame_counter >> 8) ^
-				 (frame_counter >> 16) ^ (frame_counter >> 24) ^ 0x5au);
-}
-
-int tlsr8258_pm_save_frame_counter(uint32_t frame_counter)
-{
-	/*
-	 * The five registers are the vendor-compatible retention slots used by
-	 * the TLSR8258 deep-sleep path. The deep-sleep marker is written by the
-	 * entry sequence only after the wake gate has passed.
-	 */
-	tlsr8258_pm_analog_write(TLSR8258_AREG_FRAME_COUNTER0,
-				 (uint8_t)frame_counter);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_FRAME_COUNTER1,
-				 (uint8_t)(frame_counter >> 8));
-	tlsr8258_pm_analog_write(TLSR8258_AREG_FRAME_COUNTER2,
-				 (uint8_t)(frame_counter >> 16));
-	tlsr8258_pm_analog_write(TLSR8258_AREG_FRAME_COUNTER3,
-				 (uint8_t)(frame_counter >> 24));
-	tlsr8258_pm_analog_write(TLSR8258_AREG_FRAME_COUNTER_CSUM,
-				 tlsr8258_pm_frame_counter_checksum(frame_counter));
-
-	return 0;
-}
-
-int tlsr8258_pm_get_retained_frame_counter(uint32_t *frame_counter)
-{
-	if (frame_counter == NULL) {
-		return -EINVAL;
-	}
-
-	if (!tlsr8258_pm_retained_counter_valid) {
-		return -ENOENT;
-	}
-
-	*frame_counter = tlsr8258_pm_retained_counter;
-	return 0;
-}
-
-bool tlsr8258_pm_deep_sleep_wake_pending(void)
-{
-	return tlsr8258_pm_deep_wake_pending;
-}
-
-void tlsr8258_pm_deep_sleep_wake_clear(void)
-{
-	tlsr8258_pm_analog_write(TLSR8258_AREG_DEEP_SLEEP_MARKER, 0u);
+	tlsr8258_analog_write(TLSR8258_AREG_DEEP_SLEEP_MARKER, 0u);
 
 	tlsr8258_pm_deep_wake_pending = false;
-	tlsr8258_pm_retained_counter_valid = false;
 }
 
-void tlsr8258_pm_recover_after_wake(void)
+static void tlsr8258_pm_recover_after_wake(void)
 {
 	if (!tlsr8258_pm_deep_wake_pending) {
 		return;
@@ -260,9 +167,9 @@ void tlsr8258_pm_recover_after_wake(void)
 	TLSR8258_REG_SYSTEM_TICK_CTRL = 1u;
 	TLSR8258_REG_SYSTEM_32K_TICK_RD = 0u;
 	TLSR8258_REG_SYSTEM_32K_TICK_CAL = 0u;
-	tlsr8258_pm_analog_write(TLSR8258_AREG_WAKEUP_STATUS,
+	tlsr8258_analog_write(TLSR8258_AREG_WAKEUP_STATUS,
 				 TLSR8258_WAKEUP_STATUS_ALL);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_PM_STATUS, 0u);
+	tlsr8258_analog_write(TLSR8258_AREG_PM_STATUS, 0u);
 }
 
 static void tlsr8258_pm_set_default_timings(void)
@@ -309,10 +216,10 @@ static uint32_t tlsr8258_pm_get_32k_tick(void)
 
 	while (true) {
 		t0 = t1;
-		t1 = tlsr8258_pm_analog_read(0x47u);
-		t1 = (t1 << 8) | tlsr8258_pm_analog_read(0x46u);
-		t1 = (t1 << 8) | tlsr8258_pm_analog_read(0x45u);
-		t1 = (t1 << 8) | tlsr8258_pm_analog_read(0x43u);
+		t1 = tlsr8258_analog_read(0x47u);
+		t1 = (t1 << 8) | tlsr8258_analog_read(0x46u);
+		t1 = (t1 << 8) | tlsr8258_analog_read(0x45u);
+		t1 = (t1 << 8) | tlsr8258_analog_read(0x43u);
 		if (n != 0u) {
 			if ((t1 - t0) < 2u) {
 				return t1;
@@ -353,7 +260,7 @@ static void TC32_BOOT_RAM_MIRROR_CODE tlsr8258_pm_sleep_start(void)
 					 ((uint32_t)TLSR8258_REG_RET_SLOT_IDX << 8));
 	uint32_t ret_slot_saved;
 
-	tlsr8258_pm_analog_write(0x34u, 0x87u);
+	tlsr8258_analog_write(0x34u, 0x87u);
 	TLSR8258_REG8(0x0080000du) = 0u;
 	TLSR8258_REG8(0x0080000cu) = 0xb9u;
 
@@ -362,14 +269,14 @@ static void TC32_BOOT_RAM_MIRROR_CODE tlsr8258_pm_sleep_start(void)
 
 	TLSR8258_REG8(0x0080000du) = 1u;
 	TLSR8258_REG8(0x008005a1u) = 0u;
-	tlsr8258_pm_analog_write(0x82u, 0x0cu);
+	tlsr8258_analog_write(0x82u, 0x0cu);
 
 	ret_slot_saved = *ret_slot;
 	*ret_slot = TLSR8258_PM_RET_SLOT_NOP;
 	start_suspend();
 	*ret_slot = ret_slot_saved;
 
-	tlsr8258_pm_analog_write(0x82u, 0x64u);
+	tlsr8258_analog_write(0x82u, 0x64u);
 	TLSR8258_REG8(0x008005a1u) = 0x0fu;
 	TLSR8258_REG8(0x0080000du) = 0u;
 	TLSR8258_REG8(0x0080000cu) = 0xabu;
@@ -378,7 +285,7 @@ static void TC32_BOOT_RAM_MIRROR_CODE tlsr8258_pm_sleep_start(void)
 	}
 
 	TLSR8258_REG8(0x0080000du) = 1u;
-	tlsr8258_pm_analog_write(0x34u, 0x80u);
+	tlsr8258_analog_write(0x34u, 0x80u);
 
 	for (volatile uint32_t i = 0u; i <= tlsr8258_pm_xtal_stable_suspend_nopnum; i++) {
 	}
@@ -465,7 +372,7 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 
 		if (dt > 0xE0000000u) {
 			arch_irq_unlock(irq_key);
-			return tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
+			return tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
 			       TLSR8258_WAKEUP_STATUS_ALL;
 		}
 
@@ -474,10 +381,10 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 		} else {
 			uint8_t st;
 
-			tlsr8258_pm_analog_write(TLSR8258_AREG_WAKEUP_STATUS,
+			tlsr8258_analog_write(TLSR8258_AREG_WAKEUP_STATUS,
 						 TLSR8258_WAKEUP_STATUS_ALL);
 			do {
-				st = tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
+				st = tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
 				     TLSR8258_WAKEUP_STATUS_ALL;
 			} while (((TLSR8258_REG_SYSTEM_TICK - t0) < dt) && (st == 0u));
 
@@ -498,43 +405,43 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 
 	if (d > 0xE0000000u) {
 		arch_irq_unlock(irq_key);
-		return tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
+		return tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
 		       TLSR8258_WAKEUP_STATUS_ALL;
 	}
 
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X26, wakeup_src_u8);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_WAKEUP_STATUS, TLSR8258_WAKEUP_STATUS_ALL);
+	tlsr8258_analog_write(TLSR8258_AREG_0X26, wakeup_src_u8);
+	tlsr8258_analog_write(TLSR8258_AREG_WAKEUP_STATUS, TLSR8258_WAKEUP_STATUS_ALL);
 	TLSR8258_REG_CLK_SEL = 0u;
 
 	if (deep) {
-		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2B, 0xdeu);
-		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2C,
+		tlsr8258_analog_write(TLSR8258_AREG_0X2B, 0xdeu);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2C,
 					 (uint8_t)(0x16u | 0xc0u | (timer_wakeup ? 1u : 0u)));
-		tlsr8258_pm_analog_write(TLSR8258_AREG_LDO_SETTING1,
-					 (tlsr8258_pm_analog_read(TLSR8258_AREG_LDO_SETTING1) &
+		tlsr8258_analog_write(TLSR8258_AREG_LDO_SETTING1,
+					 (tlsr8258_analog_read(TLSR8258_AREG_LDO_SETTING1) &
 					  (uint8_t)~0x07u) |
 						 5u);
 	} else {
-		tlsr8258_pm_analog_write(TLSR8258_AREG_0X04, 0x48u);
-		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2B, 0x5eu);
-		tlsr8258_pm_analog_write(TLSR8258_AREG_0X2C,
+		tlsr8258_analog_write(TLSR8258_AREG_0X04, 0x48u);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2B, 0x5eu);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2C,
 					 (uint8_t)(0x96u | 0x16u | (timer_wakeup ? 1u : 0u)));
-		tlsr8258_pm_analog_write(TLSR8258_AREG_LDO_SETTING1,
-					 (tlsr8258_pm_analog_read(TLSR8258_AREG_LDO_SETTING1) &
+		tlsr8258_analog_write(TLSR8258_AREG_LDO_SETTING1,
+					 (tlsr8258_analog_read(TLSR8258_AREG_LDO_SETTING1) &
 					  (uint8_t)~0x07u) |
 						 4u);
 	}
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X7E, (uint8_t)sleep_mode);
+	tlsr8258_analog_write(TLSR8258_AREG_0X7E, (uint8_t)sleep_mode);
 	/* Both modes implemented here are non-retention: disable the SRAM
 	 * retention path (0x08) and mark "about to enter PM" for the analog
 	 * domain. DEEPSLEEP_MODE_RET_SRAM_LOW32K would skip this -- see
 	 * power.h's tlsr8258_pm_sleep_mode doc comment.
 	 */
 	TLSR8258_REG_PM_RET_SRAM_CTRL = 0x08u;
-	tlsr8258_pm_analog_write(TLSR8258_AREG_PM_STATUS, 1u);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_0X20,
+	tlsr8258_analog_write(TLSR8258_AREG_PM_STATUS, 1u);
+	tlsr8258_analog_write(TLSR8258_AREG_0X20,
 				 (uint8_t)(0x7fu - ((0xfa00u + (calib >> 1)) / calib)));
-	tlsr8258_pm_analog_write(
+	tlsr8258_analog_write(
 		TLSR8258_AREG_0X1F,
 		(uint8_t)((((uint32_t)tlsr8258_pm_r_delay.suspend_ret_r_delay_us << 7) +
 			   (calib >> 1)) /
@@ -557,14 +464,14 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 	TLSR8258_REG_SYSTEM_TICK_MODE = 0x20u;
 
 	wake_gate_ready = tlsr8258_pm_wake_gate_ready(
-		tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS));
+		tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS));
 	if (wake_gate_ready) {
 		if (deep) {
 			/*
 			 * 0x3a survives the reset generated by deep sleep. Keep it set
 			 * until the post-reset Zigbee bootstrap consumes it.
 			 */
-			tlsr8258_pm_analog_write(TLSR8258_AREG_DEEP_SLEEP_MARKER,
+			tlsr8258_analog_write(TLSR8258_AREG_DEEP_SLEEP_MARKER,
 					 TLSR8258_PM_DEEP_SLEEP_MARKER);
 		}
 		tlsr8258_pm_sleep_start();
@@ -587,9 +494,9 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 			TLSR8258_REG_SYSTEM_TICK_MODE = 0u;
 			TLSR8258_REG_SYSTEM_TICK_CTRL = 1u;
 			TLSR8258_REG_CLK_SEL = bak66;
-			tlsr8258_pm_analog_write(TLSR8258_AREG_PM_STATUS, 0u);
+			tlsr8258_analog_write(TLSR8258_AREG_PM_STATUS, 0u);
 		}
-		st = tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS);
+		st = tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS);
 
 		arch_irq_unlock(irq_key);
 		return (st != 0u) ? (st | TLSR8258_STATUS_ENTER_SUSPEND) :
@@ -619,7 +526,7 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 	tlsr8258_pm_wait_xtal_ready();
 	TLSR8258_REG_CLK_SEL = bak66;
 
-	uint32_t st = tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS);
+	uint32_t st = tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS);
 
 	arch_irq_unlock(irq_key);
 
@@ -798,15 +705,15 @@ int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low
 	pol_reg = (uint8_t)(0x21u + port);
 	en_reg = (uint8_t)(0x27u + port);
 
-	value = tlsr8258_pm_analog_read(pol_reg);
+	value = tlsr8258_analog_read(pol_reg);
 	if (active_low) {
 		value |= bit;
 	} else {
 		value &= (uint8_t)~bit;
 	}
-	tlsr8258_pm_analog_write(pol_reg, value);
+	tlsr8258_analog_write(pol_reg, value);
 
-	value = tlsr8258_pm_analog_read(en_reg);
+	value = tlsr8258_analog_read(en_reg);
 	if (enable) {
 		value |= bit;
 		tlsr8258_pm_gpio_wakeup_mask |= key_bit;
@@ -814,8 +721,8 @@ int tlsr8258_pm_configure_gpio_wakeup(uint8_t port, uint8_t pin, bool active_low
 		value &= (uint8_t)~bit;
 		tlsr8258_pm_gpio_wakeup_mask &= ~key_bit;
 	}
-	tlsr8258_pm_analog_write(en_reg, value);
-	tlsr8258_pm_analog_write(TLSR8258_AREG_WAKEUP_STATUS, TLSR8258_WAKEUP_STATUS_ALL);
+	tlsr8258_analog_write(en_reg, value);
+	tlsr8258_analog_write(TLSR8258_AREG_WAKEUP_STATUS, TLSR8258_WAKEUP_STATUS_ALL);
 
 	return 0;
 }
@@ -834,40 +741,24 @@ static int tlsr8258_pm_init(void)
 {
 	uint8_t port;
 	uint8_t marker;
-	uint32_t retained_counter;
-	uint8_t checksum;
 
 	tlsr8258_pm_set_default_timings();
 	TLSR8258_REG_SYSTEM_32K_TICK_RD = 0u;
 	TLSR8258_REG_GPIO_WAKEUP_IRQ |=
 		(TLSR8258_FLD_GPIO_CORE_WAKEUP_EN | TLSR8258_FLD_GPIO_CORE_INTERRUPT_EN);
 	tlsr8258_pm_last_raw_status =
-		tlsr8258_pm_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
+		tlsr8258_analog_read(TLSR8258_AREG_WAKEUP_STATUS) &
 		TLSR8258_WAKEUP_STATUS_ALL;
 	tlsr8258_pm_last_reason =
 		tlsr8258_pm_reason_from_status(tlsr8258_pm_last_raw_status);
 	tlsr8258_pm_gpio_wakeup_mask = 0U;
 	for (port = 0U; port <= TLSR8258_PM_GPIO_PORT_D; port++) {
 		tlsr8258_pm_gpio_wakeup_mask |=
-			(uint32_t)tlsr8258_pm_analog_read((uint8_t)(0x27U + port)) <<
+			(uint32_t)tlsr8258_analog_read((uint8_t)(0x27U + port)) <<
 			(port * 8U);
 	}
-	marker = tlsr8258_pm_analog_read(TLSR8258_AREG_DEEP_SLEEP_MARKER);
+	marker = tlsr8258_analog_read(TLSR8258_AREG_DEEP_SLEEP_MARKER);
 	tlsr8258_pm_deep_wake_pending = (marker == TLSR8258_PM_DEEP_SLEEP_MARKER);
-	tlsr8258_pm_retained_counter_valid = false;
-	if (tlsr8258_pm_deep_wake_pending) {
-		retained_counter =
-			(uint32_t)tlsr8258_pm_analog_read(TLSR8258_AREG_FRAME_COUNTER0) |
-			((uint32_t)tlsr8258_pm_analog_read(TLSR8258_AREG_FRAME_COUNTER1) << 8) |
-			((uint32_t)tlsr8258_pm_analog_read(TLSR8258_AREG_FRAME_COUNTER2) << 16) |
-			((uint32_t)tlsr8258_pm_analog_read(TLSR8258_AREG_FRAME_COUNTER3) << 24);
-		checksum = tlsr8258_pm_analog_read(TLSR8258_AREG_FRAME_COUNTER_CSUM);
-		if (checksum == tlsr8258_pm_frame_counter_checksum(retained_counter)) {
-			tlsr8258_pm_retained_counter = retained_counter;
-			tlsr8258_pm_retained_counter_valid = true;
-		}
-	}
-
 	return 0;
 }
 
