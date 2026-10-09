@@ -21,6 +21,7 @@
 		zephyr,flash = &flash;
 		zephyr,console = &uart0;
 		zephyr,code-partition = &app_partition;
+		zigbee,retained-mem = &retained_analog;
 	};
 
 	leds {
