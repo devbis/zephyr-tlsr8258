@@ -704,6 +704,46 @@ __weak void zb_platform_radio_rx_poll(void)
 {
 }
 
+#if defined(CONFIG_ZIGBEE_ED)
+/*
+ * An end device never opens permit join, so the commissioning save that
+ * bdb_mgmtPermitJoiningConfirm() schedules on the parent never runs for it.
+ * Save the joined state once per join, as soon as the stack is idle. A delay
+ * here let deep sleep start first, so the state never reached flash and the
+ * device woke without a joined network. The idle checks in
+ * zb_ed_join_save_service() keep the flash write out of the join exchange.
+ */
+#define ZB_ED_JOIN_SAVE_DELAY_MS 0U
+
+static bool zb_ed_join_save_was_joined;
+static bool zb_ed_join_save_armed;
+static uint32_t zb_ed_join_save_at;
+
+static void zb_ed_join_save_service(void)
+{
+	bool joined = (g_zbNwkCtx.joined != 0U) && (aps_ib.aps_authenticated != 0U);
+
+	if (!joined) {
+		zb_ed_join_save_was_joined = false;
+		zb_ed_join_save_armed = false;
+		return;
+	}
+
+	if (!zb_ed_join_save_was_joined) {
+		zb_ed_join_save_was_joined = true;
+		zb_ed_join_save_armed = true;
+		zb_ed_join_save_at = k_uptime_get_32() + ZB_ED_JOIN_SAVE_DELAY_MS;
+		return;
+	}
+
+	if (zb_ed_join_save_armed && ((int32_t)(zb_ed_join_save_at - k_uptime_get_32()) <= 0) &&
+	    zdo_ifZdoNwkManagerIdle() && zb_taskq_is_empty()) {
+		zb_ed_join_save_armed = false;
+		zb_info_save(NULL);
+	}
+}
+#endif
+
 static void zb_thread_fn(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -745,6 +785,9 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	LOG_INF("Zigbee thread started");
 
 	while (1) {
+#if defined(CONFIG_ZIGBEE_ED)
+		zb_ed_join_save_service();
+#endif
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 		zb_zbhci_uart_poll();
 #endif
