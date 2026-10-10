@@ -158,7 +158,14 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 		entry.potentialParent = 1;
 	}
 
-	entry.potentialParent = entry.permitJoining && entry.potentialParent;
+	/*
+	 * A rejoin is not a join: the parent accepts a known end device whether or
+	 * not association is currently permitted, so the permit-join bit must not
+	 * drop the parent from the rejoin scan.
+	 */
+	if (state != NLME_STATE_REJOIN) {
+		entry.potentialParent = entry.permitJoining && entry.potentialParent;
+	}
 	entry.deviceType = ((ind->panDesc.superframeSpec & 0x4000U) != 0U)
 				   ? NWK_DEVICE_TYPE_COORDINATOR
 				   : NWK_DEVICE_TYPE_ROUTER;
