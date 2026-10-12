@@ -29,6 +29,11 @@ static const uint8_t tlsr8258_wakeup_analog[][2] = {
 	{0x0bu, 0x38u},
 	{0x8cu, 0x02u},
 	{0x02u, 0xa2u},
+	/*
+	 * Flash voltage: the vendor writes it after the efuse check. The RC 32k
+	 * calibration does not complete without it.
+	 */
+	{0x0cu, 0xc6u},
 };
 
 static void tlsr8258_analog_write(uint8_t addr, uint8_t value)
