@@ -700,11 +700,12 @@ __weak void zb_platform_radio_rx_poll(void)
 /*
  * An end device never opens permit join, so the commissioning save that
  * bdb_mgmtPermitJoiningConfirm() schedules on the parent never runs for it.
- * Save the joined state once per join, after the interview has had time to
- * complete: the flash write masks interrupts and would drop the trust
- * centre's frames if it ran during the join.
+ * Save the joined state once per join, as soon as the stack is idle. A delay
+ * here let deep sleep start first, so the state never reached flash and the
+ * device woke without a joined network. The idle checks in
+ * zb_ed_join_save_service() keep the flash write out of the join exchange.
  */
-#define ZB_ED_JOIN_SAVE_DELAY_MS 15000U
+#define ZB_ED_JOIN_SAVE_DELAY_MS 0U
 
 static bool zb_ed_join_save_was_joined;
 static bool zb_ed_join_save_armed;
