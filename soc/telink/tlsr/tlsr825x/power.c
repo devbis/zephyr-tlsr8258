@@ -792,4 +792,4 @@ static int tlsr8258_pm_post_wake_init(void)
 	return 0;
 }
 
-SYS_INIT(tlsr8258_pm_post_wake_init, APPLICATION, 0);
+SYS_INIT(tlsr8258_pm_post_wake_init, PRE_KERNEL_1, 0);
