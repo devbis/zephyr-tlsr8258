@@ -482,6 +482,13 @@ static void zb_core_bootstrap_once(void)
 			if (poll_rate == 0U) {
 				poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
 			}
+			/*
+			 * zb_platform_zdo_attr_init() resets the indirect poll rate to 1000 ms on
+			 * every boot, so zdo_set_pollRate() would take its unchanged-rate early
+			 * return and never create the poll timer. Clear the cached rate so the
+			 * call arms it.
+			 */
+			zdo_af_set_syn_rate(0U);
 			zdo_set_pollRate(poll_rate);
 			if (zb_platform_radio_start_on_channel(g_zbMacPib.phyChannelCur) != 0) {
 				LOG_ERR("deep-sleep wake: radio recovery failed");
