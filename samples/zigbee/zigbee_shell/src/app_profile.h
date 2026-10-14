@@ -18,8 +18,29 @@
 #define APP_PROFILE_ENDPOINT        0x01U
 
 /* Authoritative identity strings (single source of truth) */
+#if defined(CONFIG_SOC_FAMILY_TELINK_TLSR)
 #define APP_PROFILE_MFR_NAME        "Telink"
-#define APP_PROFILE_MODEL_ID        "tlsr8258-zigbee-shell"
+#elif defined(CONFIG_SOC_FAMILY_ESPRESSIF_ESP32)
+#define APP_PROFILE_MFR_NAME        "Espressif"
+#elif defined(CONFIG_SOC_FAMILY_NORDIC_NRF)
+#define APP_PROFILE_MFR_NAME        "Nordic Semiconductors"
+#else
+#define APP_PROFILE_MFR_NAME        "Unknown"
+#endif
+
+#if defined(CONFIG_SOC)
+#define APP_PROFILE_SOC_NAME        CONFIG_SOC
+#else
+#define APP_PROFILE_SOC_NAME        "unknown"
+#endif
+
+#if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
+#define APP_PROFILE_ZIGBEE_ROLE     "router"
+#else
+#define APP_PROFILE_ZIGBEE_ROLE     "ed"
+#endif
+
+#define APP_PROFILE_MODEL_ID        APP_PROFILE_SOC_NAME "-zigbee-" APP_PROFILE_ZIGBEE_ROLE
 
 /*
  * Initialize the ZCL layer and register the application endpoint.
