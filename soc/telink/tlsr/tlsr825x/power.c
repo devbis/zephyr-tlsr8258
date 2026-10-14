@@ -79,6 +79,18 @@ extern void start_suspend(void);
 #define TLSR8258_AREG_0X26           0x26u
 #define TLSR8258_AREG_0X2B           0x2bu
 #define TLSR8258_AREG_0X2C           0x2cu
+#define TLSR8258_AREG_0X2B_SUSPEND_VALUE 0x5eu
+#define TLSR8258_AREG_0X2B_DEEP_VALUE \
+	(TLSR8258_AREG_0X2B_SUSPEND_VALUE | BIT(7))
+/* Observed AREG 0x2c patterns 0x56, 0x96 and 0xd6 share bits [4, 2, 1];
+ * their mode value is in [7:6].
+ */
+#define TLSR8258_AREG_0X2C_BASE_BITS (BIT(4) | BIT(2) | BIT(1))
+#define TLSR8258_AREG_0X2C_SLEEP_STATE_SHIFT 6u
+#define TLSR8258_AREG_0X2C_SLEEP_STATE_SUSPEND (0x02u << TLSR8258_AREG_0X2C_SLEEP_STATE_SHIFT)
+#define TLSR8258_AREG_0X2C_SLEEP_STATE_DEEP (0x03u << TLSR8258_AREG_0X2C_SLEEP_STATE_SHIFT)
+#define TLSR8258_AREG_0X2C_COMPARATOR_WAKEUP BIT(3)
+#define TLSR8258_AREG_0X2C_TIMER_WAKEUP      BIT(0)
 #define TLSR8258_AREG_0X7E           0x7eu
 #define TLSR8258_AREG_WAKEUP_STATUS  0x44u
 #define TLSR8258_AREG_PM_STATUS      0x7fu
@@ -474,21 +486,30 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 	TLSR8258_REG_CLK_SEL = 0u;
 
 	if (deep) {
-		tlsr8258_analog_write(TLSR8258_AREG_0X2B, 0xdeu);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2B,
+				     TLSR8258_AREG_0X2B_DEEP_VALUE);
 		/*
-		 * 0xde: comparator bit set, timer bit clear, as the vendor deep-sleep
-		 * path writes it. With the timer bit (0xd7) the wake did not fire.
+		 * The deep-sleep path sets the comparator wake bit (bit 3). Replacing
+		 * it with the timer wake bit (bit 0), producing 0xd7, did not wake the
+		 * device on hardware.
 		 */
-		tlsr8258_analog_write(TLSR8258_AREG_0X2C, 0xdeu);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2C,
+				     (uint8_t)(TLSR8258_AREG_0X2C_BASE_BITS |
+					       TLSR8258_AREG_0X2C_SLEEP_STATE_DEEP |
+					       TLSR8258_AREG_0X2C_COMPARATOR_WAKEUP));
 		tlsr8258_analog_write(TLSR8258_AREG_LDO_SETTING1,
 					 (tlsr8258_analog_read(TLSR8258_AREG_LDO_SETTING1) &
 					  (uint8_t)~0x07u) |
 						 5u);
 	} else {
 		tlsr8258_analog_write(TLSR8258_AREG_0X04, 0x48u);
-		tlsr8258_analog_write(TLSR8258_AREG_0X2B, 0x5eu);
+		tlsr8258_analog_write(TLSR8258_AREG_0X2B,
+				     TLSR8258_AREG_0X2B_SUSPEND_VALUE);
 		tlsr8258_analog_write(TLSR8258_AREG_0X2C,
-					 (uint8_t)(0x96u | 0x16u | (timer_wakeup ? 1u : 0u)));
+				     (uint8_t)(TLSR8258_AREG_0X2C_BASE_BITS |
+					       TLSR8258_AREG_0X2C_SLEEP_STATE_SUSPEND |
+					       (timer_wakeup ? TLSR8258_AREG_0X2C_TIMER_WAKEUP :
+							0u)));
 		tlsr8258_analog_write(TLSR8258_AREG_LDO_SETTING1,
 					 (tlsr8258_analog_read(TLSR8258_AREG_LDO_SETTING1) &
 					  (uint8_t)~0x07u) |
