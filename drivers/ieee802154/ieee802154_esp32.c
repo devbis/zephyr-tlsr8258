@@ -615,6 +615,10 @@ static const struct ieee802154_radio_api esp32_radio_api = {
 #define L2 OPENTHREAD_L2
 #define L2_CTX_TYPE NET_L2_GET_CTX_TYPE(OPENTHREAD_L2)
 #define MTU 1280
+#elif defined(CONFIG_NET_L2_CUSTOM_IEEE802154)
+#define L2 CUSTOM_IEEE802154_L2
+#define L2_CTX_TYPE NET_L2_GET_CTX_TYPE(CUSTOM_IEEE802154_L2)
+#define MTU CONFIG_NET_L2_CUSTOM_IEEE802154_MTU
 #endif
 
 /* clang-format off */
