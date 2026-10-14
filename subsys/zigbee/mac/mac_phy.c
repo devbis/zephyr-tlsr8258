@@ -227,7 +227,7 @@ static void rf_mac_ack_build(void)
 }
 
 /*********************************************************************
- * @fn      rf_init
+ * @fn      zb_mac_phy_init
  *
  * @brief   Initialize RF module and do the RF power up.
  *
@@ -235,7 +235,7 @@ static void rf_mac_ack_build(void)
  *
  * @return  none
  */
-void rf_init(void)
+void zb_mac_phy_init(void)
 {
     rf_reset();
 
