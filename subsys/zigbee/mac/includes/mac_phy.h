@@ -155,7 +155,7 @@ void rf_reset(void);
 #define mac_phyReconfig()       rf_reset();
 
 /*********************************************************************
- * @fn      rf_init
+ * @fn      zb_mac_phy_init
  *
  * @brief   Initialize RF module and do the RF power up.
  *
@@ -163,7 +163,7 @@ void rf_reset(void);
  *
  * @return  none
  */
-void rf_init(void);
+void zb_mac_phy_init(void);
 
 /*********************************************************************
  * @fn      rf_setRxBuf

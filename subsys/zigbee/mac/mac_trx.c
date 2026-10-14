@@ -540,7 +540,7 @@ void mac_trxInit(void)
 	tx_fifo_wptr = 0;
 	memset(&mac_trx_vars, 0, sizeof(mac_trx_vars));
 	g_pTxQueue = g_txQueue;
-	rf_init();
+	zb_mac_phy_init();
 }
 
 u8 mac_getTrxState(void)

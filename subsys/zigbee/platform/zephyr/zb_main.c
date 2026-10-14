@@ -76,7 +76,6 @@ void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
 	}
 }
 
-extern void rf_init(void);
 extern void aps_init(void);
 extern void tl_zbMacInit(u8 coldReset);
 extern void tl_zbNwkInit(u8 coldReset);
@@ -411,7 +410,7 @@ static void zb_core_bootstrap_once(void)
 			zb_radio_port_update_filters(MAC_INVALID_PANID, MAC_SHORT_ADDR_BROADCAST,
 						     g_zbMacPib.extAddress);
 		}
-		rf_init();
+		zb_mac_phy_init();
 		zb_core_init_done = true;
 	}
 
