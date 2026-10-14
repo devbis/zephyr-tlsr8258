@@ -57,7 +57,7 @@ struct zb_radio_ctx {
 static struct zb_radio_ctx g_radio;
 
 /*
- * The imported rf_init() arms a vendor RX DMA buffer and clears its header
+ * The Zigbee MAC PHY init arms a vendor RX DMA buffer and clears its header
  * (ZB_RADIO_RX_BUF_CLEAR writes bytes 0 and 4). Frames are received through
  * the driver sink into zb_bufs instead, so this buffer only absorbs those
  * writes.
