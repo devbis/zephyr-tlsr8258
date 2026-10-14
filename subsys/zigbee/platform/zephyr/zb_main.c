@@ -27,6 +27,7 @@
 #include "zdo/zdo_api.h"
 #include "ss_security_flags.h"
 #if defined(CONFIG_ZIGBEE_ED)
+#include "nwk/includes/nwk_addr_map.h"
 #include "zb_ed_sleep.h"
 #endif
 #if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
@@ -170,6 +171,10 @@ static bool zb_waiting_for_radio_log;
 static bool zb_persistent_rejoin_in_progress;
 /* Set once a router or coordinator has been set up as a parent. */
 static bool zb_parenting_enabled;
+
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+static void zb_ed_join_save_restored(void);
+#endif
 
 void zb_platform_network_left(void)
 {
@@ -480,6 +485,7 @@ static void zb_core_bootstrap_once(void)
 		    (g_zbMacPib.phyChannelCur <= 26U)) {
 			uint32_t poll_rate = zdo_af_get_syn_rate();
 
+			zb_ed_join_save_restored();
 			if (poll_rate == 0U) {
 				poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
 			}
@@ -719,6 +725,15 @@ static bool zb_ed_join_save_was_joined;
 static bool zb_ed_join_save_armed;
 static uint32_t zb_ed_join_save_at;
 
+#if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
+static void zb_ed_join_save_restored(void)
+{
+	/* The joined state and parent already exist in NV on a timed wake. */
+	zb_ed_join_save_was_joined = true;
+	zb_ed_join_save_armed = false;
+}
+#endif
+
 static void zb_ed_join_save_service(void)
 {
 	bool joined = (g_zbNwkCtx.joined != 0U) && (aps_ib.aps_authenticated != 0U);
@@ -739,6 +754,8 @@ static void zb_ed_join_save_service(void)
 	if (zb_ed_join_save_armed && ((int32_t)(zb_ed_join_save_at - k_uptime_get_32()) <= 0) &&
 	    zdo_ifZdoNwkManagerIdle() && zb_taskq_is_empty()) {
 		zb_ed_join_save_armed = false;
+		/* Parent polling after a reset needs the persisted neighbor entry too. */
+		(void)nwk_parentNodeInfoStore();
 		zb_info_save(NULL);
 	}
 }
