@@ -202,7 +202,7 @@ static bool zb_platform_bdb_restore_joined_target(void)
 	}
 
 	zb_ed_fixed_join_target(g_zbMacPib.phyChannelCur, g_zbMacPib.panId,
-				g_zbMacPib.coordShortAddress, g_zbNIB.extPANId, nwkKey,
+				g_zbMacPib.shortAddress, g_zbNIB.extPANId, nwkKey,
 				ss_ib.trust_center_address);
 	zb_radio_port_update_filters(g_zbMacPib.panId, g_zbMacPib.shortAddress,
 				     g_zbMacPib.extAddress);
