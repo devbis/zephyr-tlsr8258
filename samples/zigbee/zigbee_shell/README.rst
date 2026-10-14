@@ -18,15 +18,16 @@ Requirements
 ************
 
 A board with an IEEE 802.15.4 radio supported by the Zigbee platform layer,
-for example ``tlsr8258_tb03f`` or ``nrf52840dk/nrf52840``, and a Zigbee
-coordinator with permit join open.
+for example ``tlsr8258_tb03f``, ``nrf52840dk/nrf52840``,
+``esp32c6_devkitc/esp32c6/hpcore`` or ``esp32h2_devkitm/esp32h2``, and a
+Zigbee coordinator with permit join open. The ESP32-C6 and ESP32-H2 board
+configurations scan channel 11.
 
 Building and Running
 ********************
 
 .. zephyr-app-commands::
    :zephyr-app: samples/zigbee/zigbee_shell
-   :board: tlsr8258_tb03f
-   :gen-args: -DEXTRA_CONF_FILE=router.conf
+   :board: esp32c6_devkitc/esp32c6/hpcore
    :goals: build flash
    :compact:
