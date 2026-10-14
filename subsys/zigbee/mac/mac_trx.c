@@ -551,7 +551,7 @@ void mac_trxInit(void)
 {
 	memset(&mac_trx_vars, 0, sizeof(mac_trx_vars));
 	g_pTxQueue = g_txQueue;
-	rf_init();
+	zb_mac_phy_init();
 }
 
 uint8_t mac_getTrxState(void)
