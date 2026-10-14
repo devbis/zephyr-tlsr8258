@@ -17,6 +17,8 @@
 
 #include "app_profile.h"
 
+#include <string.h>
+
 /*
  * In a real Zephyr build pull in the ZCL/AF SDK headers.
  * In the host-test harness the test file provides all stubs before
@@ -67,33 +69,12 @@ static const u8 app_basic_power_src = 0x03U; /* Battery (0x03) */
 static const u16 app_basic_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 /* Manufacturer name and model ID as ZCL CHAR_STR (length-prefixed). */
-static const u8 app_basic_mfr_name[] = {
-	sizeof(APP_PROFILE_MFR_NAME) - 1U, 'T', 'e', 'l', 'i', 'n', 'k',
+static u8 app_basic_mfr_name[1U + sizeof(APP_PROFILE_MFR_NAME)] = {
+	sizeof(APP_PROFILE_MFR_NAME) - 1U,
 };
 
-static const u8 app_basic_model_id[] = {
+static u8 app_basic_model_id[1U + sizeof(APP_PROFILE_MODEL_ID)] = {
 	sizeof(APP_PROFILE_MODEL_ID) - 1U,
-	't',
-	'l',
-	's',
-	'r',
-	'8',
-	'2',
-	'5',
-	'8',
-	'-',
-	'z',
-	'i',
-	'g',
-	'b',
-	'e',
-	'e',
-	'-',
-	's',
-	'h',
-	'e',
-	'l',
-	'l',
 };
 
 static const zclAttrInfo_t app_basic_attr_tbl[] = {
@@ -186,6 +167,9 @@ static zcl_specClusterInfo_t app_cluster_info[] = {
 
 void app_profile_register(void)
 {
+	memcpy(&app_basic_mfr_name[1], APP_PROFILE_MFR_NAME, sizeof(APP_PROFILE_MFR_NAME));
+	memcpy(&app_basic_model_id[1], APP_PROFILE_MODEL_ID, sizeof(APP_PROFILE_MODEL_ID));
+
 	zcl_init(NULL);
 
 	if (af_simpleDescGet(APP_PROFILE_ENDPOINT) == NULL) {
