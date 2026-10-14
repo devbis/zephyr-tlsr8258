@@ -11,7 +11,7 @@
 #include <zephyr/sys/util.h>
 
 #define TLSR8258_REG_RST_CLK0 (*(volatile uint32_t *)0x00800060u)
-#define TLSR8258_REG_RST_CLK1 (*(volatile uint32_t *)0x00800064u)
+#define TLSR8258_REG8(addr) (*(volatile uint8_t *)(addr))
 
 #define TLSR8258_REG_TMR_CTRL  (*(volatile uint32_t *)0x00800620u)
 #define TLSR8258_FLD_TMR_WD_EN BIT(23)
@@ -71,11 +71,6 @@ static const uint8_t tlsr8258_wakeup_analog[][2] = {
 	{0x0bu, 0x38u},
 	{0x8cu, 0x02u},
 	{0x02u, 0xa2u},
-	/*
-	 * Flash voltage: the vendor writes it after the efuse check. The RC 32k
-	 * calibration does not complete without it.
-	 */
-	{0x0cu, 0xc6u},
 };
 
 static void tlsr8258_analog_write(uint8_t addr, uint8_t value)
@@ -95,7 +90,9 @@ void soc_prep_hook(void)
 	 * peripheral resets and enable their clocks, then stop the watchdog.
 	 */
 	TLSR8258_REG_RST_CLK0 = 0xff000000u;
-	TLSR8258_REG_RST_CLK1 = 0x0006ffffu;
+	/* clk_en1 and clk_en2 only; a word store would also write reg_clk_sel (0x66). */
+	TLSR8258_REG8(0x00800064u) = 0xffu;
+	TLSR8258_REG8(0x00800065u) = 0xffu;
 
 	TLSR8258_REG_TMR_CTRL &= ~TLSR8258_FLD_TMR_WD_EN;
 }
