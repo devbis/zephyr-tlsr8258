@@ -82,6 +82,11 @@ extern void start_suspend(void);
 #define TLSR8258_AREG_0X7E           0x7eu
 #define TLSR8258_AREG_WAKEUP_STATUS  0x44u
 #define TLSR8258_AREG_PM_STATUS      0x7fu
+#define TLSR8258_AREG_32K_TICK0      0x40u
+#define TLSR8258_AREG_32K_TICK1      0x41u
+#define TLSR8258_AREG_32K_TICK2      0x42u
+#define TLSR8258_AREG_32K_TICK3      0x43u
+#define TLSR8258_AREG_DEEP2          0x3cu
 #define TLSR8258_AREG_DEEP_SLEEP_MARKER 0x3au
 #define TLSR8258_PM_DEEP_SLEEP_MARKER 0xa5u
 
@@ -208,29 +213,80 @@ static enum tlsr8258_pm_wakeup_reason tlsr8258_pm_reason_from_status(uint32_t st
 	return TLSR8258_PM_WAKEUP_NONE;
 }
 
+/*
+ * The 32 kHz counter is a 32-bit value in analog registers 0x40..0x43, least
+ * significant byte first. The bytes are read one at a time while the counter
+ * runs, so two consecutive samples must agree to within one count.
+ */
+static uint32_t tlsr8258_pm_read_32k_tick_raw(void)
+{
+	uint32_t value = tlsr8258_analog_read(TLSR8258_AREG_32K_TICK3);
+
+	value = (value << 8) | tlsr8258_analog_read(TLSR8258_AREG_32K_TICK2);
+	value = (value << 8) | tlsr8258_analog_read(TLSR8258_AREG_32K_TICK1);
+	value = (value << 8) | tlsr8258_analog_read(TLSR8258_AREG_32K_TICK0);
+
+	return value;
+}
+
+/*
+ * System ticks per 16 counts of the 32 kHz counter, as the sleep routine uses
+ * it. The internal RC runs off its nominal frequency on this chip, so the
+ * constant is replaced by a measurement taken against the 16 MHz system tick.
+ */
+static uint32_t tlsr8258_pm_get_32k_tick(void);
+
+static bool tlsr8258_pm_calib_measured;
+static volatile uint16_t tlsr8258_pm_calib = TLSR8258_PM_TICK_32K_CALIB;
+
+#define TLSR8258_PM_CALIB_WINDOW_TICKS (20u * 1000u * TLSR8258_PM_SYS_TICK_PER_US)
+
+static void tlsr8258_pm_measure_calib(void)
+{
+	uint32_t t0 = TLSR8258_REG_SYSTEM_TICK;
+	uint32_t c0 = tlsr8258_pm_get_32k_tick();
+	uint32_t c1;
+	uint32_t dt;
+	uint32_t dc;
+
+	/* Bounded: the system tick may not run yet this early in boot. */
+	for (uint32_t spins = 0u; spins < 4000000u; spins++) {
+		if ((TLSR8258_REG_SYSTEM_TICK - t0) >= TLSR8258_PM_CALIB_WINDOW_TICKS) {
+			break;
+		}
+	}
+	c1 = tlsr8258_pm_get_32k_tick();
+	dt = TLSR8258_REG_SYSTEM_TICK - t0;
+	dc = c1 - c0;
+
+	if ((dt >= TLSR8258_PM_CALIB_WINDOW_TICKS) && (dc >= 100u)) {
+		uint32_t calib = ((uint64_t)dt * 16u) / dc;
+
+		if (calib > 0u && calib < 0xffffu) {
+			tlsr8258_pm_calib = (uint16_t)calib;
+		}
+	}
+}
+
+uint16_t tlsr8258_pm_get_calib(void)
+{
+	if (!tlsr8258_pm_calib_measured) {
+		tlsr8258_pm_calib_measured = true;
+		tlsr8258_pm_measure_calib();
+	}
+	return tlsr8258_pm_calib;
+}
+
 static uint32_t tlsr8258_pm_get_32k_tick(void)
 {
-	uint32_t t0 = 0u;
-	uint32_t t1 = 0u;
-	uint32_t n = 0u;
-
 	while (true) {
-		t0 = t1;
-		t1 = tlsr8258_analog_read(0x47u);
-		t1 = (t1 << 8) | tlsr8258_analog_read(0x46u);
-		t1 = (t1 << 8) | tlsr8258_analog_read(0x45u);
-		t1 = (t1 << 8) | tlsr8258_analog_read(0x43u);
-		if (n != 0u) {
-			if ((t1 - t0) < 2u) {
-				return t1;
-			}
+		uint32_t prev = tlsr8258_pm_read_32k_tick_raw();
+		uint32_t value = tlsr8258_pm_read_32k_tick_raw();
+		uint32_t delta = value - prev;
 
-			if ((t0 ^ t1) == 1u) {
-				return t0;
-			}
+		if (delta <= 1u) {
+			return (delta == 1u) ? prev : value;
 		}
-
-		n++;
 	}
 }
 
@@ -358,11 +414,15 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 					uint32_t wakeup_tick, uint32_t wakeup_src)
 {
+	if (!tlsr8258_pm_calib_measured) {
+		tlsr8258_pm_calib_measured = true;
+		tlsr8258_pm_measure_calib();
+	}
 	unsigned int irq_key = arch_irq_lock();
 	uint32_t t0 = TLSR8258_REG_SYSTEM_TICK;
 	bool timer_wakeup = (wakeup_src & TLSR8258_PM_WAKEUP_TIMER_BITS) != 0u;
 	uint8_t wakeup_src_u8 = (uint8_t)wakeup_src;
-	uint16_t calib = TLSR8258_PM_TICK_32K_CALIB;
+	uint16_t calib = tlsr8258_pm_calib;
 	bool deep = (sleep_mode == TLSR8258_PM_SLEEP_DEEP);
 	bool wake_gate_ready;
 
@@ -415,8 +475,11 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 
 	if (deep) {
 		tlsr8258_analog_write(TLSR8258_AREG_0X2B, 0xdeu);
-		tlsr8258_analog_write(TLSR8258_AREG_0X2C,
-					 (uint8_t)(0x16u | 0xc0u | (timer_wakeup ? 1u : 0u)));
+		/*
+		 * 0xde: comparator bit set, timer bit clear, as the vendor deep-sleep
+		 * path writes it. With the timer bit (0xd7) the wake did not fire.
+		 */
+		tlsr8258_analog_write(TLSR8258_AREG_0X2C, 0xdeu);
 		tlsr8258_analog_write(TLSR8258_AREG_LDO_SETTING1,
 					 (tlsr8258_analog_read(TLSR8258_AREG_LDO_SETTING1) &
 					  (uint8_t)~0x07u) |
@@ -439,6 +502,11 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 	 */
 	TLSR8258_REG_PM_RET_SRAM_CTRL = 0x08u;
 	tlsr8258_analog_write(TLSR8258_AREG_PM_STATUS, 1u);
+	if (deep) {
+		/* The vendor sets this before every deep sleep entry. */
+		tlsr8258_analog_write(TLSR8258_AREG_DEEP2,
+				      tlsr8258_analog_read(TLSR8258_AREG_DEEP2) | 0x02u);
+	}
 	tlsr8258_analog_write(TLSR8258_AREG_0X20,
 				 (uint8_t)(0x7fu - ((0xfa00u + (calib >> 1)) / calib)));
 	tlsr8258_analog_write(
@@ -447,11 +515,14 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 			   (calib >> 1)) /
 			  calib));
 
+	/*
+	 * The wake time is on the 32 kHz counter: the 32k count now plus the
+	 * system ticks left until the target converted with the calibration.
+	 */
 	if (tlsr8258_pm_long_suspend != 0u) {
-		wake_tick = target - ((d / calib) << 4) + tlsr8258_pm_tick_32k_cur;
+		wake_tick = ((d / calib) << 4) + tlsr8258_pm_tick_32k_cur;
 	} else {
-		wake_tick = target - (((d << 4) + (calib >> 1)) / calib) +
-			    tlsr8258_pm_tick_32k_cur;
+		wake_tick = (((d << 4) + (calib >> 1)) / calib) + tlsr8258_pm_tick_32k_cur;
 	}
 
 	TLSR8258_REG_SYSTEM_TICK_MODE = 0x2cu;
@@ -486,6 +557,8 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 		 */
 		uint32_t st;
 
+		tlsr8258_analog_write(TLSR8258_AREG_DEEP2,
+				      tlsr8258_analog_read(TLSR8258_AREG_DEEP2) & (uint8_t)~0x02u);
 		if (!wake_gate_ready) {
 			/*
 			 * The analog wake gate rejected entry. Restore the clock and
@@ -762,7 +835,7 @@ static int tlsr8258_pm_init(void)
 	return 0;
 }
 
-SYS_INIT(tlsr8258_pm_init, PRE_KERNEL_2, CONFIG_SYSTEM_CLOCK_INIT_PRIORITY);
+SYS_INIT(tlsr8258_pm_init, PRE_KERNEL_1, 0);
 
 /*
  * Deep sleep restarts the SoC, so entering it is never transparent to the
@@ -792,4 +865,4 @@ static int tlsr8258_pm_post_wake_init(void)
 	return 0;
 }
 
-SYS_INIT(tlsr8258_pm_post_wake_init, PRE_KERNEL_1, 0);
+SYS_INIT(tlsr8258_pm_post_wake_init, PRE_KERNEL_1, 1);
