@@ -12,6 +12,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_port, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -68,11 +69,12 @@ int zb_radio_port_get_ieee_addr(uint8_t ieee_addr[8])
 	}
 
 	link_addr = net_if_get_link_addr(iface);
-	if ((link_addr == NULL) || (link_addr->addr == NULL) || (link_addr->len != 8U)) {
+	if ((link_addr == NULL) || (link_addr->len != 8U)) {
 		return -EINVAL;
 	}
 
-	memcpy(ieee_addr, link_addr->addr, 8U);
+	/* net_linkaddr is big-endian; the Zigbee stack uses little-endian. */
+	sys_memcpy_swap(ieee_addr, link_addr->addr, 8U);
 	return 0;
 #endif
 }

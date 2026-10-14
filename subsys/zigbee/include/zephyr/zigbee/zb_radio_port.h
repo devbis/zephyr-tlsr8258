@@ -35,7 +35,8 @@ int zb_radio_port_radio_get(const struct device **dev,
  *
  * Each radio port implementation must provide this function.
  *
- * @param ieee_addr Buffer that receives the 64-bit IEEE address.
+ * @param ieee_addr Buffer that receives the 64-bit IEEE address in little-endian
+ *                  byte order, as used by the Zigbee stack.
  *
  * @retval 0 Address copied successfully.
  * @retval -EINVAL The output buffer is invalid or the address length is unsupported.
