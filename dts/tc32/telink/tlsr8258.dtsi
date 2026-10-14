@@ -87,13 +87,13 @@
 	};
 
 	/*
-	 * Analog registers 0x35..0x3a are not reset by a deep-sleep wake and
-	 * hold six bytes for the firmware.
+	 * Analog registers 0x35..0x39 are not reset by a deep-sleep wake and
+	 * hold five bytes for the firmware; 0x3a is the SoC deep-sleep marker.
 	 */
 	retained_analog: retained-analog {
 		compatible = "telink,tlsr8258-analog-retained";
 		analog-address = <0x35>;
-		size = <6>;
+		size = <5>;
 	};
 
 	cpus {
