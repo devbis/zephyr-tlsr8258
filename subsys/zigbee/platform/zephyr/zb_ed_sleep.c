@@ -54,7 +54,6 @@ enum zb_ed_sleep_reject_reason {
 	ZB_ED_SLEEP_REJECT_NETWORK_BUSY,
 	ZB_ED_SLEEP_REJECT_MAC_BUSY,
 	ZB_ED_SLEEP_REJECT_TASK_QUEUE,
-	ZB_ED_SLEEP_REJECT_TRANSIENT_TIMER,
 	ZB_ED_SLEEP_REJECT_NO_DEADLINE,
 	ZB_ED_SLEEP_REJECT_SHORT_INTERVAL,
 	ZB_ED_SLEEP_REJECT_RADIO,
@@ -146,18 +145,19 @@ static bool zb_ed_sleep_ready(void)
 		return false;
 	}
 
-	if (ev_timer_has_other_than(poll_evt)) {
-		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TRANSIENT_TIMER);
-		return false;
-	}
-
+	/*
+	 * Other timers (the ZCL second clock, the commissioning info save, an
+	 * application retry) are not state that has to survive the sleep: their
+	 * owners arm them again after the restart. The device wakes for the
+	 * nearest of them, which is never later than the poll.
+	 */
 	nearest_evt = ev_timer_nearestGet();
-	if (nearest_evt != poll_evt) {
-		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_TRANSIENT_TIMER);
+	if (nearest_evt == NULL) {
+		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_NO_DEADLINE);
 		return false;
 	}
 
-	sleep_ms = ev_timer_timeout_get(poll_evt);
+	sleep_ms = ev_timer_timeout_get(nearest_evt);
 	if (sleep_ms < ZB_ED_SLEEP_MIN_INTERVAL_MS) {
 		zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_SHORT_INTERVAL);
 		return false;
@@ -167,11 +167,10 @@ static bool zb_ed_sleep_ready(void)
 }
 
 /*
- * Layout of the record kept in the retained memory across a deep sleep: a
- * magic byte, the outgoing frame counter and an XOR checksum over both.
+ * Layout of the record kept in the retained memory across a deep sleep: the
+ * outgoing frame counter and an XOR checksum over it.
  */
-#define ZB_ED_SLEEP_RECORD_MAGIC 0xa5U
-#define ZB_ED_SLEEP_RECORD_SIZE  6U
+#define ZB_ED_SLEEP_RECORD_SIZE 5U
 
 static const struct device *const zb_ed_sleep_retained =
 	DEVICE_DT_GET(DT_CHOSEN(zigbee_retained_mem));
@@ -194,12 +193,11 @@ static void zb_ed_sleep_record_store(uint32_t frame_counter)
 {
 	uint8_t record[ZB_ED_SLEEP_RECORD_SIZE];
 
-	record[0] = ZB_ED_SLEEP_RECORD_MAGIC;
-	record[1] = (uint8_t)frame_counter;
-	record[2] = (uint8_t)(frame_counter >> 8);
-	record[3] = (uint8_t)(frame_counter >> 16);
-	record[4] = (uint8_t)(frame_counter >> 24);
-	record[5] = zb_ed_sleep_record_checksum(record);
+	record[0] = (uint8_t)frame_counter;
+	record[1] = (uint8_t)(frame_counter >> 8);
+	record[2] = (uint8_t)(frame_counter >> 16);
+	record[3] = (uint8_t)(frame_counter >> 24);
+	record[4] = zb_ed_sleep_record_checksum(record);
 
 	(void)retained_mem_write(zb_ed_sleep_retained, 0, record, sizeof(record));
 }
@@ -212,13 +210,12 @@ static bool zb_ed_sleep_record_load(uint32_t *frame_counter)
 		return false;
 	}
 
-	if ((record[0] != ZB_ED_SLEEP_RECORD_MAGIC) ||
-	    (record[5] != zb_ed_sleep_record_checksum(record))) {
+	if (record[4] != zb_ed_sleep_record_checksum(record)) {
 		return false;
 	}
 
-	*frame_counter = (uint32_t)record[1] | ((uint32_t)record[2] << 8) |
-			 ((uint32_t)record[3] << 16) | ((uint32_t)record[4] << 24);
+	*frame_counter = (uint32_t)record[0] | ((uint32_t)record[1] << 8) |
+			 ((uint32_t)record[2] << 16) | ((uint32_t)record[3] << 24);
 
 	return true;
 }
@@ -255,6 +252,7 @@ static int zb_ed_sleep_init(void)
 	}
 
 	pm_notifier_register(&zb_ed_sleep_notifier);
+	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
 
 	return 0;
 }
