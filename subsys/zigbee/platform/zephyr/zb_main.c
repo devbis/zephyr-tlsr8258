@@ -27,6 +27,7 @@
 #include "zdo/zdo_api.h"
 #include "ss_security_flags.h"
 #if defined(CONFIG_ZIGBEE_ED)
+#include "nwk/includes/nwk_addr_map.h"
 #include "zb_ed_sleep.h"
 #endif
 #if defined(CONFIG_ZIGBEE_SLEEPY_DEEP)
@@ -738,6 +739,8 @@ static void zb_ed_join_save_service(void)
 	if (zb_ed_join_save_armed && ((int32_t)(zb_ed_join_save_at - k_uptime_get_32()) <= 0) &&
 	    zdo_ifZdoNwkManagerIdle() && zb_taskq_is_empty()) {
 		zb_ed_join_save_armed = false;
+		/* Parent polling after a reset needs the persisted neighbor entry too. */
+		(void)nwk_parentNodeInfoStore();
 		zb_info_save(NULL);
 	}
 }
