@@ -17,3 +17,10 @@ tests:
   sample.zigbee.node.router:
     extra_args:
       - EXTRA_CONF_FILE=router.conf
+  sample.zigbee.node.coordinator_znp.esp32c6:
+    platform_allow:
+      - esp32c6_devkitc/esp32c6/hpcore
+    integration_platforms:
+      - esp32c6_devkitc/esp32c6/hpcore
+    extra_args:
+      - EXTRA_CONF_FILE=coordinator_znp.conf
