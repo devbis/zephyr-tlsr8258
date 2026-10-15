@@ -159,20 +159,37 @@ config ZIGBEE_GP
 	  ~0.6 KB RAM on top of an already tight RAM budget (~96.6% ->
 	  ~97.8%).
 
-config ZIGBEE_ZBHCI_UART
-	bool "ZBHCI (Zigbee Host Command Interface) over UART"
+config ZIGBEE_NCP
+	bool "Serial network co-processor interface"
 	depends on ZIGBEE_COORDINATOR
 	select SERIAL
-	select UART_INTERRUPT_DRIVEN
-	default n
+	help
+	  Let a host drive the coordinator over a UART, the way it would a
+	  dedicated coordinator adapter. The protocol is chosen below.
+
+if ZIGBEE_NCP
+
+choice ZIGBEE_NCP_PROTOCOL
+	prompt "NCP protocol"
+	default ZIGBEE_NCP_TELINK
+
+config ZIGBEE_NCP_TELINK
+	bool "Telink ZBHCI"
 	help
 	  Expose a narrow subset of Telink's vendor ZBHCI UART protocol
 	  (network start, permit-join, child-node list, AF data send, ZDO
-	  active-EP/simple-desc query) on a UART, so a host tool can drive
-	  the coordinator the same way it would a real Telink coordinator's
+	  active-EP/simple-desc query), so a host tool can drive the
+	  coordinator the same way it would a real Telink coordinator's
 	  serial port. Framing and command-ID layout are adapted from
 	  tl_zigbee_sdk's zbhci/ module (Apache-2.0, Telink Semiconductor);
 	  only the commands listed above are implemented.
+
+endchoice
+
+endif # ZIGBEE_NCP
+
+config ZIGBEE_ZBHCI_UART
+	def_bool ZIGBEE_NCP_TELINK
 
 config ZIGBEE_OTA
 	bool "OTA firmware update"
