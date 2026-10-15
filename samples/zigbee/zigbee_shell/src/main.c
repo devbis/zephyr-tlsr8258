@@ -19,6 +19,9 @@
 #include <zephyr/zigbee/zb_config.h>
 #if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
 #include <zephyr/zigbee/zb_znp.h>
+
+BUILD_ASSERT(DT_HAS_CHOSEN(zigbee_ncp_uart),
+	     "the board overlay must name the host UART as zigbee,ncp-uart");
 #endif
 
 #include "app_bdb.h"
