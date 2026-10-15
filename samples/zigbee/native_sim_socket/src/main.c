@@ -7,7 +7,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 #include <zephyr/zigbee/zb_zbhci.h>
+#elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+#include <zephyr/zigbee/zb_znp.h>
+#endif
 
 #include "app_bdb.h"
 
@@ -41,7 +45,12 @@ bool zb_platform_app_enable_radio_smoke_probe(void)
 
 bool zb_platform_app_should_start_commissioning(void)
 {
+#if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+	/* The host starts network formation. */
+	return false;
+#else
 	return app_bdb_should_start_commissioning();
+#endif
 }
 
 void zb_platform_app_start_commissioning(void)
@@ -57,6 +66,9 @@ void zb_platform_app_network_left(void)
 void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joined_network)
 {
 	app_bdb_commissioning_status(status, joined_network);
+#if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+	zb_znp_bdb_commissioning_status(status, joined_network);
+#endif
 }
 
 int main(void)
@@ -67,6 +79,12 @@ int main(void)
 
 	if (rc != 0) {
 		LOG_ERR("ZBHCI UART init failed (%d)", rc);
+	}
+#elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+	int rc = zb_znp_init(DEVICE_DT_GET(DT_NODELABEL(uart1)));
+
+	if (rc != 0) {
+		LOG_ERR("ZNP UART init failed (%d)", rc);
 	}
 #endif
 
