@@ -12,7 +12,11 @@ network yet, steers into one that permits joining on channel 11. It then
 announces itself and answers the coordinator's interview.
 
 The default configuration is a sleepy end device; ``router.conf`` builds a
-router, which also accepts children.
+router, which also accepts children. ``coordinator_znp.conf`` builds a
+coordinator that a Z-Stack host (Zigbee2MQTT with ``adapter: zstack``, or ZHA)
+drives over the UART that the board overlay names as ``zigbee,ncp-uart``; the
+ESP32-C6 overlay uses its USB serial/JTAG port. The host forms the network, so
+the node does not start commissioning on its own.
 
 Requirements
 ************
