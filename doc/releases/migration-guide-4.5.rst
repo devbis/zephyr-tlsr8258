@@ -2094,6 +2094,16 @@ Bluetooth Services
   more intuitive type.
   Simply modify any hex values like ``0x30`` to their decimal values like ``48``.
 
+Zigbee
+******
+
+* :kconfig:option:`CONFIG_ZIGBEE_ZBHCI_UART` is no longer set directly. The host interface of a
+  coordinator is now :kconfig:option:`CONFIG_ZIGBEE_NCP`, which is on by default, and the protocol
+  is chosen with :kconfig:option:`CONFIG_ZIGBEE_NCP_ZSTACK` (the new default) or
+  :kconfig:option:`CONFIG_ZIGBEE_NCP_TELINK`. A coordinator that used ZBHCI must now select
+  :kconfig:option:`CONFIG_ZIGBEE_NCP_TELINK`, and one that does not want a host interface must
+  clear :kconfig:option:`CONFIG_ZIGBEE_NCP`.
+
 Networking
 **********
 
