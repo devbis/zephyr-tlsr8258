@@ -162,16 +162,18 @@ config ZIGBEE_GP
 config ZIGBEE_NCP
 	bool "Serial network co-processor interface"
 	depends on ZIGBEE_COORDINATOR
+	default y
 	select SERIAL
 	help
 	  Let a host drive the coordinator over a UART, the way it would a
-	  dedicated coordinator adapter. The protocol is chosen below.
+	  dedicated coordinator adapter. The protocol is chosen below. A
+	  coordinator is driven by a host unless this is turned off.
 
 if ZIGBEE_NCP
 
 choice ZIGBEE_NCP_PROTOCOL
 	prompt "NCP protocol"
-	default ZIGBEE_NCP_TELINK
+	default ZIGBEE_NCP_ZSTACK
 
 config ZIGBEE_NCP_TELINK
 	bool "Telink ZBHCI"
