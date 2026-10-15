@@ -12,7 +12,9 @@
 #include "zb_znp_internal.h"
 
 #define ZNP_NV_MAX_ITEMS 48U
-#define ZNP_NV_POOL_SIZE 3072U
+#define ZNP_NV_POOL_SIZE 2560U
+
+#define ZNP_NV_EXPORT_VERSION 1U
 
 struct znp_nv_item {
 	uint16_t id;
@@ -24,6 +26,7 @@ static struct znp_nv_item items[ZNP_NV_MAX_ITEMS];
 static uint8_t pool[ZNP_NV_POOL_SIZE];
 static uint16_t pool_used;
 static uint8_t item_count;
+static uint32_t generation;
 
 static struct znp_nv_item *nv_find(uint16_t id)
 {
@@ -34,6 +37,38 @@ static struct znp_nv_item *nv_find(uint16_t id)
 	}
 
 	return NULL;
+}
+
+/*
+ * Items whose value is the stack's own state. They are rebuilt from the stack
+ * whenever the host looks, so they are neither saved nor counted as changes.
+ */
+static bool nv_is_derived(uint16_t id)
+{
+	switch (id) {
+	case ZNP_NV_EXTADDR:
+	case ZNP_NV_ADDRMGR:
+	case ZNP_NV_NIB:
+	case ZNP_NV_NWK_ACTIVE_KEY_INFO:
+	case ZNP_NV_NWK_ALTERN_KEY_INFO:
+	case ZNP_NV_BDBNODEISONANETWORK:
+	case ZNP_NV_NWKKEY:
+		return true;
+	default:
+		return (id >= ZNP_NV_NWK_SEC_MATERIAL_FIRST && id <= ZNP_NV_NWK_SEC_MATERIAL_LAST);
+	}
+}
+
+static void nv_changed(uint16_t id)
+{
+	if (!nv_is_derived(id)) {
+		generation++;
+	}
+}
+
+uint32_t znp_nv_generation(void)
+{
+	return generation;
 }
 
 uint16_t znp_nv_length(uint16_t id)
@@ -63,6 +98,7 @@ uint8_t znp_nv_item_init(uint16_t id, uint16_t len, const uint8_t *init, uint8_t
 
 	memset(&pool[item->pool_off], 0xff, len);
 	memcpy(&pool[item->pool_off], init, (init_len < len) ? init_len : len);
+	nv_changed(id);
 
 	return ZNP_STATUS_NV_ITEM_UNINIT;
 }
@@ -95,7 +131,10 @@ uint8_t znp_nv_write(uint16_t id, uint16_t offset, const uint8_t *data, size_t l
 		return ZNP_STATUS_INVALID_PARAMETER;
 	}
 
-	memcpy(&pool[item->pool_off + offset], data, len);
+	if (memcmp(&pool[item->pool_off + offset], data, len) != 0) {
+		memcpy(&pool[item->pool_off + offset], data, len);
+		nv_changed(id);
+	}
 
 	return ZNP_STATUS_SUCCESS;
 }
@@ -107,6 +146,8 @@ uint8_t znp_nv_delete(uint16_t id)
 	if (item == NULL) {
 		return ZNP_STATUS_INVALID_PARAMETER;
 	}
+
+	nv_changed(id);
 
 	/* Close the gap in the pool so recreating an item never exhausts it. */
 	memmove(&pool[item->pool_off], &pool[item->pool_off + item->len],
@@ -126,4 +167,86 @@ void znp_nv_reset(void)
 {
 	item_count = 0U;
 	pool_used = 0U;
+	generation++;
+}
+
+size_t znp_nv_export(uint8_t *buf, size_t max)
+{
+	size_t n = 2U;
+
+	if (max < n) {
+		return 0U;
+	}
+
+	buf[0] = ZNP_NV_EXPORT_VERSION;
+	buf[1] = 0U;
+	for (uint8_t i = 0; i < item_count; i++) {
+		const struct znp_nv_item *item = &items[i];
+
+		if (nv_is_derived(item->id)) {
+			continue;
+		}
+		if (n + 4U + item->len > max) {
+			return 0U;
+		}
+
+		(void)znp_put_u16(&buf[n], item->id);
+		(void)znp_put_u16(&buf[n + 2U], item->len);
+		memcpy(&buf[n + 4U], &pool[item->pool_off], item->len);
+		n += 4U + item->len;
+		buf[1]++;
+	}
+
+	return n;
+}
+
+bool znp_nv_import(const uint8_t *buf, size_t len)
+{
+	size_t n = 2U;
+
+	if (len < n || buf[0] != ZNP_NV_EXPORT_VERSION) {
+		return false;
+	}
+
+	znp_nv_reset();
+	for (uint8_t i = 0; i < buf[1]; i++) {
+		uint16_t id;
+		uint16_t item_len;
+
+		if (n + 4U > len) {
+			return false;
+		}
+		id = znp_get_u16(&buf[n]);
+		item_len = znp_get_u16(&buf[n + 2U]);
+		n += 4U;
+		if (n + item_len > len) {
+			return false;
+		}
+
+		(void)znp_nv_item_init(id, item_len, &buf[n], 0U);
+		(void)znp_nv_write(id, 0U, &buf[n], item_len);
+		n += item_len;
+	}
+
+	return true;
+}
+
+uint8_t znp_nv_set_derived(uint16_t id, const uint8_t *data, size_t len)
+{
+	const struct znp_nv_item *item = nv_find(id);
+
+	if (item == NULL || len != item->len) {
+		if (item != NULL) {
+			(void)znp_nv_delete(id);
+		}
+		(void)znp_nv_item_init(id, (uint16_t)len, data, (uint8_t)MIN(len, 255U));
+		item = nv_find(id);
+		if (item == NULL) {
+			return ZNP_STATUS_NV_OPER_FAILED;
+		}
+	}
+
+	memcpy(&pool[item->pool_off], data, len);
+
+	return ZNP_STATUS_SUCCESS;
 }
