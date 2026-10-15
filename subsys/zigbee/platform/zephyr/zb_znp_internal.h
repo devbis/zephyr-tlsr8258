@@ -63,6 +63,11 @@ static inline uint16_t znp_get_u16(const uint8_t *p)
 	return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
 
+static inline uint32_t znp_get_u32(const uint8_t *p)
+{
+	return (uint32_t)znp_get_u16(p) | ((uint32_t)znp_get_u16(&p[2]) << 16);
+}
+
 static inline uint8_t *znp_put_u16(uint8_t *p, uint16_t v)
 {
 	p[0] = (uint8_t)(v & 0xffU);
@@ -110,6 +115,10 @@ bool znp_zdo_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t le
 bool znp_tables_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 uint8_t znp_tables_children(uint16_t *out, uint8_t max);
 void znp_tables_sync(void);
+void znp_tables_nv_written(uint16_t id);
+
+/* The unique link key of a device that a seed and shift stand for (zb_znp_keys.c). */
+void znp_tclk_key(const uint8_t seed[16], uint8_t shift, const uint8_t ieee[8], uint8_t key[16]);
 bool znp_af_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 
 static inline bool znp_cmd_dispatch(const struct znp_cmd *table, size_t count, uint8_t subsys,
@@ -132,7 +141,7 @@ uint8_t znp_nv_read(uint16_t id, uint16_t offset, uint8_t *out, size_t max, size
 uint8_t znp_nv_write(uint16_t id, uint16_t offset, const uint8_t *data, size_t len);
 uint8_t znp_nv_delete(uint16_t id);
 void znp_nv_reset(void);
-#define ZNP_NV_EXPORT_MAX 2816U
+#define ZNP_NV_EXPORT_MAX 4096U
 
 /* Counts changes the host made to items that are worth keeping. */
 uint32_t znp_nv_generation(void);
@@ -173,6 +182,13 @@ void znp_persist_flush(void);
 #define ZNP_ADDRMGR_ENTRY_LEN      11U
 #define ZNP_APS_LINK_KEY_TABLE_LEN (2U + 32U * 5U)
 #define ZNP_NWK_SEC_MATERIAL_LEN   12U
+
+/* Hashed trust center link keys: one seed, and a table of device entries. */
+#define ZNP_NV_TCLK_SEED           0x0101U
+#define ZNP_NV_TCLK_FIRST          0x0111U
+#define ZNP_TCLK_ENTRIES           32U
+#define ZNP_TCLK_ENTRY_LEN         19U
+#define ZNP_TCLK_KEY_DEFAULT       0xFFU
 
 /* State shared between the ZNP modules (zb_znp_sys.c). */
 void znp_state_change(uint8_t state);
