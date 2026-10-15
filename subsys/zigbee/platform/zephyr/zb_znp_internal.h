@@ -81,6 +81,39 @@ static inline uint8_t *znp_put_u32(uint8_t *p, uint32_t v)
 	return znp_put_u16(p, (uint16_t)(v >> 16));
 }
 
+/* Framing (zb_znp_frame.c). */
+enum znp_rx_state {
+	ZNP_RX_SOF,
+	ZNP_RX_LEN,
+	ZNP_RX_CMD0,
+	ZNP_RX_CMD1,
+	ZNP_RX_DATA,
+	ZNP_RX_FCS,
+};
+
+struct znp_parser {
+	enum znp_rx_state state;
+	uint8_t len;
+	uint8_t cmd0;
+	uint8_t cmd1;
+	uint8_t pos;
+	uint8_t fcs;
+	uint8_t data[ZNP_MAX_DATA];
+};
+
+enum znp_feed_result {
+	ZNP_FEED_MORE,
+	ZNP_FEED_FRAME,
+	ZNP_FEED_BAD_FCS,
+};
+
+void znp_parser_reset(struct znp_parser *p);
+/* On ZNP_FEED_FRAME, cmd0, cmd1, data and len of @p p describe the frame. */
+enum znp_feed_result znp_parser_feed(struct znp_parser *p, uint8_t byte);
+/* @p out holds ZNP_MAX_DATA + 5 bytes at most; returns the frame length. */
+size_t znp_frame_encode(uint8_t *out, uint8_t type, uint8_t subsys, uint8_t cmd,
+			const uint8_t *data, size_t len);
+
 /* Transport (zb_znp_uart.c). */
 void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, size_t len);
 
