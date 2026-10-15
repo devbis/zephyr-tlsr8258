@@ -314,6 +314,26 @@ static void zdo_ext_count_all_groups(const uint8_t *d, uint8_t len)
 	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x4CU, aps_group_entry_num_get());
 }
 
+static void zdo_startup_from_app(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	/* The response goes first: the state change it leads to follows as an indication. */
+	if (g_zbNwkCtx.joined) {
+		rsp = ZNP_NETWORK_RESTORED;
+	} else {
+		rsp = ZNP_NETWORK_NEW;
+	}
+	znp_srsp(ZNP_SUBSYS_ZDO, 0x40U, &rsp, 1U);
+
+	if (znp_network_start(0x04U) == ZNP_NETWORK_NOT_STARTED) {
+		LOG_WRN("znp: startup from the host failed");
+	}
+}
+
 static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x00U, zdo_nwk_addr_req},
 	{ZNP_SUBSYS_ZDO, 0x21U, zdo_bind},
@@ -321,6 +341,7 @@ static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x36U, zdo_mgmt_permit_join_req},
 	{ZNP_SUBSYS_ZDO, 0x37U, zdo_mgmt_nwk_update_req},
 	{ZNP_SUBSYS_ZDO, 0x3EU, zdo_msg_cb_register},
+	{ZNP_SUBSYS_ZDO, 0x40U, zdo_startup_from_app},
 	{ZNP_SUBSYS_ZDO, 0x45U, zdo_ext_route_disc},
 	{ZNP_SUBSYS_ZDO, 0x46U, zdo_ext_route_chk},
 	{ZNP_SUBSYS_ZDO, 0x47U, zdo_ext_remove_group},

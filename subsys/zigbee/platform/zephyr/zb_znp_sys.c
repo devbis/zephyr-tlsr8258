@@ -15,9 +15,13 @@
 #include <zephyr/zigbee/zb_znp.h>
 
 #include "zb_common.h"
+#include "drv_nv.h"
+#include "zbapi/zb_initialize.h"
 #include "zb_znp_internal.h"
 
 LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
+
+extern void zb_reset(void);
 
 /* MT capabilities: SYS, AF, ZDO, UTIL, APP and APP_CNF. */
 #define ZNP_CAPABILITIES            0x0559U
@@ -97,7 +101,7 @@ static void znp_nv_seed_tables(void)
 	}
 }
 
-static void znp_nv_seed(void)
+void znp_nv_seed_missing(void)
 {
 	uint8_t ff[16];
 	uint8_t ieee[8];
@@ -105,7 +109,6 @@ static void znp_nv_seed(void)
 	memset(ff, 0xff, sizeof(ff));
 	zb_getLocalExtAddr(ieee);
 
-	znp_nv_reset();
 	for (size_t i = 0; i < ARRAY_SIZE(nv_defaults); i++) {
 		(void)znp_nv_item_init(nv_defaults[i].id, 1U, &nv_defaults[i].value, 1U);
 	}
@@ -124,6 +127,13 @@ static void znp_nv_seed(void)
 	znp_nv_seed_tables();
 }
 
+/* All items back to their factory values. */
+static void znp_nv_seed(void)
+{
+	znp_nv_reset();
+	znp_nv_seed_missing();
+}
+
 /* Items whose value is the stack's own state, refreshed before the host looks. */
 static void znp_nv_sync(void)
 {
@@ -131,8 +141,7 @@ static void znp_nv_sync(void)
 
 	/* A host that deletes the address expects the hardware one back. */
 	zb_getLocalExtAddr(ieee);
-	(void)znp_nv_item_init(ZNP_NV_EXTADDR, sizeof(ieee), ieee, sizeof(ieee));
-	(void)znp_nv_write(ZNP_NV_EXTADDR, 0U, ieee, sizeof(ieee));
+	(void)znp_nv_set_derived(ZNP_NV_EXTADDR, ieee, sizeof(ieee));
 	znp_net_sync();
 }
 
@@ -177,9 +186,30 @@ static void sys_reset_req(const uint8_t *d, uint8_t len)
 	ARG_UNUSED(len);
 
 	(void)znp_nv_read(ZNP_NV_STARTUP_OPTION, 0U, &opt, 1U, &n);
-	if ((opt & (ZNP_STARTUP_CLEAR_CONFIG | ZNP_STARTUP_CLEAR_STATE)) != 0U) {
+
+	if ((opt & ZNP_STARTUP_CLEAR_STATE) != 0U) {
+		/* Forget the network, as the stack's own factory reset does. */
+		LOG_INF("znp: clearing the network");
+		/*
+		 * The stack's factory reset, without its BDB step: that step
+		 * restarts BDB on the descriptor of an earlier init, which a
+		 * node that never started commissioning does not have.
+		 */
+		addrExt_t ieee;
+
+		zb_getLocalExtAddr(ieee);
+		(void)nv_resetToFactoryNew();
+		zb_reset();
+		/* The MAC reset drops the node's address; it is not part of the network. */
+		ZB_IEEE_ADDR_COPY(g_zbMacPib.extAddress, ieee);
+		zb_platform_bdb_runtime_reset();
+		znp_net_reset();
+		znp_nv_seed();
+		znp_persist_flush();
+	} else if ((opt & ZNP_STARTUP_CLEAR_CONFIG) != 0U) {
 		znp_nv_seed();
 		znp_net_reset();
+		znp_persist_flush();
 	}
 
 	formation_pending = false;
@@ -440,23 +470,18 @@ static void znp_apply_network_config(void)
 	znp_net_formation_config();
 }
 
-static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
+/*
+ * Start the network, whichever way the host asked: a restored network is
+ * announced as up, a new one is formed from the host's settings.
+ */
+uint8_t znp_network_start(uint8_t mode)
 {
-	uint8_t mode = (len >= 1U) ? d[0] : 0U;
-
-	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x05U, ZNP_STATUS_SUCCESS);
-
-	if ((mode & BDB_MODE_NWK_FORMATION) == 0U) {
-		bdb_notify(BDB_STATUS_SUCCESS, mode, 0U);
-		return;
-	}
-
 	if (g_zbNwkCtx.joined) {
 		/* A formed network is not formed again, but takes the host's settings. */
 		znp_net_apply_host();
 		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
 		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
-		return;
+		return ZNP_NETWORK_RESTORED;
 	}
 
 	znp_state_change(ZNP_DEV_STATE_STARTING);
@@ -469,7 +494,24 @@ static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
 		formation_pending = false;
 		znp_state_change(ZNP_DEV_STATE_HOLD);
 		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
+		return ZNP_NETWORK_NOT_STARTED;
 	}
+
+	return ZNP_NETWORK_NEW;
+}
+
+static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
+{
+	uint8_t mode = (len >= 1U) ? d[0] : 0U;
+
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x05U, ZNP_STATUS_SUCCESS);
+
+	if ((mode & BDB_MODE_NWK_FORMATION) == 0U) {
+		bdb_notify(BDB_STATUS_SUCCESS, mode, 0U);
+		return;
+	}
+
+	(void)znp_network_start(mode);
 }
 
 static void app_cnf_set_channel(const uint8_t *d, uint8_t len)
@@ -587,6 +629,7 @@ void zb_znp_bdb_commissioning_status(uint8_t status, bool joined_network)
 	if (joined_network) {
 		formation_pending = false;
 		(void)znp_nv_write(ZNP_NV_BDBNODEISONANETWORK, 0U, &one, 1U);
+		zb_info_save(NULL);
 		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
 		bdb_notify(BDB_STATUS_SUCCESS, BDB_MODE_NWK_FORMATION, 0U);
 	} else if (status != 0U) {
@@ -604,7 +647,11 @@ bool zb_znp_host_controls_commissioning(void)
 /* Called once the UART is attached, so the host sees the usual power-up indication. */
 void znp_sys_start(void)
 {
-	znp_nv_seed();
+	/* The host's items survive a restart; items a newer build adds are created empty. */
+	if (znp_persist_load()) {
+		LOG_INF("znp: restored the saved NV items");
+	}
+	znp_nv_seed_missing();
 	znp_dev_state = ZNP_DEV_STATE_HOLD;
 	znp_reset_ind(0x00U);
 }
