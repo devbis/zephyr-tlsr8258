@@ -136,6 +136,8 @@ void zb_znp_poll(void)
 	while (uart_poll_in(znp_uart_dev, &byte) == 0) {
 		znp_rx_byte((uint8_t)byte);
 	}
+
+	znp_persist_service();
 }
 
 void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, size_t len)

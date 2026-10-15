@@ -18,6 +18,7 @@
 #include "nwk/nwk_data.h"
 #include "ss/ss_zdoSecurityME.h"
 #include "zb_common.h"
+#include "zbapi/zb_initialize.h"
 #include "zb_znp_internal.h"
 
 LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -69,9 +70,13 @@ void znp_net_sync(void)
 	uint8_t nib[ZNP_NIB_LEN];
 	uint8_t item[KEY_ITEM_LEN];
 	uint8_t ieee[8];
+	uint8_t on = g_zbNwkCtx.joined ? 1U : 0U;
 	uint8_t seq;
 	const uint8_t *key;
 	size_t n;
+
+	/* Whether the node is on a network is the stack's to say. */
+	(void)znp_nv_set_derived(ZNP_NV_BDBNODEISONANETWORK, &on, 1U);
 
 	if (host_dirty || !g_zbNwkCtx.joined) {
 		return;
@@ -101,23 +106,33 @@ void znp_net_sync(void)
 
 	key = active_key(&seq);
 	nib[ZNP_NIB_KEY_LOADED] = key_is_set(key) ? 1U : 0U;
-	(void)znp_nv_write(ZNP_NV_NIB, 0U, nib, sizeof(nib));
+	(void)znp_nv_set_derived(ZNP_NV_NIB, nib, sizeof(nib));
 
 	if (key_is_set(key)) {
 		uint8_t counted[KEY_ITEM_LEN + 4U];
 
 		item[0] = seq;
 		memcpy(&item[1], key, SEC_KEY_LEN);
-		(void)znp_nv_write(ZNP_NV_NWK_ACTIVE_KEY_INFO, 0U, item, KEY_ITEM_LEN);
-		(void)znp_nv_write(ZNP_NV_NWK_ALTERN_KEY_INFO, 0U, item, KEY_ITEM_LEN);
+		(void)znp_nv_set_derived(ZNP_NV_NWK_ACTIVE_KEY_INFO, item, KEY_ITEM_LEN);
+		(void)znp_nv_set_derived(ZNP_NV_NWK_ALTERN_KEY_INFO, item, KEY_ITEM_LEN);
 
 		/* The active key with its frame counter. */
 		memcpy(counted, item, KEY_ITEM_LEN);
 		(void)znp_put_u32(&counted[KEY_ITEM_LEN], ss_ib.outgoingFrameCounter);
-		(void)znp_nv_write(ZNP_NV_NWKKEY, 0U, counted, sizeof(counted));
+		(void)znp_nv_set_derived(ZNP_NV_NWKKEY, counted, sizeof(counted));
+
+		/* The network security material: frame counter and the PAN it belongs to. */
+		{
+			uint8_t material[ZNP_NWK_SEC_MATERIAL_LEN];
+
+			(void)znp_put_u32(material, ss_ib.outgoingFrameCounter);
+			memcpy(&material[4], g_zbNIB.extPANId, 8U);
+			(void)znp_nv_set_derived(ZNP_NV_NWK_SEC_MATERIAL_FIRST, material,
+						 sizeof(material));
+		}
 	}
 
-	(void)znp_nv_write(ZNP_NV_EXTADDR, 0U, ieee, sizeof(ieee));
+	(void)znp_nv_set_derived(ZNP_NV_EXTADDR, ieee, sizeof(ieee));
 	(void)znp_nv_write(ZNP_NV_EXTENDED_PAN_ID, 0U, g_zbNIB.extPANId, 8U);
 }
 
@@ -223,4 +238,7 @@ void znp_net_apply_host(void)
 	}
 
 	tl_zbNwkBeaconPayloadUpdate();
+
+	/* The stack keeps what it was told only once it has written it down. */
+	zb_info_save(NULL);
 }
