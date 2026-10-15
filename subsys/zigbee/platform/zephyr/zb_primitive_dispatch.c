@@ -189,6 +189,11 @@ void af_aps_data_entry(void *arg)
 		return;
 	}
 	if (ad->profile_id == ZDO_PROFILE_ID && ad->dst_ep == ZDO_EP) {
+		if (ad->asdu != NULL && ad->asduLength > 0U) {
+			zb_platform_app_zdo_rx(ad->src_short_addr,
+					       ZB_NWK_IS_ADDRESS_BROADCAST(ad->dst_addr),
+					       ad->cluster_id, ad->asdu, ad->asduLength);
+		}
 		/* ZDP owns the complete vendor request/response dispatch table. */
 		af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
 
