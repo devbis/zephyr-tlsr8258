@@ -115,7 +115,11 @@ void app_profile_register(void)
 	app_basic_model_id[0] = sizeof(APP_PROFILE_MODEL_ID) - 1U;
 	memcpy(&app_basic_model_id[1], APP_PROFILE_MODEL_ID, sizeof(APP_PROFILE_MODEL_ID) - 1U);
 
-	zcl_init(IS_ENABLED(CONFIG_ZIGBEE_COORDINATOR) ? app_interview_zcl_msg : NULL);
+#if defined(CONFIG_ZIGBEE_COORDINATOR) && !defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+	zcl_init(app_interview_zcl_msg);
+#else
+	zcl_init(NULL);
+#endif
 
 	if (af_simpleDescGet(APP_PROFILE_ENDPOINT) == NULL) {
 		if (!af_endpointRegister(APP_PROFILE_ENDPOINT, &app_simple_desc,
@@ -129,7 +133,10 @@ void app_profile_register(void)
 
 void zb_platform_app_register_endpoints(void)
 {
+#if !defined(CONFIG_ZIGBEE_NCP)
+	/* An NCP host registers the endpoints it serves. */
 	app_profile_register();
+#endif
 }
 
 const char *zb_platform_app_basic_mfr_name(void)
