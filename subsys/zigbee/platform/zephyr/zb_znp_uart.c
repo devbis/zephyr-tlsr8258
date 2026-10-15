@@ -27,7 +27,13 @@ enum znp_rx_state {
 	ZNP_RX_FCS,
 };
 
+/* Outgoing bytes leave a few at a time from the poll; see tx_drain(). */
+#define ZNP_TX_RING_SIZE   1024U
+#define ZNP_TX_BURST_BYTES 32U
+
 static const struct device *znp_uart_dev;
+
+static void tx_drain(size_t max);
 
 static struct {
 	enum znp_rx_state state;
@@ -137,7 +143,41 @@ void zb_znp_poll(void)
 		znp_rx_byte((uint8_t)byte);
 	}
 
+	tx_drain(ZNP_TX_BURST_BYTES);
 	znp_persist_service();
+}
+
+/*
+ * Outgoing bytes wait in a ring and leave a few at a time from the poll, so
+ * that sending a long frame at a low baud rate does not keep the Zigbee
+ * thread from the radio for the whole frame.
+ */
+static uint8_t tx_ring[ZNP_TX_RING_SIZE];
+static size_t tx_head;
+static size_t tx_tail;
+
+static size_t tx_pending(void)
+{
+	return (tx_head - tx_tail) % ZNP_TX_RING_SIZE;
+}
+
+static void tx_drain(size_t max)
+{
+	while (max-- > 0U && tx_head != tx_tail) {
+		uart_poll_out(znp_uart_dev, tx_ring[tx_tail]);
+		tx_tail = (tx_tail + 1U) % ZNP_TX_RING_SIZE;
+	}
+}
+
+static void tx_put(uint8_t byte)
+{
+	/* One slot stays free to tell a full ring from an empty one. */
+	while (tx_pending() == ZNP_TX_RING_SIZE - 1U) {
+		tx_drain(1U);
+	}
+
+	tx_ring[tx_head] = byte;
+	tx_head = (tx_head + 1U) % ZNP_TX_RING_SIZE;
 }
 
 void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, size_t len)
@@ -149,13 +189,13 @@ void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, si
 		return;
 	}
 
-	uart_poll_out(znp_uart_dev, ZNP_SOF);
-	uart_poll_out(znp_uart_dev, (uint8_t)len);
-	uart_poll_out(znp_uart_dev, cmd0);
-	uart_poll_out(znp_uart_dev, cmd);
+	tx_put(ZNP_SOF);
+	tx_put((uint8_t)len);
+	tx_put(cmd0);
+	tx_put(cmd);
 	for (size_t i = 0; i < len; i++) {
-		uart_poll_out(znp_uart_dev, data[i]);
+		tx_put(data[i]);
 		fcs ^= data[i];
 	}
-	uart_poll_out(znp_uart_dev, fcs);
+	tx_put(fcs);
 }
