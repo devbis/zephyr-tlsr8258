@@ -18,15 +18,6 @@
 
 LOG_MODULE_REGISTER(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 
-enum znp_rx_state {
-	ZNP_RX_SOF,
-	ZNP_RX_LEN,
-	ZNP_RX_CMD0,
-	ZNP_RX_CMD1,
-	ZNP_RX_DATA,
-	ZNP_RX_FCS,
-};
-
 /* Outgoing bytes leave a few at a time from the poll; see tx_drain(). */
 #define ZNP_TX_RING_SIZE   1024U
 #define ZNP_TX_BURST_BYTES 32U
@@ -35,15 +26,7 @@ static const struct device *znp_uart_dev;
 
 static void tx_drain(size_t max);
 
-static struct {
-	enum znp_rx_state state;
-	uint8_t len;
-	uint8_t cmd0;
-	uint8_t cmd1;
-	uint8_t pos;
-	uint8_t fcs;
-	uint8_t data[ZNP_MAX_DATA];
-} rx;
+static struct znp_parser rx;
 
 static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_t len)
 {
@@ -55,8 +38,9 @@ static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_
 		return;
 	}
 
-	if (znp_sys_handle(subsys, cmd1, data, len) || znp_tables_handle(subsys, cmd1, data, len) || znp_zdo_handle(subsys, cmd1, data, len) ||
-	    znp_af_handle(subsys, cmd1, data, len)) {
+	if (znp_sys_handle(subsys, cmd1, data, len) ||
+	    znp_tables_handle(subsys, cmd1, data, len) ||
+	    znp_zdo_handle(subsys, cmd1, data, len) || znp_af_handle(subsys, cmd1, data, len)) {
 		return;
 	}
 
@@ -73,47 +57,14 @@ static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_
 
 static void znp_rx_byte(uint8_t byte)
 {
-	switch (rx.state) {
-	case ZNP_RX_SOF:
-		/* Anything else, such as the 0xEF bootloader skip bytes, is noise. */
-		if (byte == ZNP_SOF) {
-			rx.state = ZNP_RX_LEN;
-		}
+	switch (znp_parser_feed(&rx, byte)) {
+	case ZNP_FEED_FRAME:
+		znp_dispatch(rx.cmd0, rx.cmd1, rx.data, rx.len);
 		break;
-	case ZNP_RX_LEN:
-		if (byte > ZNP_MAX_DATA) {
-			rx.state = ZNP_RX_SOF;
-			break;
-		}
-		rx.len = byte;
-		rx.fcs = byte;
-		rx.state = ZNP_RX_CMD0;
+	case ZNP_FEED_BAD_FCS:
+		LOG_WRN("znp: bad checksum 0x%02x, expected 0x%02x", byte, rx.fcs);
 		break;
-	case ZNP_RX_CMD0:
-		rx.cmd0 = byte;
-		rx.fcs ^= byte;
-		rx.state = ZNP_RX_CMD1;
-		break;
-	case ZNP_RX_CMD1:
-		rx.cmd1 = byte;
-		rx.fcs ^= byte;
-		rx.pos = 0U;
-		rx.state = (rx.len > 0U) ? ZNP_RX_DATA : ZNP_RX_FCS;
-		break;
-	case ZNP_RX_DATA:
-		rx.data[rx.pos++] = byte;
-		rx.fcs ^= byte;
-		if (rx.pos == rx.len) {
-			rx.state = ZNP_RX_FCS;
-		}
-		break;
-	case ZNP_RX_FCS:
-		rx.state = ZNP_RX_SOF;
-		if (byte == rx.fcs) {
-			znp_dispatch(rx.cmd0, rx.cmd1, rx.data, rx.len);
-		} else {
-			LOG_WRN("znp: bad checksum 0x%02x, expected 0x%02x", byte, rx.fcs);
-		}
+	case ZNP_FEED_MORE:
 		break;
 	}
 }
@@ -125,7 +76,7 @@ int zb_znp_init(const struct device *uart_dev)
 	}
 
 	znp_uart_dev = uart_dev;
-	rx.state = ZNP_RX_SOF;
+	znp_parser_reset(&rx);
 	znp_sys_start();
 
 	return 0;
@@ -182,20 +133,15 @@ static void tx_put(uint8_t byte)
 
 void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, size_t len)
 {
-	uint8_t cmd0 = (uint8_t)((type << 5) | (subsys & 0x1fU));
-	uint8_t fcs = (uint8_t)len ^ cmd0 ^ cmd;
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	size_t n;
 
 	if (znp_uart_dev == NULL || len > ZNP_MAX_DATA) {
 		return;
 	}
 
-	tx_put(ZNP_SOF);
-	tx_put((uint8_t)len);
-	tx_put(cmd0);
-	tx_put(cmd);
-	for (size_t i = 0; i < len; i++) {
-		tx_put(data[i]);
-		fcs ^= data[i];
+	n = znp_frame_encode(frame, type, subsys, cmd, data, len);
+	for (size_t i = 0; i < n; i++) {
+		tx_put(frame[i]);
 	}
-	tx_put(fcs);
 }

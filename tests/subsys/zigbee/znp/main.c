@@ -16,14 +16,14 @@ static void before(void *fixture)
 	znp_nv_reset();
 }
 
-ZTEST_SUITE(znp_nv, NULL, NULL, before, NULL, NULL);
+ZTEST_SUITE(znp, NULL, NULL, before, NULL, NULL);
 
-ZTEST(znp_nv, test_missing_item_has_no_length)
+ZTEST(znp, test_missing_item_has_no_length)
 {
 	zassert_equal(znp_nv_length(0x0021U), 0U);
 }
 
-ZTEST(znp_nv, test_init_creates_then_reports_existing)
+ZTEST(znp, test_init_creates_then_reports_existing)
 {
 	const uint8_t init[2] = {0x11U, 0x22U};
 	uint8_t out[4];
@@ -44,7 +44,7 @@ ZTEST(znp_nv, test_init_creates_then_reports_existing)
 	zassert_equal(znp_nv_item_init(0x10U, 8U, init, sizeof(init)), ZNP_STATUS_NV_BAD_ITEM_LEN);
 }
 
-ZTEST(znp_nv, test_write_and_read_back_at_offset)
+ZTEST(znp, test_write_and_read_back_at_offset)
 {
 	const uint8_t init[4] = {0U};
 	const uint8_t data[2] = {0xaaU, 0xbbU};
@@ -62,7 +62,7 @@ ZTEST(znp_nv, test_write_and_read_back_at_offset)
 	zassert_equal(znp_nv_write(0x99U, 0U, data, sizeof(data)), ZNP_STATUS_INVALID_PARAMETER);
 }
 
-ZTEST(znp_nv, test_delete_keeps_the_other_items)
+ZTEST(znp, test_delete_keeps_the_other_items)
 {
 	const uint8_t a = 1U;
 	const uint8_t b = 2U;
@@ -89,7 +89,7 @@ ZTEST(znp_nv, test_delete_keeps_the_other_items)
 	zassert_equal(out[0], 3U);
 }
 
-ZTEST(znp_nv, test_repeated_recreate_does_not_exhaust_the_pool)
+ZTEST(znp, test_repeated_recreate_does_not_exhaust_the_pool)
 {
 	const uint8_t init = 0x5aU;
 
@@ -99,7 +99,7 @@ ZTEST(znp_nv, test_repeated_recreate_does_not_exhaust_the_pool)
 	}
 }
 
-ZTEST(znp_nv, test_export_import_keeps_host_items_and_skips_stack_items)
+ZTEST(znp, test_export_import_keeps_host_items_and_skips_stack_items)
 {
 	const uint8_t host[3] = {1U, 2U, 3U};
 	const uint8_t stack[4] = {9U, 9U, 9U, 9U};
@@ -125,7 +125,7 @@ ZTEST(znp_nv, test_export_import_keeps_host_items_and_skips_stack_items)
 	zassert_equal(znp_nv_length(ZNP_NV_NIB), 0U);
 }
 
-ZTEST(znp_nv, test_import_rejects_a_damaged_copy)
+ZTEST(znp, test_import_rejects_a_damaged_copy)
 {
 	const uint8_t host = 1U;
 	uint8_t blob[ZNP_NV_EXPORT_MAX];
@@ -140,7 +140,7 @@ ZTEST(znp_nv, test_import_rejects_a_damaged_copy)
 	zassert_false(znp_nv_import(blob, 1U));
 }
 
-ZTEST(znp_nv, test_generation_counts_only_changes_worth_saving)
+ZTEST(znp, test_generation_counts_only_changes_worth_saving)
 {
 	const uint8_t a = 1U;
 	const uint8_t b = 2U;
@@ -158,7 +158,7 @@ ZTEST(znp_nv, test_generation_counts_only_changes_worth_saving)
 	zassert_not_equal(znp_nv_generation(), gen);
 }
 
-ZTEST(znp_nv, test_link_key_matches_the_hosts_derivation)
+ZTEST(znp, test_link_key_matches_the_hosts_derivation)
 {
 	/* Reference values computed by zigpy-znp's compute_key() for seed 00..0f. */
 	static const uint8_t expected[3][16] = {
@@ -182,4 +182,110 @@ ZTEST(znp_nv, test_link_key_matches_the_hosts_derivation)
 		znp_tclk_key(seed, shifts[i], ieee, key);
 		zassert_mem_equal(key, expected[i], sizeof(key), "shift %u", shifts[i]);
 	}
+}
+
+static enum znp_feed_result feed_all(struct znp_parser *p, const uint8_t *bytes, size_t len)
+{
+	enum znp_feed_result res = ZNP_FEED_MORE;
+
+	for (size_t i = 0; i < len; i++) {
+		res = znp_parser_feed(p, bytes[i]);
+	}
+
+	return res;
+}
+
+ZTEST(znp, test_frame_round_trip)
+{
+	static const uint8_t payload[] = {1U, 2U, 3U, 4U};
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	znp_parser_reset(&p);
+	n = znp_frame_encode(frame, ZNP_TYPE_SREQ, ZNP_SUBSYS_SYS, 0x08U, payload, sizeof(payload));
+	zassert_equal(n, sizeof(payload) + 5U);
+	zassert_equal(frame[0], ZNP_SOF);
+	zassert_equal(frame[2], 0x21U); /* SREQ, SYS */
+
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+	zassert_equal(p.cmd0, 0x21U);
+	zassert_equal(p.cmd1, 0x08U);
+	zassert_equal(p.len, sizeof(payload));
+	zassert_mem_equal(p.data, payload, sizeof(payload));
+}
+
+ZTEST(znp, test_frame_without_payload)
+{
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	znp_parser_reset(&p);
+	n = znp_frame_encode(frame, ZNP_TYPE_SRSP, ZNP_SUBSYS_UTIL, 0x00U, NULL, 0U);
+	zassert_equal(n, 5U);
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+	zassert_equal(p.len, 0U);
+}
+
+ZTEST(znp, test_bad_checksum_is_rejected_and_the_parser_resyncs)
+{
+	static const uint8_t payload[2] = {7U, 8U};
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	znp_parser_reset(&p);
+	n = znp_frame_encode(frame, ZNP_TYPE_SREQ, ZNP_SUBSYS_SYS, 0x01U, payload, sizeof(payload));
+	frame[n - 1U] ^= 0xffU;
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_BAD_FCS);
+
+	/* The next frame is parsed as usual. */
+	n = znp_frame_encode(frame, ZNP_TYPE_SREQ, ZNP_SUBSYS_SYS, 0x01U, payload, sizeof(payload));
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+}
+
+ZTEST(znp, test_noise_before_a_frame_is_skipped)
+{
+	static const uint8_t noise[] = {0xefU, 0xefU, 0x00U, 0x12U};
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	znp_parser_reset(&p);
+	zassert_equal(feed_all(&p, noise, sizeof(noise)), ZNP_FEED_MORE);
+
+	n = znp_frame_encode(frame, ZNP_TYPE_SREQ, ZNP_SUBSYS_SYS, 0x01U, NULL, 0U);
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+}
+
+ZTEST(znp, test_oversized_length_drops_the_frame)
+{
+	static const uint8_t oversized[] = {ZNP_SOF, ZNP_MAX_DATA + 1U};
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	znp_parser_reset(&p);
+	zassert_equal(feed_all(&p, oversized, sizeof(oversized)), ZNP_FEED_MORE);
+
+	/* The parser is back to waiting for a start byte. */
+	n = znp_frame_encode(frame, ZNP_TYPE_SREQ, ZNP_SUBSYS_SYS, 0x02U, NULL, 0U);
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+}
+
+ZTEST(znp, test_largest_frame)
+{
+	uint8_t payload[ZNP_MAX_DATA];
+	uint8_t frame[ZNP_MAX_DATA + 5U];
+	struct znp_parser p;
+	size_t n;
+
+	memset(payload, 0xa5, sizeof(payload));
+	znp_parser_reset(&p);
+	n = znp_frame_encode(frame, ZNP_TYPE_AREQ, ZNP_SUBSYS_AF, 0x81U, payload, sizeof(payload));
+	zassert_equal(n, sizeof(frame));
+	zassert_equal(feed_all(&p, frame, n), ZNP_FEED_FRAME);
+	zassert_equal(p.len, ZNP_MAX_DATA);
+	zassert_mem_equal(p.data, payload, sizeof(payload));
 }
