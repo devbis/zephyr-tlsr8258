@@ -10,6 +10,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_znp.h>
@@ -138,6 +139,17 @@ void znp_nv_seed_missing(void)
 	(void)znp_nv_item_init(ZNP_NV_NWK_ACTIVE_KEY_INFO, 17U, ff, 16U);
 	(void)znp_nv_item_init(ZNP_NV_NWK_ALTERN_KEY_INFO, 17U, ff, 16U);
 	(void)znp_nv_item_init(ZNP_NV_NWKKEY, 21U, ff, 16U);
+
+	/*
+	 * The seed that unique link keys are derived from exists on every Z-Stack,
+	 * and a host that does not find it takes the network for unformed.
+	 */
+	if (znp_nv_length(ZNP_NV_TCLK_SEED) == 0U) {
+		uint8_t seed[16];
+
+		sys_rand_get(seed, sizeof(seed));
+		(void)znp_nv_item_init(ZNP_NV_TCLK_SEED, sizeof(seed), seed, sizeof(seed));
+	}
 	znp_nv_seed_tables();
 }
 
