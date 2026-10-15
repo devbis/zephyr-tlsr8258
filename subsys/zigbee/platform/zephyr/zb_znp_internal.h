@@ -161,6 +161,8 @@ void znp_persist_flush(void);
 #define ZNP_NV_NWK_ALTERN_KEY_INFO 0x003BU
 #define ZNP_NV_NWKKEY              0x0082U
 #define ZNP_NV_BDBNODEISONANETWORK 0x0055U
+#define ZNP_NV_CONCENTRATOR_ENABLE    0x0032U
+#define ZNP_NV_CONCENTRATOR_DISCOVERY 0x0033U
 #define ZNP_NV_ADDRMGR             0x0023U
 #define ZNP_NV_APS_LINK_KEY_TABLE  0x004CU
 #define ZNP_NV_NWK_SEC_MATERIAL_FIRST 0x0075U
@@ -182,6 +184,7 @@ void znp_sys_start(void);
 #define ZNP_NETWORK_NOT_STARTED 2U
 
 uint8_t znp_network_start(uint8_t mode);
+void znp_routing_apply(void);
 void znp_nv_seed_missing(void);
 uint8_t znp_device_state(void);
 
