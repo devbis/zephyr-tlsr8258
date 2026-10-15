@@ -1,0 +1,610 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * ZNP SYS, UTIL and APP_CNF commands, the device state reported to the host
+ * and the network formation it triggers.
+ */
+#include <string.h>
+
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
+#include <zephyr/zigbee/zb_znp.h>
+
+#include "zb_common.h"
+#include "zb_znp_internal.h"
+
+LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
+
+/* MT capabilities: SYS, AF, ZDO, UTIL, APP and APP_CNF. */
+#define ZNP_CAPABILITIES            0x0559U
+
+#define ZNP_DEVICE_TYPE_COORDINATOR 0x01U
+
+#define BDB_MODE_NWK_FORMATION      0x04U
+#define BDB_STATUS_SUCCESS          0x00U
+#define BDB_STATUS_IN_PROGRESS      0x01U
+#define BDB_STATUS_FORMATION_FAILED 0x08U
+
+#define ZNP_STARTUP_CLEAR_CONFIG    BIT(0)
+#define ZNP_STARTUP_CLEAR_STATE     BIT(1)
+
+#define ZNP_NV_READ_CHUNK           240U
+
+/* The NV items every Z-Stack has from the factory, with their default values. */
+struct znp_nv_default {
+	uint16_t id;
+	uint8_t value;
+};
+
+static const struct znp_nv_default nv_defaults[] = {
+	{ZNP_NV_STARTUP_OPTION, 0x00U},
+	{ZNP_NV_LOGICAL_TYPE, 0x00U},
+	{0x0030U, 20U},   /* BCAST_DELIVERY_TIME */
+	{0x0032U, 0x00U}, /* CONCENTRATOR_ENABLE */
+	{0x0033U, 120U},  /* CONCENTRATOR_DISCOVERY */
+	{0x0036U, 0x01U}, /* CONCENTRATOR_RC */
+	{0x0038U, 255U},  /* SRC_RTG_EXPIRY_TIME */
+	{0x003EU, 0x00U}, /* NWK_CHILD_AGE_ENABLE */
+	{0x008FU, 0x00U}, /* ZDO_DIRECT_CB */
+	{ZNP_NV_PRECFGKEYS_ENABLE, 0x01U},
+	{ZNP_NV_BDBNODEISONANETWORK, 0x00U},
+};
+
+static uint8_t znp_dev_state = ZNP_DEV_STATE_HOLD;
+static bool formation_pending;
+static uint32_t bdb_primary_channels;
+
+bool znp_all_ff(const uint8_t *p, size_t len)
+{
+	for (size_t i = 0; i < len; i++) {
+		if (p[i] != 0xffU) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/*
+ * The tables a host rewrites when it restores a network. They are sized for a
+ * few devices and start empty.
+ */
+static void znp_nv_seed_tables(void)
+{
+	uint8_t empty_addr[ZNP_ADDRMGR_ENTRY_LEN];
+	uint8_t zero[ZNP_APS_LINK_KEY_TABLE_LEN];
+
+	memset(zero, 0, sizeof(zero));
+	empty_addr[0] = 0x00U;
+	memset(&empty_addr[1], 0xff, sizeof(empty_addr) - 1U);
+
+	if (znp_nv_item_init(ZNP_NV_ADDRMGR, ZNP_ADDRMGR_ENTRIES * ZNP_ADDRMGR_ENTRY_LEN, empty_addr,
+			     ZNP_ADDRMGR_ENTRY_LEN) == ZNP_STATUS_NV_ITEM_UNINIT) {
+		for (uint16_t i = 1U; i < ZNP_ADDRMGR_ENTRIES; i++) {
+			(void)znp_nv_write(ZNP_NV_ADDRMGR, i * ZNP_ADDRMGR_ENTRY_LEN, empty_addr,
+					   ZNP_ADDRMGR_ENTRY_LEN);
+		}
+	}
+
+	(void)znp_nv_item_init(ZNP_NV_APS_LINK_KEY_TABLE, ZNP_APS_LINK_KEY_TABLE_LEN, zero,
+			       sizeof(zero));
+	for (uint16_t id = ZNP_NV_NWK_SEC_MATERIAL_FIRST; id <= ZNP_NV_NWK_SEC_MATERIAL_LAST; id++) {
+		(void)znp_nv_item_init(id, ZNP_NWK_SEC_MATERIAL_LEN, zero, ZNP_NWK_SEC_MATERIAL_LEN);
+	}
+}
+
+static void znp_nv_seed(void)
+{
+	uint8_t ff[16];
+	uint8_t ieee[8];
+
+	memset(ff, 0xff, sizeof(ff));
+	zb_getLocalExtAddr(ieee);
+
+	znp_nv_reset();
+	for (size_t i = 0; i < ARRAY_SIZE(nv_defaults); i++) {
+		(void)znp_nv_item_init(nv_defaults[i].id, 1U, &nv_defaults[i].value, 1U);
+	}
+
+	(void)znp_nv_item_init(ZNP_NV_EXTADDR, 8U, ieee, 8U);
+	(void)znp_nv_item_init(ZNP_NV_PANID, 2U, ff, 2U);
+	(void)znp_nv_item_init(ZNP_NV_CHANLIST, 4U, ff, 4U);
+	(void)znp_nv_item_init(ZNP_NV_PRECFGKEY, 16U, ff, 16U);
+	(void)znp_nv_item_init(ZNP_NV_EXTENDED_PAN_ID, 8U, ff, 8U);
+	(void)znp_nv_item_init(ZNP_NV_APS_USE_EXT_PANID, 8U, ff, 8U);
+	/* The network key items exist, empty, before a network is formed. */
+	memset(ff, 0, sizeof(ff));
+	(void)znp_nv_item_init(ZNP_NV_NWK_ACTIVE_KEY_INFO, 17U, ff, 16U);
+	(void)znp_nv_item_init(ZNP_NV_NWK_ALTERN_KEY_INFO, 17U, ff, 16U);
+	(void)znp_nv_item_init(ZNP_NV_NWKKEY, 21U, ff, 16U);
+	znp_nv_seed_tables();
+}
+
+/* Items whose value is the stack's own state, refreshed before the host looks. */
+static void znp_nv_sync(void)
+{
+	uint8_t ieee[8];
+
+	/* A host that deletes the address expects the hardware one back. */
+	zb_getLocalExtAddr(ieee);
+	(void)znp_nv_item_init(ZNP_NV_EXTADDR, sizeof(ieee), ieee, sizeof(ieee));
+	(void)znp_nv_write(ZNP_NV_EXTADDR, 0U, ieee, sizeof(ieee));
+	znp_net_sync();
+}
+
+uint8_t znp_device_state(void)
+{
+	return znp_dev_state;
+}
+
+void znp_state_change(uint8_t state)
+{
+	znp_dev_state = state;
+	znp_areq(ZNP_SUBSYS_ZDO, 0xC0U, &state, 1U);
+}
+
+static void bdb_notify(uint8_t status, uint8_t mode, uint8_t remaining)
+{
+	uint8_t d[3] = {status, mode, remaining};
+
+	znp_areq(ZNP_SUBSYS_APP_CNF, 0x80U, d, sizeof(d));
+}
+
+static void znp_reset_ind(uint8_t reason)
+{
+	uint8_t d[6] = {reason,
+			ZNP_TRANSPORT_REV,
+			ZNP_PRODUCT_ID,
+			ZNP_VERSION_MAJOR,
+			ZNP_VERSION_MINOR,
+			ZNP_VERSION_MAINT};
+
+	znp_areq(ZNP_SUBSYS_SYS, 0x80U, d, sizeof(d));
+}
+
+/* SYS */
+
+static void sys_reset_req(const uint8_t *d, uint8_t len)
+{
+	uint8_t opt = 0U;
+	size_t n;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	(void)znp_nv_read(ZNP_NV_STARTUP_OPTION, 0U, &opt, 1U, &n);
+	if ((opt & (ZNP_STARTUP_CLEAR_CONFIG | ZNP_STARTUP_CLEAR_STATE)) != 0U) {
+		znp_nv_seed();
+		znp_net_reset();
+	}
+
+	formation_pending = false;
+	znp_dev_state = g_zbNwkCtx.joined ? ZNP_DEV_STATE_COORDINATOR : ZNP_DEV_STATE_HOLD;
+	znp_reset_ind(0x01U);
+}
+
+static void sys_ping(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[2];
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	(void)znp_put_u16(rsp, ZNP_CAPABILITIES);
+	znp_srsp(ZNP_SUBSYS_SYS, 0x01U, rsp, sizeof(rsp));
+}
+
+static void sys_version(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[15];
+	uint8_t *p = rsp;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	*p++ = ZNP_TRANSPORT_REV;
+	*p++ = ZNP_PRODUCT_ID;
+	*p++ = ZNP_VERSION_MAJOR;
+	*p++ = ZNP_VERSION_MINOR;
+	*p++ = ZNP_VERSION_MAINT;
+	p = znp_put_u32(p, ZNP_CODE_REVISION);
+	*p++ = 0U; /* not a bootloader build */
+	p = znp_put_u32(p, 0U);
+	znp_srsp(ZNP_SUBSYS_SYS, 0x02U, rsp, (size_t)(p - rsp));
+}
+
+static void sys_get_ext_addr(const uint8_t *d, uint8_t len)
+{
+	uint8_t ieee[8];
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	zb_getLocalExtAddr(ieee);
+	znp_srsp(ZNP_SUBSYS_SYS, 0x04U, ieee, sizeof(ieee));
+}
+
+static void sys_nv_item_init(const uint8_t *d, uint8_t len)
+{
+	uint8_t status;
+
+	if (len < 5U || len < 5U + d[4]) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x07U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	status = znp_nv_item_init(znp_get_u16(d), znp_get_u16(&d[2]), &d[5], d[4]);
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x07U, status);
+}
+
+static void nv_read_rsp(uint8_t cmd, uint16_t id, uint16_t offset)
+{
+	uint8_t rsp[2U + ZNP_NV_READ_CHUNK];
+	size_t n = 0U;
+	uint8_t status;
+
+	znp_nv_sync();
+	status = znp_nv_read(id, offset, &rsp[2], ZNP_NV_READ_CHUNK, &n);
+	rsp[0] = status;
+	rsp[1] = (uint8_t)n;
+	znp_srsp(ZNP_SUBSYS_SYS, cmd, rsp, 2U + n);
+}
+
+static void sys_nv_read(const uint8_t *d, uint8_t len)
+{
+	if (len < 3U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x08U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	nv_read_rsp(0x08U, znp_get_u16(d), d[2]);
+}
+
+static void sys_nv_read_ext(const uint8_t *d, uint8_t len)
+{
+	if (len < 4U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x1CU, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	nv_read_rsp(0x1CU, znp_get_u16(d), znp_get_u16(&d[2]));
+}
+
+static void sys_nv_write(const uint8_t *d, uint8_t len)
+{
+	if (len < 4U || len < 4U + d[3]) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x09U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_net_note_write(znp_get_u16(d));
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x09U,
+			znp_nv_write(znp_get_u16(d), d[2], &d[4], d[3]));
+}
+
+static void sys_nv_write_ext(const uint8_t *d, uint8_t len)
+{
+	uint16_t n;
+
+	if (len < 6U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x1DU, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	n = znp_get_u16(&d[4]);
+	if (len < 6U + n) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x1DU, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_net_note_write(znp_get_u16(d));
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x1DU,
+			znp_nv_write(znp_get_u16(d), znp_get_u16(&d[2]), &d[6], n));
+}
+
+static void sys_nv_delete(const uint8_t *d, uint8_t len)
+{
+	if (len < 4U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x12U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_net_note_write(znp_get_u16(d));
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x12U, znp_nv_delete(znp_get_u16(d)));
+}
+
+static void sys_nv_length(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[2];
+
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x13U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_nv_sync();
+	(void)znp_put_u16(rsp, znp_nv_length(znp_get_u16(d)));
+	znp_srsp(ZNP_SUBSYS_SYS, 0x13U, rsp, sizeof(rsp));
+}
+
+static void sys_set_tx_power(const uint8_t *d, uint8_t len)
+{
+	/* The radio power is not adjustable at run time; report the request as applied. */
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U, (len >= 1U) ? d[0] : 0U);
+}
+
+/* UTIL */
+
+static void util_get_device_info(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[1 + 8 + 2 + 1 + 1 + 1];
+	uint8_t *p = rsp;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	*p++ = ZNP_STATUS_SUCCESS;
+	zb_getLocalExtAddr(p);
+	p += 8;
+	p = znp_put_u16(p, zb_getLocalShortAddr());
+	*p++ = ZNP_DEVICE_TYPE_COORDINATOR;
+	*p++ = znp_dev_state;
+	*p++ = 0U; /* no associated device list */
+	znp_srsp(ZNP_SUBSYS_UTIL, 0x00U, rsp, (size_t)(p - rsp));
+}
+
+static void util_get_nv_info(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[1 + 8 + 4 + 2 + 1 + 16];
+	uint8_t *p = rsp;
+	size_t n;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	znp_nv_sync();
+	*p++ = ZNP_STATUS_SUCCESS;
+	zb_getLocalExtAddr(p);
+	p += 8;
+	(void)znp_nv_read(ZNP_NV_CHANLIST, 0U, p, 4U, &n);
+	p += 4;
+	(void)znp_nv_read(ZNP_NV_PANID, 0U, p, 2U, &n);
+	p += 2;
+	*p++ = 0U;
+	(void)znp_nv_read(ZNP_NV_PRECFGKEY, 0U, p, 16U, &n);
+	p += 16;
+	znp_srsp(ZNP_SUBSYS_UTIL, 0x01U, rsp, (size_t)(p - rsp));
+}
+
+static void util_assoc_count(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[2] = {0U, 0U};
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	znp_srsp(ZNP_SUBSYS_UTIL, 0x48U, rsp, sizeof(rsp));
+}
+
+static void util_assoc_find_device(const uint8_t *d, uint8_t len)
+{
+	/*
+	 * The host reads the size of this packed struct to learn the target's
+	 * struct alignment; 28 bytes is the unaligned layout. An empty slot is
+	 * all 0xff.
+	 */
+	uint8_t rsp[28];
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	memset(rsp, 0xff, sizeof(rsp));
+	znp_srsp(ZNP_SUBSYS_UTIL, 0x49U, rsp, sizeof(rsp));
+}
+
+static void util_led_control(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	znp_srsp_status(ZNP_SUBSYS_UTIL, 0x0AU, ZNP_STATUS_SUCCESS);
+}
+
+static void util_time_alive(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp[4];
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	(void)znp_put_u32(rsp, (uint32_t)(k_uptime_get() / 1000));
+	znp_srsp(ZNP_SUBSYS_UTIL, 0x09U, rsp, sizeof(rsp));
+}
+
+/* APP_CNF */
+
+static void znp_apply_network_config(void)
+{
+	/* The BDB must be initialized before its attributes are overridden. */
+	(void)zb_platform_bdb_init_default();
+
+	if (bdb_primary_channels != 0U) {
+		g_bdbAttrs.primaryChannelSet = bdb_primary_channels;
+		g_bdbAttrs.secondaryChannelSet = 0U;
+	}
+
+	znp_net_formation_config();
+}
+
+static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
+{
+	uint8_t mode = (len >= 1U) ? d[0] : 0U;
+
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x05U, ZNP_STATUS_SUCCESS);
+
+	if ((mode & BDB_MODE_NWK_FORMATION) == 0U) {
+		bdb_notify(BDB_STATUS_SUCCESS, mode, 0U);
+		return;
+	}
+
+	if (g_zbNwkCtx.joined) {
+		/* A formed network is not formed again, but takes the host's settings. */
+		znp_net_apply_host();
+		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
+		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
+		return;
+	}
+
+	znp_state_change(ZNP_DEV_STATE_STARTING);
+	/* The formation is not over while a mode remains. */
+	bdb_notify(BDB_STATUS_IN_PROGRESS, mode, mode);
+
+	znp_apply_network_config();
+	formation_pending = true;
+	if (zb_platform_bdb_network_formation_start() != 0U) {
+		formation_pending = false;
+		znp_state_change(ZNP_DEV_STATE_HOLD);
+		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
+	}
+}
+
+static void app_cnf_set_channel(const uint8_t *d, uint8_t len)
+{
+	if (len < 5U) {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x08U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	if (d[0] != 0U) {
+		bdb_primary_channels = (uint32_t)znp_get_u16(&d[1]) |
+				       ((uint32_t)znp_get_u16(&d[3]) << 16);
+	}
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x08U, ZNP_STATUS_SUCCESS);
+}
+
+static void app_cnf_ok(uint8_t cmd)
+{
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, cmd, ZNP_STATUS_SUCCESS);
+}
+
+static void app_cnf_default_ok(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	/* Settings this port has no use for are accepted and ignored. */
+	app_cnf_ok(0x01U);
+}
+
+static void app_cnf_allow_rejoin(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	app_cnf_ok(0x03U);
+}
+
+static void app_cnf_set_centralized_key(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	app_cnf_ok(0x07U);
+}
+
+static void app_cnf_tc_key_exchange(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	app_cnf_ok(0x09U);
+}
+
+static void app_cnf_set_frame_counter(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	app_cnf_ok(0xFFU);
+}
+
+static void app_cnf_unsupported(const uint8_t *d, uint8_t len)
+{
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	/* Install codes are not supported. */
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_FAILURE);
+}
+
+static const struct znp_cmd sys_cmds[] = {
+	{ZNP_SUBSYS_SYS, 0x00U, sys_reset_req},
+	{ZNP_SUBSYS_SYS, 0x01U, sys_ping},
+	{ZNP_SUBSYS_SYS, 0x02U, sys_version},
+	{ZNP_SUBSYS_SYS, 0x04U, sys_get_ext_addr},
+	{ZNP_SUBSYS_SYS, 0x07U, sys_nv_item_init},
+	{ZNP_SUBSYS_SYS, 0x08U, sys_nv_read},
+	{ZNP_SUBSYS_SYS, 0x09U, sys_nv_write},
+	{ZNP_SUBSYS_SYS, 0x12U, sys_nv_delete},
+	{ZNP_SUBSYS_SYS, 0x13U, sys_nv_length},
+	{ZNP_SUBSYS_SYS, 0x14U, sys_set_tx_power},
+	{ZNP_SUBSYS_SYS, 0x1CU, sys_nv_read_ext},
+	{ZNP_SUBSYS_SYS, 0x1DU, sys_nv_write_ext},
+	{ZNP_SUBSYS_UTIL, 0x00U, util_get_device_info},
+	{ZNP_SUBSYS_UTIL, 0x01U, util_get_nv_info},
+	{ZNP_SUBSYS_UTIL, 0x09U, util_time_alive},
+	{ZNP_SUBSYS_UTIL, 0x0AU, util_led_control},
+	{ZNP_SUBSYS_UTIL, 0x48U, util_assoc_count},
+	{ZNP_SUBSYS_UTIL, 0x49U, util_assoc_find_device},
+	{ZNP_SUBSYS_APP_CNF, 0x01U, app_cnf_default_ok},
+	{ZNP_SUBSYS_APP_CNF, 0x03U, app_cnf_allow_rejoin},
+	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x05U, app_cnf_start_commissioning},
+	{ZNP_SUBSYS_APP_CNF, 0x06U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x07U, app_cnf_set_centralized_key},
+	{ZNP_SUBSYS_APP_CNF, 0x08U, app_cnf_set_channel},
+	{ZNP_SUBSYS_APP_CNF, 0x09U, app_cnf_tc_key_exchange},
+	{ZNP_SUBSYS_APP_CNF, 0xFFU, app_cnf_set_frame_counter},
+};
+
+bool znp_sys_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len)
+{
+	return znp_cmd_dispatch(sys_cmds, ARRAY_SIZE(sys_cmds), subsys, cmd, data, len);
+}
+
+void zb_znp_bdb_commissioning_status(uint8_t status, bool joined_network)
+{
+	uint8_t one = 1U;
+
+	if (!formation_pending) {
+		return;
+	}
+
+	if (joined_network) {
+		formation_pending = false;
+		(void)znp_nv_write(ZNP_NV_BDBNODEISONANETWORK, 0U, &one, 1U);
+		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
+		bdb_notify(BDB_STATUS_SUCCESS, BDB_MODE_NWK_FORMATION, 0U);
+	} else if (status != 0U) {
+		formation_pending = false;
+		znp_state_change(ZNP_DEV_STATE_HOLD);
+		bdb_notify(BDB_STATUS_FORMATION_FAILED, BDB_MODE_NWK_FORMATION, 0U);
+	}
+}
+
+bool zb_znp_host_controls_commissioning(void)
+{
+	return true;
+}
+
+/* Called once the UART is attached, so the host sees the usual power-up indication. */
+void znp_sys_start(void)
+{
+	znp_nv_seed();
+	znp_dev_state = ZNP_DEV_STATE_HOLD;
+	znp_reset_ind(0x00U);
+}

@@ -190,6 +190,14 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZBHCI_UART
   platform/zephyr/zb_zbhci_uart.c
   platform/zephyr/zb_zbhci_cmd.c
 )
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZSTACK_NCP
+  platform/zephyr/zb_znp_uart.c
+  platform/zephyr/zb_znp_nv.c
+  platform/zephyr/zb_znp_net.c
+  platform/zephyr/zb_znp_sys.c
+  platform/zephyr/zb_znp_zdo.c
+  platform/zephyr/zb_znp_af.c
+)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 # The imported MAC hands Green Power confirms to cGp_dataCnf on every router
 # build, because the vendor ties GP_SUPPORT_ENABLE to ZB_ROUTER_ROLE. This port
