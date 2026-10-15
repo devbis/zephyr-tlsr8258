@@ -4,6 +4,15 @@
  */
 
 /* The USB serial/JTAG port carries the NCP protocol of coordinator_znp.conf. */
+/*
+ * The board description assumes 8 MB of flash; the DevKitC-1 with the N4
+ * module has 4 MB, which is what the default partitions use. A 4 MB image
+ * header also boots on an 8 MB module.
+ */
+&flash0 {
+	reg = <0x0 DT_SIZE_M(4)>;
+};
+
 &usb_serial {
 	status = "okay";
 };
