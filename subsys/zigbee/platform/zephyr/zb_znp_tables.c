@@ -13,6 +13,7 @@
 #include <zephyr/logging/log.h>
 
 #include "zb_common.h"
+#include "ss/ss_zdoSecurityME.h"
 #include "nwk/includes/nwk_addr_map.h"
 #include "nwk/includes/nwk_neighbor.h"
 #include "zb_znp_internal.h"
@@ -31,7 +32,8 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 /* associated_devices_t as sent by Z-Stack 3.0: packed, 28 bytes. */
 #define ZNP_ASSOC_DEVICE_LEN    28U
 
-#define ZNP_ADDRMGR_USER_ASSOC  0x01U
+#define ZNP_ADDRMGR_USER_ASSOC    0x01U
+#define ZNP_ADDRMGR_USER_SECURITY 0x02U
 
 static uint8_t relation_of(const tl_zb_normal_neighbor_entry_t *e)
 {
@@ -151,26 +153,15 @@ static void util_assoc_get_with_address(const uint8_t *d, uint8_t len)
 	znp_srsp(ZNP_SUBSYS_UTIL, 0x4AU, rsp, sizeof(rsp));
 }
 
-static void util_assoc_add(const uint8_t *d, uint8_t len)
+/* Add a device the host knows of, as the Z-Stack node relation @p rel says. */
+static bool device_add(uint16_t nwk, const uint8_t *ext, uint8_t rel)
 {
 	tl_zb_normal_neighbor_entry_t n;
-	uint8_t rel;
+	tl_zb_normal_neighbor_entry_t *entry;
 	u16 idx = 0U;
 
-	if (len < 11U) {
-		znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U, ZNP_STATUS_INVALID_PARAMETER);
-		return;
-	}
-
-	rel = d[10];
-	if (rel < ZNP_REL_CHILD_RFD || rel > ZNP_REL_NEIGHBOR) {
-		znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U, ZNP_STATUS_INVALID_PARAMETER);
-		return;
-	}
-
-	if (tl_zbNwkAddrMapAdd(znp_get_u16(d), (u8 *)&d[2], &idx) != NWK_STATUS_SUCCESS) {
-		znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U, ZNP_STATUS_FAILURE);
-		return;
+	if (tl_zbNwkAddrMapAdd(nwk, (u8 *)ext, &idx) != NWK_STATUS_SUCCESS) {
+		return false;
 	}
 
 	memset(&n, 0, sizeof(n));
@@ -187,9 +178,37 @@ static void util_assoc_add(const uint8_t *d, uint8_t len)
 	n.lqi = 0xdeU;
 	n.outgoingCost = 1U;
 
+	entry = tl_zbNeighborTableUpdate(&n, 1U);
+	if (entry == NULL) {
+		return false;
+	}
+
+	/* A child is written to flash, so that its parent keeps it across a restart. */
+	if (n.relationship == NEIGHBOR_IS_CHILD) {
+		ss_zdoChildTableStore(entry);
+	}
+
+	return true;
+}
+
+static void util_assoc_add(const uint8_t *d, uint8_t len)
+{
+	uint8_t rel;
+
+	if (len < 11U) {
+		znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	rel = d[10];
+	if (rel < ZNP_REL_CHILD_RFD || rel > ZNP_REL_NEIGHBOR) {
+		znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
 	znp_srsp_status(ZNP_SUBSYS_UTIL, 0x64U,
-			(tl_zbNeighborTableUpdate(&n, 1U) != NULL) ? ZNP_STATUS_SUCCESS
-								  : ZNP_STATUS_FAILURE);
+			device_add(znp_get_u16(d), &d[2], rel) ? ZNP_STATUS_SUCCESS
+							       : ZNP_STATUS_FAILURE);
 }
 
 static void util_assoc_remove(const uint8_t *d, uint8_t len)
@@ -302,12 +321,91 @@ void znp_tables_sync(void)
 			continue;
 		}
 
-		entry[0] = (nb != NULL && nb->relationship == NEIGHBOR_IS_CHILD) ? ZNP_ADDRMGR_USER_ASSOC
-										 : 0U;
+		/* Other devices are listed too, or a backup would leave them out. */
+		entry[0] = (nb != NULL && nb->relationship == NEIGHBOR_IS_CHILD)
+				   ? ZNP_ADDRMGR_USER_ASSOC
+				   : ZNP_ADDRMGR_USER_SECURITY;
 		(void)znp_put_u16(&entry[1], a->shortAddr);
 		memcpy(&entry[3], a->extAddr, 8U);
 		used++;
 	}
 
 	(void)znp_nv_set_derived(ZNP_NV_ADDRMGR, table, sizeof(table));
+}
+
+/*
+ * A host that restores a backup writes the device tables, and expects them to
+ * be what the stack knows afterwards.
+ */
+static bool addr_valid(uint16_t nwk, const uint8_t *ext)
+{
+	return nwk < 0xFFF8U && !ZB_IEEE_ADDR_IS_ZERO(ext) && !znp_all_ff(ext, 8U);
+}
+
+static void addrmgr_import(void)
+{
+	uint8_t table[ZNP_ADDRMGR_ENTRIES * ZNP_ADDRMGR_ENTRY_LEN];
+	uint8_t local[8];
+	size_t n;
+
+	if (znp_nv_read(ZNP_NV_ADDRMGR, 0U, table, sizeof(table), &n) != ZNP_STATUS_SUCCESS ||
+	    n != sizeof(table)) {
+		return;
+	}
+
+	zb_getLocalExtAddr(local);
+	for (size_t i = 0; i < ZNP_ADDRMGR_ENTRIES; i++) {
+		const uint8_t *entry = &table[i * ZNP_ADDRMGR_ENTRY_LEN];
+		uint16_t nwk = znp_get_u16(&entry[1]);
+		const uint8_t *ext = &entry[3];
+
+		if (!addr_valid(nwk, ext) || nwk == zb_getLocalShortAddr() ||
+		    memcmp(ext, local, 8U) == 0) {
+			continue;
+		}
+
+		/* An associated device is a child of this node, anything else a router. */
+		(void)device_add(nwk, ext,
+				 ((entry[0] & ZNP_ADDRMGR_USER_ASSOC) != 0U) ? ZNP_REL_CHILD_RFD
+									    : ZNP_REL_NEIGHBOR);
+	}
+}
+
+static void tclk_import(uint16_t id)
+{
+	uint8_t entry[ZNP_TCLK_ENTRY_LEN];
+	uint8_t seed[16];
+	uint8_t key[16];
+	ss_dev_pair_set_t pair;
+	size_t n;
+
+	if (znp_nv_read(id, 0U, entry, sizeof(entry), &n) != ZNP_STATUS_SUCCESS ||
+	    n != sizeof(entry) || entry[16] == ZNP_TCLK_KEY_DEFAULT || !addr_valid(0U, &entry[8]) ||
+	    znp_nv_read(ZNP_NV_TCLK_SEED, 0U, seed, sizeof(seed), &n) != ZNP_STATUS_SUCCESS ||
+	    n != sizeof(seed)) {
+		return;
+	}
+
+	znp_tclk_key(seed, entry[18], &entry[8], key);
+
+	memset(&pair, 0, sizeof(pair));
+	memcpy(pair.device_address, &entry[8], 8U);
+	memcpy(pair.linkKey, key, sizeof(key));
+	pair.apsLinkKeyType = SS_UNIQUE_LINK_KEY;
+	/* The attribute values are the stack's own: provisional, unverified, verified. */
+	pair.keyAttr = entry[16];
+	pair.outgoingFrameCounter = znp_get_u32(&entry[0]);
+	pair.incomingFrameCounter = znp_get_u32(&entry[4]);
+
+	(void)ss_devKeyPairDelete(pair.device_address);
+	ss_devKeyPairSave(&pair);
+}
+
+void znp_tables_nv_written(uint16_t id)
+{
+	if (id == ZNP_NV_ADDRMGR) {
+		addrmgr_import();
+	} else if (id >= ZNP_NV_TCLK_FIRST && id < ZNP_NV_TCLK_FIRST + ZNP_TCLK_ENTRIES) {
+		tclk_import(id);
+	}
 }
