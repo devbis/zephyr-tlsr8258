@@ -107,6 +107,9 @@ struct znp_cmd {
 /* Each module looks the request up in its table; false means not handled. */
 bool znp_sys_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 bool znp_zdo_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
+bool znp_tables_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
+uint8_t znp_tables_children(uint16_t *out, uint8_t max);
+void znp_tables_sync(void);
 bool znp_af_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 
 static inline bool znp_cmd_dispatch(const struct znp_cmd *table, size_t count, uint8_t subsys,
@@ -129,6 +132,19 @@ uint8_t znp_nv_read(uint16_t id, uint16_t offset, uint8_t *out, size_t max, size
 uint8_t znp_nv_write(uint16_t id, uint16_t offset, const uint8_t *data, size_t len);
 uint8_t znp_nv_delete(uint16_t id);
 void znp_nv_reset(void);
+#define ZNP_NV_EXPORT_MAX 2816U
+
+/* Counts changes the host made to items that are worth keeping. */
+uint32_t znp_nv_generation(void);
+size_t znp_nv_export(uint8_t *buf, size_t max);
+bool znp_nv_import(const uint8_t *buf, size_t len);
+/* Store a stack-owned value, creating or resizing the item; not a host change. */
+uint8_t znp_nv_set_derived(uint16_t id, const uint8_t *data, size_t len);
+
+/* Flash copy of the NV items (zb_znp_persist.c). */
+bool znp_persist_load(void);
+void znp_persist_service(void);
+void znp_persist_flush(void);
 
 /* Item IDs the stack glue reads or writes itself. */
 #define ZNP_NV_STARTUP_OPTION      0x0003U
@@ -159,6 +175,14 @@ void znp_nv_reset(void);
 /* State shared between the ZNP modules (zb_znp_sys.c). */
 void znp_state_change(uint8_t state);
 void znp_sys_start(void);
+
+/* ZDO_STARTUP_FROM_APP states. */
+#define ZNP_NETWORK_RESTORED    0U
+#define ZNP_NETWORK_NEW         1U
+#define ZNP_NETWORK_NOT_STARTED 2U
+
+uint8_t znp_network_start(uint8_t mode);
+void znp_nv_seed_missing(void);
 uint8_t znp_device_state(void);
 
 /* Network settings as NV items (zb_znp_net.c). */

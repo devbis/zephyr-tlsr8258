@@ -99,6 +99,16 @@ static void zb_shell_leave_cnf(nlme_leave_cnf_t *cnf)
 
 static bool zb_shell_tc_join(zdo_tc_join_ind_t *ind)
 {
+#if defined(ZB_COORDINATOR_ROLE)
+	ss_dev_pair_set_t pair;
+
+	/* With an install code required, a device without a pre-installed key stays out. */
+	if (g_bdbAttrs.joinUsesInstallCodeKey != 0U &&
+	    ss_devKeyPairFind(ind->devIeeeAddr, &pair) != NV_SUCC) {
+		LOG_WRN("zb bdb: refusing a join without an install code key");
+		return false;
+	}
+#endif
 	zb_platform_app_device_joined(ind->devShortAddr, ind->devIeeeAddr, ind->parentIeeeAddr);
 	return true;
 }

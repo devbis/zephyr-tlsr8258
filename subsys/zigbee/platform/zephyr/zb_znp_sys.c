@@ -15,9 +15,14 @@
 #include <zephyr/zigbee/zb_znp.h>
 
 #include "zb_common.h"
+#include "drv_nv.h"
+#include "zbapi/zb_initialize.h"
 #include "zb_znp_internal.h"
 
 LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
+
+extern void zb_reset(void);
+extern u16 tl_bdbInstallCodeCRC16(u8 *pInstallCode, u8 len);
 
 /* MT capabilities: SYS, AF, ZDO, UTIL, APP and APP_CNF. */
 #define ZNP_CAPABILITIES            0x0559U
@@ -32,7 +37,11 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZNP_STARTUP_CLEAR_CONFIG    BIT(0)
 #define ZNP_STARTUP_CLEAR_STATE     BIT(1)
 
+#define ZNP_INSTALL_CODE_WITH_CRC     1U
+#define ZNP_INSTALL_CODE_DERIVED_KEY  2U
+
 #define ZNP_NV_READ_CHUNK           240U
+#define ZNP_DEVICE_INFO_CHILDREN    16U
 
 /* The NV items every Z-Stack has from the factory, with their default values. */
 struct znp_nv_default {
@@ -97,7 +106,7 @@ static void znp_nv_seed_tables(void)
 	}
 }
 
-static void znp_nv_seed(void)
+void znp_nv_seed_missing(void)
 {
 	uint8_t ff[16];
 	uint8_t ieee[8];
@@ -105,7 +114,6 @@ static void znp_nv_seed(void)
 	memset(ff, 0xff, sizeof(ff));
 	zb_getLocalExtAddr(ieee);
 
-	znp_nv_reset();
 	for (size_t i = 0; i < ARRAY_SIZE(nv_defaults); i++) {
 		(void)znp_nv_item_init(nv_defaults[i].id, 1U, &nv_defaults[i].value, 1U);
 	}
@@ -124,6 +132,13 @@ static void znp_nv_seed(void)
 	znp_nv_seed_tables();
 }
 
+/* All items back to their factory values. */
+static void znp_nv_seed(void)
+{
+	znp_nv_reset();
+	znp_nv_seed_missing();
+}
+
 /* Items whose value is the stack's own state, refreshed before the host looks. */
 static void znp_nv_sync(void)
 {
@@ -131,9 +146,9 @@ static void znp_nv_sync(void)
 
 	/* A host that deletes the address expects the hardware one back. */
 	zb_getLocalExtAddr(ieee);
-	(void)znp_nv_item_init(ZNP_NV_EXTADDR, sizeof(ieee), ieee, sizeof(ieee));
-	(void)znp_nv_write(ZNP_NV_EXTADDR, 0U, ieee, sizeof(ieee));
+	(void)znp_nv_set_derived(ZNP_NV_EXTADDR, ieee, sizeof(ieee));
 	znp_net_sync();
+	znp_tables_sync();
 }
 
 uint8_t znp_device_state(void)
@@ -177,9 +192,30 @@ static void sys_reset_req(const uint8_t *d, uint8_t len)
 	ARG_UNUSED(len);
 
 	(void)znp_nv_read(ZNP_NV_STARTUP_OPTION, 0U, &opt, 1U, &n);
-	if ((opt & (ZNP_STARTUP_CLEAR_CONFIG | ZNP_STARTUP_CLEAR_STATE)) != 0U) {
+
+	if ((opt & ZNP_STARTUP_CLEAR_STATE) != 0U) {
+		/* Forget the network, as the stack's own factory reset does. */
+		LOG_INF("znp: clearing the network");
+		/*
+		 * The stack's factory reset, without its BDB step: that step
+		 * restarts BDB on the descriptor of an earlier init, which a
+		 * node that never started commissioning does not have.
+		 */
+		addrExt_t ieee;
+
+		zb_getLocalExtAddr(ieee);
+		(void)nv_resetToFactoryNew();
+		zb_reset();
+		/* The MAC reset drops the node's address; it is not part of the network. */
+		ZB_IEEE_ADDR_COPY(g_zbMacPib.extAddress, ieee);
+		zb_platform_bdb_runtime_reset();
+		znp_net_reset();
+		znp_nv_seed();
+		znp_persist_flush();
+	} else if ((opt & ZNP_STARTUP_CLEAR_CONFIG) != 0U) {
 		znp_nv_seed();
 		znp_net_reset();
+		znp_persist_flush();
 	}
 
 	formation_pending = false;
@@ -341,11 +377,18 @@ static void sys_set_tx_power(const uint8_t *d, uint8_t len)
 
 static void util_get_device_info(const uint8_t *d, uint8_t len)
 {
-	uint8_t rsp[1 + 8 + 2 + 1 + 1 + 1];
+	uint8_t rsp[1 + 8 + 2 + 1 + 1 + 1 + 2 * ZNP_DEVICE_INFO_CHILDREN];
+	uint16_t children[ZNP_DEVICE_INFO_CHILDREN];
 	uint8_t *p = rsp;
+	uint8_t n;
 
 	ARG_UNUSED(d);
 	ARG_UNUSED(len);
+
+	/* A network the stack restored is up without the host starting it. */
+	if (g_zbNwkCtx.joined && znp_dev_state == ZNP_DEV_STATE_HOLD) {
+		znp_dev_state = ZNP_DEV_STATE_COORDINATOR;
+	}
 
 	*p++ = ZNP_STATUS_SUCCESS;
 	zb_getLocalExtAddr(p);
@@ -353,7 +396,11 @@ static void util_get_device_info(const uint8_t *d, uint8_t len)
 	p = znp_put_u16(p, zb_getLocalShortAddr());
 	*p++ = ZNP_DEVICE_TYPE_COORDINATOR;
 	*p++ = znp_dev_state;
-	*p++ = 0U; /* no associated device list */
+	n = znp_tables_children(children, ZNP_DEVICE_INFO_CHILDREN);
+	*p++ = n;
+	for (uint8_t i = 0U; i < n; i++) {
+		p = znp_put_u16(p, children[i]);
+	}
 	znp_srsp(ZNP_SUBSYS_UTIL, 0x00U, rsp, (size_t)(p - rsp));
 }
 
@@ -378,32 +425,6 @@ static void util_get_nv_info(const uint8_t *d, uint8_t len)
 	(void)znp_nv_read(ZNP_NV_PRECFGKEY, 0U, p, 16U, &n);
 	p += 16;
 	znp_srsp(ZNP_SUBSYS_UTIL, 0x01U, rsp, (size_t)(p - rsp));
-}
-
-static void util_assoc_count(const uint8_t *d, uint8_t len)
-{
-	uint8_t rsp[2] = {0U, 0U};
-
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
-
-	znp_srsp(ZNP_SUBSYS_UTIL, 0x48U, rsp, sizeof(rsp));
-}
-
-static void util_assoc_find_device(const uint8_t *d, uint8_t len)
-{
-	/*
-	 * The host reads the size of this packed struct to learn the target's
-	 * struct alignment; 28 bytes is the unaligned layout. An empty slot is
-	 * all 0xff.
-	 */
-	uint8_t rsp[28];
-
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
-
-	memset(rsp, 0xff, sizeof(rsp));
-	znp_srsp(ZNP_SUBSYS_UTIL, 0x49U, rsp, sizeof(rsp));
 }
 
 static void util_led_control(const uint8_t *d, uint8_t len)
@@ -440,23 +461,18 @@ static void znp_apply_network_config(void)
 	znp_net_formation_config();
 }
 
-static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
+/*
+ * Start the network, whichever way the host asked: a restored network is
+ * announced as up, a new one is formed from the host's settings.
+ */
+uint8_t znp_network_start(uint8_t mode)
 {
-	uint8_t mode = (len >= 1U) ? d[0] : 0U;
-
-	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x05U, ZNP_STATUS_SUCCESS);
-
-	if ((mode & BDB_MODE_NWK_FORMATION) == 0U) {
-		bdb_notify(BDB_STATUS_SUCCESS, mode, 0U);
-		return;
-	}
-
 	if (g_zbNwkCtx.joined) {
 		/* A formed network is not formed again, but takes the host's settings. */
 		znp_net_apply_host();
 		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
 		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
-		return;
+		return ZNP_NETWORK_RESTORED;
 	}
 
 	znp_state_change(ZNP_DEV_STATE_STARTING);
@@ -469,7 +485,24 @@ static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
 		formation_pending = false;
 		znp_state_change(ZNP_DEV_STATE_HOLD);
 		bdb_notify(BDB_STATUS_FORMATION_FAILED, mode, 0U);
+		return ZNP_NETWORK_NOT_STARTED;
 	}
+
+	return ZNP_NETWORK_NEW;
+}
+
+static void app_cnf_start_commissioning(const uint8_t *d, uint8_t len)
+{
+	uint8_t mode = (len >= 1U) ? d[0] : 0U;
+
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x05U, ZNP_STATUS_SUCCESS);
+
+	if ((mode & BDB_MODE_NWK_FORMATION) == 0U) {
+		bdb_notify(BDB_STATUS_SUCCESS, mode, 0U);
+		return;
+	}
+
+	(void)znp_network_start(mode);
 }
 
 static void app_cnf_set_channel(const uint8_t *d, uint8_t len)
@@ -532,13 +565,59 @@ static void app_cnf_set_frame_counter(const uint8_t *d, uint8_t len)
 	app_cnf_ok(0xFFU);
 }
 
-static void app_cnf_unsupported(const uint8_t *d, uint8_t len)
+/*
+ * Pre-install the link key of a device that joins with an install code. The
+ * code arrives with its CRC (format 1) or already turned into the key that
+ * the trust center uses (format 2).
+ */
+static void app_cnf_add_install_code(const uint8_t *d, uint8_t len)
 {
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	ss_dev_pair_set_t pair;
+	const uint8_t *code = &d[9];
+	size_t code_len;
 
-	/* Install codes are not supported. */
-	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_FAILURE);
+	if (len < 9U + SEC_KEY_LEN) {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+	code_len = len - 9U;
+
+	if (d[0] == ZNP_INSTALL_CODE_WITH_CRC && code_len == SEC_KEY_LEN + 2U) {
+		if (tl_bdbInstallCodeCRC16((u8 *)code, SEC_KEY_LEN) !=
+		    znp_get_u16(&code[SEC_KEY_LEN])) {
+			znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+			return;
+		}
+
+		bdb_preInstallCodeAdd((u8 *)&d[1], (u8 *)code);
+	} else if (d[0] == ZNP_INSTALL_CODE_DERIVED_KEY && code_len == SEC_KEY_LEN) {
+		/* A device keeps one key, so a new one replaces the old. */
+		(void)ss_devKeyPairDelete((u8 *)&d[1]);
+
+		memset(&pair, 0, sizeof(pair));
+		memcpy(pair.device_address, &d[1], 8U);
+		memcpy(pair.linkKey, code, SEC_KEY_LEN);
+		pair.apsLinkKeyType = SS_UNIQUE_LINK_KEY;
+		pair.keyAttr = SS_UNVERIFIED_KEY;
+		ss_devKeyPairSave(&pair);
+	} else {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_SUCCESS);
+}
+
+/* While set, only a device with a pre-installed key may join. */
+static void app_cnf_join_uses_install_code(const uint8_t *d, uint8_t len)
+{
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x06U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	g_bdbAttrs.joinUsesInstallCodeKey = (d[0] != 0U) ? 1U : 0U;
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x06U, ZNP_STATUS_SUCCESS);
 }
 
 static const struct znp_cmd sys_cmds[] = {
@@ -558,13 +637,11 @@ static const struct znp_cmd sys_cmds[] = {
 	{ZNP_SUBSYS_UTIL, 0x01U, util_get_nv_info},
 	{ZNP_SUBSYS_UTIL, 0x09U, util_time_alive},
 	{ZNP_SUBSYS_UTIL, 0x0AU, util_led_control},
-	{ZNP_SUBSYS_UTIL, 0x48U, util_assoc_count},
-	{ZNP_SUBSYS_UTIL, 0x49U, util_assoc_find_device},
 	{ZNP_SUBSYS_APP_CNF, 0x01U, app_cnf_default_ok},
 	{ZNP_SUBSYS_APP_CNF, 0x03U, app_cnf_allow_rejoin},
-	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_add_install_code},
 	{ZNP_SUBSYS_APP_CNF, 0x05U, app_cnf_start_commissioning},
-	{ZNP_SUBSYS_APP_CNF, 0x06U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x06U, app_cnf_join_uses_install_code},
 	{ZNP_SUBSYS_APP_CNF, 0x07U, app_cnf_set_centralized_key},
 	{ZNP_SUBSYS_APP_CNF, 0x08U, app_cnf_set_channel},
 	{ZNP_SUBSYS_APP_CNF, 0x09U, app_cnf_tc_key_exchange},
@@ -587,6 +664,7 @@ void zb_znp_bdb_commissioning_status(uint8_t status, bool joined_network)
 	if (joined_network) {
 		formation_pending = false;
 		(void)znp_nv_write(ZNP_NV_BDBNODEISONANETWORK, 0U, &one, 1U);
+		zb_info_save(NULL);
 		znp_state_change(ZNP_DEV_STATE_COORDINATOR);
 		bdb_notify(BDB_STATUS_SUCCESS, BDB_MODE_NWK_FORMATION, 0U);
 	} else if (status != 0U) {
@@ -604,7 +682,11 @@ bool zb_znp_host_controls_commissioning(void)
 /* Called once the UART is attached, so the host sees the usual power-up indication. */
 void znp_sys_start(void)
 {
-	znp_nv_seed();
+	/* The host's items survive a restart; items a newer build adds are created empty. */
+	if (znp_persist_load()) {
+		LOG_INF("znp: restored the saved NV items");
+	}
+	znp_nv_seed_missing();
 	znp_dev_state = ZNP_DEV_STATE_HOLD;
 	znp_reset_ind(0x00U);
 }
