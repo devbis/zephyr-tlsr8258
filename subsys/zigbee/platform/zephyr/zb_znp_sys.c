@@ -102,6 +102,14 @@ static void znp_nv_seed_tables(void)
 
 	(void)znp_nv_item_init(ZNP_NV_APS_LINK_KEY_TABLE, ZNP_APS_LINK_KEY_TABLE_LEN, zero,
 			       sizeof(zero));
+
+	/* Empty trust center link key entries: all zero but the "default key" attribute. */
+	zero[ZNP_TCLK_ENTRY_LEN - 3U] = ZNP_TCLK_KEY_DEFAULT;
+	for (uint16_t i = 0U; i < ZNP_TCLK_ENTRIES; i++) {
+		(void)znp_nv_item_init(ZNP_NV_TCLK_FIRST + i, ZNP_TCLK_ENTRY_LEN, zero,
+				       ZNP_TCLK_ENTRY_LEN);
+	}
+	zero[ZNP_TCLK_ENTRY_LEN - 3U] = 0U;
 	for (uint16_t id = ZNP_NV_NWK_SEC_MATERIAL_FIRST; id <= ZNP_NV_NWK_SEC_MATERIAL_LAST; id++) {
 		(void)znp_nv_item_init(id, ZNP_NWK_SEC_MATERIAL_LEN, zero, ZNP_NWK_SEC_MATERIAL_LEN);
 	}
@@ -147,6 +155,8 @@ static void znp_nv_written(uint16_t id)
 	if (id == ZNP_NV_CONCENTRATOR_ENABLE || id == ZNP_NV_CONCENTRATOR_DISCOVERY) {
 		znp_routing_apply();
 	}
+
+	znp_tables_nv_written(id);
 }
 
 static void znp_nv_sync(void)
@@ -227,6 +237,11 @@ static void sys_reset_req(const uint8_t *d, uint8_t len)
 		znp_persist_flush();
 	}
 
+	/* What the host wrote to the network settings takes effect on a reset. */
+	if (g_zbNwkCtx.joined) {
+		znp_net_apply_host();
+	}
+
 	formation_pending = false;
 	znp_dev_state = g_zbNwkCtx.joined ? ZNP_DEV_STATE_COORDINATOR : ZNP_DEV_STATE_HOLD;
 	znp_reset_ind(0x01U);
@@ -237,11 +252,6 @@ static void sys_ping(const uint8_t *d, uint8_t len)
 	uint8_t rsp[2];
 
 	ARG_UNUSED(d);
-	/* What the host wrote to the network settings takes effect on a reset. */
-	if (g_zbNwkCtx.joined) {
-		znp_net_apply_host();
-	}
-
 	ARG_UNUSED(len);
 
 	(void)znp_put_u16(rsp, ZNP_CAPABILITIES);
