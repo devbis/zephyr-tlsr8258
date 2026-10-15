@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 tests:
-  zigbee.znp_nv:
+  zigbee.znp:
     tags:
       - zigbee
     type: unit
