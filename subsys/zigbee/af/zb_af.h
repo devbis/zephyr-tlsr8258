@@ -35,7 +35,12 @@
 #define	ZDO_EP                                  0
 #define	AF_BROADCAST_EP                         0xFF
 
+#if defined(CONFIG_ZIGBEE_NCP)
+/* A host registers all the endpoints it serves; Zigbee2MQTT alone uses fourteen. */
+#define	MAX_ACTIVE_EP_NUMBER                    16
+#else
 #define	MAX_ACTIVE_EP_NUMBER                    8
+#endif
 
 #define	INVALID_CMP_RESULT                      0xFF
 
