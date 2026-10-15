@@ -8,7 +8,7 @@
 	node-id = <0x0001>;
 };
 
-/* uart1 carries the ZBHCI protocol. */
+/* uart1 carries the NCP protocol. */
 &uart1 {
 	status = "okay";
 };
