@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* The USB serial/JTAG port carries the NCP protocol of coordinator_znp.conf. */
+&usb_serial {
+	status = "okay";
+};
+
+/ {
+	chosen {
+		zigbee,ncp-uart = &usb_serial;
+	};
+};
