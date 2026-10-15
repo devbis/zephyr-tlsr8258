@@ -10,6 +10,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_znp.h>
@@ -102,6 +103,14 @@ static void znp_nv_seed_tables(void)
 
 	(void)znp_nv_item_init(ZNP_NV_APS_LINK_KEY_TABLE, ZNP_APS_LINK_KEY_TABLE_LEN, zero,
 			       sizeof(zero));
+
+	/* Empty trust center link key entries: all zero but the "default key" attribute. */
+	zero[ZNP_TCLK_ENTRY_LEN - 3U] = ZNP_TCLK_KEY_DEFAULT;
+	for (uint16_t i = 0U; i < ZNP_TCLK_ENTRIES; i++) {
+		(void)znp_nv_item_init(ZNP_NV_TCLK_FIRST + i, ZNP_TCLK_ENTRY_LEN, zero,
+				       ZNP_TCLK_ENTRY_LEN);
+	}
+	zero[ZNP_TCLK_ENTRY_LEN - 3U] = 0U;
 	for (uint16_t id = ZNP_NV_NWK_SEC_MATERIAL_FIRST; id <= ZNP_NV_NWK_SEC_MATERIAL_LAST; id++) {
 		(void)znp_nv_item_init(id, ZNP_NWK_SEC_MATERIAL_LEN, zero, ZNP_NWK_SEC_MATERIAL_LEN);
 	}
@@ -130,6 +139,17 @@ void znp_nv_seed_missing(void)
 	(void)znp_nv_item_init(ZNP_NV_NWK_ACTIVE_KEY_INFO, 17U, ff, 16U);
 	(void)znp_nv_item_init(ZNP_NV_NWK_ALTERN_KEY_INFO, 17U, ff, 16U);
 	(void)znp_nv_item_init(ZNP_NV_NWKKEY, 21U, ff, 16U);
+
+	/*
+	 * The seed that unique link keys are derived from exists on every Z-Stack,
+	 * and a host that does not find it takes the network for unformed.
+	 */
+	if (znp_nv_length(ZNP_NV_TCLK_SEED) == 0U) {
+		uint8_t seed[16];
+
+		sys_rand_get(seed, sizeof(seed));
+		(void)znp_nv_item_init(ZNP_NV_TCLK_SEED, sizeof(seed), seed, sizeof(seed));
+	}
 	znp_nv_seed_tables();
 }
 
@@ -147,6 +167,8 @@ static void znp_nv_written(uint16_t id)
 	if (id == ZNP_NV_CONCENTRATOR_ENABLE || id == ZNP_NV_CONCENTRATOR_DISCOVERY) {
 		znp_routing_apply();
 	}
+
+	znp_tables_nv_written(id);
 }
 
 static void znp_nv_sync(void)
@@ -225,6 +247,11 @@ static void sys_reset_req(const uint8_t *d, uint8_t len)
 		znp_nv_seed();
 		znp_net_reset();
 		znp_persist_flush();
+	}
+
+	/* What the host wrote to the network settings takes effect on a reset. */
+	if (g_zbNwkCtx.joined) {
+		znp_net_apply_host();
 	}
 
 	formation_pending = false;

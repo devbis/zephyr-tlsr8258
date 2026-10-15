@@ -11,8 +11,8 @@
 
 #include "zb_znp_internal.h"
 
-#define ZNP_NV_MAX_ITEMS 48U
-#define ZNP_NV_POOL_SIZE 2560U
+#define ZNP_NV_MAX_ITEMS 96U
+#define ZNP_NV_POOL_SIZE 3840U
 
 #define ZNP_NV_EXPORT_VERSION 1U
 
