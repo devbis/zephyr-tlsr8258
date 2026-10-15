@@ -18,6 +18,10 @@ The role is selected at build time:
 - coordinator: ``coordinator.conf`` and ``coordinator.overlay``; the
   coordinator also interviews every device that announces itself and speaks
   the Telink ZBHCI protocol on ``uart1`` (see ``zbhci_client.py``)
+- coordinator for a Z-Stack host: ``coordinator_znp.conf`` and
+  ``coordinator.overlay``; ``uart1`` then speaks the Z-Stack ZNP protocol
+  instead (``CONFIG_ZIGBEE_NCP_ZSTACK``), and the host, not the sample,
+  forms the network and interviews the devices
 
 Building and Running
 ********************
@@ -60,3 +64,17 @@ coordinator ``0x0001`` and ``...:01``.
 
 The same configurations also run on the ``nrf52_bsim`` BabbleSim board, see
 ``scripts/bsim/run_zigbee_join.sh``.
+
+Z-Stack host
+************
+
+``zephyr.exe`` prints the pseudo terminal of ``uart1`` at startup. Point a
+Z-Stack host at it: Zigbee2MQTT with ``adapter: zstack`` and ``port``, or ZHA
+(zigpy-znp) with the radio type ``znp``. ``znp_check.py`` drives the node with
+zigpy-znp, forms the network, opens permit join and reads the Basic cluster of
+the first device that joins:
+
+.. code-block:: console
+
+   pip install zigpy-znp
+   ./znp_check.py /dev/ttysNNN
