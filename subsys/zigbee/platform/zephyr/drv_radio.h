@@ -55,6 +55,8 @@ void zb_radio_filter_sync(void);
 void zb_radio_trx_switch(uint8_t mode, uint8_t phy_chn);
 void zb_radio_trx_off_auto_mode(void);
 void zb_radio_tx_power_set(uint8_t level);
+/* Set the transmit power in dBm; 0 on success, a negative errno otherwise. */
+int zb_radio_tx_power_dbm_set(int16_t dbm);
 int8_t zb_radio_rssi_get(void);
 void zb_radio_tx_start(uint8_t *tx_buf);
 uint8_t zb_radio_tx_done_get(void);
