@@ -4,12 +4,13 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr COMPONENTS unittest REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(znp_nv)
+project(znp)
 
 target_sources(testbinary PRIVATE
   main.c
   ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_nv.c
   ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_keys.c
+  ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_frame.c
 )
 
 target_include_directories(testbinary PRIVATE
