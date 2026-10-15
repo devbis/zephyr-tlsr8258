@@ -192,6 +192,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZBHCI_UART
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZSTACK_NCP
   platform/zephyr/zb_znp_uart.c
+  platform/zephyr/zb_znp_frame.c
   platform/zephyr/zb_znp_nv.c
   platform/zephyr/zb_znp_net.c
   platform/zephyr/zb_znp_tables.c
