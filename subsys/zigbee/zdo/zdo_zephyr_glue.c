@@ -226,6 +226,58 @@ static u8 zdo_announce_seq;
  */
 /* zb_zdoSendDevAnnance() now comes from the imported stack (zbapi/zb_api.c). */
 
+/*
+ * A frame addressed to this node does not go over the air: it is delivered to
+ * the local endpoint as if it had been received.
+ */
+static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len, const u8 *pld,
+			  u8 *apsCnt)
+{
+	const u16 pldOff = (u16)((sizeof(aps_data_ind_t) + 3U) & ~3U);
+	aps_data_ind_t *ind;
+	zb_buf_t *buf;
+
+	if ((u16)(pldOff + len) > ZB_BUF_SIZE) {
+		return APS_STATUS_ASDU_TOO_LONG;
+	}
+
+	buf = zb_buf_allocate();
+	if (buf == NULL) {
+		return APS_STATUS_INTERNAL_BUF_FULL;
+	}
+
+	ind = (aps_data_ind_t *)buf;
+	memset(ind, 0, sizeof(*ind));
+	if (len != 0U) {
+		memcpy((u8 *)buf + pldOff, pld, len);
+	}
+
+	ind->dst_addr_mode = APS_SHORT_DSTADDR_WITHEP;
+	ind->dst_ep = dst->dstEp;
+	ind->dst_addr = g_zbNIB.nwkAddr;
+	ind->src_addr_mode = APS_SHORT_DSTADDR_WITHEP;
+	ind->src_ep = srcEp;
+	ind->profile_id = dst->profileId;
+	ind->cluster_id = clusterId;
+	ind->asduLength = len;
+	ind->asdu = (u8 *)buf + pldOff;
+	ind->src_short_addr = g_zbNIB.nwkAddr;
+	ind->srcMacAddr = g_zbNIB.nwkAddr;
+	ind->lqi = 0xFFU;
+	ind->aps_counter = aps_get_counter_value();
+	if (apsCnt != NULL) {
+		*apsCnt = ind->aps_counter;
+	}
+
+	buf->hdr.used = 1U;
+	if (tl_zbTaskPost(af_aps_data_entry, buf) != RET_OK) {
+		zb_buf_free(buf);
+		return APS_STATUS_INTERNAL_BUF_FULL;
+	}
+
+	return APS_STATUS_SUCCESS;
+}
+
 u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt)
 {
 	zb_buf_t *buf;
@@ -244,6 +296,11 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 	}
 	if ((u16)(AF_APS_DATA_HDR_LEN + cmdPldLen) > ZB_BUF_SIZE) {
 		return APS_STATUS_ASDU_TOO_LONG;
+	}
+
+	if (!ZB_NWK_IS_ADDRESS_BROADCAST(pDstEpInfo->dstAddr.shortAddr) &&
+	    pDstEpInfo->dstAddr.shortAddr == g_zbNIB.nwkAddr && g_zbNwkCtx.joined) {
+		return af_dataLoopback(srcEp, pDstEpInfo, clusterId, cmdPldLen, cmdPld, apsCnt);
 	}
 
 	buf = zb_buf_allocate();
