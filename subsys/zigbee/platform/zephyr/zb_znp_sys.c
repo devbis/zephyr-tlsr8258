@@ -237,6 +237,11 @@ static void sys_ping(const uint8_t *d, uint8_t len)
 	uint8_t rsp[2];
 
 	ARG_UNUSED(d);
+	/* What the host wrote to the network settings takes effect on a reset. */
+	if (g_zbNwkCtx.joined) {
+		znp_net_apply_host();
+	}
+
 	ARG_UNUSED(len);
 
 	(void)znp_put_u16(rsp, ZNP_CAPABILITIES);
