@@ -16,6 +16,7 @@
 
 #include "zb_common.h"
 #include "drv_nv.h"
+#include "drv_radio.h"
 #include "zbapi/zb_initialize.h"
 #include "zb_znp_internal.h"
 
@@ -140,6 +141,14 @@ static void znp_nv_seed(void)
 }
 
 /* Items whose value is the stack's own state, refreshed before the host looks. */
+/* A host write may call for the stack to act on it. */
+static void znp_nv_written(uint16_t id)
+{
+	if (id == ZNP_NV_CONCENTRATOR_ENABLE || id == ZNP_NV_CONCENTRATOR_DISCOVERY) {
+		znp_routing_apply();
+	}
+}
+
 static void znp_nv_sync(void)
 {
 	uint8_t ieee[8];
@@ -320,6 +329,7 @@ static void sys_nv_write(const uint8_t *d, uint8_t len)
 	znp_net_note_write(znp_get_u16(d));
 	znp_srsp_status(ZNP_SUBSYS_SYS, 0x09U,
 			znp_nv_write(znp_get_u16(d), d[2], &d[4], d[3]));
+	znp_nv_written(znp_get_u16(d));
 }
 
 static void sys_nv_write_ext(const uint8_t *d, uint8_t len)
@@ -340,6 +350,7 @@ static void sys_nv_write_ext(const uint8_t *d, uint8_t len)
 	znp_net_note_write(znp_get_u16(d));
 	znp_srsp_status(ZNP_SUBSYS_SYS, 0x1DU,
 			znp_nv_write(znp_get_u16(d), znp_get_u16(&d[2]), &d[6], n));
+	znp_nv_written(znp_get_u16(d));
 }
 
 static void sys_nv_delete(const uint8_t *d, uint8_t len)
@@ -369,8 +380,17 @@ static void sys_nv_length(const uint8_t *d, uint8_t len)
 
 static void sys_set_tx_power(const uint8_t *d, uint8_t len)
 {
-	/* The radio power is not adjustable at run time; report the request as applied. */
-	znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U, (len >= 1U) ? d[0] : 0U);
+	int8_t dbm;
+
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	/* Z-Stack 3.0 answers with the power it applied. */
+	dbm = (int8_t)d[0];
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U,
+			(zb_radio_tx_power_dbm_set(dbm) == 0) ? (uint8_t)dbm : 0U);
 }
 
 /* UTIL */
@@ -388,6 +408,7 @@ static void util_get_device_info(const uint8_t *d, uint8_t len)
 	/* A network the stack restored is up without the host starting it. */
 	if (g_zbNwkCtx.joined && znp_dev_state == ZNP_DEV_STATE_HOLD) {
 		znp_dev_state = ZNP_DEV_STATE_COORDINATOR;
+		znp_routing_apply();
 	}
 
 	*p++ = ZNP_STATUS_SUCCESS;
@@ -467,6 +488,8 @@ static void znp_apply_network_config(void)
  */
 uint8_t znp_network_start(uint8_t mode)
 {
+	znp_routing_apply();
+
 	if (g_zbNwkCtx.joined) {
 		/* A formed network is not formed again, but takes the host's settings. */
 		znp_net_apply_host();

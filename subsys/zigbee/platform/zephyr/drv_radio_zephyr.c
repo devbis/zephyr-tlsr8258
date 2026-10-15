@@ -765,6 +765,15 @@ void zb_radio_tx_power_set(u8 level)
 	(void)g_radio.api->set_txpower(g_radio.dev, zb_radio_tx_dbm_from_level(level));
 }
 
+int zb_radio_tx_power_dbm_set(int16_t dbm)
+{
+	if ((g_radio.dev == NULL) || (g_radio.api == NULL) || (g_radio.api->set_txpower == NULL)) {
+		return -ENOTSUP;
+	}
+
+	return g_radio.api->set_txpower(g_radio.dev, dbm);
+}
+
 s8 zb_radio_rssi_get(void)
 {
 	s8 live_rssi;
