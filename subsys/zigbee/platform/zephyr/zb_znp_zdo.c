@@ -16,6 +16,9 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 #include "zb_common.h"
+#include "ev_timer.h"
+#include "mac/mac.h"
+#include "nwk/nwk_data.h"
 #include "aps/aps_api.h"
 #include "zb_znp_internal.h"
 
@@ -214,13 +217,71 @@ static void zdo_ext_route_chk(const uint8_t *d, uint8_t len)
 	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x46U, ZNP_STATUS_SUCCESS);
 }
 
+/*
+ * A channel change is announced to the network, and every node, this one
+ * included, moves once the announcement has had time to spread.
+ */
+#define NWK_UPDATE_CHANNEL_CHANGE 0xFEU
+#define NWK_UPDATE_BROADCAST_ALL  0xFFFDU
+#define NWK_UPDATE_DELAY_MS       5000U
+
+static uint8_t pending_channel;
+static uint8_t pending_update_id;
+
+static int channel_change_apply(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	tl_zbMacChannelSet(pending_channel);
+	g_zbMacPib.phyChannelCur = pending_channel;
+	g_zbNIB.updateId = pending_update_id;
+	zdo_nlmeChannelShift(pending_channel);
+	tl_zbNwkBeaconPayloadUpdate();
+
+	/* The host reads the new channel back from the NIB. */
+	LOG_INF("znp: network moved to channel %u", pending_channel);
+	return -1;
+}
+
 static void zdo_mgmt_nwk_update_req(const uint8_t *d, uint8_t len)
 {
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	zdo_mgmt_nwk_update_req_t req;
+	uint32_t channels;
+	u8 seq = 0U;
 
-	/* Moving the network to another channel is not supported. */
-	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_FAILURE);
+	if (len < 11U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	channels = znp_get_u16(&d[3]) | ((uint32_t)znp_get_u16(&d[5]) << 16);
+	if (d[7] != NWK_UPDATE_CHANNEL_CHANGE) {
+		/* Energy scans are not offered. */
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_FAILURE);
+		return;
+	}
+
+	/* One channel of the 2.4 GHz band, other than the current one. */
+	if (channels == 0U || (channels & (channels - 1U)) != 0U ||
+	    (channels & ~(0x07FFFFFFUL & ~0x7FFUL)) != 0U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	pending_channel = (uint8_t)__builtin_ctz(channels);
+	pending_update_id = (uint8_t)(g_zbNIB.updateId + 1U);
+
+	memset(&req, 0, sizeof(req));
+	req.scan_ch = channels;
+	req.scan_duration = NWK_UPDATE_CHANNEL_CHANGE;
+	req.nwk_update_id = pending_update_id;
+	if (zb_mgmtNwkUpdateReq(NWK_UPDATE_BROADCAST_ALL, &req, &seq, NULL) != ZDO_SUCCESS) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_FAILURE);
+		return;
+	}
+
+	(void)ev_timer_taskPost(channel_change_apply, NULL, NWK_UPDATE_DELAY_MS);
+	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_SUCCESS);
 }
 
 static void zdo_ext_nwk_info(const uint8_t *d, uint8_t len)
@@ -314,6 +375,26 @@ static void zdo_ext_count_all_groups(const uint8_t *d, uint8_t len)
 	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x4CU, aps_group_entry_num_get());
 }
 
+static void zdo_startup_from_app(const uint8_t *d, uint8_t len)
+{
+	uint8_t rsp;
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	/* The response goes first: the state change it leads to follows as an indication. */
+	if (g_zbNwkCtx.joined) {
+		rsp = ZNP_NETWORK_RESTORED;
+	} else {
+		rsp = ZNP_NETWORK_NEW;
+	}
+	znp_srsp(ZNP_SUBSYS_ZDO, 0x40U, &rsp, 1U);
+
+	if (znp_network_start(0x04U) == ZNP_NETWORK_NOT_STARTED) {
+		LOG_WRN("znp: startup from the host failed");
+	}
+}
+
 static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x00U, zdo_nwk_addr_req},
 	{ZNP_SUBSYS_ZDO, 0x21U, zdo_bind},
@@ -321,6 +402,7 @@ static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x36U, zdo_mgmt_permit_join_req},
 	{ZNP_SUBSYS_ZDO, 0x37U, zdo_mgmt_nwk_update_req},
 	{ZNP_SUBSYS_ZDO, 0x3EU, zdo_msg_cb_register},
+	{ZNP_SUBSYS_ZDO, 0x40U, zdo_startup_from_app},
 	{ZNP_SUBSYS_ZDO, 0x45U, zdo_ext_route_disc},
 	{ZNP_SUBSYS_ZDO, 0x46U, zdo_ext_route_chk},
 	{ZNP_SUBSYS_ZDO, 0x47U, zdo_ext_remove_group},
