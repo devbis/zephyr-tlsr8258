@@ -157,3 +157,29 @@ ZTEST(znp_nv, test_generation_counts_only_changes_worth_saving)
 	zassert_equal(znp_nv_write(ZNP_NV_PANID, 0U, &b, 1U), ZNP_STATUS_SUCCESS);
 	zassert_not_equal(znp_nv_generation(), gen);
 }
+
+ZTEST(znp_nv, test_link_key_matches_the_hosts_derivation)
+{
+	/* Reference values computed by zigpy-znp's compute_key() for seed 00..0f. */
+	static const uint8_t expected[3][16] = {
+		{0x01, 0x03, 0x01, 0x07, 0x01, 0x03, 0x01, 0x0f, 0x09, 0x0b, 0x09, 0x0f, 0x09, 0x0b,
+		 0x09, 0x07},
+		{0x02, 0x06, 0x06, 0x02, 0x02, 0x0e, 0x0e, 0x02, 0x0a, 0x0e, 0x0e, 0x0a, 0x0a, 0x06,
+		 0x06, 0x0a},
+		{0x0e, 0x02, 0x02, 0x06, 0x06, 0x02, 0x02, 0x0e, 0x06, 0x0a, 0x0a, 0x0e, 0x0e, 0x0a,
+		 0x0a, 0x06},
+	};
+	static const uint8_t shifts[3] = {0U, 3U, 15U};
+	static const uint8_t ieee[8] = {1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U};
+	uint8_t seed[16];
+	uint8_t key[16];
+
+	for (uint8_t i = 0U; i < sizeof(seed); i++) {
+		seed[i] = i;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(shifts); i++) {
+		znp_tclk_key(seed, shifts[i], ieee, key);
+		zassert_mem_equal(key, expected[i], sizeof(key), "shift %u", shifts[i]);
+	}
+}
