@@ -226,6 +226,34 @@ static void permit_join_remote_cb(void *p)
 	}
 }
 
+/* The host is told when a timed permit join window closes. */
+static struct ev_timer_event_t *permit_timer;
+
+static int permit_close_tick(void *arg)
+{
+	uint8_t closed = 0U;
+
+	ARG_UNUSED(arg);
+
+	permit_timer = NULL;
+	znp_areq(ZNP_SUBSYS_ZDO, ZNP_ZDO_PERMIT_JOIN_IND, &closed, 1U);
+	return -1;
+}
+
+static void permit_close_arm(uint8_t duration)
+{
+	if (permit_timer != NULL) {
+		(void)ev_timer_taskCancel(&permit_timer);
+		permit_timer = NULL;
+	}
+
+	/* No window, or one that never closes, has nothing to announce. */
+	if (duration != 0U && duration != 0xffU) {
+		permit_timer = ev_timer_taskPost(permit_close_tick, NULL,
+						 (uint32_t)duration * 1000U);
+	}
+}
+
 static void zdo_mgmt_permit_join_req(const uint8_t *d, uint8_t len)
 {
 	uint16_t dst;
@@ -250,6 +278,7 @@ static void zdo_mgmt_permit_join_req(const uint8_t *d, uint8_t len)
 		uint8_t duration = d[3];
 
 		znp_areq(ZNP_SUBSYS_ZDO, ZNP_ZDO_PERMIT_JOIN_IND, &duration, 1U);
+		permit_close_arm(duration);
 	}
 	if (local) {
 		permit_join_rsp(zb_getLocalShortAddr(),
