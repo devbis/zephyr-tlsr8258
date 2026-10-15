@@ -49,7 +49,7 @@ static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_
 		return;
 	}
 
-	if (znp_sys_handle(subsys, cmd1, data, len) || znp_zdo_handle(subsys, cmd1, data, len) ||
+	if (znp_sys_handle(subsys, cmd1, data, len) || znp_tables_handle(subsys, cmd1, data, len) || znp_zdo_handle(subsys, cmd1, data, len) ||
 	    znp_af_handle(subsys, cmd1, data, len)) {
 		return;
 	}
@@ -136,6 +136,8 @@ void zb_znp_poll(void)
 	while (uart_poll_in(znp_uart_dev, &byte) == 0) {
 		znp_rx_byte((uint8_t)byte);
 	}
+
+	znp_persist_service();
 }
 
 void znp_send(uint8_t type, uint8_t subsys, uint8_t cmd, const uint8_t *data, size_t len)

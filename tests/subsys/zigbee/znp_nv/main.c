@@ -98,3 +98,62 @@ ZTEST(znp_nv, test_repeated_recreate_does_not_exhaust_the_pool)
 		zassert_equal(znp_nv_delete(7U), ZNP_STATUS_SUCCESS);
 	}
 }
+
+ZTEST(znp_nv, test_export_import_keeps_host_items_and_skips_stack_items)
+{
+	const uint8_t host[3] = {1U, 2U, 3U};
+	const uint8_t stack[4] = {9U, 9U, 9U, 9U};
+	uint8_t blob[ZNP_NV_EXPORT_MAX];
+	uint8_t out[4];
+	size_t len;
+	size_t n;
+
+	zassert_equal(znp_nv_item_init(ZNP_NV_PANID, sizeof(host), host, sizeof(host)),
+		      ZNP_STATUS_NV_ITEM_UNINIT);
+	zassert_equal(znp_nv_set_derived(ZNP_NV_NIB, stack, sizeof(stack)), ZNP_STATUS_SUCCESS);
+
+	len = znp_nv_export(blob, sizeof(blob));
+	zassert_true(len > 0U);
+
+	znp_nv_reset();
+	zassert_true(znp_nv_import(blob, len));
+
+	zassert_equal(znp_nv_read(ZNP_NV_PANID, 0U, out, sizeof(out), &n), ZNP_STATUS_SUCCESS);
+	zassert_equal(n, sizeof(host));
+	zassert_mem_equal(out, host, sizeof(host));
+	/* The NIB is rebuilt from the stack, not restored. */
+	zassert_equal(znp_nv_length(ZNP_NV_NIB), 0U);
+}
+
+ZTEST(znp_nv, test_import_rejects_a_damaged_copy)
+{
+	const uint8_t host = 1U;
+	uint8_t blob[ZNP_NV_EXPORT_MAX];
+	size_t len;
+
+	zassert_equal(znp_nv_item_init(ZNP_NV_PANID, 1U, &host, 1U), ZNP_STATUS_NV_ITEM_UNINIT);
+	len = znp_nv_export(blob, sizeof(blob));
+
+	zassert_false(znp_nv_import(blob, len - 1U));
+	blob[0] = 0xffU;
+	zassert_false(znp_nv_import(blob, len));
+	zassert_false(znp_nv_import(blob, 1U));
+}
+
+ZTEST(znp_nv, test_generation_counts_only_changes_worth_saving)
+{
+	const uint8_t a = 1U;
+	const uint8_t b = 2U;
+	uint32_t gen;
+
+	zassert_equal(znp_nv_item_init(ZNP_NV_PANID, 1U, &a, 1U), ZNP_STATUS_NV_ITEM_UNINIT);
+	gen = znp_nv_generation();
+
+	/* The same value again, and a stack-owned item, do not count. */
+	zassert_equal(znp_nv_write(ZNP_NV_PANID, 0U, &a, 1U), ZNP_STATUS_SUCCESS);
+	zassert_equal(znp_nv_set_derived(ZNP_NV_NIB, &b, 1U), ZNP_STATUS_SUCCESS);
+	zassert_equal(znp_nv_generation(), gen);
+
+	zassert_equal(znp_nv_write(ZNP_NV_PANID, 0U, &b, 1U), ZNP_STATUS_SUCCESS);
+	zassert_not_equal(znp_nv_generation(), gen);
+}
