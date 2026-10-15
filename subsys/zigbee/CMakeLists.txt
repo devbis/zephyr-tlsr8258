@@ -194,6 +194,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZSTACK_NCP
   platform/zephyr/zb_znp_uart.c
   platform/zephyr/zb_znp_nv.c
   platform/zephyr/zb_znp_net.c
+  platform/zephyr/zb_znp_tables.c
   platform/zephyr/zb_znp_persist.c
   platform/zephyr/zb_znp_sys.c
   platform/zephyr/zb_znp_zdo.c
