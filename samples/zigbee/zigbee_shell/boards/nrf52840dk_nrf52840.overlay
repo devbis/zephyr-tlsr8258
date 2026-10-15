@@ -1,0 +1,11 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* The board's virtual COM port carries the NCP protocol of coordinator_znp.conf. */
+/ {
+	chosen {
+		zigbee,ncp-uart = &uart0;
+	};
+};
