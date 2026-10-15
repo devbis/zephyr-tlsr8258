@@ -97,11 +97,24 @@ static void zb_shell_leave_cnf(nlme_leave_cnf_t *cnf)
 	}
 }
 
+static bool zb_shell_tc_join(zdo_tc_join_ind_t *ind)
+{
+	zb_platform_app_device_joined(ind->devShortAddr, ind->devIeeeAddr, ind->parentIeeeAddr);
+	return true;
+}
+
+static void zb_shell_leave_ind(nlme_leave_ind_t *ind)
+{
+	zb_platform_app_device_left(ind->deviceAddr, ind->rejoin);
+}
+
 static zdo_appIndCb_t zb_shell_zdo_cb = {
 	.zdpAssocDoneCb = bdb_zdoAssocDone,
 	.zdpStartDevCnfCb = bdb_zdoStartDevCnf,
 	.zdpDevAnnounceIndCb = zb_shell_device_announce,
 	.zdpLeaveCnfCb = zb_shell_leave_cnf,
+	.zdpLeaveIndCb = zb_shell_leave_ind,
+	.zdoTcJoinIndCb = zb_shell_tc_join,
 };
 
 static af_simple_descriptor_t zb_shell_simple_desc = {
