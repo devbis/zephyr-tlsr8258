@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/logging/log.h>
+
 #include "zb_common.h"
 #include "ev_timer.h"
 #include "mac_trx_api.h"
@@ -14,6 +16,8 @@
 #include "mac_indirect_data.h"
 #include "mac_mlme.h"
 #include "mac_trx.h"
+
+LOG_MODULE_REGISTER(zigbee_mac_associate, CONFIG_ZIGBEE_LOG_LEVEL);
 
 static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
@@ -35,6 +39,7 @@ static inline u32 assoc_timeout_ms(void)
 
 static int tl_zbWaitForAssociationRespTimeout(void *arg)
 {
+	LOG_WRN("no association response from the parent");
 	mac_associate_confirm_post(arg, MAC_STA_NO_DATA);
 
 	associationReqOrigBuffer = NULL;
@@ -106,6 +111,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
 		return;
 	}
 
+	LOG_WRN("association response poll failed: status %u", status);
 	mac_associate_confirm_post(req, status);
 	associationReqOrigBuffer = NULL;
 	g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
@@ -113,6 +119,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
 
 void tl_zbMacAssociateRespReceived(void)
 {
+	LOG_DBG("association response received");
 	mac_pendingWaitTimerCancel();
 
 	if (assocRspTimeoutEvt != NULL) {
@@ -131,6 +138,7 @@ void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
 	}
 
 	if (status != MAC_SUCCESS && status != MAC_STA_FRAME_PENDING) {
+		LOG_WRN("association request not delivered: status %u", status);
 		mac_associate_confirm_post(associationReqOrigBuffer, status);
 		associationReqOrigBuffer = NULL;
 		return;
@@ -146,6 +154,7 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 	zb_buf_t *txBuf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
 
 	if (txBuf == NULL || txBuf->hdr.active != 0U || associationReqOrigBuffer != NULL) {
+		LOG_WRN("association request rejected: transmitter busy");
 		mac_associate_confirm_post(arg, MAC_STA_TX_ACTIVE);
 		associationReqOrigBuffer = NULL;
 		return;
