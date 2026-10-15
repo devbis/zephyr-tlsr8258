@@ -16,6 +16,7 @@
 
 #include "zb_common.h"
 #include "drv_nv.h"
+#include "drv_radio.h"
 #include "zbapi/zb_initialize.h"
 #include "zb_znp_internal.h"
 
@@ -369,8 +370,17 @@ static void sys_nv_length(const uint8_t *d, uint8_t len)
 
 static void sys_set_tx_power(const uint8_t *d, uint8_t len)
 {
-	/* The radio power is not adjustable at run time; report the request as applied. */
-	znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U, (len >= 1U) ? d[0] : 0U);
+	int8_t dbm;
+
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	/* Z-Stack 3.0 answers with the power it applied. */
+	dbm = (int8_t)d[0];
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0x14U,
+			(zb_radio_tx_power_dbm_set(dbm) == 0) ? (uint8_t)dbm : 0U);
 }
 
 /* UTIL */
