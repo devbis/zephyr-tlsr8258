@@ -184,12 +184,23 @@ config ZIGBEE_NCP_TELINK
 	  tl_zigbee_sdk's zbhci/ module (Apache-2.0, Telink Semiconductor);
 	  only the commands listed above are implemented.
 
+config ZIGBEE_NCP_ZSTACK
+	bool "TI Z-Stack ZNP"
+	help
+	  Emulate the serial interface of a Z-Stack 3.0.x ZNP coordinator,
+	  limited to the commands Zigbee2MQTT (adapter: zstack) and ZHA
+	  (zigpy-znp) use to start the network, manage devices and exchange
+	  APS data. Other commands are answered with an error.
+
 endchoice
 
 endif # ZIGBEE_NCP
 
 config ZIGBEE_ZBHCI_UART
 	def_bool ZIGBEE_NCP_TELINK
+
+config ZIGBEE_ZSTACK_NCP
+	def_bool ZIGBEE_NCP_ZSTACK
 
 config ZIGBEE_OTA
 	bool "OTA firmware update"
