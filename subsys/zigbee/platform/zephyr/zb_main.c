@@ -13,6 +13,8 @@
 #include <zephyr/zigbee/zb_types.h>
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 #include <zephyr/zigbee/zb_zbhci.h>
+#elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+#include <zephyr/zigbee/zb_znp.h>
 #endif
 #include <string.h>
 #include "zb_radio_smoke.h"
@@ -831,6 +833,8 @@ static void zb_thread_fn(void *a, void *b, void *c)
 #endif
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 		zb_zbhci_uart_poll();
+#elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+		zb_znp_poll();
 #endif
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
