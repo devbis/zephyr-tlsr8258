@@ -126,7 +126,7 @@ K_SEM_DEFINE(zb_ev_sem, 0, 1);
  * zb_platform_wake().
  */
 #define ZB_THREAD_POLLED_SOURCES                                                                   \
-	(IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET) || IS_ENABLED(CONFIG_ZIGBEE_ZBHCI_UART))
+	(IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET) || IS_ENABLED(CONFIG_ZIGBEE_NCP))
 #define ZB_THREAD_POLL_MS 1U
 
 void zb_platform_wake(void)
