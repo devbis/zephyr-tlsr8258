@@ -21,6 +21,8 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZNP_AF_REGISTER         0x00U
 #define ZNP_AF_DATA_REQUEST     0x01U
 #define ZNP_AF_DATA_REQUEST_EXT 0x02U
+#define ZNP_AF_DATA_REQUEST_SRC_RTG 0x03U
+#define ZNP_AF_DELETE           0x04U
 #define ZNP_AF_DATA_CONFIRM     0x80U
 #define ZNP_AF_INCOMING_MSG     0x81U
 
@@ -334,10 +336,59 @@ static void af_data_request_ext(const uint8_t *d, uint8_t len)
 		     d[16], d[17], &d[20], data_len);
 }
 
+/*
+ * A source-routed send. The stack builds its own source routes, so the relay
+ * list is dropped and the frame goes out as an ordinary unicast.
+ */
+static void af_data_request_src_rtg(const uint8_t *d, uint8_t len)
+{
+	uint8_t relays;
+	size_t off;
+
+	/* dst(2), dst ep, src ep, cluster(2), tsn, options, radius, relay count, relays, length */
+	if (len < 11U) {
+		znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_SRC_RTG,
+				ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	relays = d[9];
+	off = 10U + (size_t)relays * 2U;
+	if (len < off + 1U || len < off + 1U + d[off]) {
+		znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_SRC_RTG,
+				ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	data_request(ZNP_AF_DATA_REQUEST_SRC_RTG, ZNP_ADDR_MODE_NWK, d, d[2], d[3],
+		     znp_get_u16(&d[4]), d[6], d[7], d[8], &d[off + 1U], d[off]);
+}
+
+static void af_delete(const uint8_t *d, uint8_t len)
+{
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DELETE, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(endpoints); i++) {
+		if (endpoints[i].used && endpoints[i].desc.endpoint == d[0]) {
+			(void)af_endpointUnregister(d[0]);
+			endpoints[i].used = false;
+			znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DELETE, ZNP_STATUS_SUCCESS);
+			return;
+		}
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DELETE, ZNP_STATUS_FAILURE);
+}
+
 static const struct znp_cmd af_cmds[] = {
 	{ZNP_SUBSYS_AF, ZNP_AF_REGISTER, af_register},
 	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST, af_data_request},
 	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_EXT, af_data_request_ext},
+	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_SRC_RTG, af_data_request_src_rtg},
+	{ZNP_SUBSYS_AF, ZNP_AF_DELETE, af_delete},
 };
 
 bool znp_af_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len)
