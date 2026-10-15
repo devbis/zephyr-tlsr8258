@@ -689,7 +689,9 @@ int zb_platform_bdb_init_default(void)
 		g_bdbCtx.simpleDesc = registered_desc;
 	} else {
 		g_bdbCtx.simpleDesc = &zb_shell_simple_desc;
-		if (!af_endpointRegister(zb_shell_simple_desc.endpoint, &zb_shell_simple_desc, NULL,
+		/* An NCP host registers the endpoints it serves, endpoint 1 among them. */
+		if (!IS_ENABLED(CONFIG_ZIGBEE_NCP) &&
+		    !af_endpointRegister(zb_shell_simple_desc.endpoint, &zb_shell_simple_desc, NULL,
 					 NULL)) {
 			LOG_WRN("zb bdb init: endpoint %u register failed",
 				zb_shell_simple_desc.endpoint);

@@ -937,7 +937,13 @@ void zdo_descriptorsIndicate(void *arg)
 			ptr += sizeof(power_descriptor_t);
 			break;
 		case SIMPLE_DESC_REQ_CLID:
-			if ((descriptorReq->endpoint == 0) || (descriptorReq->endpoint > 240)) {
+			/*
+			 * An NCP host registers the Green Power endpoint (242) like any
+			 * other and queries its descriptor.
+			 */
+			if ((descriptorReq->endpoint == 0) ||
+			    ((descriptorReq->endpoint > 240) &&
+			     !(IS_ENABLED(CONFIG_ZIGBEE_NCP) && descriptorReq->endpoint == 242))) {
 				zzr.zdu[1] = ZDO_INVALID_EP;
 				*ptr++ = descriptorReq->endpoint;
 				break;
