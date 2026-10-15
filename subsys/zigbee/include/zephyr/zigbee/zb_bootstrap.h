@@ -84,6 +84,38 @@ void zb_platform_network_left(void);
  */
 void zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[8]);
 
+/**
+ * @brief Application hook for a device joining through the trust center.
+ *
+ * @param nwk_addr Network address given to the device.
+ * @param ieee_addr IEEE address of the device, in over-the-air byte order.
+ * @param parent_ieee_addr IEEE address of the device's parent.
+ */
+void zb_platform_app_device_joined(uint16_t nwk_addr, const uint8_t ieee_addr[8],
+				   const uint8_t parent_ieee_addr[8]);
+
+/**
+ * @brief Application hook for a device leaving the network.
+ *
+ * @param ieee_addr IEEE address of the device, in over-the-air byte order.
+ * @param rejoin Whether the device leaves in order to rejoin.
+ */
+void zb_platform_app_device_left(const uint8_t ieee_addr[8], bool rejoin);
+
+/**
+ * @brief Application hook for a received ZDO frame.
+ *
+ * Called for every ZDO frame the node receives, before the stack handles it.
+ *
+ * @param src_addr Network address of the sender.
+ * @param broadcast Whether the frame was broadcast.
+ * @param cluster_id ZDO cluster ID.
+ * @param payload ZDO payload, starting with the sequence number.
+ * @param len Payload length.
+ */
+void zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_id,
+			    const uint8_t *payload, uint16_t len);
+
 /*
  * Called by zb_platform_bdb_init_default() before BDB attribute
  * initialization.  Applications may override this optional hook to call
