@@ -411,7 +411,9 @@ static bool zb_platform_bdb_router_has_valid_join_context(void)
 	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL ||
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
 	    g_zbMacPib.shortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
-	    g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED ||
+	    /* The coordinator is its own parent and keeps no coordinator address. */
+	    (!IS_ENABLED(CONFIG_ZIGBEE_COORDINATOR) &&
+	     g_zbMacPib.coordShortAddress >= ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) ||
 	    g_zbNIB.panId != g_zbMacPib.panId || g_zbNIB.nwkAddr != g_zbMacPib.shortAddress) {
 		return false;
 	}
