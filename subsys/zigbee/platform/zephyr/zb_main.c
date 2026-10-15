@@ -832,7 +832,13 @@ static void zb_thread_fn(void *a, void *b, void *c)
 #if defined(CONFIG_ZIGBEE_ZBHCI_UART)
 		zb_zbhci_uart_poll();
 #elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
-		zb_znp_poll();
+		/*
+		 * A host that asks before the stack has restored its network would
+		 * be told there is none. Its bytes wait in the UART until then.
+		 */
+		if (zb_bootstrap_done) {
+			zb_znp_poll();
+		}
 #endif
 		if (!zb_bootstrap_done) {
 			zb_core_bootstrap_once();
