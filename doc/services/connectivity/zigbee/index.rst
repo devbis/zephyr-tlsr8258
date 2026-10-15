@@ -38,13 +38,53 @@ The stack runs its own MAC and sends raw frames through the radio driver API:
 - the ``zephyr,native-sim-socket-ieee802154`` driver, which connects
   ``native_sim`` nodes through a medium on a localhost socket.
 
+Host interface
+**************
+
+A coordinator can be driven by a host over a UART, as a network co-processor
+(NCP). :kconfig:option:`CONFIG_ZIGBEE_NCP` is on by default for the
+coordinator role, and the protocol is chosen with the options below:
+
+- :kconfig:option:`CONFIG_ZIGBEE_NCP_ZSTACK` (the default) emulates a Z-Stack
+  3.0.x ZNP coordinator, which Zigbee2MQTT (``adapter: zstack``) and ZHA
+  (zigpy-znp) drive;
+- :kconfig:option:`CONFIG_ZIGBEE_NCP_TELINK` speaks a subset of Telink's ZBHCI
+  protocol.
+
+The application attaches the UART with ``zb_znp_init()`` (or
+``zb_zbhci_uart_init()``) and calls ``zb_znp_bdb_commissioning_status()`` from
+``zb_platform_app_bdb_commissioning_status()``. The host forms the network,
+registers the endpoints it serves and interviews the devices, so the
+application must not start commissioning or register those endpoints itself.
+Nothing else may write to the UART: turn the console and logging off.
+``zigbee_shell`` shows this with ``coordinator_znp.conf`` and the board
+overlays, which name the UART as the ``zigbee,ncp-uart`` chosen node.
+
+The ZNP interface keeps the network, the host's configuration items and the
+devices across a restart, answers the commands those hosts use to start and
+resume a network, join and interview devices, change the channel, add install
+codes, send data and read the device tables, and restores a backup written by
+the host. It is polled from the Zigbee thread, so it needs no UART interrupts.
+
+The following are not supported:
+
+- keys installed from install codes are not restored from a backup, and a
+  restored associated device is taken as a sleepy end device until it
+  announces itself;
+- InterPAN, ``AF_DATA_STORE`` and Green Power frames are not passed to the
+  host, and ``ZDO_SERVER_DISC_REQ`` is not implemented;
+- source-routed sends go out as ordinary unicasts, because the stack builds
+  its own source routes;
+- hosts must be Z-Stack 3.0.x aware: the interface reports that version and
+  the 3.30 extended NV commands are not implemented.
+
 Samples
 *******
 
 - :zephyr:code-sample:`zigbee_node` joins a network as an end device or a
   router.
 - :zephyr:code-sample:`zigbee_native_sim_socket` runs an end device, router or
-  coordinator on ``native_sim``.
+  coordinator on ``native_sim``, the coordinator with either host protocol.
 
 Imported sources
 ****************
