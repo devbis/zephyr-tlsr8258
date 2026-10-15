@@ -22,6 +22,7 @@
 LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 
 extern void zb_reset(void);
+extern u16 tl_bdbInstallCodeCRC16(u8 *pInstallCode, u8 len);
 
 /* MT capabilities: SYS, AF, ZDO, UTIL, APP and APP_CNF. */
 #define ZNP_CAPABILITIES            0x0559U
@@ -35,6 +36,9 @@ extern void zb_reset(void);
 
 #define ZNP_STARTUP_CLEAR_CONFIG    BIT(0)
 #define ZNP_STARTUP_CLEAR_STATE     BIT(1)
+
+#define ZNP_INSTALL_CODE_WITH_CRC     1U
+#define ZNP_INSTALL_CODE_DERIVED_KEY  2U
 
 #define ZNP_NV_READ_CHUNK           240U
 #define ZNP_DEVICE_INFO_CHILDREN    16U
@@ -561,13 +565,59 @@ static void app_cnf_set_frame_counter(const uint8_t *d, uint8_t len)
 	app_cnf_ok(0xFFU);
 }
 
-static void app_cnf_unsupported(const uint8_t *d, uint8_t len)
+/*
+ * Pre-install the link key of a device that joins with an install code. The
+ * code arrives with its CRC (format 1) or already turned into the key that
+ * the trust center uses (format 2).
+ */
+static void app_cnf_add_install_code(const uint8_t *d, uint8_t len)
 {
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	ss_dev_pair_set_t pair;
+	const uint8_t *code = &d[9];
+	size_t code_len;
 
-	/* Install codes are not supported. */
-	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_FAILURE);
+	if (len < 9U + SEC_KEY_LEN) {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+	code_len = len - 9U;
+
+	if (d[0] == ZNP_INSTALL_CODE_WITH_CRC && code_len == SEC_KEY_LEN + 2U) {
+		if (tl_bdbInstallCodeCRC16((u8 *)code, SEC_KEY_LEN) !=
+		    znp_get_u16(&code[SEC_KEY_LEN])) {
+			znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+			return;
+		}
+
+		bdb_preInstallCodeAdd((u8 *)&d[1], (u8 *)code);
+	} else if (d[0] == ZNP_INSTALL_CODE_DERIVED_KEY && code_len == SEC_KEY_LEN) {
+		/* A device keeps one key, so a new one replaces the old. */
+		(void)ss_devKeyPairDelete((u8 *)&d[1]);
+
+		memset(&pair, 0, sizeof(pair));
+		memcpy(pair.device_address, &d[1], 8U);
+		memcpy(pair.linkKey, code, SEC_KEY_LEN);
+		pair.apsLinkKeyType = SS_UNIQUE_LINK_KEY;
+		pair.keyAttr = SS_UNVERIFIED_KEY;
+		ss_devKeyPairSave(&pair);
+	} else {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_SUCCESS);
+}
+
+/* While set, only a device with a pre-installed key may join. */
+static void app_cnf_join_uses_install_code(const uint8_t *d, uint8_t len)
+{
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x06U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	g_bdbAttrs.joinUsesInstallCodeKey = (d[0] != 0U) ? 1U : 0U;
+	znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x06U, ZNP_STATUS_SUCCESS);
 }
 
 static const struct znp_cmd sys_cmds[] = {
@@ -589,9 +639,9 @@ static const struct znp_cmd sys_cmds[] = {
 	{ZNP_SUBSYS_UTIL, 0x0AU, util_led_control},
 	{ZNP_SUBSYS_APP_CNF, 0x01U, app_cnf_default_ok},
 	{ZNP_SUBSYS_APP_CNF, 0x03U, app_cnf_allow_rejoin},
-	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_add_install_code},
 	{ZNP_SUBSYS_APP_CNF, 0x05U, app_cnf_start_commissioning},
-	{ZNP_SUBSYS_APP_CNF, 0x06U, app_cnf_unsupported},
+	{ZNP_SUBSYS_APP_CNF, 0x06U, app_cnf_join_uses_install_code},
 	{ZNP_SUBSYS_APP_CNF, 0x07U, app_cnf_set_centralized_key},
 	{ZNP_SUBSYS_APP_CNF, 0x08U, app_cnf_set_channel},
 	{ZNP_SUBSYS_APP_CNF, 0x09U, app_cnf_tc_key_exchange},
