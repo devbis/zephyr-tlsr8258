@@ -49,7 +49,7 @@ static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_
 		return;
 	}
 
-	if (znp_sys_handle(subsys, cmd1, data, len) || znp_zdo_handle(subsys, cmd1, data, len) ||
+	if (znp_sys_handle(subsys, cmd1, data, len) || znp_tables_handle(subsys, cmd1, data, len) || znp_zdo_handle(subsys, cmd1, data, len) ||
 	    znp_af_handle(subsys, cmd1, data, len)) {
 		return;
 	}

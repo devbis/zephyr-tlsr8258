@@ -37,6 +37,7 @@ extern void zb_reset(void);
 #define ZNP_STARTUP_CLEAR_STATE     BIT(1)
 
 #define ZNP_NV_READ_CHUNK           240U
+#define ZNP_DEVICE_INFO_CHILDREN    16U
 
 /* The NV items every Z-Stack has from the factory, with their default values. */
 struct znp_nv_default {
@@ -143,6 +144,7 @@ static void znp_nv_sync(void)
 	zb_getLocalExtAddr(ieee);
 	(void)znp_nv_set_derived(ZNP_NV_EXTADDR, ieee, sizeof(ieee));
 	znp_net_sync();
+	znp_tables_sync();
 }
 
 uint8_t znp_device_state(void)
@@ -371,11 +373,18 @@ static void sys_set_tx_power(const uint8_t *d, uint8_t len)
 
 static void util_get_device_info(const uint8_t *d, uint8_t len)
 {
-	uint8_t rsp[1 + 8 + 2 + 1 + 1 + 1];
+	uint8_t rsp[1 + 8 + 2 + 1 + 1 + 1 + 2 * ZNP_DEVICE_INFO_CHILDREN];
+	uint16_t children[ZNP_DEVICE_INFO_CHILDREN];
 	uint8_t *p = rsp;
+	uint8_t n;
 
 	ARG_UNUSED(d);
 	ARG_UNUSED(len);
+
+	/* A network the stack restored is up without the host starting it. */
+	if (g_zbNwkCtx.joined && znp_dev_state == ZNP_DEV_STATE_HOLD) {
+		znp_dev_state = ZNP_DEV_STATE_COORDINATOR;
+	}
 
 	*p++ = ZNP_STATUS_SUCCESS;
 	zb_getLocalExtAddr(p);
@@ -383,7 +392,11 @@ static void util_get_device_info(const uint8_t *d, uint8_t len)
 	p = znp_put_u16(p, zb_getLocalShortAddr());
 	*p++ = ZNP_DEVICE_TYPE_COORDINATOR;
 	*p++ = znp_dev_state;
-	*p++ = 0U; /* no associated device list */
+	n = znp_tables_children(children, ZNP_DEVICE_INFO_CHILDREN);
+	*p++ = n;
+	for (uint8_t i = 0U; i < n; i++) {
+		p = znp_put_u16(p, children[i]);
+	}
 	znp_srsp(ZNP_SUBSYS_UTIL, 0x00U, rsp, (size_t)(p - rsp));
 }
 
@@ -408,32 +421,6 @@ static void util_get_nv_info(const uint8_t *d, uint8_t len)
 	(void)znp_nv_read(ZNP_NV_PRECFGKEY, 0U, p, 16U, &n);
 	p += 16;
 	znp_srsp(ZNP_SUBSYS_UTIL, 0x01U, rsp, (size_t)(p - rsp));
-}
-
-static void util_assoc_count(const uint8_t *d, uint8_t len)
-{
-	uint8_t rsp[2] = {0U, 0U};
-
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
-
-	znp_srsp(ZNP_SUBSYS_UTIL, 0x48U, rsp, sizeof(rsp));
-}
-
-static void util_assoc_find_device(const uint8_t *d, uint8_t len)
-{
-	/*
-	 * The host reads the size of this packed struct to learn the target's
-	 * struct alignment; 28 bytes is the unaligned layout. An empty slot is
-	 * all 0xff.
-	 */
-	uint8_t rsp[28];
-
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
-
-	memset(rsp, 0xff, sizeof(rsp));
-	znp_srsp(ZNP_SUBSYS_UTIL, 0x49U, rsp, sizeof(rsp));
 }
 
 static void util_led_control(const uint8_t *d, uint8_t len)
@@ -600,8 +587,6 @@ static const struct znp_cmd sys_cmds[] = {
 	{ZNP_SUBSYS_UTIL, 0x01U, util_get_nv_info},
 	{ZNP_SUBSYS_UTIL, 0x09U, util_time_alive},
 	{ZNP_SUBSYS_UTIL, 0x0AU, util_led_control},
-	{ZNP_SUBSYS_UTIL, 0x48U, util_assoc_count},
-	{ZNP_SUBSYS_UTIL, 0x49U, util_assoc_find_device},
 	{ZNP_SUBSYS_APP_CNF, 0x01U, app_cnf_default_ok},
 	{ZNP_SUBSYS_APP_CNF, 0x03U, app_cnf_allow_rejoin},
 	{ZNP_SUBSYS_APP_CNF, 0x04U, app_cnf_unsupported},

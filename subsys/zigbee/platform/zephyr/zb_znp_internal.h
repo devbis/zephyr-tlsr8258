@@ -107,6 +107,9 @@ struct znp_cmd {
 /* Each module looks the request up in its table; false means not handled. */
 bool znp_sys_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 bool znp_zdo_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
+bool znp_tables_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
+uint8_t znp_tables_children(uint16_t *out, uint8_t max);
+void znp_tables_sync(void);
 bool znp_af_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len);
 
 static inline bool znp_cmd_dispatch(const struct znp_cmd *table, size_t count, uint8_t subsys,
