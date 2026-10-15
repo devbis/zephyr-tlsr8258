@@ -912,6 +912,14 @@ New APIs and options
 
   * :c:enumerator:`CELLULAR_MODEM_INFO_SERIAL_NUMBER`
 
+* Zigbee
+
+  * A Zigbee coordinator can now be driven by a host over a UART as a Z-Stack ZNP
+    coordinator, for Zigbee2MQTT and ZHA. It is selected with
+    :kconfig:option:`CONFIG_ZIGBEE_NCP_ZSTACK`, which is the default for the
+    coordinator role; :kconfig:option:`CONFIG_ZIGBEE_NCP_TELINK` selects the previous
+    Telink ZBHCI interface. See :ref:`zigbee`.
+
 * Multimedia Pipeline
 
   * :kconfig:option:`CONFIG_MPIPE` (see :ref:`mpipe`)
