@@ -245,6 +245,30 @@ void __weak zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t iee
 	ARG_UNUSED(ieee_addr);
 }
 
+void __weak zb_platform_app_device_joined(uint16_t nwk_addr, const uint8_t ieee_addr[8],
+					  const uint8_t parent_ieee_addr[8])
+{
+	ARG_UNUSED(nwk_addr);
+	ARG_UNUSED(ieee_addr);
+	ARG_UNUSED(parent_ieee_addr);
+}
+
+void __weak zb_platform_app_device_left(const uint8_t ieee_addr[8], bool rejoin)
+{
+	ARG_UNUSED(ieee_addr);
+	ARG_UNUSED(rejoin);
+}
+
+void __weak zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_id,
+				   const uint8_t *payload, uint16_t len)
+{
+	ARG_UNUSED(src_addr);
+	ARG_UNUSED(broadcast);
+	ARG_UNUSED(cluster_id);
+	ARG_UNUSED(payload);
+	ARG_UNUSED(len);
+}
+
 bool __weak zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
 	ARG_UNUSED(target);
