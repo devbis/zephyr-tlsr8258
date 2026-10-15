@@ -188,7 +188,10 @@ void app_profile_register(void)
  */
 void zb_platform_app_register_endpoints(void)
 {
+#if !defined(CONFIG_ZIGBEE_NCP)
+	/* An NCP host registers the endpoints it serves. */
 	app_profile_register();
+#endif
 
 #if defined(CONFIG_ZIGBEE_GP)
 	/*
