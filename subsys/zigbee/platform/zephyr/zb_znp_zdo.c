@@ -18,6 +18,8 @@
 #include "zb_common.h"
 #include "ev_timer.h"
 #include "mac/mac.h"
+#include "nwk/nwk_routing.h"
+#include "nwk/includes/nwk_neighbor.h"
 #include "nwk/nwk_data.h"
 #include "aps/aps_api.h"
 #include "zb_znp_internal.h"
@@ -255,21 +257,123 @@ static void zdo_mgmt_permit_join_req(const uint8_t *d, uint8_t len)
 	}
 }
 
-static void zdo_ext_route_disc(const uint8_t *d, uint8_t len)
-{
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+/*
+ * Routes. A route exists when the stack has an active routing entry, or the
+ * destination is a neighbor it can reach directly.
+ */
+#define ZNP_ROUTING_SUCCESS       0U
+#define ZNP_ROUTING_FAIL          1U
+#define ZNP_ROUTING_NO_ENTRY      4U
+#define ZNP_ROUTING_INVALID_PARAM 6U
 
-	/* Routes are discovered by the stack when a frame needs one. */
-	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x45U, ZNP_STATUS_SUCCESS);
-}
+#define ROUTE_DISC_MTO_NO_CACHE   0x02U
+#define ROUTE_DISC_MTO            0x01U
 
 static void zdo_ext_route_chk(const uint8_t *d, uint8_t len)
 {
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	uint16_t dst;
 
-	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x46U, ZNP_STATUS_SUCCESS);
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x46U, ZNP_ROUTING_INVALID_PARAM);
+		return;
+	}
+
+	dst = znp_get_u16(d);
+	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x46U,
+			(dst == zb_getLocalShortAddr() ||
+			 nwkRoutingTabEntryDstActiveGet(dst) != NULL ||
+			 nwkValidNeighborToFwd(dst) != NULL)
+				? ZNP_ROUTING_SUCCESS
+				: ZNP_ROUTING_NO_ENTRY);
+}
+
+static uint8_t route_discovery(uint16_t dst, bool many_to_one, bool no_cache, uint8_t radius)
+{
+	nlme_routeDisc_req_t *req;
+	zb_buf_t *buf = zb_buf_allocate();
+
+	if (buf == NULL) {
+		return ZNP_ROUTING_FAIL;
+	}
+
+	req = (nlme_routeDisc_req_t *)buf;
+	memset(req, 0, sizeof(*req));
+	req->dstAddr = dst;
+	req->dstAddrMode = many_to_one ? ADDR_MODE_NONE : ZB_ADDR_16BIT_DEV_OR_BROADCAST;
+	req->radius = radius;
+	req->noRouteCache = no_cache;
+	buf->hdr.used = 1U;
+
+	if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, buf) != RET_OK) {
+		zb_buf_free(buf);
+		return ZNP_ROUTING_FAIL;
+	}
+
+	return ZNP_ROUTING_SUCCESS;
+}
+
+static void zdo_ext_route_disc(const uint8_t *d, uint8_t len)
+{
+	uint8_t options;
+
+	if (len < 4U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x45U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	options = d[2];
+	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x45U,
+			route_discovery(znp_get_u16(d), (options & ROUTE_DISC_MTO) != 0U,
+					(options & ROUTE_DISC_MTO_NO_CACHE) != 0U, d[3]) ==
+					ZNP_ROUTING_SUCCESS
+				? ZNP_STATUS_SUCCESS
+				: ZNP_STATUS_FAILURE);
+}
+
+/*
+ * The coordinator, as a concentrator, announces itself with a many-to-one
+ * route request now and then, so that routers keep a route back to it. The
+ * host sets the period, and whether to do it at all, in NV.
+ */
+static uint32_t concentrator_period_ms;
+static struct ev_timer_event_t *concentrator_timer;
+
+static int concentrator_tick(void *arg)
+{
+	ARG_UNUSED(arg);
+
+	concentrator_timer = NULL;
+	if (concentrator_period_ms == 0U || !g_zbNwkCtx.joined) {
+		return -1;
+	}
+
+	(void)route_discovery(NWK_BROADCAST_ROUTER_COORDINATOR, true, false,
+			      g_zbNIB.concentratorRadius);
+	concentrator_timer = ev_timer_taskPost(concentrator_tick, NULL, concentrator_period_ms);
+	return -1;
+}
+
+void znp_routing_apply(void)
+{
+	uint8_t enable = 1U;
+	uint8_t period = 120U;
+	size_t n;
+
+	(void)znp_nv_read(ZNP_NV_CONCENTRATOR_ENABLE, 0U, &enable, 1U, &n);
+	(void)znp_nv_read(ZNP_NV_CONCENTRATOR_DISCOVERY, 0U, &period, 1U, &n);
+
+	g_zbNIB.isConcentrator = (enable != 0U) ? 1U : 0U;
+	g_zbNIB.concentratorDiscoveryTime = period;
+	concentrator_period_ms = (enable != 0U) ? (uint32_t)period * 1000U : 0U;
+
+	if (concentrator_timer != NULL) {
+		(void)ev_timer_taskCancel(&concentrator_timer);
+		concentrator_timer = NULL;
+	}
+	if (concentrator_period_ms != 0U && g_zbNwkCtx.joined) {
+		concentrator_timer = ev_timer_taskPost(concentrator_tick, NULL,
+						       concentrator_period_ms);
+	}
 }
 
 /*
