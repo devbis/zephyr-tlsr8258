@@ -982,8 +982,13 @@ void zdo_descriptorsIndicate(void *arg)
 			    ((descriptorReq->endpoint > ZDP_EP_MAX_APP) &&
 			     (descriptorReq->endpoint != ZDP_EP_GP))) {
 #else
+			/* An NCP host registers the Green Power endpoint (242) like any other
+			 * and queries its descriptor, also on an end device.
+			 */
 			if ((descriptorReq->endpoint == 0) ||
-			    (descriptorReq->endpoint > ZDP_EP_MAX_APP)) {
+			    ((descriptorReq->endpoint > ZDP_EP_MAX_APP) &&
+			     !(IS_ENABLED(CONFIG_ZIGBEE_NCP) &&
+			       descriptorReq->endpoint == ZDP_EP_GP))) {
 #endif
 				zzr.zdu[1] = ZDO_INVALID_EP;
 				*ptr++ = 0;

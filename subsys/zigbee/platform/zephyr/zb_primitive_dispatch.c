@@ -205,7 +205,8 @@ void af_aps_data_entry(void *arg)
 		return;
 	}
 
-	if (ad->profile_id == HA_PROFILE_ID && ad->cluster_id == ZCL_CLUSTER_GEN_BASIC &&
+	if (!IS_ENABLED(CONFIG_ZIGBEE_NCP) && ad->profile_id == HA_PROFILE_ID &&
+	    ad->cluster_id == ZCL_CLUSTER_GEN_BASIC &&
 	    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
 	    (ad->asdu[0] & (ZCL_FRAME_CONTROL_TYPE | ZCL_FRAME_CONTROL_MANU_SPECIFIC)) ==
 		    ZCL_FRAME_TYPE_PROFILE_CMD &&
