@@ -37,7 +37,12 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ADDR_UNKNOWN          0xFFFEU
 #define NWK_ADDR_BROADCAST_ALL    0xFFFDU
 
-static bool raw_callbacks;
+/* The clusters the host asked to see raw; 0xFFFF registers all of them. */
+#define ZDO_CB_CLUSTERS 16U
+#define ZDO_CB_ALL      0xFFFFU
+
+static uint16_t cb_clusters[ZDO_CB_CLUSTERS];
+static uint8_t cb_count;
 static uint8_t zdo_tsn;
 
 /* Send one ZDO request frame: TSN followed by @p payload. */
@@ -85,6 +90,10 @@ static const struct zdo_passthrough passthrough[] = {
 	{0x04U, 0x0004U, 5U}, /* SIMPLE_DESC_REQ */
 	{0x05U, 0x0005U, 4U}, /* ACTIVE_EP_REQ */
 	{0x06U, 0x0006U, 7U}, /* MATCH_DESC_REQ */
+	{0x07U, 0x0010U, 4U}, /* COMPLEX_DESC_REQ */
+	{0x08U, 0x0011U, 4U}, /* USER_DESC_REQ */
+	{0x0BU, 0x0014U, 5U}, /* USER_DESC_SET: dst, nwk addr, length, descriptor */
+	{0x30U, 0x0030U, 8U}, /* MGMT_NWK_DISC_REQ: dst, channels, duration, start index */
 	{0x31U, 0x0031U, 3U}, /* MGMT_LQI_REQ */
 	{0x32U, 0x0032U, 3U}, /* MGMT_RTG_REQ */
 	{0x33U, 0x0033U, 3U}, /* MGMT_BIND_REQ */
@@ -142,13 +151,59 @@ static void zdo_unbind(const uint8_t *d, uint8_t len)
 	zdo_bind_req(0x22U, 0x0022U, d, len);
 }
 
+static bool cb_wanted(uint16_t cluster)
+{
+	for (uint8_t i = 0U; i < cb_count; i++) {
+		if (cb_clusters[i] == ZDO_CB_ALL || cb_clusters[i] == cluster) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static void zdo_msg_cb_register(const uint8_t *d, uint8_t len)
 {
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	uint16_t cluster;
 
-	raw_callbacks = true;
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x3EU, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	cluster = znp_get_u16(d);
+	if (!cb_wanted(cluster)) {
+		if (cb_count == ZDO_CB_CLUSTERS) {
+			znp_srsp_status(ZNP_SUBSYS_ZDO, 0x3EU, ZNP_STATUS_MEM_ERROR);
+			return;
+		}
+		cb_clusters[cb_count++] = cluster;
+	}
+
 	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x3EU, ZNP_STATUS_SUCCESS);
+}
+
+static void zdo_msg_cb_remove(const uint8_t *d, uint8_t len)
+{
+	uint16_t cluster;
+
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x3FU, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	cluster = znp_get_u16(d);
+	if (cluster == ZDO_CB_ALL) {
+		cb_count = 0U;
+	}
+	for (uint8_t i = 0U; i < cb_count; i++) {
+		if (cb_clusters[i] == cluster) {
+			cb_clusters[i] = cb_clusters[--cb_count];
+			break;
+		}
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x3FU, ZNP_STATUS_SUCCESS);
 }
 
 static void permit_join_rsp(uint16_t src, uint8_t status)
@@ -221,7 +276,9 @@ static void zdo_ext_route_chk(const uint8_t *d, uint8_t len)
  * A channel change is announced to the network, and every node, this one
  * included, moves once the announcement has had time to spread.
  */
+#define NWK_UPDATE_MAX_SCAN_DURATION 5U
 #define NWK_UPDATE_CHANNEL_CHANGE 0xFEU
+#define NWK_UPDATE_SET_MANAGER    0xFFU
 #define NWK_UPDATE_BROADCAST_ALL  0xFFFDU
 #define NWK_UPDATE_DELAY_MS       5000U
 
@@ -255,9 +312,34 @@ static void zdo_mgmt_nwk_update_req(const uint8_t *d, uint8_t len)
 	}
 
 	channels = znp_get_u16(&d[3]) | ((uint32_t)znp_get_u16(&d[5]) << 16);
+	if (d[7] <= NWK_UPDATE_MAX_SCAN_DURATION) {
+		/* An energy scan of the target: channels, duration, count. */
+		uint8_t pl[6];
+
+		memcpy(pl, &d[3], 4U);
+		pl[4] = d[7];
+		pl[5] = d[8];
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, zdo_send(znp_get_u16(d), 0x0038U, pl, 6U));
+		return;
+	}
+
+	if (d[7] == NWK_UPDATE_SET_MANAGER) {
+		/* New channel mask and network manager, announced to the network. */
+		memset(&req, 0, sizeof(req));
+		req.scan_ch = channels;
+		req.scan_duration = NWK_UPDATE_SET_MANAGER;
+		req.nwk_manager_addr = znp_get_u16(&d[9]);
+		aps_ib.aps_channel_mask = channels;
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U,
+				(zb_mgmtNwkUpdateReq(NWK_UPDATE_BROADCAST_ALL, &req, &seq, NULL) ==
+				 ZDO_SUCCESS)
+					? ZNP_STATUS_SUCCESS
+					: ZNP_STATUS_FAILURE);
+		return;
+	}
+
 	if (d[7] != NWK_UPDATE_CHANNEL_CHANGE) {
-		/* Energy scans are not offered. */
-		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_FAILURE);
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_INVALID_PARAMETER);
 		return;
 	}
 
@@ -402,6 +484,7 @@ static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x36U, zdo_mgmt_permit_join_req},
 	{ZNP_SUBSYS_ZDO, 0x37U, zdo_mgmt_nwk_update_req},
 	{ZNP_SUBSYS_ZDO, 0x3EU, zdo_msg_cb_register},
+	{ZNP_SUBSYS_ZDO, 0x3FU, zdo_msg_cb_remove},
 	{ZNP_SUBSYS_ZDO, 0x40U, zdo_startup_from_app},
 	{ZNP_SUBSYS_ZDO, 0x45U, zdo_ext_route_disc},
 	{ZNP_SUBSYS_ZDO, 0x46U, zdo_ext_route_chk},
@@ -433,6 +516,23 @@ bool znp_zdo_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t le
 	return znp_cmd_dispatch(zdo_cmds, ARRAY_SIZE(zdo_cmds), subsys, cmd, data, len);
 }
 
+/* The MT message that carries the response of a ZDO cluster. */
+static uint8_t rsp_cmd(uint16_t cluster_id)
+{
+	switch (cluster_id) {
+	case 0x8010U: /* complex descriptor */
+		return 0x87U;
+	case 0x8011U: /* user descriptor */
+		return 0x88U;
+	case 0x8014U: /* user descriptor set: a confirmation */
+		return 0x89U;
+	case 0x8015U: /* server discovery */
+		return 0x8AU;
+	default:
+		return (uint8_t)(0x80U + (cluster_id & 0xffU));
+	}
+}
+
 /* Received ZDO frames. */
 
 void zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_id,
@@ -445,7 +545,7 @@ void zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_
 		return;
 	}
 
-	if (raw_callbacks) {
+	if (cb_wanted(cluster_id)) {
 		p = znp_put_u16(p, src_addr);
 		*p++ = broadcast ? 1U : 0U;
 		p = znp_put_u16(p, cluster_id);
@@ -461,8 +561,7 @@ void zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_
 		/* The *_RSP message: sender, then the response payload without its sequence number. */
 		p = znp_put_u16(out, src_addr);
 		memcpy(p, &payload[1], len - 1U);
-		znp_areq(ZNP_SUBSYS_ZDO, (uint8_t)(0x80U + (cluster_id & 0xffU)), out,
-			 2U + len - 1U);
+		znp_areq(ZNP_SUBSYS_ZDO, rsp_cmd(cluster_id), out, 2U + len - 1U);
 	} else if (cluster_id == ZDO_CLUSTER_DEVICE_ANNCE && len >= 12U) {
 		p = znp_put_u16(out, src_addr);
 		memcpy(p, &payload[1], 11U); /* nwk address, IEEE address, capabilities */
