@@ -62,6 +62,21 @@ jobs:
             role: coordinator
             role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: gnuarmemb
+          - soc: efr32mg21
+            board: slwrb4180a
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: efr32mg21
+            board: slwrb4180a
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: gnuarmemb
+          - soc: efr32mg21
+            board: slwrb4180a
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: gnuarmemb
           - soc: esp32h2
             board: esp32h2_devkitm/esp32h2
             role: router
@@ -149,8 +164,13 @@ jobs:
           echo "$toolchain_path/bin" >> "$GITHUB_PATH"
           "$toolchain_path/bin/clang" --version
 
+      - name: Fetch Silicon Labs binary blobs
+        if: matrix.soc == 'efr32mg21'
+        run: |
+          west blobs fetch hal_silabs
+
       - name: Install Arm GNU Toolchain
-        if: matrix.soc == 'nrf52840'
+        if: matrix.soc == 'nrf52840' || matrix.soc == 'efr32mg21'
         shell: bash
         run: |
           set -euo pipefail
@@ -200,6 +220,9 @@ jobs:
               ;;
             coordinator)
               cmake_args+=(-DEXTRA_CONF_FILE=coordinator_znp.conf)
+              if [[ "$SOC" == efr32mg21 ]]; then
+                cmake_args+=("-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_slwrb4180a.overlay")
+              fi
               ;;
             *)
               echo "Unknown Zigbee role: $ROLE" >&2
@@ -273,8 +296,8 @@ jobs:
           set -euo pipefail
           tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
           mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
-          if [[ "${#firmware_files[@]}" -ne 12 ]]; then
-            echo "Expected twelve firmware images, found ${#firmware_files[@]}" >&2
+          if [[ "${#firmware_files[@]}" -ne 15 ]]; then
+            echo "Expected fifteen firmware images, found ${#firmware_files[@]}" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -283,12 +306,13 @@ jobs:
 
           Toolchains:
           - TLSR8258: TC32 LLVM \`$TC32_TOOLCHAIN_VERSION\`
-          - nRF52840: Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
+          - nRF52840 and EFR32MG21: Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
           - ESP32-C6 and ESP32-H2: Zephyr SDK with the RISC-V toolchain
 
           The release contains router, end-device, and coordinator images for TLSR8258,
-          nRF52840, ESP32-C6, and ESP32-H2. The coordinators speak the Z-Stack ZNP
-          protocol, for Zigbee2MQTT (adapter: zstack) and ZHA.
+          nRF52840, ESP32-C6, and ESP32-H2, and router, end-device, and coordinator images
+          for EFR32MG21 (slwrb4180a). The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT
+          (adapter: zstack) and ZHA.
           EOF
           printf '%s\n' "${firmware_files[@]}"
 
