@@ -17,9 +17,12 @@
 #include <zephyr/init.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/net/ieee802154_pkt.h>
 #include <zephyr/drivers/hwinfo.h>
+#if defined(CONFIG_NET_L2_OPENTHREAD)
 #include <zephyr/net/openthread.h>
 #include <zephyr/net/ieee802154_radio_openthread.h>
+#endif
 #include <zephyr/devicetree.h>
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/ieee802154.h>
@@ -31,17 +34,19 @@
 #include <zephyr/logging/log_ctrl.h>
 LOG_MODULE_REGISTER(ieee802154_silabs_efr32, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
-#if CONFIG_ZEPHYR_OPENTHREAD_MODULE
-#include <openthread/platform/crypto.h>
-#include <openthread/platform/radio.h>
-#include <openthread/error.h>
-#include <openthread/link.h>
-#include <openthread-core-zephyr-config.h>
-#endif
-
 #include <sli_crypto.h>
 
 #include "ieee802154_silabs_efr32.h"
+
+/* IEEE 802.15.4 2.4 GHz O-QPSK constants. The values match the OpenThread
+ * platform radio API, which this driver no longer needs at build time.
+ */
+#define SL_802154_MAC_KEY_SIZE           16
+#define SL_802154_SYMBOL_TIME_US         16
+#define SL_802154_TEN_SYMBOLS_TIME_US    160
+#define SL_802154_ACK_IE_MAX_SIZE        16
+#define SL_802154_OQPSK_CHANNEL_MIN      11
+#define SL_802154_OQPSK_CHANNEL_MAX      26
 
 /*************************************************************************************************/
 /* MAC header helpers */
@@ -323,7 +328,7 @@ static int sl_802154_ccm_tag_auth_only(const uint8_t *aad, uint16_t aad_len, con
 				       uint8_t tag_length, const uint8_t *key, uint8_t *tag)
 {
 	sli_crypto_descriptor_t key_desc =
-		SLI_CRYPTO_DESCRIPTOR_INIT_PLAINTEXT_KEY((uint8_t *)key, OT_MAC_KEY_SIZE);
+		SLI_CRYPTO_DESCRIPTOR_INIT_PLAINTEXT_KEY((uint8_t *)key, SL_802154_MAC_KEY_SIZE);
 	uint8_t block[SLI_CRYPTO_AES_BLOCK_SIZE];
 	uint8_t mac[SLI_CRYPTO_AES_BLOCK_SIZE];
 	uint8_t keystream[SLI_CRYPTO_AES_BLOCK_SIZE];
@@ -343,7 +348,7 @@ static int sl_802154_ccm_tag_auth_only(const uint8_t *aad, uint16_t aad_len, con
 	block[14] = 0;
 	block[15] = 0;
 
-	ret = sli_crypto_aes_ecb_radio(true, &key_desc, OT_MAC_KEY_SIZE * 8, block, mac);
+	ret = sli_crypto_aes_ecb_radio(true, &key_desc, SL_802154_MAC_KEY_SIZE * 8, block, mac);
 	if (ret != SL_STATUS_OK) {
 		return -EIO;
 	}
@@ -361,7 +366,7 @@ static int sl_802154_ccm_tag_auth_only(const uint8_t *aad, uint16_t aad_len, con
 		ARRAY_FOR_EACH(block, i) {
 			block[i] ^= mac[i];
 		}
-		ret = sli_crypto_aes_ecb_radio(true, &key_desc, OT_MAC_KEY_SIZE * 8, block, mac);
+		ret = sli_crypto_aes_ecb_radio(true, &key_desc, SL_802154_MAC_KEY_SIZE * 8, block, mac);
 		if (ret != SL_STATUS_OK) {
 			return -EIO;
 		}
@@ -373,7 +378,7 @@ static int sl_802154_ccm_tag_auth_only(const uint8_t *aad, uint16_t aad_len, con
 	block[14] = 0;
 	block[15] = 0;
 
-	ret = sli_crypto_aes_ecb_radio(true, &key_desc, OT_MAC_KEY_SIZE * 8, block, keystream);
+	ret = sli_crypto_aes_ecb_radio(true, &key_desc, SL_802154_MAC_KEY_SIZE * 8, block, keystream);
 	if (ret != SL_STATUS_OK) {
 		return -EIO;
 	}
@@ -395,7 +400,7 @@ static int sl_802154_tx_ccm(uint8_t *mpdu, uint16_t mpdu_len, uint8_t header_len
 	uint8_t *payload;
 	uint8_t *footer;
 	sli_crypto_descriptor_t key_desc =
-		SLI_CRYPTO_DESCRIPTOR_INIT_PLAINTEXT_KEY((uint8_t *)key, OT_MAC_KEY_SIZE);
+		SLI_CRYPTO_DESCRIPTOR_INIT_PLAINTEXT_KEY((uint8_t *)key, SL_802154_MAC_KEY_SIZE);
 	sl_status_t ret;
 
 	if (security_level >= ARRAY_SIZE(mic_size_table)) {
@@ -648,7 +653,7 @@ static int sl_802154_security_process_tx(struct sl_802154_data *data, uint8_t *b
 #define SL_802154_SHR_DURATION_US              160
 #define SL_802154_SCHEDULE_TX_DELAY_US         3000
 #define SL_802154_RX_TO_ENH_ACK_TX_US          256
-#define SL_802154_PHR_DURATION_US              (SL_802154_PHR_BYTES * OT_RADIO_SYMBOL_TIME * 2)
+#define SL_802154_PHR_DURATION_US              (SL_802154_PHR_BYTES * SL_802154_SYMBOL_TIME_US * 2)
 #define SL_802154_CSMA_BACKOFF_TIME_US         150
 
 #define SL_802154_FLAG_ONGOING_TX_DATA      0
@@ -981,11 +986,11 @@ static bool sl_802154_src_match_contains(struct sl_802154_data *data)
 
 static inline uint16_t sl_802154_get_csl_phase(struct sl_802154_data *data, uint32_t tx_mhr_time_us)
 {
-	uint32_t csl_period_us = data->csl_period * OT_US_PER_TEN_SYMBOLS;
+	uint32_t csl_period_us = data->csl_period * SL_802154_TEN_SYMBOLS_TIME_US;
 	uint32_t diff = ((data->csl_sample_time_us % csl_period_us) -
 			 (tx_mhr_time_us % csl_period_us) + csl_period_us) %
 			csl_period_us;
-	return (diff / OT_US_PER_TEN_SYMBOLS);
+	return (diff / SL_802154_TEN_SYMBOLS_TIME_US);
 }
 
 static inline uint32_t sl_802154_get_ack_mhr_time(struct sl_802154_data *data,
@@ -993,17 +998,17 @@ static inline uint32_t sl_802154_get_ack_mhr_time(struct sl_802154_data *data,
 						  uint16_t rx_frame_length)
 {
 	return rx_timestamp -
-	       (rx_packet_bytes * OT_RADIO_SYMBOL_TIME * 2)
+	       (rx_packet_bytes * SL_802154_SYMBOL_TIME_US * 2)
 	       /* PHR of this packet */
-	       + (SL_802154_PHR_BYTES * OT_RADIO_SYMBOL_TIME * 2)
+	       + (SL_802154_PHR_BYTES * SL_802154_SYMBOL_TIME_US * 2)
 	       /* Received frame's expected time in the PHR */
-	       + (rx_frame_length * OT_RADIO_SYMBOL_TIME * 2)
+	       + (rx_frame_length * SL_802154_SYMBOL_TIME_US * 2)
 	       /* rxToTx turnaround time */
 	       + data->radio_data.rail_ieee802154_config.timings.rx_to_tx
 	       /* PHR time of the ACK */
-	       + (SL_802154_PHR_BYTES * OT_RADIO_SYMBOL_TIME * 2)
+	       + (SL_802154_PHR_BYTES * SL_802154_SYMBOL_TIME_US * 2)
 	       /* SHR time of the ACK */
-	       + (SL_802154_SHR_BYTES * OT_RADIO_SYMBOL_TIME * 2);
+	       + (SL_802154_SHR_BYTES * SL_802154_SYMBOL_TIME_US * 2);
 }
 
 static bool sl_802154_update_tx_csl_ie(struct sl_802154_data *data, uint8_t frame_len,
@@ -1134,7 +1139,7 @@ static int sl_802154_read_initial_pkt_data(struct sl_802154_data *data,
 
 /* Upper bound passed to sl_802154_read_initial_pkt_data() including optional ACK IE payload. */
 #define SL_802154_ENH_ACK_INIT_PEEK_MAX_BYTES                                                      \
-	(SL_802154_ENH_ACK_INIT_PEEK_BYTES + OT_ACK_IE_MAX_SIZE)
+	(SL_802154_ENH_ACK_INIT_PEEK_BYTES + SL_802154_ACK_IE_MAX_SIZE)
 
 /* Compose one ACK address field (PAN+addr, addr-only, or PAN-only) into out.
  * Address bytes are sourced from rx_addr_field, whose own layout is described
@@ -1737,10 +1742,12 @@ static void sl_802154_handle_rx_data(const struct device *dev, uint16_t length,
 	}
 	net_pkt_set_ieee802154_lqi(pkt, pkt_details->lqi);
 	net_pkt_set_ieee802154_rssi_dbm(pkt, pkt_details->rssi_dbm);
-	net_pkt_set_ieee802154_ack_seb(pkt, data->mac_data.ack_seb);
 	net_pkt_set_ieee802154_ack_fpb(pkt, data->mac_data.ack_fpb);
+#if defined(CONFIG_NET_L2_OPENTHREAD)
+	net_pkt_set_ieee802154_ack_seb(pkt, data->mac_data.ack_seb);
 	net_pkt_set_ieee802154_ack_fc(pkt, data->mac_data.ack_fc);
 	net_pkt_set_ieee802154_ack_keyid(pkt, data->mac_data.ack_key_id);
+#endif
 	net_pkt_set_timestamp_ns(pkt,
 				 sl_802154_us32_to_ns64(pkt_details->time_received.packet_time));
 	net_pkt_cursor_init(pkt);
@@ -2257,8 +2264,8 @@ static void sl_802154_rail_timer_callback(struct sl_rail_multi_timer *tmr,
 }
 
 /*************************************************************************************************/
-IEEE802154_DEFINE_PHY_SUPPORTED_CHANNELS(drv_attr, OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MIN,
-					 OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MAX);
+IEEE802154_DEFINE_PHY_SUPPORTED_CHANNELS(drv_attr, SL_802154_OQPSK_CHANNEL_MIN,
+					 SL_802154_OQPSK_CHANNEL_MAX);
 
 static int silabs_efr32_attr_get(const struct device *dev, enum ieee802154_attr attr,
 				 struct ieee802154_attr_value *value)
@@ -2333,8 +2340,8 @@ static int silabs_efr32_set_channel(const struct device *dev, uint16_t channel)
 {
 	struct sl_802154_data *data = dev->data;
 
-	if (channel < OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MIN ||
-	    channel > OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MAX) {
+	if (channel < SL_802154_OQPSK_CHANNEL_MIN ||
+	    channel > SL_802154_OQPSK_CHANNEL_MAX) {
 		return -EINVAL;
 	}
 	data->current_channel = channel;
