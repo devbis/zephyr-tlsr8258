@@ -23,9 +23,9 @@ Requirements
 
 A board with an IEEE 802.15.4 radio supported by the Zigbee platform layer,
 for example ``tlsr8258_tb03f``, ``nrf52840dk/nrf52840``,
-``esp32c6_devkitc/esp32c6/hpcore`` or ``esp32h2_devkitm/esp32h2``, and a
-Zigbee coordinator with permit join open. The ESP32-C6 and ESP32-H2 board
-configurations scan channel 11.
+``esp32c6_devkitc/esp32c6/hpcore``, ``esp32h2_devkitm/esp32h2`` or
+``slwrb4180a`` (EFR32MG21), and a Zigbee coordinator with permit join open.
+The ESP32-C6 and ESP32-H2 board configurations scan channel 11.
 
 Building and Running
 ********************
