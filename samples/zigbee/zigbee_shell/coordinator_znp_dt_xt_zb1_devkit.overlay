@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* Z-Stack host UART for dt_xt_zb1_devkit: uart0 (GPIO14 TX, GPIO15 RX), the
+ * board's only UART. The coordinator build turns the console off, so the UART
+ * carries only the NCP protocol.
+ */
+
+/ {
+	chosen {
+		zigbee,ncp-uart = &uart0;
+	};
+};
