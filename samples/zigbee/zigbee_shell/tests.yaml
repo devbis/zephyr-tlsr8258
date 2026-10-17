@@ -11,6 +11,7 @@ common:
     - esp32c6_devkitc/esp32c6/hpcore
     - esp32h2_devkitm/esp32h2
     - slwrb4180a
+    - dt_xt_zb1_devkit
   tags:
     - zigbee
 tests:
