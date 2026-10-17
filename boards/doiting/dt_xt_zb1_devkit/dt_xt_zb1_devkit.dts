@@ -10,6 +10,14 @@
 
 / {
 	model = "Zigbee 3.0 and BLE 5.0 Coexistence Module Development Kit";
+
+	chosen {
+		zephyr,ieee802154 = &ieee802154;
+	};
+};
+
+&ieee802154 {
+	status = "okay";
 };
 
 &i2c0 {
