@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(ieee802154_bflb, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/random/random.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/irq.h>
 
 #include "ieee802154_bflb.h"
@@ -68,6 +69,10 @@ LOG_MODULE_REGISTER(ieee802154_bflb, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define IEEE802154_BFLB_L2          OPENTHREAD_L2
 #define IEEE802154_BFLB_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(OPENTHREAD_L2)
 #define IEEE802154_BFLB_MTU         1280
+#elif defined(CONFIG_NET_L2_CUSTOM_IEEE802154)
+#define IEEE802154_BFLB_L2          CUSTOM_IEEE802154_L2
+#define IEEE802154_BFLB_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(CUSTOM_IEEE802154_L2)
+#define IEEE802154_BFLB_MTU         CONFIG_NET_L2_CUSTOM_IEEE802154_MTU
 #endif
 
 static struct bflb_ieee802154_data bflb_ieee802154_data_inst;
@@ -380,6 +385,31 @@ static int bflb_ieee802154_set_txpower(const struct device *dev, int16_t dbm)
 	return 0;
 }
 
+/*
+ * lmac154 reports the Frame Pending bit and the sequence number of a received
+ * ACK, not the ACK frame. Hand an ACK frame with those two fields to the L2
+ * the way the drivers that see the whole frame do, so that a device which
+ * polls its parent learns that data is waiting and keeps its receiver on.
+ */
+static void bflb_ack_deliver(uint8_t frame_pending, uint8_t seq)
+{
+	uint8_t ack[3] = {0x02U | (frame_pending != 0U ? BIT(4) : 0U), 0x00U, seq};
+	struct net_pkt *ack_pkt;
+
+	ack_pkt = net_pkt_rx_alloc_with_buffer(bflb_ieee802154_data_inst.iface, sizeof(ack),
+					       AF_UNSPEC, 0, K_NO_WAIT);
+	if (ack_pkt == NULL) {
+		return;
+	}
+
+	if (net_pkt_write(ack_pkt, ack, sizeof(ack)) == 0) {
+		net_pkt_cursor_init(ack_pkt);
+		(void)ieee802154_handle_ack(bflb_ieee802154_data_inst.iface, ack_pkt);
+	}
+
+	net_pkt_unref(ack_pkt);
+}
+
 static int bflb_ieee802154_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 			      struct net_pkt *pkt, struct net_buf *frag)
 {
@@ -492,6 +522,9 @@ static int bflb_ieee802154_tx(const struct device *dev, enum ieee802154_tx_mode 
 			LOG_DBG("No ACK received");
 			return -ENOMSG;
 		}
+
+		bflb_ack_deliver(bflb_ieee802154_data_inst.ack_frame_pending,
+				 bflb_ieee802154_data_inst.ack_seq_num);
 	}
 
 	return 0;
@@ -612,6 +645,42 @@ static const struct ieee802154_radio_api bflb_ieee802154_radio_api = {
 
 /* Device init */
 
+/*
+ * The EUI-64 identifies the device to its parent, which ties the short address
+ * and the keys it handed out to it. It has to be the same after every reset,
+ * so build it from the factory MAC in the efuse, inserting FF:FE in the
+ * middle. Without a factory MAC use a random locally-administered address.
+ */
+static void bflb_eui64_get(uint8_t mac[8])
+{
+	uint8_t id[6];
+	uint8_t or_all = 0U;
+	uint8_t and_all = 0xFFU;
+
+	if (IS_ENABLED(CONFIG_HWINFO) && hwinfo_get_device_id(id, sizeof(id)) == sizeof(id)) {
+		for (size_t i = 0; i < sizeof(id); i++) {
+			or_all |= id[i];
+			and_all &= id[i];
+		}
+
+		if ((or_all != 0U) && (and_all != 0xFFU)) {
+			mac[0] = id[0];
+			mac[1] = id[1];
+			mac[2] = id[2];
+			mac[3] = 0xFFU;
+			mac[4] = 0xFEU;
+			mac[5] = id[3];
+			mac[6] = id[4];
+			mac[7] = id[5];
+			return;
+		}
+	}
+
+	sys_rand_get(mac, 8U);
+	/* Set the locally-administered bit, clear multicast bit */
+	mac[0] = (mac[0] | 0x02U) & 0xFEU;
+}
+
 static int bflb_ieee802154_init(const struct device *dev)
 {
 	struct bflb_ieee802154_data *data = dev->data;
@@ -626,10 +695,7 @@ static int bflb_ieee802154_init(const struct device *dev)
 	k_sem_init(&data->tx_sem, 0, 1);
 	k_sem_init(&data->ack_sem, 0, 1);
 
-	/* Random locally-administered EUI-64 */
-	sys_rand_get(data->mac, sizeof(data->mac));
-	/* Set the locally-administered bit, clear multicast bit */
-	data->mac[0] = (data->mac[0] | 0x02U) & 0xFEU;
+	bflb_eui64_get(data->mac);
 
 #if defined(CONFIG_SOC_SERIES_BL61X)
 	/* BL616: enable M154 + BT/BLE peripheral clock gates */
