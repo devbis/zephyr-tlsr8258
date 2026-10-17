@@ -23,5 +23,6 @@ supported:
   - entropy
   - crypto
   - counter
+  - ieee802154
   - usbd
 vendor: doiting
