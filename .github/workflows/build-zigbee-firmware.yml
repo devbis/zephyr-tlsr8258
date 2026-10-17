@@ -107,6 +107,21 @@ jobs:
             role: coordinator
             role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: zephyr
+          - soc: bl702
+            board: dt_xt_zb1_devkit
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: zephyr
+          - soc: bl702
+            board: dt_xt_zb1_devkit
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: zephyr
+          - soc: bl702
+            board: dt_xt_zb1_devkit
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: zephyr
 
     steps:
       - name: Checkout repository
@@ -169,6 +184,11 @@ jobs:
         run: |
           west blobs fetch hal_silabs
 
+      - name: Fetch Bouffalo Lab binary blobs
+        if: matrix.soc == 'bl702'
+        run: |
+          west blobs fetch hal_bouffalolab
+
       - name: Install Arm GNU Toolchain
         if: matrix.soc == 'nrf52840' || matrix.soc == 'efr32mg21'
         shell: bash
@@ -187,7 +207,7 @@ jobs:
           "$install_dir/bin/arm-none-eabi-gcc" --version
 
       - name: Install Zephyr SDK
-        if: matrix.soc == 'esp32h2' || matrix.soc == 'esp32c6'
+        if: matrix.soc == 'esp32h2' || matrix.soc == 'esp32c6' || matrix.soc == 'bl702'
         shell: bash
         run: |
           set -euo pipefail
@@ -222,6 +242,9 @@ jobs:
               cmake_args+=(-DEXTRA_CONF_FILE=coordinator_znp.conf)
               if [[ "$SOC" == efr32mg21 ]]; then
                 cmake_args+=("-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_slwrb4180a.overlay")
+              fi
+              if [[ "$SOC" == bl702 ]]; then
+                cmake_args+=("-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_dt_xt_zb1_devkit.overlay")
               fi
               ;;
             *)
@@ -296,8 +319,8 @@ jobs:
           set -euo pipefail
           tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
           mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
-          if [[ "${#firmware_files[@]}" -ne 15 ]]; then
-            echo "Expected fifteen firmware images, found ${#firmware_files[@]}" >&2
+          if [[ "${#firmware_files[@]}" -ne 18 ]]; then
+            echo "Expected eighteen firmware images, found ${#firmware_files[@]}" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -307,12 +330,12 @@ jobs:
           Toolchains:
           - TLSR8258: TC32 LLVM \`$TC32_TOOLCHAIN_VERSION\`
           - nRF52840 and EFR32MG21: Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
-          - ESP32-C6 and ESP32-H2: Zephyr SDK with the RISC-V toolchain
+          - ESP32-C6, ESP32-H2 and BL702: Zephyr SDK with the RISC-V toolchain
 
           The release contains router, end-device, and coordinator images for TLSR8258,
-          nRF52840, ESP32-C6, and ESP32-H2, and router, end-device, and coordinator images
-          for EFR32MG21 (slwrb4180a). The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT
-          (adapter: zstack) and ZHA.
+          nRF52840, ESP32-C6, ESP32-H2, and BL702 (dt_xt_zb1_devkit), and router, end-device,
+          and coordinator images for EFR32MG21 (slwrb4180a). The coordinators speak the Z-Stack
+          ZNP protocol, for Zigbee2MQTT (adapter: zstack) and ZHA.
           EOF
           printf '%s\n' "${firmware_files[@]}"
 
