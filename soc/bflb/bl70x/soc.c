@@ -19,6 +19,7 @@
 #include <bflb_soc.h>
 #include <glb_reg.h>
 #include <hbn_reg.h>
+#include <aon_reg.h>
 
 void soc_early_init_hook(void)
 {
@@ -31,6 +32,15 @@ void soc_early_init_hook(void)
 	/* "BL_CLR_REG_BIT" */
 	tmp = tmp & HBN_REG_EN_HW_PU_PD_UMSK;
 	sys_write32(tmp, HBN_BASE + HBN_IRQ_MODE_OFFSET);
+
+	/* Crystal load capacitors and the extra capacitance bit, as bflb_early_init() of the
+	 * vendor SDK sets them. The RF PLL and the 802.15.4 receiver run from this crystal.
+	 */
+	tmp = sys_read32(AON_BASE + AON_XTAL_CFG_OFFSET);
+	tmp &= AON_XTAL_CAPCODE_IN_AON_UMSK & AON_XTAL_CAPCODE_OUT_AON_UMSK;
+	tmp |= (0x30U << AON_XTAL_CAPCODE_IN_AON_POS) | (0x30U << AON_XTAL_CAPCODE_OUT_AON_POS) |
+	       AON_XTAL_CAPCODE_EXTRA_AON_MSK;
+	sys_write32(tmp, AON_BASE + AON_XTAL_CFG_OFFSET);
 
 	/* Configure "seam" (BLE exchange memory): 8KB or 16KB with BLE, 0KB otherwise */
 	tmp = sys_read32(GLB_BASE + GLB_SEAM_MISC_OFFSET);
