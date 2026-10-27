@@ -384,6 +384,31 @@ static int bflb_ieee802154_set_txpower(const struct device *dev, int16_t dbm)
 	return 0;
 }
 
+/*
+ * lmac154 reports the Frame Pending bit and the sequence number of a received
+ * ACK, not the ACK frame. Hand an ACK frame with those two fields to the L2
+ * the way the drivers that see the whole frame do, so that a device which
+ * polls its parent learns that data is waiting and keeps its receiver on.
+ */
+static void bflb_ack_deliver(uint8_t frame_pending, uint8_t seq)
+{
+	uint8_t ack[3] = {0x02U | (frame_pending != 0U ? BIT(4) : 0U), 0x00U, seq};
+	struct net_pkt *ack_pkt;
+
+	ack_pkt = net_pkt_rx_alloc_with_buffer(bflb_ieee802154_data_inst.iface, sizeof(ack),
+					       AF_UNSPEC, 0, K_NO_WAIT);
+	if (ack_pkt == NULL) {
+		return;
+	}
+
+	if (net_pkt_write(ack_pkt, ack, sizeof(ack)) == 0) {
+		net_pkt_cursor_init(ack_pkt);
+		(void)ieee802154_handle_ack(bflb_ieee802154_data_inst.iface, ack_pkt);
+	}
+
+	net_pkt_unref(ack_pkt);
+}
+
 static int bflb_ieee802154_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 			      struct net_pkt *pkt, struct net_buf *frag)
 {
@@ -496,6 +521,9 @@ static int bflb_ieee802154_tx(const struct device *dev, enum ieee802154_tx_mode 
 			LOG_DBG("No ACK received");
 			return -ENOMSG;
 		}
+
+		bflb_ack_deliver(bflb_ieee802154_data_inst.ack_frame_pending,
+				 bflb_ieee802154_data_inst.ack_seq_num);
 	}
 
 	return 0;
