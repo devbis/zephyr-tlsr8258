@@ -60,6 +60,7 @@ bool zb_platform_bdb_service_persistent_rejoin(void);
 void zb_platform_bdb_abandon_persistent_rejoin(void);
 int zb_platform_restore_persistent_state(void);
 int zb_platform_clear_persistent_state(void);
+void zb_platform_clear_key_pairs(void);
 void zb_platform_persistence_runtime_reset(void);
 bool zb_platform_persistence_can_write(void);
 void zb_platform_app_network_left(void);

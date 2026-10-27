@@ -120,6 +120,26 @@ int zb_platform_restore_persistent_state(void)
 	return 0;
 }
 
+/*
+ * The APS key pair table outlives the joined snapshot. A pair left over from an
+ * earlier network is found by ss_devKeyPairFind() for the trust center and is
+ * then used instead of the preconfigured link key, so the Transport-Key of a
+ * new join fails to decrypt and the join never completes. The vendor starts a
+ * factory-new device with an empty table.
+ */
+void zb_platform_clear_key_pairs(void)
+{
+#if !defined(ZB_COORDINATOR_ROLE)
+	nv_sts_t st = nv_resetModule(NV_MODULE_KEYPAIR);
+
+	if (st != NV_SUCC && st != NV_NO_MEDIA) {
+		LOG_WRN("Zigbee key pair table clear failed: %d", st);
+	}
+
+	ss_ib.devKeyPairNum = 0U;
+#endif
+}
+
 int zb_platform_clear_persistent_state(void)
 {
 	nv_sts_t st;
@@ -130,6 +150,8 @@ int zb_platform_clear_persistent_state(void)
 	if (st != NV_SUCC && st != NV_ITEM_NOT_FOUND && st != NV_NO_MEDIA) {
 		LOG_WRN("Zigbee persistence clear failed: %d", st);
 	}
+
+	zb_platform_clear_key_pairs();
 
 #if defined(ZB_ED_ROLE) && ZB_ED_ROLE
 	zb_ed_runtime_reset();

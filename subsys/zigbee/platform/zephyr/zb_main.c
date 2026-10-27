@@ -367,6 +367,7 @@ static void zb_core_bootstrap_once(void)
 		if (zb_platform_restore_persistent_state() != 0) {
 			g_zbNwkCtx.joined = 0U;
 			g_zbNwkCtx.is_factory_new = 1U;
+			zb_platform_clear_key_pairs();
 		}
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 		if (g_zbNwkCtx.joined) {
