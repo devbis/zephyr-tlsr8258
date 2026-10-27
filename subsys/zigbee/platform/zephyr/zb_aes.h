@@ -27,6 +27,14 @@ void zb_aes_encrypt(uint8_t *key, uint8_t *plain, uint8_t *result);
  */
 void zb_aes_decrypt(uint8_t *key, uint8_t *cipher, uint8_t *result);
 
+/**
+ * @brief Software AES-128 block encrypt/decrypt, same contract as above.
+ *
+ * Only linked when CONFIG_ZIGBEE_AES_SOFTWARE is set.
+ */
+void zb_aes_sw_encrypt(uint8_t *key, uint8_t *plain, uint8_t *result);
+void zb_aes_sw_decrypt(uint8_t *key, uint8_t *cipher, uint8_t *result);
+
 /*
  * The imported stack calls the vendor SDK's drv_security.h entry points. This
  * port reaches the AES engine through the crypto driver instead, so map the
