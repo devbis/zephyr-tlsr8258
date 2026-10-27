@@ -247,6 +247,25 @@ config ZIGBEE_RADIO_PORT_TLSR8269
 	select CRYPTO
 	default y if IEEE802154_TELINK_TLSR8269
 
+config ZIGBEE_AES_ENGINE
+	bool
+	depends on ZIGBEE
+	default y if DT_HAS_ESPRESSIF_ESP32_AES_ENABLED || \
+		     (DT_HAS_NORDIC_NRF_ECB_ENABLED && !HAS_BT_CTLR)
+	select CRYPTO
+	help
+	  The SoC has an AES engine that the crypto API drives for the Zigbee
+	  security service. The engine driver itself is enabled by default once
+	  CRYPTO is.
+
+config ZIGBEE_AES_SOFTWARE
+	bool
+	default y if !(CRYPTO_TLSR8258 || CRYPTO_ESP32_AES)
+	help
+	  Build the software AES-128 cipher. It is the whole implementation
+	  when no engine is available, and the decrypt direction on the nRF
+	  ECB peripheral, which only encrypts.
+
 config ZIGBEE_RADIO_PORT_GENERIC
 	bool
 	depends on NET_L2_CUSTOM_IEEE802154 && !IEEE802154_TELINK_TLSR8258 && !IEEE802154_TELINK_TLSR8269
