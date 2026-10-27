@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The Zigbee NV is an NVS volume. Looking up an absent key walks every sector
+ * of the volume, and the stack looks up many absent keys while it restores its
+ * state after a reset: with the 512 KB storage partition that takes about a
+ * minute on the single-line serial flash of the BL702. Eight sectors, taken
+ * from the unused end of the flash, make the same start-up take milliseconds.
+ */
+&storage_partition {
+	reg = <0x000f8000 DT_SIZE_K(32)>;
+};
