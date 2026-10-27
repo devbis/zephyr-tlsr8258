@@ -87,6 +87,8 @@ zephyr_library_sources(
   platform/zephyr/zb_primitive_dispatch.c
 )
 
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_AES_SOFTWARE platform/zephyr/zb_aes_sw.c)
+
 if(NOT CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR
    AND NOT CONFIG_XOSHIRO_RANDOM_GENERATOR
    AND NOT CONFIG_TIMER_RANDOM_GENERATOR
