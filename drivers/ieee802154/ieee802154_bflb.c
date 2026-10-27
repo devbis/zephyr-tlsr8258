@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(ieee802154_bflb, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/random/random.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/irq.h>
 
 #include "ieee802154_bflb.h"
@@ -644,6 +645,42 @@ static const struct ieee802154_radio_api bflb_ieee802154_radio_api = {
 
 /* Device init */
 
+/*
+ * The EUI-64 identifies the device to its parent, which ties the short address
+ * and the keys it handed out to it. It has to be the same after every reset,
+ * so build it from the factory MAC in the efuse, inserting FF:FE in the
+ * middle. Without a factory MAC use a random locally-administered address.
+ */
+static void bflb_eui64_get(uint8_t mac[8])
+{
+	uint8_t id[6];
+	uint8_t or_all = 0U;
+	uint8_t and_all = 0xFFU;
+
+	if (IS_ENABLED(CONFIG_HWINFO) && hwinfo_get_device_id(id, sizeof(id)) == sizeof(id)) {
+		for (size_t i = 0; i < sizeof(id); i++) {
+			or_all |= id[i];
+			and_all &= id[i];
+		}
+
+		if ((or_all != 0U) && (and_all != 0xFFU)) {
+			mac[0] = id[0];
+			mac[1] = id[1];
+			mac[2] = id[2];
+			mac[3] = 0xFFU;
+			mac[4] = 0xFEU;
+			mac[5] = id[3];
+			mac[6] = id[4];
+			mac[7] = id[5];
+			return;
+		}
+	}
+
+	sys_rand_get(mac, 8U);
+	/* Set the locally-administered bit, clear multicast bit */
+	mac[0] = (mac[0] | 0x02U) & 0xFEU;
+}
+
 static int bflb_ieee802154_init(const struct device *dev)
 {
 	struct bflb_ieee802154_data *data = dev->data;
@@ -658,10 +695,7 @@ static int bflb_ieee802154_init(const struct device *dev)
 	k_sem_init(&data->tx_sem, 0, 1);
 	k_sem_init(&data->ack_sem, 0, 1);
 
-	/* Random locally-administered EUI-64 */
-	sys_rand_get(data->mac, sizeof(data->mac));
-	/* Set the locally-administered bit, clear multicast bit */
-	data->mac[0] = (data->mac[0] | 0x02U) & 0xFEU;
+	bflb_eui64_get(data->mac);
 
 #if defined(CONFIG_SOC_SERIES_BL61X)
 	/* BL616: enable M154 + BT/BLE peripheral clock gates */
