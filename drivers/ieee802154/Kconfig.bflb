@@ -10,6 +10,8 @@ menuconfig IEEE802154_BFLB
 	# the BL70x/BL70xL platform shims attach blob ISRs at runtime
 	select DYNAMIC_INTERRUPTS if SOC_SERIES_BL70X || SOC_SERIES_BL70XL
 	select BFLB_PHYRF
+	# the factory MAC in the efuse gives the EUI-64
+	imply HWINFO
 
 if IEEE802154_BFLB
 
