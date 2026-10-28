@@ -47,6 +47,16 @@ u32 g_u32CfgFlashAddr;
 
 #define NV_ITEM_LEN_CHK_TABLE_NUM 16
 #define NV_INDEX_KEY_BASE         0x8000U
+/*
+ * Per module key holding an upper bound of the highest index in use, plus
+ * one. NVS has to walk its whole log to find that a key is absent, so probing
+ * the 256 possible indexes of a module costs far more than the rest of the
+ * start-up. The bound is raised before a record is written and lowered only
+ * when the module is rescanned, so it is never below the real top.
+ */
+#define NV_INDEX_HINT_KEY_BASE    0x4000U
+/* Appends move the bound up in steps, so it is not rewritten for every record. */
+#define NV_INDEX_HINT_SLACK       4
 #define NV_INDEX_MAGIC            0xa7U
 #define NV_INDEX_MAX              UINT8_MAX
 #define NV_INDEX_HEADER_LEN       4U
@@ -73,6 +83,8 @@ static u8 nv_item_len_chk_num;
  */
 static int16_t nv_index_top[NV_MAX_MODULS];
 static u8 nv_index_top_known;
+/* The top index the stored hint allows, valid with nv_index_top_known. */
+static int16_t nv_index_hint_top[NV_MAX_MODULS];
 
 BUILD_ASSERT(NV_MAX_MODULS <= 8, "nv_index_top_known holds one bit per module");
 
@@ -228,6 +240,32 @@ static inline uint16_t nv_index_key(u8 id, u8 opIdx)
 	return (uint16_t)(NV_INDEX_KEY_BASE | ((u16)id << 8) | opIdx);
 }
 
+static inline uint16_t nv_index_hint_key(u8 id)
+{
+	return (uint16_t)(NV_INDEX_HINT_KEY_BASE | id);
+}
+
+static bool nv_index_hint_read(u8 id, int16_t *top)
+{
+	u16 hint;
+	ssize_t len = nvs_read(&zb_nvs, nv_index_hint_key(id), &hint, sizeof(hint));
+
+	if (len != (ssize_t)sizeof(hint) || hint > (u16)NV_INDEX_MAX + 1U) {
+		return false;
+	}
+
+	*top = (int16_t)hint - 1;
+	return true;
+}
+
+static void nv_index_hint_write(u8 id, int16_t top)
+{
+	u16 hint = (u16)(top + 1);
+
+	(void)nvs_write(&zb_nvs, nv_index_hint_key(id), &hint, sizeof(hint));
+	nv_index_hint_top[id] = top;
+}
+
 static bool nv_index_record_read(u8 id, u8 itemId, u8 opIdx, u16 len, u8 *buf)
 {
 	ssize_t stored_len;
@@ -279,14 +317,21 @@ static int16_t nv_index_top_get(u8 id)
 {
 	if ((nv_index_top_known & BIT(id)) == 0U) {
 		int16_t top = NV_INDEX_TOP_EMPTY;
+		int16_t start = NV_INDEX_MAX;
+		bool hinted = nv_index_hint_read(id, &start);
 
-		for (int16_t i = NV_INDEX_MAX; i >= 0; i--) {
+		for (int16_t i = start; i >= 0; i--) {
 			if (nv_index_header_read(id, (u8)i, NULL)) {
 				top = i;
 				break;
 			}
 		}
 		nv_index_top_set(id, top);
+		if (!hinted || (start - top) > NV_INDEX_HINT_SLACK) {
+			nv_index_hint_write(id, top);
+		} else {
+			nv_index_hint_top[id] = start;
+		}
 	}
 
 	return nv_index_top[id];
@@ -342,6 +387,7 @@ static bool nv_index_compact(u8 id)
 	}
 
 	nv_index_top_set(id, dst - 1);
+	nv_index_hint_write(id, MIN(dst - 1 + NV_INDEX_HINT_SLACK, (int16_t)NV_INDEX_MAX));
 	return true;
 }
 
@@ -396,6 +442,7 @@ static nv_sts_t nv_clear_module_items(u8 module_id)
 	}
 
 	nv_index_top_set(module_id, NV_INDEX_TOP_EMPTY);
+	nv_index_hint_write(module_id, NV_INDEX_TOP_EMPTY);
 	return NV_SUCC;
 }
 
@@ -418,6 +465,11 @@ nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
 
 	if (len > NV_INDEX_VALUE_MAX || !nv_index_append_slot((u8)id, &op_idx)) {
 		return NV_NOT_ENOUGH_SAPCE;
+	}
+
+	if ((int16_t)op_idx > nv_index_hint_top[id]) {
+		nv_index_hint_write((u8)id, MIN((int16_t)op_idx + NV_INDEX_HINT_SLACK,
+						(int16_t)NV_INDEX_MAX));
 	}
 
 	nv_index_scratch[0] = NV_INDEX_MAGIC;
