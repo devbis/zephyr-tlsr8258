@@ -237,6 +237,10 @@ jobs:
               ;;
             end-device)
               cmake_args+=(-DCONFIG_ZIGBEE_ED=y)
+              # Deep sleep is implemented for the TLSR8258 and the BL702 only.
+              if [[ "$SOC" == tlsr8258 || "$SOC" == bl702 ]]; then
+                cmake_args+=(-DEXTRA_CONF_FILE=sleepy_deep.conf)
+              fi
               ;;
             coordinator)
               cmake_args+=(-DEXTRA_CONF_FILE=coordinator_znp.conf)
@@ -273,6 +277,10 @@ jobs:
           grep -Fx "$ROLE_SYMBOL=y" "$config_file"
           if [[ "$ROLE" == coordinator ]]; then
             grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK=y' "$config_file"
+          fi
+          if [[ "$ROLE" == end-device && ( "$SOC" == tlsr8258 || "$SOC" == bl702 ) ]]; then
+            grep -Fx 'CONFIG_PM=y' "$config_file"
+            grep -Fx 'CONFIG_ZIGBEE_SLEEPY_DEEP=y' "$config_file"
           fi
           if [[ "$SOC" == esp32c6 || "$SOC" == esp32h2 ]]; then
             grep -Fx 'CONFIG_ZIGBEE_CHANNEL_MASK=0x800' "$config_file"
@@ -336,6 +344,7 @@ jobs:
           nRF52840, ESP32-C6, ESP32-H2, and BL702 (dt_xt_zb1_devkit), and router, end-device,
           and coordinator images for EFR32MG21 (slwrb4180a). The coordinators speak the Z-Stack
           ZNP protocol, for Zigbee2MQTT (adapter: zstack) and ZHA.
+          The end devices for TLSR8258 and BL702 are sleepy: they deep sleep between parent polls.
           EOF
           printf '%s\n' "${firmware_files[@]}"
 
