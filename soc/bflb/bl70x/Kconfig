@@ -9,6 +9,8 @@ config SOC_SERIES_BL70X
 	select CPU_HAS_ICACHE
 	select CPU_HAS_DCACHE
 	select GEN_IRQ_VECTOR_TABLE
+	select HAS_PM
+	select HAS_PM_STATE_SOFT_OFF
 	select INCLUDE_RESET_VECTOR
 	select OTP
 	select RISCV
