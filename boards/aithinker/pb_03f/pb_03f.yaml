@@ -1,0 +1,10 @@
+identifier: pb_03f
+name: Ai-Thinker PB-03F
+type: mcu
+arch: arm
+ram: 57
+flash: 128
+toolchain:
+  - zephyr
+  - gnuarmemb
+vendor: aithinker
