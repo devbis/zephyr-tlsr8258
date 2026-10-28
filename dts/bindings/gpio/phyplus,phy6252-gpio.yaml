@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Phyplus PHY6252 GPIO controller
+
+compatible: "phyplus,phy6252-gpio"
+
+include: [base.yaml, gpio-controller.yaml]
+
+properties:
+  reg:
+    required: true
+  interrupts:
+    required: true
+  "#gpio-cells":
+    const: 2
+
+gpio-cells:
+  - pin
+  - flags
