@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config FLASH_PHY6252
+	bool "PHY6252 flash controller"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY6252_FLASH_CONTROLLER_ENABLED
+	select FLASH_HAS_DRIVER_ENABLED
+	select FLASH_HAS_PAGE_LAYOUT
+	select FLASH_HAS_EXPLICIT_ERASE
+	help
+	  Enable the PHY6252 flash controller. Program and erase operations
+	  execute from SRAM while interrupts are locked.

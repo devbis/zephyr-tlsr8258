@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+tests:
+  boards.aithinker.pb_03f.configuration:
+    platform_allow: pb_03f
+    build_only: true
+    tags:
+      - gpio
+      - flash
+      - counter
