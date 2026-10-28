@@ -113,12 +113,29 @@
 			d-cache-line-size = <32>;
 			hardware-exec-breakpoint-count = <4>;
 			status = "okay";
+			cpu-power-states = <&bl70x_soft_off>;
 
 			ictrl: interrupt-controller {
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
 				compatible = "riscv,cpu-intc";
 				interrupt-controller;
+			};
+		};
+
+		power-states {
+			/*
+			 * Hibernate with the RTC as the wakeup: the wakeup is a reset.
+			 * The exit latency is the boot to the first radio operation,
+			 * the residency the sleep that repays the entry and the boot.
+			 * The SoC holds a policy lock on this state, so only code that
+			 * can restore itself ever enters it.
+			 */
+			bl70x_soft_off: soft_off {
+				compatible = "zephyr,power-state";
+				power-state-name = "soft-off";
+				min-residency-us = <150000>;
+				exit-latency-us = <60000>;
 			};
 		};
 	};
