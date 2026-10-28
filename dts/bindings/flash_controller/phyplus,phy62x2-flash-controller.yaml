@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Phyplus PHY62x2 flash controller
+
+compatible: "phyplus,phy62x2-flash-controller"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true

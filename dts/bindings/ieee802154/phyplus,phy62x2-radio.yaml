@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Phyplus PHY62x2 IEEE 802.15.4 radio
+
+compatible: "phyplus,phy62x2-radio"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+    description: RF, link-layer, TX FIFO, and RX FIFO register windows.
+
+  interrupts:
+    required: true
+    description: Baseband and link-layer radio interrupt.

@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_PHY62X2
+	select ARM
+	select CPU_CORTEX_M0
+	select CPU_CORTEX_M_HAS_SYSTICK
+	select SOC_PREP_HOOK
+	select XIP
+
+config PHY62X2_WATCHDOG
+	bool "Reset the chip when the system hangs"
+	default y
+	depends on SOC_PHY62X2 && WATCHDOG && DT_HAS_SNPS_DESIGNWARE_WATCHDOG_ENABLED
+	help
+	  Start the watchdog at boot and feed it from a thread of the lowest priority. A thread of a
+	  higher priority that does not leave the CPU, or interrupts that stay locked, stop the
+	  feeding and the chip is reset. Disable it where the code feeds the watchdog itself
+	  (MCUboot).
+
+config PHY62X2_WATCHDOG_TIMEOUT_MS
+	int "Timeout of the watchdog in ms"
+	default 8000
+	depends on PHY62X2_WATCHDOG
+	help
+	  The timeout comes from the 32 kHz RC oscillator in steps of a power of two, 2 s up to
+	  256 s.
+
+config PHY62X2_UART1_SWAP
+	bool "UART1 with TX on P3 and RX on P2"
+	depends on SOC_PHY62X2
+	help
+	  UART1 is on P2 (TX) and P3 (RX) when the console is on UART1. Select this when the adapter
+	  is wired the other way round.
+
