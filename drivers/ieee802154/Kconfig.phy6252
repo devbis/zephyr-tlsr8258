@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_PHY6252
+	bool "Phyplus PHY6252 IEEE 802.15.4 radio"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY6252_RADIO_ENABLED
+	help
+	  Enable the experimental IEEE 802.15.4 radio driver for Phyplus PHY6252.
+	  The RF register setup is based on an unverified PHY6222/PHY6252 backend.
+
+if IEEE802154_PHY6252
+
+config IEEE802154_PHY6252_INIT_PRIO
+	int "PHY6252 IEEE 802.15.4 initialization priority"
+	default 80
+
+endif # IEEE802154_PHY6252
