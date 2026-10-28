@@ -27,6 +27,7 @@
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/sys/time_units.h>
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
@@ -61,6 +62,8 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define PHY6252_CCA_SETTLE_US       128U
 #define PHY6252_TX_TIMEOUT_MS       10U
 #define PHY6252_ACK_TIMEOUT_MS      3U
+#define PHY6252_ACK_TURNAROUND_US   192U
+#define PHY6252_ACK_TX_TIMEOUT_US   1000U
 #define PHY6252_RX_QUEUE_DEPTH      16U
 
 #define PHY6252_LL_MODE_STX         0U
@@ -406,6 +409,100 @@ static bool phy6252_filter_frame(struct phy6252_data *data, const uint8_t *psdu,
 	return phy6252_filter_match(data, psdu, len);
 }
 
+static bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t *psdu,
+				      uint8_t len)
+{
+	uint8_t ieee_addr[sizeof(data->ieee_addr)];
+	uint16_t short_addr;
+	uint16_t fcf;
+	uint8_t frame_type;
+	uint8_t dst_mode;
+	uint8_t frame_version;
+	bool promiscuous;
+	bool short_filter_enabled;
+	bool ieee_filter_enabled;
+	unsigned int key;
+
+	if (len < 3U) {
+		return false;
+	}
+
+	fcf = sys_get_le16(psdu);
+	frame_type = (uint8_t)(fcf & 0x07U);
+	frame_version = (uint8_t)((fcf >> 12) & 0x03U);
+	if (((fcf & BIT(5)) == 0U) ||
+	    ((frame_type != 1U) && (frame_type != 3U)) || (frame_version > 1U)) {
+		return false;
+	}
+
+	dst_mode = (uint8_t)((fcf >> 10) & 0x03U);
+	key = irq_lock();
+	promiscuous = data->promiscuous;
+	short_filter_enabled = data->short_filter_enabled;
+	short_addr = data->short_addr;
+	ieee_filter_enabled = data->ieee_filter_enabled;
+	memcpy(ieee_addr, ieee_filter_enabled ? data->filter_ieee_addr : data->ieee_addr,
+	       sizeof(ieee_addr));
+	irq_unlock(key);
+
+	if (promiscuous) {
+		return false;
+	}
+
+	if (dst_mode == 2U) {
+		uint16_t frame_short_addr;
+
+		if ((len < 7U) || !short_filter_enabled) {
+			return false;
+		}
+
+		frame_short_addr = sys_get_le16(&psdu[5]);
+		return (frame_short_addr < 0xFFF8U) && (frame_short_addr == short_addr);
+	}
+
+	if (dst_mode == 3U) {
+		return (len >= 13U) &&
+		       (memcmp(&psdu[5], ieee_addr, sizeof(ieee_addr)) == 0);
+	}
+
+	return false;
+}
+
+static void phy6252_send_ack(uint8_t sequence, uint32_t rx_irq_entry_cycles)
+{
+	const uint32_t turnaround_cycles = k_us_to_cyc_ceil32(PHY6252_ACK_TURNAROUND_US);
+	const uint32_t tx_timeout_cycles = k_us_to_cyc_ceil32(PHY6252_ACK_TX_TIMEOUT_US);
+	volatile uint8_t *tx_fifo = (volatile uint8_t *)PHY6252_TX_FIFO;
+	uint32_t tx_start_cycles;
+
+	phy6252_radio_abort();
+	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
+	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
+	phy6252_reg_write(PHY6252_LL_REG(0x40U), 1U);
+
+	/* The hardware appends the FCS; no pending-data bit is set in the FCF. */
+	tx_fifo[0] = (uint8_t)(3U + PHY6252_FCS_LEN);
+	tx_fifo[1] = 0x02U;
+	tx_fifo[2] = 0U;
+	tx_fifo[3] = sequence;
+
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
+	while ((k_cycle_get_32() - rx_irq_entry_cycles) < turnaround_cycles) {
+	}
+	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+
+	tx_start_cycles = k_cycle_get_32();
+	while ((phy6252_reg_read(PHY6252_LL_REG(0x10U)) & PHY6252_IRQ_MD) == 0U) {
+		if ((k_cycle_get_32() - tx_start_cycles) >= tx_timeout_cycles) {
+			phy6252_radio_abort();
+			return;
+		}
+	}
+
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+}
+
 static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu, uint8_t len,
 				 int8_t rssi_dbm)
 {
@@ -436,7 +533,8 @@ static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu,
 	k_sem_give(&data->ack_done);
 }
 
-static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
+static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
+			   uint32_t rx_irq_entry_cycles)
 {
 	struct phy6252_rx_frame frame;
 	const volatile uint8_t *rx_fifo = (const volatile uint8_t *)PHY6252_RX_FIFO;
@@ -468,6 +566,9 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 	if (!phy6252_filter_frame(data, frame.psdu, mpdu_len)) {
 		return;
 	}
+	if (phy6252_frame_requires_ack(data, frame.psdu, mpdu_len)) {
+		phy6252_send_ack(frame.psdu[2], rx_irq_entry_cycles);
+	}
 
 	frame.len = psdu_len;
 	frame.rssi_dbm = rssi_dbm;
@@ -481,6 +582,7 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 static void phy6252_radio_isr(const void *arg)
 {
 	struct phy6252_data *data = (struct phy6252_data *)arg;
+	uint32_t rx_irq_entry_cycles = k_cycle_get_32();
 	uint32_t irq_status = phy6252_reg_read(PHY6252_LL_REG(0x10U));
 	uint32_t mode;
 
@@ -491,7 +593,7 @@ static void phy6252_radio_isr(const void *arg)
 		k_sem_give(&data->tx_done);
 	} else if ((mode == PHY6252_LL_MODE_SRX) &&
 		   ((irq_status & (PHY6252_IRQ_MD | PHY6252_IRQ_RTO)) != 0U)) {
-		phy6252_rx_irq(data, irq_status);
+		phy6252_rx_irq(data, irq_status, rx_irq_entry_cycles);
 	}
 
 	if (atomic_get(&data->started) != 0) {
@@ -559,7 +661,7 @@ static enum ieee802154_hw_caps phy6252_get_capabilities(const struct device *dev
 	ARG_UNUSED(dev);
 
 	return IEEE802154_HW_FCS | IEEE802154_HW_FILTER | IEEE802154_HW_PROMISC |
-	       IEEE802154_HW_TX_RX_ACK;
+	       IEEE802154_HW_TX_RX_ACK | IEEE802154_HW_RX_TX_ACK;
 }
 
 static int phy6252_cca(const struct device *dev)
