@@ -1,0 +1,6 @@
+family:
+- name: phyplus
+  series:
+  - name: phy62x2
+    socs:
+    - name: phy62x2

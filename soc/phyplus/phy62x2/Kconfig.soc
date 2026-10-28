@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_PHY62X2
+	bool
+	select SOC_FAMILY_PHYPLUS
+
+config SOC_PHY62X2
+	bool
+	select SOC_SERIES_PHY62X2
+
+config SOC_SERIES
+	default "phy62x2" if SOC_SERIES_PHY62X2
+
+config SOC
+	default "phy62x2" if SOC_PHY62X2
