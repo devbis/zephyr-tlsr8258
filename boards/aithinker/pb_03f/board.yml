@@ -1,0 +1,6 @@
+board:
+  name: pb_03f
+  full_name: Ai-Thinker PB-03F
+  vendor: aithinker
+  socs:
+    - name: phy6252
