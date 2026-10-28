@@ -13,3 +13,20 @@
 &storage_partition {
 	reg = <0x000f8000 DT_SIZE_K(32)>;
 };
+
+/*
+ * The 4 KB retention RAM keeps its content through the hibernate of the
+ * sleepy end device, which uses it for the outgoing frame counter.
+ */
+&retram {
+	retainedmem: retainedmem {
+		compatible = "zephyr,retained-ram";
+		status = "okay";
+	};
+};
+
+/ {
+	chosen {
+		zigbee,retained-mem = &retainedmem;
+	};
+};
