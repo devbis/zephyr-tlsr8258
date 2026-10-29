@@ -10,7 +10,7 @@ config SYS_CLOCK_EXISTS
 	default y
 
 config SYS_CLOCK_HW_CYCLES_PER_SEC
-	default 16000000
+	default "$(dt_node_int_prop_int,/clocks/clock-tick,clock-frequency)"
 
 # TC32 has neither a 64-bit ALU nor a hardware divider, so 64-bit tick
 # arithmetic turns into library calls on the timeout hot path. Measured on

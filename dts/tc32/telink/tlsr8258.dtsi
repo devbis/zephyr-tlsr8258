@@ -11,14 +11,22 @@
 
 	clocks {
 		/*
-		 * System clock. The SoC selects this frequency at start, and the UART, SPI,
-		 * I2C and PWM dividers follow it. 16, 24 and 48 MHz are possible: a board or an
-		 * application overrides clock-frequency to change it.
+		 * System clock: the CPU and the UART, SPI, I2C and PWM dividers. The SoC selects
+		 * this frequency at start. 16, 24 and 48 MHz are possible: a board or an
+		 * application overrides clock-frequency to change it. It is the only place the
+		 * frequency is written; the CPU node refers to it.
 		 */
-		sys_clk: clock-24m {
+		sys_clk: clock-sys {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <24000000>;
+		};
+
+		/* System tick: a 16 MHz counter of its own, independent of the system clock. */
+		stimer_clk: clock-tick {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <16000000>;
 		};
 	};
 
@@ -95,7 +103,7 @@
 		cpu0: cpu@0 {
 			compatible = "telink,tlsr8258-tc32";
 			reg = <0>;
-			clock-frequency = <24000000>;
+			clocks = <&sys_clk>;
 			cpu-power-states = <&tlsr8258_suspend &tlsr8258_soft_off>;
 		};
 
@@ -141,7 +149,7 @@
 			reg = <0x00800740 0x00000010>;
 			interrupts = <20>;
 			interrupt-parent = <&intc>;
-			clocks = <&sys_clk>;
+			clocks = <&stimer_clk>;
 		};
 
 		wdt0: watchdog@800620 {

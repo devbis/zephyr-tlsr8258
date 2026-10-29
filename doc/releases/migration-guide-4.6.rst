@@ -48,7 +48,12 @@ Telink
 * The TLSR8269 boards run at a system clock of 16 MHz, selected by the SoC at start from the
   ``sys_clk`` devicetree node; nothing selected it before. The ``clock-frequency`` property is
   removed from the ``telink,tlsr8269-uart`` binding, which takes the clock from ``clocks``.
-  ``sys_clk`` must be 16 MHz on this SoC.
+  ``sys_clk`` must be 16 or 32 MHz on this SoC.
+* The ``clock-frequency`` property of the ``cpu0`` node of the TLSR8258 and TLSR8269 devicetrees
+  is replaced by ``clocks = <&sys_clk>``; the CPU frequency is written only in ``sys_clk``.
+  An overlay that set it on ``cpu0`` must set it on ``sys_clk`` instead, and a node that sets it
+  on ``cpu0`` fails to build. On the TLSR8258 the system tick, always 16 MHz, is the new
+  ``stimer_clk`` node and ``SYS_CLOCK_HW_CYCLES_PER_SEC`` is read from it.
 
 Device Drivers and Devicetree
 *****************************

@@ -10,7 +10,7 @@ config SYS_CLOCK_EXISTS
 	default y
 
 config SYS_CLOCK_HW_CYCLES_PER_SEC
-	default 16000000
+	default "$(dt_node_int_prop_int,/clocks/clock-sys,clock-frequency)"
 
 # See soc/telink/tlsr/tlsr825x/Kconfig.defconfig for the 64-bit timeout trade-off.
 config TIMEOUT_64BIT

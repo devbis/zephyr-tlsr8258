@@ -31,8 +31,13 @@
 #define TLSR8258_FLD_SYSTEM_TICK_START BIT(0)
 #define TLSR8258_FLD_SYSTEM_TICK_16M   BIT(4)
 
-/* System ticks per microsecond: the system timer runs at 16 MHz whatever the CPU clock is. */
-#define TLSR8258_TICKS_PER_US 16u
+/*
+ * The system timer counts the stimer_clk node, 16 MHz whatever the CPU clock is;
+ * the tick mode written below is the 16 MHz one.
+ */
+BUILD_ASSERT(DT_PROP(DT_NODELABEL(stimer_clk), clock_frequency) == 16000000,
+	     "stimer_clk must be 16 MHz");
+#define TLSR8258_TICKS_PER_US (DT_PROP(DT_NODELABEL(stimer_clk), clock_frequency) / 1000000u)
 /* Time the crystal gets to show that it runs, in microseconds. */
 #define TLSR8258_XTAL_READY_US 20u
 #define TLSR8258_XTAL_READY_SPINS 100000u

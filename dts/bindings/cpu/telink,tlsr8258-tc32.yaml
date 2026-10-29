@@ -6,3 +6,10 @@ description: Telink TLSR8258 TC32 CPU
 compatible: "telink,tlsr8258-tc32"
 
 include: cpu.yaml
+
+properties:
+  clocks:
+    required: true
+    description: |
+      System clock of the CPU. Its clock-frequency is the CPU frequency; the
+      property of the CPU node itself is not used.

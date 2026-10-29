@@ -17,7 +17,7 @@
 	#size-cells = <1>;
 
 	clocks {
-		sys_clk: clock-16m {
+		sys_clk: clock-sys {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <16000000>;
@@ -48,7 +48,7 @@
 		cpu0: cpu@0 {
 			compatible = "telink,tlsr8258-tc32";
 			reg = <0>;
-			clock-frequency = <16000000>;
+			clocks = <&sys_clk>;
 		};
 	};
 
