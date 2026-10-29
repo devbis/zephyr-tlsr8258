@@ -6,6 +6,7 @@ menuconfig IEEE802154_TELINK_TLSR8258
 	default y
 	depends on DT_HAS_TELINK_TLSR8258_ZB_ENABLED
 	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	select TLSR825X_DMA_IRQ
 	help
 	  Enable the IEEE 802.15.4 RF driver for the Telink TLSR8258
 	  (2.4 GHz O-QPSK, 250 kbit/s).
