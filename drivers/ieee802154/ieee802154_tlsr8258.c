@@ -27,6 +27,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 #include <tlsr82xx/irq.h>
+#include <tlsr825x/dma_irq.h>
 #include <tlsr825x/power.h>
 
 #include "ieee802154_tlsr8258_tx_irq.h"
@@ -2064,17 +2065,17 @@ static void tlsr82xx_irq_config(const struct device *dev)
 {
 	/*
 	 * rf_irq_reenable() enables both the RF ZB_RT source (IRQ 13) and
-	 * the RF DMA completion source (IRQ 4).  IRQ 4 must have a real
-	 * vector: leaving it at Zephyr's default z_irq_spurious handler makes
-	 * a normal RX/TX DMA completion fatal under interview traffic.
-	 * The RF ISR clears both latched sources, so use the same handler for
-	 * the two hardware sources.  The TC32 IRQ dispatcher services IRQ 13
-	 * first when both are pending and will enter here again for IRQ 4 if
-	 * the DMA latch remains set.
+	 * the RF DMA completion source (IRQ 4).  The DMA line is shared with
+	 * the UART and has one vector, owned by the SoC's DMA interrupt
+	 * dispatcher, which calls this handler when a status bit of the RF RX
+	 * or TX channel is set.  The RF ISR clears both latched sources, so
+	 * the same handler serves the two hardware sources.  The TC32 IRQ
+	 * dispatcher services IRQ 13 first when both are pending and will
+	 * enter here again for IRQ 4 if the DMA latch remains set.
 	 */
-	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
+	tlsr825x_dma_irq_register(DMA_CHN_RF_RX | DMA_CHN_RF_TX, tlsr8258_rf_isr,
+				  &tlsr8258_radio_data_0);
 	IRQ_CONNECT(DT_INST_IRQN(0), 0, tlsr8258_rf_isr, &tlsr8258_radio_data_0, 0);
-	irq_disable(TLSR82XX_IRQ_DMA);
 	irq_disable(TLSR82XX_IRQ_ZB_RT);
 	ARG_UNUSED(dev);
 }
