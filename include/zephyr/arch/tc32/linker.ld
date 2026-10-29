@@ -12,12 +12,32 @@
 #define ROMABLE_REGION FLASH
 #define RAMABLE_REGION RAM
 
+#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+/*
+ * Image chain-loaded by MCUboot from a flash slot. The CPU sees the image
+ * head (vectors, .boot_ram_mirror, .ram_code) at address 0, in the SRAM
+ * mirror the loader fills, so the head is linked at VMA 0 with its load
+ * address in the slot. Everything after the head runs from flash, where the
+ * instruction cache fetches address X from flash offset X, so it is linked
+ * at its slot address: IMAGE_BASE, after the MCUboot header, plus the head
+ * size rounded up to the 256-byte cache line.
+ */
+#define TC32_SLOT_IMAGE
+#define IMAGE_BASE (CONFIG_FLASH_BASE_ADDRESS + CONFIG_FLASH_LOAD_OFFSET + CONFIG_ROM_START_OFFSET)
+#define ROM_BASE IMAGE_BASE
+#define ROM_SIZE (CONFIG_FLASH_LOAD_SIZE - CONFIG_ROM_START_OFFSET)
+#define TC32_HEAD_LINK_IN > HEAD AT> FLASH
+#define TC32_TEXT_ADDR (IMAGE_BASE + ((_tc32_boot_copy_lma_end + 255) / 256) * 256)
+#else
 #define ROM_BASE CONFIG_FLASH_BASE_ADDRESS
 
 #if CONFIG_FLASH_LOAD_SIZE > 0
 #define ROM_SIZE CONFIG_FLASH_LOAD_SIZE
 #else
 #define ROM_SIZE (CONFIG_FLASH_SIZE * 1024)
+#endif
+#define TC32_HEAD_LINK_IN GROUP_LINK_IN(ROMABLE_REGION)
+#define TC32_TEXT_ADDR
 #endif
 
 #define RAM_BASE DT_CHOSEN_SRAM_ADDR
@@ -37,6 +57,9 @@
 MEMORY
 {
 	FLASH (rx)  : ORIGIN = ROM_BASE, LENGTH = ROM_SIZE
+#if defined(TC32_SLOT_IMAGE)
+	HEAD (rx)   : ORIGIN = 0, LENGTH = TC32_BOOT_MIRROR_SIZE
+#endif
 	BOOT_MIRROR (rwx) : ORIGIN = RAM_BASE, LENGTH = TC32_BOOT_MIRROR_SIZE
 	RAM   (rwx) : ORIGIN = RAM_BASE + TC32_BOOT_MIRROR_SIZE, LENGTH = RAM_SIZE - TC32_BOOT_MIRROR_SIZE
 	LINKER_DT_REGIONS()
@@ -52,14 +75,18 @@ SECTIONS
 {
 #include <zephyr/linker/rel-sections.ld>
 
+#if defined(TC32_SLOT_IMAGE)
+	. = 0;
+#else
 	. = ROM_BASE;
+#endif
 	__text_region_start = .;
 
 	SECTION_PROLOGUE(.vectors,,)
 	{
 		KEEP(*(.vectors))
 		KEEP(*(".vectors.*"))
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	} TC32_HEAD_LINK_IN
 
 	SECTION_PROLOGUE(.boot_ram_mirror,,)
 	{
@@ -68,7 +95,7 @@ SECTIONS
 		*(.boot_ram_mirror)
 		*(".boot_ram_mirror.*")
 		PROVIDE(__boot_ram_mirror_end = .);
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	} TC32_HEAD_LINK_IN
 
 	/*
 	 * .ram_code — vendor-style low-flash region that the TC32 icache
@@ -87,12 +114,12 @@ SECTIONS
 		*(.ram_code)
 		*(".ram_code.*")
 		PROVIDE(__ram_code_end = .);
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	} TC32_HEAD_LINK_IN
 
 	. = ALIGN(16);
 	_tc32_boot_copy_lma_end = .;
 
-	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
+	SECTION_PROLOGUE(_TEXT_SECTION_NAME, TC32_TEXT_ADDR,)
 	{
 		. = ALIGN(4);
 		*(.text)
