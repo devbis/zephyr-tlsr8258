@@ -262,6 +262,28 @@ static uint8_t tlsr8258_uart_rx_count(void)
 	return TLSR8258_REG_UART_BUF_CNT & FLD_UART_RX_BUF_CNT;
 }
 
+/*
+ * The receive FIFO is read through the four data registers in turn. Writing
+ * CLEAR_RX_FLAG restarts that cycle at register 0x90, so every write has to
+ * restart the software index too.
+ */
+static uint8_t uart_rx_index;
+
+static void tlsr8258_uart_clear_rx_flag(void)
+{
+	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	uart_rx_index = 0u;
+}
+
+static uint8_t tlsr8258_uart_rx_byte(void)
+{
+	uint8_t c = TLSR8258_REG_UART_DATA_BUF(uart_rx_index);
+
+	uart_rx_index = (uart_rx_index + 1u) % UART_DATA_BUF_COUNT;
+
+	return c;
+}
+
 static void tlsr8258_uart_clear_irq_status(uint8_t mask)
 {
 	TLSR8258_REG_UART_STATUS1 = mask;
@@ -271,7 +293,7 @@ static void tlsr8258_uart_clear_irq_status(uint8_t mask)
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 static void __maybe_unused tlsr8258_uart_clear_rx_irq_status(void)
 {
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	tlsr8258_uart_clear_irq_status(FLD_UART_RX_DONE | FLD_UART_RX_BUF_IRQ);
 }
 
@@ -364,7 +386,7 @@ static void tlsr8258_uart_hw_init(uint32_t clock, uint32_t baudrate)
 					      FLD_UART_CTRL1_TTL |
 					      FLD_UART_CTRL1_LOOPBACK);
 	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~(FLD_UART_RX_IRQ_EN | FLD_UART_TX_IRQ_EN);
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	tlsr8258_uart_clear_irq_status(FLD_UART_STATUS1_IRQ_MASK);
 }
 
@@ -457,7 +479,7 @@ static int tlsr8258_uart_poll_in(const struct device *dev, unsigned char *c)
 		return -1;
 	}
 
-	*c = TLSR8258_REG_UART_DATA_BUF(0);
+	*c = tlsr8258_uart_rx_byte();
 
 	return 0;
 }
@@ -480,11 +502,12 @@ static void tlsr8258_uart_clear_disabled_irq_status(void)
 
 	if ((TLSR8258_REG_UART_CTRL0 & FLD_UART_RX_IRQ_EN) == 0u) {
 		clear |= FLD_UART_RX_DONE | FLD_UART_RX_BUF_IRQ;
-		TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+		tlsr8258_uart_clear_rx_flag();
 	}
 
-	if ((TLSR8258_REG_UART_RX_TIMEOUT1 & FLD_UART_MASK_ERR_IRQ) != 0u) {
-		TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	if ((TLSR8258_REG_UART_RX_TIMEOUT1 & FLD_UART_MASK_ERR_IRQ) != 0u &&
+	    (TLSR8258_REG_UART_STATUS0 & FLD_UART_RX_ERR_FLAG) != 0u) {
+		tlsr8258_uart_clear_rx_flag();
 	}
 
 	if ((TLSR8258_REG_UART_STATUS1 & clear) != 0u) {
@@ -507,11 +530,12 @@ static int tlsr8258_uart_fifo_fill(const struct device *dev, const uint8_t *tx_d
 
 static int tlsr8258_uart_fifo_read(const struct device *dev, uint8_t *rx_data, const int size)
 {
-	struct tlsr8258_uart_data *data = dev->data;
 	int num_rx = 0;
 
+	ARG_UNUSED(dev);
+
 	while (num_rx < size && tlsr8258_uart_rx_count() != 0u) {
-		rx_data[num_rx++] = TLSR8258_REG_UART_DATA_BUF(0);
+		rx_data[num_rx++] = tlsr8258_uart_rx_byte();
 	}
 
 	if (tlsr8258_uart_rx_count() == 0u) {
@@ -558,7 +582,7 @@ static void tlsr8258_uart_irq_rx_enable(const struct device *dev)
 
 	unsigned int key = irq_lock();
 
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	if ((TLSR8258_REG_UART_CTRL0 & FLD_UART_TX_IRQ_EN) == 0u) {
 		tlsr8258_uart_clear_irq_status(FLD_UART_TX_DONE | FLD_UART_TX_BUF_IRQ);
 	}
@@ -574,7 +598,7 @@ static void tlsr8258_uart_irq_rx_disable(const struct device *dev)
 	unsigned int key = irq_lock();
 
 	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~FLD_UART_RX_IRQ_EN;
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	tlsr8258_uart_clear_irq_status(FLD_UART_RX_DONE | FLD_UART_RX_BUF_IRQ);
 	tlsr8258_uart_parent_irq_update();
 	irq_unlock(key);
@@ -614,7 +638,7 @@ static void tlsr8258_uart_irq_err_disable(const struct device *dev)
 	unsigned int key = irq_lock();
 
 	TLSR8258_REG_UART_RX_TIMEOUT1 |= FLD_UART_MASK_ERR_IRQ;
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	tlsr8258_uart_clear_irq_status(FLD_UART_RX_DONE | FLD_UART_RX_BUF_IRQ);
 	tlsr8258_uart_parent_irq_update();
 	irq_unlock(key);
@@ -811,7 +835,7 @@ static void tlsr8258_uart_dma_err_check(const struct device *dev)
 		return;
 	}
 
-	TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+	tlsr8258_uart_clear_rx_flag();
 	if (data->async_rx_buf == NULL) {
 		return;
 	}
@@ -1156,11 +1180,11 @@ static void tlsr8258_uart_async_rx_drain(const struct device *dev)
 
 	start = data->async_rx_pos;
 	while (data->async_rx_pos < data->async_rx_len && tlsr8258_uart_rx_count() != 0u) {
-		data->async_rx_buf[data->async_rx_pos++] = TLSR8258_REG_UART_DATA_BUF(0);
+		data->async_rx_buf[data->async_rx_pos++] = tlsr8258_uart_rx_byte();
 	}
 
 	if (tlsr8258_uart_rx_count() == 0u) {
-		TLSR8258_REG_UART_STATUS0 = FLD_UART_CLEAR_RX_FLAG;
+		tlsr8258_uart_clear_rx_flag();
 	}
 
 	if (data->async_rx_pos != start) {
