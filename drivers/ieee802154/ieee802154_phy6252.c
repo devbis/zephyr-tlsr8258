@@ -7,7 +7,8 @@
  * PHY register values and LL operation sequences are adapted from the
  * PHY6222 backend in zigbee-rs/zigbee-mac at commit
  * 76d184caa4756a69eb17ee4fd74244cf6ed62806. That backend documents the
- * PHY6222/PHY6252 radio path as unverified on hardware.
+ * PHY6222/PHY6252 radio path as unverified on hardware. PLL defaults match
+ * the PHY6222M005 ROM initialization sequence.
  */
 
 #define DT_DRV_COMPAT phyplus_phy6252_radio
@@ -333,15 +334,14 @@ static void phy6252_radio_init_hw(struct phy6252_data *data)
 	phy6252_reg_write_field(PHY6252_RF_REG(0x80U), 0U, 0U, 1U);
 
 	phy6252_reg_write(PHY6252_RF_REG(0xCCU), 0x20000BC0U);
-	phy6252_reg_write(PHY6252_RF_REG(0xD0U), 0x00000180U);
-	phy6252_reg_write(PHY6252_RF_REG(0xD4U), 0x076A3E7AU);
-	phy6252_reg_write(PHY6252_RF_REG(0xD8U), 0x04890000U);
-	phy6252_reg_write(PHY6252_RF_REG(0x104U), 0x00000180U);
-	phy6252_reg_write(PHY6252_RF_REG(0x108U), 0x076A3E7AU);
-	phy6252_reg_write(PHY6252_RF_REG(0x10CU), 0x04898000U);
-	phy6252_reg_write(PHY6252_RF_REG(0x80U),
-			  phy6252_reg_read(PHY6252_RF_REG(0x80U)) | 0x000024CCU);
-	phy6252_reg_write(PHY6252_RF_REG(0xDCU), 0x01A6FC2FU);
+	phy6252_reg_write(PHY6252_RF_REG(0xD0U), 0x00000140U);
+	phy6252_reg_write(PHY6252_RF_REG(0xD4U), 0x04083F6AU);
+	phy6252_reg_write(PHY6252_RF_REG(0xD8U), 0x04928000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x104U), 0x000000A0U);
+	phy6252_reg_write(PHY6252_RF_REG(0x108U), 0x07083F9AU);
+	phy6252_reg_write(PHY6252_RF_REG(0x10CU), 0x04910000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x80U), 0x000024CDU);
+	phy6252_reg_write(PHY6252_RF_REG(0xDCU), 0x01BE7F0FU);
 	phy6252_reg_write(PHY6252_RF_REG(0xB0U), 0x01000003U);
 
 	phy6252_reg_write(PHY6252_RF_REG(0xE0U), 0x00000080U);
