@@ -10,6 +10,10 @@
 	#size-cells = <1>;
 
 	clocks {
+		/*
+		 * System clock. The SoC selects this frequency at start. 16, 24 and 48 MHz are
+		 * possible: a board or an application overrides clock-frequency to change it.
+		 */
 		sys_clk: clock-24m {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
