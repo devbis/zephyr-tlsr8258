@@ -1,0 +1,38 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Flash layout shared with MCUboot (boot/zephyr/boards/tlsr8258_generic_1m.overlay
+ * in the mcuboot module): keep the two in step. The loader sits at 0, where the boot
+ * ROM looks for the "KNLT" mark, and the two slots are the same size, up to the
+ * Zigbee NV partition.
+ */
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+&flash {
+	partitions {
+		/delete-node/ partition@0;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00008000>;
+		};
+
+		slot0_partition: partition@8000 {
+			label = "image-0";
+			reg = <0x00008000 0x00079000>;
+		};
+
+		slot1_partition: partition@81000 {
+			label = "image-1";
+			reg = <0x00081000 0x00079000>;
+		};
+	};
+};
