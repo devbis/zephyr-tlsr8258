@@ -28,6 +28,12 @@ Flash Layout
 - ``0xff000`` - ``0xfffff``: ``ieee-addr`` factory data, where the vendor tools write
   the MAC address on 1 MB parts
 
+MCUboot
+*******
+
+The :ref:`tlsr8258-mcuboot <snippet-tlsr8258-mcuboot>` snippet builds an
+application for slot 0 of the flash layout that the TLSR8258 port of MCUboot uses.
+
 Programming and Debugging
 *************************
 

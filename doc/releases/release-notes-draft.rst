@@ -65,6 +65,9 @@ New APIs and options
 
 .. zephyr-keep-sorted-stop
 
+* :kconfig:option:`CONFIG_UART_TLSR8258_IRQ_DMA_RX`: serves the interrupt-driven UART API of the
+  TLSR8258 from DMA reception.
+
 .. _boards_added_in_zephyr_4_6:
 
 New Boards
@@ -75,6 +78,10 @@ New Boards
   it visible to people who might be looking at the working draft of the release notes. However, note
   that this list will be recomputed at the time of the release, so you don't *have* to update it.
   In any case, just link the board, further details go in the board description.
+
+* Telink Semiconductor
+
+  * :zephyr:board:`tlsr8258_generic_1m`
 
 .. _shields_added_in_zephyr_4_6:
 
@@ -107,3 +114,6 @@ Other notable changes
 ..
   Any more descriptive subsystem or driver changes. Do you really want to write
   a paragraph or is it enough to link to the api/driver/Kconfig/board page above?
+
+* Added the :ref:`tlsr8258-mcuboot <snippet-tlsr8258-mcuboot>` snippet, which builds an application
+  for a slot of the MCUboot flash layout of the TLSR8258 boards.
