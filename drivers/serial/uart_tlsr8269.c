@@ -801,7 +801,7 @@ static DEVICE_API(uart, tlsr8269_uart_driver_api) = {
 	}                                                                                         \
 	static struct tlsr8269_uart_data tlsr8269_uart_data_##n;                                 \
 	static const struct tlsr8269_uart_config tlsr8269_uart_config_##n = {                    \
-		.clock_frequency = DT_INST_PROP(n, clock_frequency),                             \
+		.clock_frequency = DT_PROP(DT_INST_CLOCKS_CTLR(n), clock_frequency),        \
 		.current_speed = DT_INST_PROP(n, current_speed),                                 \
 		.irq_config_func = tlsr8269_uart_irq_config_##n,                                 \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                       \
