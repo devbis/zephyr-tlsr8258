@@ -26,6 +26,12 @@ Flash Layout
 - ``0x00000`` - ``0x7bfff``: application image
 - ``0x7c000`` - ``0x7ffff``: ``zigbee_nv`` storage partition
 
+MCUboot
+*******
+
+The :ref:`tlsr8258-mcuboot <snippet-tlsr8258-mcuboot>` snippet builds an
+application for slot 0 of the flash layout that the TLSR8258 port of MCUboot uses.
+
 Programming and Debugging
 *************************
 
