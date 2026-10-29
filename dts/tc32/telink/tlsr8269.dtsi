@@ -17,10 +17,10 @@
 	#size-cells = <1>;
 
 	clocks {
-		sys_clk: clock-24m {
+		sys_clk: clock-16m {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
-			clock-frequency = <24000000>;
+			clock-frequency = <16000000>;
 		};
 	};
 
@@ -48,7 +48,7 @@
 		cpu0: cpu@0 {
 			compatible = "telink,tlsr8258-tc32";
 			reg = <0>;
-			clock-frequency = <24000000>;
+			clock-frequency = <16000000>;
 		};
 	};
 
@@ -85,7 +85,7 @@
 			reg = <0x00800090 0x00000010>;
 			interrupts = <4>;
 			interrupt-parent = <&intc>;
-			clock-frequency = <24000000>;
+			clocks = <&sys_clk>;
 			current-speed = <115200>;
 			pinctrl-0 = <&uart0_tx_default &uart0_rx_default>;
 			pinctrl-names = "default";
