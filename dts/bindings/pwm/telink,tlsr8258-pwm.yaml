@@ -11,18 +11,17 @@ properties:
   reg:
     required: true
 
-  clock-frequency:
-    type: int
+  clocks:
     required: true
     description: |
-      Frequency of the system clock the PWM divider works from, in Hz.
+      System clock the PWM divider works from.
 
   prescaler:
     type: int
     default: 0
     description: |
       Value written to PWM_CLKDIV. The PWM tick rate is
-      clock-frequency / (prescaler + 1). The divider is shared by all
+      system clock / (prescaler + 1). The divider is shared by all
       channels and cannot change at runtime. Range 0 to 255.
 
   "#pwm-cells":

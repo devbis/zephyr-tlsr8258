@@ -16,9 +16,9 @@ properties:
 
   clocks:
     required: true
-
-  clock-frequency:
-    required: true
+    description: |
+      System clock the baud rate divider is derived from; its clock-frequency
+      is what the driver divides.
 
   tx-pin:
     type: int

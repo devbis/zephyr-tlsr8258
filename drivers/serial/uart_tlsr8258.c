@@ -1602,7 +1602,7 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 	TLSR8258_UART_PINCTRL_DEFINE(n)					\
 	TLSR8258_UART_IRQ_CONFIG_DEFINE(n)				\
 	static const struct tlsr8258_uart_config tlsr8258_uart_config_##n = {	\
-		.clock_frequency = DT_INST_PROP(n, clock_frequency),		\
+		.clock_frequency = DT_PROP(DT_INST_CLOCKS_CTLR(n), clock_frequency),		\
 		.current_speed = DT_INST_PROP(n, current_speed),		\
 		.tx_pin = DT_INST_PROP(n, tx_pin),				\
 		.rx_pin = DT_INST_PROP_OR(n, rx_pin, 0),			\

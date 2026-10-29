@@ -11,9 +11,8 @@ properties:
   reg:
     required: true
 
-  clock-frequency:
-    type: int
+  clocks:
     required: true
     description: |
-      System clock frequency in Hz. The SPI clock is derived from it as
+      System clock the SPI divider is derived from. The SPI clock is
       system clock / (2 * (div + 1)).

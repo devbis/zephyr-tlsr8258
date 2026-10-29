@@ -317,7 +317,7 @@ static DEVICE_API(spi, tlsr8258_spi_api) = {
                                                                                                   \
 	static const struct tlsr8258_spi_config tlsr8258_spi_cfg_##inst = {                       \
 		.base = DT_INST_REG_ADDR(inst),                                                   \
-		.clock_frequency = DT_INST_PROP(inst, clock_frequency),                           \
+		.clock_frequency = DT_PROP(DT_INST_CLOCKS_CTLR(inst), clock_frequency),           \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                                     \
 	};                                                                                        \
                                                                                                   \

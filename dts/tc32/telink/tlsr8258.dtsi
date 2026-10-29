@@ -11,8 +11,9 @@
 
 	clocks {
 		/*
-		 * System clock. The SoC selects this frequency at start. 16, 24 and 48 MHz are
-		 * possible: a board or an application overrides clock-frequency to change it.
+		 * System clock. The SoC selects this frequency at start, and the UART, SPI,
+		 * I2C and PWM dividers follow it. 16, 24 and 48 MHz are possible: a board or an
+		 * application overrides clock-frequency to change it.
 		 */
 		sys_clk: clock-24m {
 			compatible = "fixed-clock";
@@ -156,7 +157,6 @@
 			interrupts = <6>;
 			interrupt-parent = <&intc>;
 			clocks = <&sys_clk>;
-			clock-frequency = <24000000>;
 			current-speed = <115200>;
 			tx-pin = <TLSR8258_GPIO_PB1>;
 			rx-pin = <TLSR8258_GPIO_PA0>;
@@ -180,7 +180,7 @@
 		spi0: spi@800008 {
 			compatible = "telink,tlsr8258-spi";
 			reg = <0x00800008 0x00000004>;
-			clock-frequency = <24000000>;
+			clocks = <&sys_clk>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			pinctrl-0 = <&spi0_sck_default &spi0_sdo_default &spi0_sdi_default>;
@@ -207,7 +207,7 @@
 		pwm0: pwm@800780 {
 			compatible = "telink,tlsr8258-pwm";
 			reg = <0x00800780 0x00000030>;
-			clock-frequency = <24000000>;
+			clocks = <&sys_clk>;
 			#pwm-cells = <3>;
 			status = "disabled";
 		};

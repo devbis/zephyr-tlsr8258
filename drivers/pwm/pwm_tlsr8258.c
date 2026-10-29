@@ -166,7 +166,7 @@ static DEVICE_API(pwm, pwm_tlsr8258_api) = {
 	static const struct pwm_tlsr8258_config pwm_tlsr8258_cfg_##n = {        \
 		.base = DT_INST_REG_ADDR(n),                                    \
 		.pcfg = PWM_TLSR8258_PCFG(n),                                   \
-		.clock_frequency = DT_INST_PROP(n, clock_frequency),            \
+		.clock_frequency = DT_PROP(DT_INST_CLOCKS_CTLR(n), clock_frequency), \
 		.prescaler = DT_INST_PROP(n, prescaler),                        \
 	};                                                                      \
 									\
