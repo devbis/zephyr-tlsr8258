@@ -139,6 +139,13 @@ struct tlsr8258_uart_data {
 	uint8_t dma_tx_pkt[UART_DMA_HDR_LEN + UART_DMA_TX_CHUNK] __aligned(4);
 	size_t dma_tx_inflight;
 #endif
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+	uint8_t dma_rx[CONFIG_UART_TLSR8258_IRQ_DMA_RX_BUF_SIZE] __aligned(4);
+	uint8_t rx_ring[CONFIG_UART_TLSR8258_IRQ_DMA_RX_RING_SIZE];
+	volatile uint16_t rx_head;
+	volatile uint16_t rx_tail;
+	bool dma_rx_on;
+#endif
 };
 
 #ifndef CONFIG_PINCTRL
@@ -674,6 +681,129 @@ static void tlsr8258_uart_irq_callback_set(const struct device *dev,
 	data->callback = cb;
 	data->callback_data = user_data;
 }
+
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+/*
+ * The DMA writes a received packet as [32-bit little-endian length][payload]
+ * once the line has been idle for the receive timeout.
+ */
+static void tlsr8258_uart_dmarx_arm(struct tlsr8258_uart_data *data)
+{
+	TLSR8258_REG_DMA_IRQ_STATUS = FLD_DMA_CHN_UART_RX;
+	TLSR8258_REG_DMA_RX_ADDR = (uint16_t)(uintptr_t)data->dma_rx;
+	TLSR8258_REG_DMA_RX_ADDR_HI = (uint8_t)(((uintptr_t)data->dma_rx >> 16) & 0x7fu);
+	TLSR8258_REG_DMA_RX_SIZE = (uint8_t)(sizeof(data->dma_rx) >> 4);
+	TLSR8258_REG_DMA_RX_MODE = FLD_DMA_WR_MEM;
+	TLSR8258_REG_DMA_CHN_IRQ_MSK |= FLD_DMA_CHN_UART_RX;
+	TLSR8258_REG_DMA_CHN_EN |= FLD_DMA_CHN_UART_RX;
+}
+
+static uint16_t tlsr8258_uart_dmarx_count(const struct tlsr8258_uart_data *data)
+{
+	return (uint16_t)((data->rx_head - data->rx_tail) % sizeof(data->rx_ring));
+}
+
+static void tlsr8258_uart_dmarx_isr(const void *arg)
+{
+	const struct device *dev = arg;
+	struct tlsr8258_uart_data *data = dev->data;
+	uint32_t len;
+	uint32_t i;
+	uint16_t head;
+
+	if ((TLSR8258_REG_DMA_IRQ_STATUS & FLD_DMA_CHN_UART_RX) == 0u) {
+		return;
+	}
+
+	if (!data->dma_rx_on) {
+		TLSR8258_REG_DMA_IRQ_STATUS = FLD_DMA_CHN_UART_RX;
+		return;
+	}
+
+	len = (uint32_t)data->dma_rx[0] | ((uint32_t)data->dma_rx[1] << 8) |
+	      ((uint32_t)data->dma_rx[2] << 16) | ((uint32_t)data->dma_rx[3] << 24);
+	if (len > sizeof(data->dma_rx) - UART_DMA_HDR_LEN) {
+		len = sizeof(data->dma_rx) - UART_DMA_HDR_LEN;
+	}
+
+	head = data->rx_head;
+	for (i = 0; i < len; i++) {
+		uint16_t next = (head + 1u) % sizeof(data->rx_ring);
+
+		if (next == data->rx_tail) {
+			break;	/* ring full: drop the rest */
+		}
+		data->rx_ring[head] = data->dma_rx[UART_DMA_HDR_LEN + i];
+		head = next;
+	}
+	data->rx_head = head;
+
+	/* Re-arm before the callback so reception goes on while it runs. */
+	tlsr8258_uart_dmarx_arm(data);
+
+	if (len > 0u && data->callback != NULL) {
+		data->callback(dev, data->callback_data);
+	}
+}
+
+static void tlsr8258_uart_dmarx_irq_rx_enable(const struct device *dev)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+	unsigned int key = irq_lock();
+
+	data->rx_head = 0u;
+	data->rx_tail = 0u;
+	data->dma_rx_on = true;
+	tlsr8258_uart_clear_rx_flag();
+	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~FLD_UART_RX_IRQ_EN;
+	TLSR8258_REG_UART_CTRL0 |= FLD_UART_RX_DMA_EN;
+	tlsr8258_uart_dmarx_arm(data);
+	irq_enable(TLSR82XX_IRQ_DMA);
+	irq_unlock(key);
+}
+
+static void tlsr8258_uart_dmarx_irq_rx_disable(const struct device *dev)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+	unsigned int key = irq_lock();
+
+	data->dma_rx_on = false;
+	TLSR8258_REG_DMA_CHN_EN &= (uint8_t)~FLD_DMA_CHN_UART_RX;
+	TLSR8258_REG_DMA_CHN_IRQ_MSK &= (uint8_t)~FLD_DMA_CHN_UART_RX;
+	TLSR8258_REG_DMA_IRQ_STATUS = FLD_DMA_CHN_UART_RX;
+	TLSR8258_REG_UART_CTRL0 &= (uint8_t)~FLD_UART_RX_DMA_EN;
+	irq_unlock(key);
+}
+
+static int tlsr8258_uart_dmarx_irq_rx_ready(const struct device *dev)
+{
+	const struct tlsr8258_uart_data *data = dev->data;
+
+	return (data->dma_rx_on && tlsr8258_uart_dmarx_count(data) != 0u) ? 1 : 0;
+}
+
+static int tlsr8258_uart_dmarx_irq_is_pending(const struct device *dev)
+{
+	return tlsr8258_uart_dmarx_irq_rx_ready(dev);
+}
+
+static int tlsr8258_uart_dmarx_fifo_read(const struct device *dev, uint8_t *rx_data,
+					 const int size)
+{
+	struct tlsr8258_uart_data *data = dev->data;
+	int num_rx = 0;
+
+	while (num_rx < size && data->rx_tail != data->rx_head) {
+		uint16_t tail = data->rx_tail;
+
+		rx_data[num_rx++] = data->rx_ring[tail];
+		data->rx_tail = (tail + 1u) % sizeof(data->rx_ring);
+	}
+
+	return num_rx;
+}
+#endif /* CONFIG_UART_TLSR8258_IRQ_DMA_RX */
+
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
 #ifdef CONFIG_UART_TLSR8258_DMA
@@ -1383,17 +1513,34 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 	.err_check = tlsr8258_uart_err_check,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = tlsr8258_uart_fifo_fill,
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+	.fifo_read = tlsr8258_uart_dmarx_fifo_read,
+#else
 	.fifo_read = tlsr8258_uart_fifo_read,
+#endif
 	.irq_tx_enable = tlsr8258_uart_irq_tx_enable,
 	.irq_tx_disable = tlsr8258_uart_irq_tx_disable,
 	.irq_tx_ready = tlsr8258_uart_irq_tx_ready,
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+	.irq_rx_enable = tlsr8258_uart_dmarx_irq_rx_enable,
+	.irq_rx_disable = tlsr8258_uart_dmarx_irq_rx_disable,
+#else
 	.irq_rx_enable = tlsr8258_uart_irq_rx_enable,
 	.irq_rx_disable = tlsr8258_uart_irq_rx_disable,
+#endif
 	.irq_tx_complete = tlsr8258_uart_irq_tx_complete,
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+	.irq_rx_ready = tlsr8258_uart_dmarx_irq_rx_ready,
+#else
 	.irq_rx_ready = tlsr8258_uart_irq_rx_ready,
+#endif
 	.irq_err_enable = tlsr8258_uart_irq_err_enable,
 	.irq_err_disable = tlsr8258_uart_irq_err_disable,
+#ifdef CONFIG_UART_TLSR8258_IRQ_DMA_RX
+	.irq_is_pending = tlsr8258_uart_dmarx_irq_is_pending,
+#else
 	.irq_is_pending = tlsr8258_uart_irq_is_pending,
+#endif
 	.irq_update = tlsr8258_uart_irq_update,
 	.irq_callback_set = tlsr8258_uart_irq_callback_set,
 #endif
@@ -1427,6 +1574,10 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 #ifdef CONFIG_UART_TLSR8258_DMA
 #define TLSR8258_UART_DMA_IRQ_CONNECT(n)					\
 	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_uart_dma_isr,			\
+		    DEVICE_DT_INST_GET(n), 0);
+#elif defined(CONFIG_UART_TLSR8258_IRQ_DMA_RX)
+#define TLSR8258_UART_DMA_IRQ_CONNECT(n)					\
+	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_uart_dmarx_isr,		\
 		    DEVICE_DT_INST_GET(n), 0);
 #else
 #define TLSR8258_UART_DMA_IRQ_CONNECT(n)
