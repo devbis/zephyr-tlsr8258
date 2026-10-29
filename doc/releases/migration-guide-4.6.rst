@@ -45,6 +45,10 @@ Telink
 * The ``clock-frequency`` property is removed from the ``telink,tlsr8258-uart``,
   ``telink,tlsr8258-spi`` and ``telink,tlsr8258-pwm`` bindings. These nodes take the clock from
   their ``clocks`` property, which points at ``sys_clk``.
+* The TLSR8269 boards run at a system clock of 16 MHz, selected by the SoC at start from the
+  ``sys_clk`` devicetree node; nothing selected it before. The ``clock-frequency`` property is
+  removed from the ``telink,tlsr8269-uart`` binding, which takes the clock from ``clocks``.
+  ``sys_clk`` must be 16 MHz on this SoC.
 
 Device Drivers and Devicetree
 *****************************
