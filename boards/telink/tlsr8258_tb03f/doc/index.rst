@@ -32,6 +32,12 @@ default breaks ``TlsrPgm.py`` / ``probe-rs`` attach.
 
 The DTS keeps the button definition only as a commented, disabled example.
 
+MCUboot
+*******
+
+The :ref:`tlsr8258-mcuboot <snippet-tlsr8258-mcuboot>` snippet builds an
+application for slot 0 of the flash layout that the TLSR8258 port of MCUboot uses.
+
 Programming and Debugging
 *************************
 
