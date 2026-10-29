@@ -14,6 +14,7 @@
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
 #include <tlsr82xx/irq.h>
+#include <tlsr825x/dma_irq.h>
 
 #define TLSR8258_REG8(addr)  (*(volatile uint8_t *)(addr))
 #define TLSR8258_REG16(addr) (*(volatile uint16_t *)(addr))
@@ -1573,12 +1574,12 @@ static DEVICE_API(uart, tlsr8258_uart_driver_api) = {
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 #ifdef CONFIG_UART_TLSR8258_DMA
 #define TLSR8258_UART_DMA_IRQ_CONNECT(n)					\
-	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_uart_dma_isr,			\
-		    DEVICE_DT_INST_GET(n), 0);
+	tlsr825x_dma_irq_register(FLD_DMA_CHN_UART_RX | FLD_DMA_CHN_UART_TX,	\
+				  tlsr8258_uart_dma_isr, DEVICE_DT_INST_GET(n));
 #elif defined(CONFIG_UART_TLSR8258_IRQ_DMA_RX)
 #define TLSR8258_UART_DMA_IRQ_CONNECT(n)					\
-	IRQ_CONNECT(TLSR82XX_IRQ_DMA, 0, tlsr8258_uart_dmarx_isr,		\
-		    DEVICE_DT_INST_GET(n), 0);
+	tlsr825x_dma_irq_register(FLD_DMA_CHN_UART_RX,				\
+				  tlsr8258_uart_dmarx_isr, DEVICE_DT_INST_GET(n));
 #else
 #define TLSR8258_UART_DMA_IRQ_CONNECT(n)
 #endif
