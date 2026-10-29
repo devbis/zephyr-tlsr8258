@@ -17,6 +17,13 @@ if SOC_SERIES_TLSR825X
 config SOC_TLSR8258
 	bool
 
+config TLSR825X_DMA_IRQ
+	bool
+	help
+	  Dispatcher of the DMA interrupt line, which has one vector but is
+	  used by the UART and the 802.15.4 radio. Selected by the drivers
+	  that register a handler with tlsr825x_dma_irq_register().
+
 config SOC_SERIES_TLSR825X_PM
 	bool "TLSR825x system power management"
 	default y
