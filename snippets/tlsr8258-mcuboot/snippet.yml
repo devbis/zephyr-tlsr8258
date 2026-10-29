@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: tlsr8258-mcuboot
+description: |
+  Builds the application for slot 0 of the MCUboot flash layout of the
+  TLSR8258 boards.
+append:
+  EXTRA_CONF_FILE: tlsr8258-mcuboot.conf
+
+boards:
+  tlsr8258_tb03f/tlsr8258:
+    append:
+      EXTRA_DTC_OVERLAY_FILE: boards/tlsr8258_512k.overlay
+  tlsr8258_generic/tlsr8258:
+    append:
+      EXTRA_DTC_OVERLAY_FILE: boards/tlsr8258_512k.overlay
+  tlsr8258_generic_1m/tlsr8258:
+    append:
+      EXTRA_DTC_OVERLAY_FILE: boards/tlsr8258_generic_1m.overlay
