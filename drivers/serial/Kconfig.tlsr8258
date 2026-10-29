@@ -22,3 +22,43 @@ config UART_TLSR8258_DMA
 	  interrupt-driven FIFO path. The UART DMA completion interrupt shares
 	  the DMA IRQ line with the 802.15.4 radio, so this option cannot be
 	  enabled together with IEEE802154_TELINK_TLSR8258.
+
+config UART_TLSR8258_IRQ_DMA_RX
+	bool "Telink TLSR8258 UART receive through DMA for the interrupt-driven API"
+	default n
+	depends on UART_TELINK_TLSR8258 && UART_INTERRUPT_DRIVEN && !UART_ASYNC_API
+	depends on !IEEE802154_TELINK_TLSR8258
+	help
+	  Receive through DMA0 and serve the interrupt-driven API from a
+	  software ring buffer: uart_irq_rx_enable() arms the DMA, the DMA
+	  completion interrupt moves a received packet into the ring and calls
+	  the user callback, uart_fifo_read() drains the ring.
+
+	  The four-byte receive FIFO of the interrupt-driven path is too
+	  shallow for the latency of the interrupt handler, and its interrupt
+	  is also raised by the transmit flags. The vendor driver receives
+	  through DMA for the same reasons.
+
+	  The UART DMA completion interrupt shares the DMA IRQ line with the
+	  802.15.4 radio, so this option cannot be enabled together with
+	  IEEE802154_TELINK_TLSR8258.
+
+if UART_TLSR8258_IRQ_DMA_RX
+
+config UART_TLSR8258_IRQ_DMA_RX_BUF_SIZE
+	int "DMA receive buffer size"
+	default 2048
+	range 32 4080
+	help
+	  Size of one DMA packet including its four-byte length. A burst of
+	  bytes longer than this is cut into several packets.
+
+config UART_TLSR8258_IRQ_DMA_RX_RING_SIZE
+	int "Receive ring buffer size"
+	default 2048
+	range 64 32768
+	help
+	  Bytes held between the DMA interrupt and uart_fifo_read(). Bytes
+	  that do not fit are dropped.
+
+endif # UART_TLSR8258_IRQ_DMA_RX
