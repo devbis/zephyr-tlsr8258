@@ -47,11 +47,19 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define PHY6252_RF_REG(offset)      (PHY6252_RF_BASE + (offset))
 #define PHY6252_LL_REG(offset)      (PHY6252_LL_BASE + (offset))
 
+/*
+ * LL status bits as ll_hw_get_irq_status() of the ROM and the SDK's ll_hw_drv.h
+ * define them. The shipping Zigbee firmware for this chip reads exactly this
+ * layout: a good frame is MD | COK (0x401) and an empty receive window is
+ * MD | RTO. The earlier "compact" layout (COK = bit 1, RTO = bit 3) came from
+ * the unverified zigbee-rs backend and has no second source, so it is not used.
+ * ll_hw_go() clears the whole 0x3fff status range, and only MD is enabled as
+ * an interrupt; COK and RTO are read from the status when MD fires.
+ */
 #define PHY6252_IRQ_MD              BIT(0)
-#define PHY6252_IRQ_COK             BIT(1)
-#define PHY6252_IRQ_CERR            BIT(2)
-#define PHY6252_IRQ_RTO             BIT(3)
-#define PHY6252_IRQ_MASK            0x1FU
+#define PHY6252_IRQ_RTO             BIT(2)
+#define PHY6252_IRQ_COK             BIT(10)
+#define PHY6252_IRQ_CLEAR           0x3FFFU
 #define PHY6252_CRC_ZIGBEE           0x03U
 
 #define PHY6252_CHANNEL_MIN         11U
@@ -365,25 +373,24 @@ static void phy6252_radio_init_hw(struct phy6252_data *data)
 	phy6252_radio_set_channel(data, PHY6252_CHANNEL_MIN);
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), 0U);
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 }
 
 static void phy6252_radio_abort(void)
 {
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), 0U);
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 }
 
 static void phy6252_radio_rx_start(void)
 {
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_SRX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
 	phy6252_reg_write(PHY6252_LL_REG(0x28U), UINT16_MAX);
-	phy6252_reg_write(PHY6252_LL_REG(0x0CU),
-			  PHY6252_IRQ_MD | PHY6252_IRQ_COK | PHY6252_IRQ_CERR | PHY6252_IRQ_RTO);
+	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
 }
 
@@ -486,7 +493,7 @@ static void phy6252_send_ack(uint8_t sequence, uint32_t rx_irq_entry_cycles)
 	tx_fifo[2] = 0U;
 	tx_fifo[3] = sequence;
 
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
 	while ((k_cycle_get_32() - rx_irq_entry_cycles) < turnaround_cycles) {
 	}
@@ -500,7 +507,7 @@ static void phy6252_send_ack(uint8_t sequence, uint32_t rx_irq_entry_cycles)
 		}
 	}
 
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 }
 
 static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu, uint8_t len,
@@ -586,7 +593,7 @@ static void phy6252_radio_isr(const void *arg)
 	uint32_t irq_status = phy6252_reg_read(PHY6252_LL_REG(0x10U));
 	uint32_t mode;
 
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	mode = phy6252_reg_read(PHY6252_LL_REG(0x04U)) & 0x07U;
 
 	if (((irq_status & PHY6252_IRQ_MD) != 0U) && (mode == PHY6252_LL_MODE_STX)) {
@@ -836,7 +843,7 @@ static int phy6252_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 		tx_fifo[i + 1U] = psdu[i];
 	}
 
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_MASK);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
 	ret = k_sem_take(&data->tx_done, K_MSEC(PHY6252_TX_TIMEOUT_MS));
