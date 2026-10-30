@@ -124,8 +124,18 @@ jobs:
             toolchain_variant: zephyr
           - soc: phy6252
             board: pb_03f
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: phy6252
+            board: pb_03f
             role: end-device
             role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: gnuarmemb
+          - soc: phy6252
+            board: pb_03f
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: gnuarmemb
 
     steps:
@@ -239,6 +249,10 @@ jobs:
           case "$ROLE" in
             router)
               cmake_args+=(-DEXTRA_CONF_FILE=router.conf)
+              # The router does not fit into the 128 KiB of flash with logging.
+              if [[ "$SOC" == phy6252 ]]; then
+                cmake_args+=(-DCONFIG_LOG=n)
+              fi
               ;;
             end-device)
               cmake_args+=(-DCONFIG_ZIGBEE_ED=y)
@@ -254,6 +268,9 @@ jobs:
               fi
               if [[ "$SOC" == bl702 ]]; then
                 cmake_args+=("-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_dt_xt_zb1_devkit.overlay")
+              fi
+              if [[ "$SOC" == phy6252 ]]; then
+                cmake_args+=("-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_pb_03f.overlay")
               fi
               ;;
             *)
@@ -336,8 +353,8 @@ jobs:
           set -euo pipefail
           tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
           mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
-          if [[ "${#firmware_files[@]}" -ne 19 ]]; then
-            echo "Expected nineteen firmware images, found ${#firmware_files[@]}" >&2
+          if [[ "${#firmware_files[@]}" -ne 21 ]]; then
+            echo "Expected twenty-one firmware images, found ${#firmware_files[@]}" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -351,9 +368,9 @@ jobs:
 
           The release contains router, end-device, and coordinator images for TLSR8258,
           nRF52840, ESP32-C6, ESP32-H2, and BL702 (dt_xt_zb1_devkit), and router, end-device,
-          and coordinator images for EFR32MG21 (slwrb4180a), plus an end-device image for
-          Ai-Thinker PB-03F (PHY6252). The coordinators speak the Z-Stack ZNP protocol, for
-          Zigbee2MQTT (adapter: zstack) and ZHA.
+          and coordinator images for EFR32MG21 (slwrb4180a) and Ai-Thinker PB-03F (PHY6252).
+          The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
+          and ZHA.
           The end devices for TLSR8258 and BL702 are sleepy: they deep sleep between parent polls.
           EOF
           printf '%s\n' "${firmware_files[@]}"
