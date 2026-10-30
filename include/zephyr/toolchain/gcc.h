@@ -250,6 +250,13 @@ do {                                                                    \
 #define __ramfunc	__attribute__((noinline))			\
 			__attribute__((long_call, section(".ramfunc")))
 #endif
+#elif defined(CONFIG_TC32)
+/* The CPU executes only from flash and from the low SRAM mirror that holds the
+ * image head, not from the main SRAM where .ramfunc is linked: a call into it
+ * never returns. Put the function in the head instead (.ram_code).
+ */
+#define __ramfunc	__attribute__((noinline))			\
+			__attribute__((section(".ram_code")))
 #else
 #define __ramfunc	__attribute__((noinline))			\
 			__attribute__((section(".ramfunc")))
