@@ -23,6 +23,10 @@
 #define FLD_SYSTEM_TICK_IRQ_EN  BIT(1)
 #define FLD_SYSTEM_TICK_16M     BIT(4)
 
+/* Attempts to get the counter running, and the delay between checks in loop iterations. */
+#define TLSR8258_TICK_START_ATTEMPTS 100u
+#define TLSR8258_TICK_START_SPIN     64u
+
 #define CYCLES_PER_TICK (sys_clock_hw_cycles_per_sec() / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 #define MIN_DELAY_CYC   64u
 #define MAX_TICKS       ((UINT32_MAX / 2u) / CYCLES_PER_TICK)
@@ -133,6 +137,21 @@ static int tlsr8258_stimer_init(void)
 	TLSR8258_REG_SYSTEM_TICK_MODE = 0u;
 	TLSR8258_REG_SYSTEM_TICK_MODE = FLD_SYSTEM_TICK_16M;
 	TLSR8258_REG_SYSTEM_TICK_CTRL = FLD_SYSTEM_TICK_START;
+	/*
+	 * The counter does not always start on the first START after a STOP, and
+	 * k_busy_wait() waits on it forever when it stays at zero. Check that it
+	 * counts and issue START again if it does not.
+	 */
+	for (uint32_t attempt = 0u; attempt < TLSR8258_TICK_START_ATTEMPTS; attempt++) {
+		uint32_t before = TLSR8258_REG_SYSTEM_TICK;
+
+		for (volatile uint32_t spin = 0u; spin < TLSR8258_TICK_START_SPIN; spin++) {
+		}
+		if (TLSR8258_REG_SYSTEM_TICK != before) {
+			break;
+		}
+		TLSR8258_REG_SYSTEM_TICK_CTRL = FLD_SYSTEM_TICK_START;
+	}
 	last_announce_cycle = TLSR8258_REG_SYSTEM_TICK;
 	next_compare_cycle = last_announce_cycle + CYCLES_PER_TICK;
 	TLSR8258_REG_SYSTEM_TICK_IRQ = tlsr8258_stimer_align_compare(next_compare_cycle);
