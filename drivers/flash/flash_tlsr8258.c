@@ -690,10 +690,9 @@ TLSR8258_FLASH_EXEC int tlsr8258_flash_erase_sector_locked(uint32_t addr)
 
 /*
  * Keep the public flash API entrypoints out of regular .text: callers reach
- * them through the generic flash API from XIP code, and TC32 can wedge on the
- * first cross-region jump into a high-RAM __ramfunc target. The entrypoint
- * itself stays in the low-flash icache-locked window, while the actual MSPI
- * transaction chain remains in __ramfunc.
+ * them through the generic flash API from XIP code. The entrypoint and the
+ * actual MSPI transaction chain both stay in .ram_code, the image head in the
+ * low SRAM mirror: the CPU does not execute code from the main SRAM.
  */
 static TLSR8258_FLASH_ENTRY int tlsr8258_flash_write(const struct device *dev,
 						     off_t offset,

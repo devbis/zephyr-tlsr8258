@@ -7,6 +7,7 @@ config SOC_SERIES_TLSR826X
 	select TC32
 	select HAS_PM
 	select HAS_SEGGER_RTT if ZEPHYR_SEGGER_MODULE
+	# __ramfunc is placed in .ram_code, see toolchain/gcc.h
 	select ARCH_HAS_RAMFUNC_SUPPORT
 	select SOC_EARLY_INIT_HOOK
 	select SOC_PREP_HOOK
