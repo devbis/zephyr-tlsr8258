@@ -39,6 +39,13 @@ The snippet selects ``slot0_partition`` as the code partition and sets
 The IEEE address and Zigbee NV partitions of the board are unchanged. The same
 layout is in the ``mcuboot`` module, in ``boot/zephyr/boards``; change both together.
 
+The head of the application has to fit under the head of the loader. The loader pads its own
+head to ``0x1700`` bytes (``CONFIG_BOOT_TC32_HEAD_PAD`` in the ``mcuboot`` module), the most
+the 8 KB boot mirror allows next to the instruction cache scratch area, and it refuses an
+application with a larger head. A Zigbee router has ``0x1100`` bytes. An application head that
+was larger than the loader's used to leave the board silent: the copy of the head overwrote the
+instruction cache lines of the loader.
+
 Signing
 *******
 
