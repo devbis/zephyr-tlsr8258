@@ -35,8 +35,6 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
 #define PHY6252_RF_BASE             0x40030000U
 #define PHY6252_LL_BASE             0x40031000U
-#define PHY6252_TX_FIFO             0x40031400U
-#define PHY6252_RX_FIFO             0x40031C00U
 #define PHY6252_CLK_CTRL            0x4000F040U
 #define PHY6252_CLK_CFG             0x4000F044U
 #define PHY6252_FLASH_BASE          0x11000000U
@@ -71,9 +69,32 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define PHY6252_CCA_SETTLE_US       128U
 #define PHY6252_TX_TIMEOUT_MS       10U
 #define PHY6252_ACK_TIMEOUT_MS      3U
-#define PHY6252_ACK_TURNAROUND_US   192U
 #define PHY6252_ACK_TX_TIMEOUT_US   1000U
 #define PHY6252_RX_QUEUE_DEPTH      16U
+
+/*
+ * Link-layer helpers of the PHY6222 mask ROM (SDK ll_hw_drv.h names). The shipping Zigbee
+ * firmware for this chip uses them for the FIFOs instead of touching the FIFO RAM directly: the
+ * TX FIFO is written through one data port with a hardware write pointer, the RX FIFO is read
+ * through another, and both are reset through LL+0x58.
+ */
+#define ROM_LL_HW_SET_TRX_SETTLE ((void (*)(uint8_t, uint8_t, uint8_t))0x000113ddU)
+#define ROM_LL_HW_RST_TFIFO      ((void (*)(void))0x000110e9U)
+#define ROM_LL_HW_RST_RFIFO      ((void (*)(void))0x000110b1U)
+#define ROM_LL_HW_WRITE_TFIFO    ((uint8_t (*)(const uint8_t *, uint8_t))0x000115c1U)
+#define ROM_LL_HW_READ_RFIFO_ZB  ((uint8_t (*)(uint8_t *, uint16_t *, uint32_t *, uint32_t *)) \
+				  0x00010f51U)
+
+/*
+ * TX settle time (microseconds) the baseband waits after a trigger before it reads the TX FIFO
+ * and starts the frame: the shipping firmware programs 88 + 8 + 40 for an ordinary frame and
+ * 128 + 8 + 40 for an acknowledgement sent right after a reception. It then triggers the
+ * acknowledgement at once instead of waiting for the turnaround time itself.
+ */
+#define PHY6252_SETTLE_BB_TX        0x58U
+#define PHY6252_SETTLE_BB_ACK       0x80U
+#define PHY6252_SETTLE_AFE          0x08U
+#define PHY6252_SETTLE_PLL          0x28U
 
 #define PHY6252_LL_MODE_STX         0U
 #define PHY6252_LL_MODE_SRX         1U
@@ -361,6 +382,11 @@ static void phy6252_radio_init_hw(struct phy6252_data *data)
 	phy6252_reg_write(PHY6252_RF_REG(0x4CU), 0x3675EE07U);
 	phy6252_reg_write(PHY6252_RF_REG(0x0CU), 128U);
 
+	/*
+	 * LL+0x08, +0x18 and +0x1C are inter-frame timing registers (in 1/16 us), not resets. The values
+	 * come from the unverified zigbee-rs backend; the shipping firmware programs 1600..2112 into
+	 * +0x18 and 1728..1920 into +0x1C. Keep these until they are checked on a board.
+	 */
 	phy6252_reg_write(PHY6252_LL_REG(0x18U), 192U * 16U);
 	phy6252_reg_write(PHY6252_LL_REG(0x1CU), 192U * 16U);
 	phy6252_reg_write(PHY6252_LL_REG(0x08U), (80U * 16U << 16) | (80U * 16U));
@@ -402,7 +428,8 @@ static void phy6252_measure_rssi(struct phy6252_data *data, bool resume_rx, int8
 	phy6252_reg_write(PHY6252_LL_REG(0x28U), 0x0800U);
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
 	k_busy_wait(PHY6252_CCA_SETTLE_US);
-	*rssi = (int8_t)(phy6252_reg_read(PHY6252_RF_REG(0xE4U)) >> 24);
+	/* RF+0xE8 holds the received level as a positive magnitude, as the SDK reads it. */
+	*rssi = -(int8_t)(phy6252_reg_read(PHY6252_RF_REG(0xE8U)) >> 24);
 	phy6252_radio_abort();
 
 	if (resume_rx && (atomic_get(&data->started) != 0)) {
@@ -475,29 +502,30 @@ static bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t 
 	return false;
 }
 
-static void phy6252_send_ack(uint8_t sequence, uint32_t rx_irq_entry_cycles)
+static void phy6252_send_ack(uint8_t sequence)
 {
-	const uint32_t turnaround_cycles = k_us_to_cyc_ceil32(PHY6252_ACK_TURNAROUND_US);
 	const uint32_t tx_timeout_cycles = k_us_to_cyc_ceil32(PHY6252_ACK_TX_TIMEOUT_US);
-	volatile uint8_t *tx_fifo = (volatile uint8_t *)PHY6252_TX_FIFO;
+	/* The hardware appends the FCS; no pending-data bit is set in the FCF. */
+	const uint8_t ack[4] = {(uint8_t)(3U + PHY6252_FCS_LEN), 0x02U, 0U, sequence};
 	uint32_t tx_start_cycles;
 
 	phy6252_radio_abort();
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
 	phy6252_reg_write(PHY6252_LL_REG(0x40U), 1U);
-
-	/* The hardware appends the FCS; no pending-data bit is set in the FCF. */
-	tx_fifo[0] = (uint8_t)(3U + PHY6252_FCS_LEN);
-	tx_fifo[1] = 0x02U;
-	tx_fifo[2] = 0U;
-	tx_fifo[3] = sequence;
+	ROM_LL_HW_SET_TRX_SETTLE(PHY6252_SETTLE_BB_ACK, PHY6252_SETTLE_AFE, PHY6252_SETTLE_PLL);
 
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
-	while ((k_cycle_get_32() - rx_irq_entry_cycles) < turnaround_cycles) {
-	}
+	/*
+	 * Trigger first and load the frame right after, as the shipping firmware does: the
+	 * baseband reads the TX FIFO only when the settle time has passed, and that settle
+	 * time is what makes the acknowledgement start about a turnaround time after the
+	 * end of the received frame.
+	 */
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+	ROM_LL_HW_RST_TFIFO();
+	(void)ROM_LL_HW_WRITE_TFIFO(ack, sizeof(ack));
 
 	tx_start_cycles = k_cycle_get_32();
 	while ((phy6252_reg_read(PHY6252_LL_REG(0x10U)) & PHY6252_IRQ_MD) == 0U) {
@@ -540,11 +568,14 @@ static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu,
 	k_sem_give(&data->ack_done);
 }
 
-static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
-			   uint32_t rx_irq_entry_cycles)
+static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 {
 	struct phy6252_rx_frame frame;
-	const volatile uint8_t *rx_fifo = (const volatile uint8_t *)PHY6252_RX_FIFO;
+	/* The ROM copies whole FIFO words: the PHR, the PSDU with its FCS and up to 3 bytes of pad. */
+	uint8_t rx_fifo[PHY6252_MAX_PSDU + 4U + 1U];
+	uint16_t rx_len = 0U;
+	uint32_t foot0 = 0U;
+	uint32_t foot1 = 0U;
 	uint8_t psdu_len;
 	uint8_t mpdu_len;
 	int8_t rssi_dbm;
@@ -556,6 +587,11 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
 		return;
 	}
 
+	if (ROM_LL_HW_READ_RFIFO_ZB(rx_fifo, &rx_len, &foot0, &foot1) == 0U) {
+		return;
+	}
+	ROM_LL_HW_RST_RFIFO();
+
 	psdu_len = rx_fifo[0];
 	if ((psdu_len < (PHY6252_FCS_LEN + 3U)) || (psdu_len > PHY6252_MAX_PSDU)) {
 		return;
@@ -564,7 +600,8 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
 	for (uint8_t i = 0U; i < psdu_len; i++) {
 		frame.psdu[i] = rx_fifo[i + 1U];
 	}
-	rssi_dbm = (int8_t)(phy6252_reg_read(PHY6252_RF_REG(0xE4U)) >> 24);
+	/* The high byte of the second footer word is the level as a positive magnitude. */
+	rssi_dbm = -(int8_t)(foot1 >> 24);
 
 	if (phy6252_is_ack(frame.psdu, mpdu_len)) {
 		phy6252_ack_received(data, frame.psdu, mpdu_len, rssi_dbm);
@@ -574,7 +611,7 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
 		return;
 	}
 	if (phy6252_frame_requires_ack(data, frame.psdu, mpdu_len)) {
-		phy6252_send_ack(frame.psdu[2], rx_irq_entry_cycles);
+		phy6252_send_ack(frame.psdu[2]);
 	}
 
 	frame.len = psdu_len;
@@ -589,7 +626,6 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status,
 static void phy6252_radio_isr(const void *arg)
 {
 	struct phy6252_data *data = (struct phy6252_data *)arg;
-	uint32_t rx_irq_entry_cycles = k_cycle_get_32();
 	uint32_t irq_status = phy6252_reg_read(PHY6252_LL_REG(0x10U));
 	uint32_t mode;
 
@@ -600,7 +636,7 @@ static void phy6252_radio_isr(const void *arg)
 		k_sem_give(&data->tx_done);
 	} else if ((mode == PHY6252_LL_MODE_SRX) &&
 		   ((irq_status & (PHY6252_IRQ_MD | PHY6252_IRQ_RTO)) != 0U)) {
-		phy6252_rx_irq(data, irq_status, rx_irq_entry_cycles);
+		phy6252_rx_irq(data, irq_status);
 	}
 
 	if (atomic_get(&data->started) != 0) {
@@ -836,12 +872,14 @@ static int phy6252_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
 	phy6252_reg_write(PHY6252_LL_REG(0x40U), 1U);
 
-	volatile uint8_t *tx_fifo = (volatile uint8_t *)PHY6252_TX_FIFO;
+	uint8_t tx_buf[PHY6252_MAX_PSDU + 1U];
 
-	tx_fifo[0] = (uint8_t)(len + PHY6252_FCS_LEN);
-	for (size_t i = 0U; i < len; i++) {
-		tx_fifo[i + 1U] = psdu[i];
-	}
+	/* PHR (PSDU length including the FCS the hardware appends) followed by the PSDU. */
+	tx_buf[0] = (uint8_t)(len + PHY6252_FCS_LEN);
+	memcpy(&tx_buf[1], psdu, len);
+	ROM_LL_HW_SET_TRX_SETTLE(PHY6252_SETTLE_BB_TX, PHY6252_SETTLE_AFE, PHY6252_SETTLE_PLL);
+	ROM_LL_HW_RST_TFIFO();
+	(void)ROM_LL_HW_WRITE_TFIFO(tx_buf, (uint8_t)(len + 1U));
 
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
