@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: modern-tc32
+      url-base: https://github.com/modern-tc32
 
   group-filter: [-babblesim, -optional, -testing]
 
@@ -330,7 +332,8 @@ manifest:
       groups:
         - crypto
     - name: mcuboot
-      revision: bfbc2eff1ab2f8d290b915036ecdaafdbc620e0f
+      remote: modern-tc32
+      revision: tc32-port
       path: bootloader/mcuboot
       groups:
         - bootloader
