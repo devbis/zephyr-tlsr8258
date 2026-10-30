@@ -31,6 +31,12 @@
 #define TLSR8258_FLD_SYSTEM_TICK_START BIT(0)
 #define TLSR8258_FLD_SYSTEM_TICK_16M   BIT(4)
 
+/* Writing the reboot bit makes the chip start again from the boot ROM. */
+#define TLSR8258_REG_PWDN_CTRL      TLSR8258_REG8(0x0080006fu)
+#define TLSR8258_FLD_PWDN_REBOOT    BIT(5)
+/* The vendor start_reboot() waits this long before it writes the bit. */
+#define TLSR8258_REBOOT_DELAY_US    13000u
+
 /*
  * The system timer counts the stimer_clk node, 16 MHz whatever the CPU clock is;
  * the tick mode written below is the 16 MHz one.
@@ -146,5 +152,20 @@ void soc_early_init_hook(void)
 					      TLSR8258_FLASH_VOLTAGE_48M);
 		}
 		tlsr8258_sys_clk_select();
+	}
+}
+
+void sys_arch_reboot(int type)
+{
+	ARG_UNUSED(type);
+
+	uint32_t start = TLSR8258_REG_SYSTEM_TICK;
+
+	while ((TLSR8258_REG_SYSTEM_TICK - start) < TLSR8258_REBOOT_DELAY_US * TLSR8258_TICKS_PER_US) {
+	}
+
+	TLSR8258_REG_PWDN_CTRL = TLSR8258_FLD_PWDN_REBOOT;
+
+	for (;;) {
 	}
 }
