@@ -181,10 +181,14 @@ SECTIONS
 	 * The data image is contiguous with rodata in flash, so use the
 	 * explicitly tracked rodata LMA instead.  Otherwise TC32 crt0 copies
 	 * .data from 0x<data_lma_end>, leaving initialized globals zero/garbled.
+	 * The load image of .ramfunc sits between the two, so skip it: without
+	 * that, .data was initialised from the code of the .ramfunc functions.
+	 * Its size is a multiple of 4, like the LMA LLD gives .data.
 	 */
-	__data_load_start = _tc32_rom_data_lma_end;
-	__data_region_load_start = _tc32_rom_data_lma_end;
-	_tc32_data_lma_end = _tc32_rom_data_lma_end + SIZEOF(_DATA_SECTION_NAME);
+	_tc32_data_lma_start = _tc32_rom_data_lma_end + SIZEOF(.ramfunc);
+	__data_load_start = _tc32_data_lma_start;
+	__data_region_load_start = _tc32_data_lma_start;
+	_tc32_data_lma_end = _tc32_data_lma_start + SIZEOF(_DATA_SECTION_NAME);
 
 #include <zephyr/linker/common-ram.ld>
 #include <zephyr/linker/kobject-data.ld>
