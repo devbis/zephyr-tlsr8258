@@ -159,6 +159,13 @@ config ZIGBEE_GP
 	  ~0.6 KB RAM on top of an already tight RAM budget (~96.6% ->
 	  ~97.8%).
 
+config ZIGBEE_ZCL_ON_OFF
+	bool "ZCL On/Off cluster"
+	depends on ZIGBEE_ZCL
+	help
+	  Build the On/Off cluster server (zcl_onoff.c) so that an
+	  application can register it with zcl_onOff_register().
+
 config ZIGBEE_NCP
 	bool "Serial network co-processor interface"
 	depends on ZIGBEE_COORDINATOR
