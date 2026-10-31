@@ -1,0 +1,23 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The button is on PA7, which shares the SWS debug line on this board:
+ * remove this overlay when a debugger or TlsrPgm.py must stay attached.
+ */
+/ {
+	buttons {
+		compatible = "gpio-keys";
+
+		sw0: button_0 {
+			gpios = <&gpioa 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			label = "TB03F Button";
+		};
+	};
+
+	aliases {
+		sw0 = &sw0;
+	};
+};
