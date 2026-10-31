@@ -435,7 +435,13 @@ config ZIGBEE_OTA_CONFIRM_DELAY_S
 
 config ZIGBEE_WWAH
 	bool "Works With All Hubs"
+	depends on ZIGBEE_ZCL
+	select ZIGBEE_ZCL_WWAH
 	default n
+	help
+	  Build the WWAH cluster server (wwah/). The application calls
+	  wwah_init() after registering its endpoint. The attributes the
+	  hub sets are stored in NV and applied again after a reset.
 
 config ZIGBEE_MAC_TIMER_CYCLES_PER_US
 	int "Zigbee MAC timer cycles per microsecond"
