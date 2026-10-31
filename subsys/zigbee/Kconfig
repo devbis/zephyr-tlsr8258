@@ -353,6 +353,17 @@ config ZIGBEE_ZCL_WWAH
 
 endmenu
 
+config ZIGBEE_GP_SINK
+	bool "Green Power sink (combo)"
+	depends on ZIGBEE_GP
+	select ZIGBEE_ZCL_ON_OFF
+	select ZIGBEE_ZCL_LEVEL_CTRL
+	help
+	  Build the Green Power sink and translation table (vendor
+	  GP_BASIC_COMBO) next to the proxy, so the node can pair with
+	  Green Power devices and act on their commands itself. Needs
+	  extra flash and RAM on top of CONFIG_ZIGBEE_GP.
+
 config ZIGBEE_NCP
 	bool "Serial network co-processor interface"
 	depends on ZIGBEE_COORDINATOR
