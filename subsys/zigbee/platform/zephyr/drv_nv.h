@@ -354,6 +354,7 @@ typedef enum {
     NV_ITEM_APP_SIMPLE_DESC,
     NV_ITEM_APP_POWER_CNT,
     NV_ITEM_APP_GP_TRANS_TABLE,
+    NV_ITEM_ZCL_WWAH_ATTRS,
 
     NV_ITEM_APS_BINDING_TABLE_V2        = 0x80, /* mustn't modify it */
 

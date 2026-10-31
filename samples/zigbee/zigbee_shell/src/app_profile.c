@@ -57,6 +57,9 @@ void zcl_rx_handler(void *p);
 #if defined(CONFIG_ZIGBEE_OTA)
 #include "ota/ota.h"
 #endif
+#if defined(CONFIG_ZIGBEE_WWAH)
+#include "wwah/wwah.h"
+#endif
 #if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
 #include <zephyr/drivers/gpio.h>
 #include "zcl/general/zcl_onoff.h"
@@ -181,6 +184,9 @@ static u16 app_in_clusters[] = {
 #if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
 	ZCL_CLUSTER_GEN_ON_OFF,
 #endif
+#if defined(CONFIG_ZIGBEE_WWAH)
+	ZCL_CLUSTER_WWAH,
+#endif
 };
 
 #if defined(CONFIG_ZIGBEE_OTA)
@@ -293,6 +299,10 @@ void app_profile_register(void)
 	}
 
 	zcl_register(APP_PROFILE_ENDPOINT, APP_CLUSTER_NUM, app_cluster_info);
+
+#if defined(CONFIG_ZIGBEE_WWAH)
+	wwah_init(WWAH_TYPE_SERVER, &app_simple_desc);
+#endif
 
 #if defined(CONFIG_ZIGBEE_OTA)
 	ota_init(OTA_TYPE_CLIENT, &app_simple_desc, &app_ota_preamble, &app_ota_cb);
