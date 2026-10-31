@@ -206,7 +206,27 @@ config ZIGBEE_ZSTACK_NCP
 
 config ZIGBEE_OTA
 	bool "OTA firmware update"
-	default n
+	depends on BOOTLOADER_MCUBOOT
+	depends on FLASH_MAP
+	select IMG_MANAGER
+	select STREAM_FLASH
+	help
+	  Zigbee OTA Upgrade client. The server sends a standard Zigbee OTA
+	  file whose image element is an MCUboot image signed with imgtool.
+	  The client writes the element to slot 1 (the "slot1_partition"
+	  devicetree node, see the tlsr8258-mcuboot snippet), and the
+	  application calls ota_mcuReboot() on OTA_EVT_COMPLETE to have MCUboot
+	  verify and test the image. The new image is confirmed once the device
+	  is on the network; MCUboot reverts it on the next reset otherwise.
+
+config ZIGBEE_OTA_CONFIRM_DELAY_S
+	int "Delay before a new image is confirmed"
+	default 30
+	range 1 3600
+	depends on ZIGBEE_OTA
+	help
+	  Time in seconds after boot before a test image that is joined to a
+	  network marks itself as confirmed.
 
 config ZIGBEE_WWAH
 	bool "Works With All Hubs"
