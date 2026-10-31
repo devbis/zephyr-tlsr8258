@@ -47,6 +47,7 @@ zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_GP
   GP_SUPPORT_ENABLE=1
   ZCL_GP_SUPPORT=1
 )
+zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_GP_SINK GP_BASIC_COMBO=1)
 
 # ZCL_OTA_SUPPORT is turned into ZCL_OTA by zcl_config.h, which gates the OTA
 # cluster code. Public so that applications see the same ZCL layout.
