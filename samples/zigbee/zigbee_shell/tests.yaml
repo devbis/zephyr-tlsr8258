@@ -34,3 +34,10 @@ tests:
     extra_args:
       - EXTRA_CONF_FILE="router.conf;ota.conf"
       - SNIPPET=tlsr8258-mcuboot
+  sample.zigbee.node.router.on_off:
+    platform_allow:
+      - tlsr8258_tb03f
+    integration_platforms:
+      - tlsr8258_tb03f
+    extra_args:
+      - EXTRA_CONF_FILE="router.conf;on_off.conf"

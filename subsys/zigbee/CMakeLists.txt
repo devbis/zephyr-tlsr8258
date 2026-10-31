@@ -52,6 +52,10 @@ zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_GP
 # cluster code. Public so that applications see the same ZCL layout.
 zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_OTA ZCL_OTA_SUPPORT=1)
 
+# zcl_config.h turns ZCL_ON_OFF_SUPPORT into ZCL_ON_OFF, which gates the
+# On/Off cluster code and its declarations.
+zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_ZCL_ON_OFF ZCL_ON_OFF_SUPPORT=1)
+
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
