@@ -26,3 +26,11 @@ tests:
       - esp32c6_devkitc/esp32c6/hpcore
     extra_args:
       - EXTRA_CONF_FILE=coordinator_znp.conf
+  sample.zigbee.node.router.ota:
+    platform_allow:
+      - tlsr8258_tb03f
+    integration_platforms:
+      - tlsr8258_tb03f
+    extra_args:
+      - EXTRA_CONF_FILE="router.conf;ota.conf"
+      - SNIPPET=tlsr8258-mcuboot
