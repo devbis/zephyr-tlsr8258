@@ -55,6 +55,47 @@ wwah_perRouterCheckInInfo_t g_zcl_perRouterCheckInInfo;
  * FUNCTIONS
  */
 
+static void wwah_attrsSave(void *arg)
+{
+#if NV_ENABLE
+    nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_ATTRS, sizeof(g_zcl_wwahAttrs),
+                     (u8 *)&g_zcl_wwahAttrs);
+#endif
+}
+
+/* Persist the attributes so that the configuration survives a reset. */
+static void wwah_attrsChanged(void)
+{
+    TL_SCHEDULE_TASK(wwah_attrsSave, NULL);
+}
+
+/* Re-apply the stack settings that the attributes control. */
+static void wwah_attrsApply(void)
+{
+    zdo_af_set_mgmtLeave_use_aps_sec(!g_zcl_wwahAttrs.mgmtLeaveWithoutRejoinEnabled);
+    zdo_af_set_use_tc_sec_on_nwk_key_rotation(g_zcl_wwahAttrs.tcSecurityOnNwkKeyRotationEnabled);
+    APS_IB().aps_zdo_restricted_mode = !g_zcl_wwahAttrs.configurationModeEnabled;
+
+    if ((g_zcl_wwahAttrs.pendingNwkUpdateChannel != 0xFF) ||
+        (g_zcl_wwahAttrs.pendingNwkUpdatePanID != 0xFFFF)) {
+        zdo_af_set_accept_nwk_update_channel(g_zcl_wwahAttrs.pendingNwkUpdateChannel);
+        zdo_af_set_accept_nwk_update_pan_id(g_zcl_wwahAttrs.pendingNwkUpdatePanID);
+    }
+}
+
+static void wwah_attrsRestore(void)
+{
+#if NV_ENABLE
+    zcl_wwahAttr_t saved;
+
+    if (nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_ATTRS, sizeof(saved),
+                        (u8 *)&saved) == NV_SUCC) {
+        g_zcl_wwahAttrs = saved;
+        wwah_attrsApply();
+    }
+#endif
+}
+
 void wwah_init(wwah_type_e type, af_simple_descriptor_t *simpleDesc)
 {
     if (type == WWAH_TYPE_CLIENT) {
@@ -62,6 +103,7 @@ void wwah_init(wwah_type_e type, af_simple_descriptor_t *simpleDesc)
         return;
     }
 
+    wwah_attrsRestore();
     zcl_register(simpleDesc->endpoint, WWAH_CB_CLUSTER_NUM, (zcl_specClusterInfo_t *)g_wwahClusterList);
 }
 
@@ -151,7 +193,7 @@ static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrI
     }
 
     if (status == ZCL_STA_SUCCESS) {
-        //TODO: attr changed
+        wwah_attrsChanged();
     }
 
     return status;
@@ -165,7 +207,7 @@ static status_t wwah_setPendingNwkUpdateHandler(zclIncomingAddrInfo_t *pAddrInfo
     zdo_af_set_accept_nwk_update_channel(pSetPendingNwkUpdateCmd->channel);
     zdo_af_set_accept_nwk_update_pan_id(pSetPendingNwkUpdateCmd->panID);
 
-    //TODO: attr changed
+    wwah_attrsChanged();
 
     return ZCL_STA_SUCCESS;
 }
@@ -209,7 +251,7 @@ static status_t wwah_cmdHandler(u8 cmdId)
     }
 
     if (status == ZCL_STA_SUCCESS) {
-        //TODO: attr changed
+        wwah_attrsChanged();
     }
 
     return status;
