@@ -60,6 +60,7 @@
 #include "measument_sensing/zcl_illuminance_measurement.h"
 #include "measument_sensing/zcl_occupancy_sensing.h"
 #include "measument_sensing/zcl_temperature_measurement.h"
+#include "measument_sensing/zcl_relative_humidity.h"
 #include "measument_sensing/zcl_electrical_measurement.h"
 
 /* Color Control */
