@@ -322,6 +322,10 @@ extern const addrExt_t g_zero_addr;
 #define DEBUG(...)                      do { } while (0)
 #endif
 
+#ifndef DEBUG_ARRAY
+#define DEBUG_ARRAY(...)                do { } while (0)
+#endif
+
 #include <zephyr/zigbee/zb_config.h>
 #include "os/ev_buffer.h"
 #include "os/ev_queue.h"
