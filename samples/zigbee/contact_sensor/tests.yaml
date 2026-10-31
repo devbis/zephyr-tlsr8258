@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: Zigbee contact sensor
+tests:
+  sample.zigbee.contact_sensor:
+    build_only: true
+    platform_allow:
+      - tlsr8258_tb03f
+    tags:
+      - zigbee
