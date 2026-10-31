@@ -85,6 +85,9 @@ Samples
   router.
 - :zephyr:code-sample:`zigbee_native_sim_socket` runs an end device, router or
   coordinator on ``native_sim``, the coordinator with either host protocol.
+- :zephyr:code-sample:`zigbee_light`, :zephyr:code-sample:`zigbee_switch` and
+  :zephyr:code-sample:`zigbee_contact_sensor` are a dimmable light, an on/off
+  switch and an IAS contact sensor.
 
 Imported sources
 ****************

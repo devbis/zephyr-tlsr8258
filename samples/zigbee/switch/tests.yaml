@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: Zigbee on/off switch
+tests:
+  sample.zigbee.switch:
+    build_only: true
+    platform_allow:
+      - tlsr8258_tb03f
+    tags:
+      - zigbee
