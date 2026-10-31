@@ -24,6 +24,10 @@
  *******************************************************************************************************/
 #include "zb_common.h"
 
+#if CONFIG_ZIGBEE_MANUFACTURER_CODE == 0
+#warning "CONFIG_ZIGBEE_MANUFACTURER_CODE is not set: the node descriptor carries code 0"
+#endif
+
 
 #if defined(ZB_COORDINATOR_ROLE) && (ZB_COORDINATOR_ROLE == 1)
     #define LOGICAL_TYPE                DEVICE_TYPE_COORDINATOR
@@ -57,8 +61,8 @@ static node_descriptor_t ndt = {
     .max_buff_size                      = AF_NSDU_MAX_LEN,
     .max_in_tr_size                     = AF_ASDU_MAX_LEN,
     .max_out_tr_size                    = AF_ASDU_MAX_LEN,
-    .mcL8                               = (MANUFACTURER_CODE_TELINK & 0xff),
-    .mcH8                               = ((MANUFACTURER_CODE_TELINK >> 8) & 0xff),
+    .mcL8                               = (ZB_MANUFACTURER_CODE & 0xff),
+    .mcH8                               = ((ZB_MANUFACTURER_CODE >> 8) & 0xff),
 };
 
 //power descriptor strut

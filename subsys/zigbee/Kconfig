@@ -449,6 +449,25 @@ config ZIGBEE_OTA_CONFIRM_DELAY_S
 	  Time in seconds after boot before a test image that is joined to a
 	  network marks itself as confirmed.
 
+config ZIGBEE_MANUFACTURER_CODE
+	hex "Manufacturer code"
+	default 0x1141 if ZIGBEE_RADIO_PORT_TLSR8258 || ZIGBEE_RADIO_PORT_TLSR8269
+	default 0x1002 if SOC_FAMILY_SILABS_S1 || SOC_FAMILY_SILABS_S2
+	default 0x131B if SOC_FAMILY_ESPRESSIF_ESP32
+	default 0x1279 if SOC_FAMILY_NORDIC_NRF
+	default 0x1055 if SOC_FAMILY_BFLB
+	default 0x123C if SOC_FAMILY_PHYPLUS
+	default 0x0000
+	range 0x0000 0xFFFF
+	help
+	  Manufacturer code of the node descriptor, which a coordinator reads, and
+	  the value the OTA files of the product carry. The default is the code of
+	  the SoC vendor: 0x1141 Telink, 0x1002 Silicon Labs (EFR32), 0x131B
+	  Espressif, 0x1279 Nordic, 0x1055 Bouffalo Lab, 0x123C PHYPLUS (PHY62xx).
+	  A product that ships under its own code sets it here. Zero, the default
+	  on other SoCs, is not a registered code: the build warns until a code is
+	  set.
+
 config ZIGBEE_WWAH
 	bool "Works With All Hubs"
 	depends on ZIGBEE_ZCL
