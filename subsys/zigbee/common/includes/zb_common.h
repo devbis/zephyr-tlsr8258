@@ -318,6 +318,11 @@ extern const addrExt_t g_zero_addr;
 #define MANUFACTURER_CODE_TELINK        0x1141
 #endif
 
+/* Manufacturer code of the node descriptor (CONFIG_ZIGBEE_MANUFACTURER_CODE) */
+#ifndef ZB_MANUFACTURER_CODE
+#define ZB_MANUFACTURER_CODE            CONFIG_ZIGBEE_MANUFACTURER_CODE
+#endif
+
 #ifndef DEBUG
 #define DEBUG(...)                      do { } while (0)
 #endif
