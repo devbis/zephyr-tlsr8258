@@ -52,9 +52,45 @@ zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_GP
 # cluster code. Public so that applications see the same ZCL layout.
 zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_OTA ZCL_OTA_SUPPORT=1)
 
-# zcl_config.h turns ZCL_ON_OFF_SUPPORT into ZCL_ON_OFF, which gates the
-# On/Off cluster code and its declarations.
-zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_ZCL_ON_OFF ZCL_ON_OFF_SUPPORT=1)
+# zcl_config.h turns each ZCL_<NAME>_SUPPORT into ZCL_<NAME>, which gates the
+# cluster code and its declarations. Public so that applications see the same
+# ZCL layout as the library.
+set(zigbee_zcl_clusters
+  POWER_CFG
+  DEV_TEMPERATURE_CFG
+  GROUP
+  SCENE
+  ON_OFF
+  ON_OFF_SWITCH_CFG
+  LEVEL_CTRL
+  ALARMS
+  TIME
+  RSSI_LOCATION
+  DIAGNOSTICS
+  POLL_CTRL
+  BINARY_INPUT
+  BINARY_OUTPUT
+  MULTISTATE_INPUT
+  MULTISTATE_OUTPUT
+  ILLUMINANCE_MEASUREMENT
+  ILLUMINANCE_LEVEL_SENSING
+  TEMPERATURE_MEASUREMENT
+  OCCUPANCY_SENSING
+  ELECTRICAL_MEASUREMENT
+  LIGHT_COLOR_CONTROL
+  THERMOSTAT
+  DOOR_LOCK
+  WINDOW_COVERING
+  IAS_ZONE
+  IAS_ACE
+  IAS_WD
+  METERING
+  ZLL_COMMISSIONING
+  WWAH
+)
+foreach(cluster ${zigbee_zcl_clusters})
+  zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_ZCL_${cluster} ZCL_${cluster}_SUPPORT=1)
+endforeach()
 
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
