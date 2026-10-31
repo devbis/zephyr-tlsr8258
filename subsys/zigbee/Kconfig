@@ -159,12 +159,199 @@ config ZIGBEE_GP
 	  ~0.6 KB RAM on top of an already tight RAM budget (~96.6% ->
 	  ~97.8%).
 
-config ZIGBEE_ZCL_ON_OFF
-	bool "ZCL On/Off cluster"
+menu "ZCL clusters"
 	depends on ZIGBEE_ZCL
+
+comment "Basic and Identify are always built; Green Power and OTA have their own options"
+
+config ZIGBEE_ZCL_POWER_CFG
+	bool "Power Configuration cluster"
 	help
-	  Build the On/Off cluster server (zcl_onoff.c) so that an
-	  application can register it with zcl_onOff_register().
+	  Build the Power Configuration cluster (ZCL_POWER_CFG_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_DEV_TEMPERATURE_CFG
+	bool "Device Temperature Configuration cluster"
+	help
+	  Build the Device Temperature Configuration cluster (ZCL_DEV_TEMPERATURE_CFG_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_GROUP
+	bool "Groups cluster"
+	help
+	  Build the Groups cluster (ZCL_GROUP_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_SCENE
+	bool "Scenes cluster"
+	select ZIGBEE_ZCL_GROUP
+	help
+	  Build the Scenes cluster (ZCL_SCENE_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ON_OFF
+	bool "On/Off cluster"
+	help
+	  Build the On/Off cluster (ZCL_ON_OFF_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ON_OFF_SWITCH_CFG
+	bool "On/Off Switch Configuration cluster"
+	help
+	  Build the On/Off Switch Configuration cluster (ZCL_ON_OFF_SWITCH_CFG_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_LEVEL_CTRL
+	bool "Level Control cluster"
+	help
+	  Build the Level Control cluster (ZCL_LEVEL_CTRL_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ALARMS
+	bool "Alarms cluster"
+	help
+	  Build the Alarms cluster (ZCL_ALARMS_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_TIME
+	bool "Time cluster"
+	help
+	  Build the Time cluster (ZCL_TIME_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_RSSI_LOCATION
+	bool "RSSI Location cluster"
+	help
+	  Build the RSSI Location cluster (ZCL_RSSI_LOCATION_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_DIAGNOSTICS
+	bool "Diagnostics cluster"
+	help
+	  Build the Diagnostics cluster (ZCL_DIAGNOSTICS_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_POLL_CTRL
+	bool "Poll Control cluster"
+	help
+	  Build the Poll Control cluster (ZCL_POLL_CTRL_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_BINARY_INPUT
+	bool "Binary Input cluster"
+	help
+	  Build the Binary Input cluster (ZCL_BINARY_INPUT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_BINARY_OUTPUT
+	bool "Binary Output cluster"
+	help
+	  Build the Binary Output cluster (ZCL_BINARY_OUTPUT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_MULTISTATE_INPUT
+	bool "Multistate Input cluster"
+	help
+	  Build the Multistate Input cluster (ZCL_MULTISTATE_INPUT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_MULTISTATE_OUTPUT
+	bool "Multistate Output cluster"
+	help
+	  Build the Multistate Output cluster (ZCL_MULTISTATE_OUTPUT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ILLUMINANCE_MEASUREMENT
+	bool "Illuminance Measurement cluster"
+	help
+	  Build the Illuminance Measurement cluster (ZCL_ILLUMINANCE_MEASUREMENT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ILLUMINANCE_LEVEL_SENSING
+	bool "Illuminance Level Sensing cluster"
+	help
+	  Build the Illuminance Level Sensing cluster (ZCL_ILLUMINANCE_LEVEL_SENSING_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_TEMPERATURE_MEASUREMENT
+	bool "Temperature Measurement cluster"
+	help
+	  Build the Temperature Measurement cluster (ZCL_TEMPERATURE_MEASUREMENT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_OCCUPANCY_SENSING
+	bool "Occupancy Sensing cluster"
+	help
+	  Build the Occupancy Sensing cluster (ZCL_OCCUPANCY_SENSING_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ELECTRICAL_MEASUREMENT
+	bool "Electrical Measurement cluster"
+	help
+	  Build the Electrical Measurement cluster (ZCL_ELECTRICAL_MEASUREMENT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_LIGHT_COLOR_CONTROL
+	bool "Color Control cluster"
+	help
+	  Build the Color Control cluster (ZCL_LIGHT_COLOR_CONTROL_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_THERMOSTAT
+	bool "Thermostat cluster"
+	help
+	  Build the Thermostat cluster (ZCL_THERMOSTAT_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_DOOR_LOCK
+	bool "Door Lock cluster"
+	help
+	  Build the Door Lock cluster (ZCL_DOOR_LOCK_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_WINDOW_COVERING
+	bool "Window Covering cluster"
+	help
+	  Build the Window Covering cluster (ZCL_WINDOW_COVERING_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_IAS_ZONE
+	bool "IAS Zone cluster"
+	help
+	  Build the IAS Zone cluster (ZCL_IAS_ZONE_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_IAS_ACE
+	bool "IAS ACE cluster"
+	help
+	  Build the IAS ACE cluster (ZCL_IAS_ACE_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_IAS_WD
+	bool "IAS Warning Device cluster"
+	help
+	  Build the IAS Warning Device cluster (ZCL_IAS_WD_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_METERING
+	bool "Metering cluster"
+	help
+	  Build the Metering cluster (ZCL_METERING_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_ZLL_COMMISSIONING
+	bool "ZLL Commissioning (Touchlink) cluster"
+	help
+	  Build the ZLL Commissioning (Touchlink) cluster (ZCL_ZLL_COMMISSIONING_SUPPORT) so that an application
+	  can register it.
+
+config ZIGBEE_ZCL_WWAH
+	bool "Works With All Hubs cluster"
+	help
+	  Build the Works With All Hubs cluster (ZCL_WWAH_SUPPORT) so that an application
+	  can register it.
+
+endmenu
 
 config ZIGBEE_NCP
 	bool "Serial network co-processor interface"
