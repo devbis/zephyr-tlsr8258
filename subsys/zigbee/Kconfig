@@ -289,6 +289,12 @@ config ZIGBEE_ZCL_TEMPERATURE_MEASUREMENT
 	  Build the Temperature Measurement cluster (ZCL_TEMPERATURE_MEASUREMENT_SUPPORT) so that an application
 	  can register it.
 
+config ZIGBEE_ZCL_RELATIVE_HUMIDITY
+	bool "Relative Humidity Measurement cluster"
+	help
+	  Build the Relative Humidity Measurement cluster (ZCL_RELATIVE_HUMIDITY_SUPPORT) so that an application
+	  can register it.
+
 config ZIGBEE_ZCL_OCCUPANCY_SENSING
 	bool "Occupancy Sensing cluster"
 	help

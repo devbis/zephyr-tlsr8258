@@ -143,6 +143,11 @@
 #define ZCL_TEMPERATURE_MEASUREMENT
 #endif
 
+/********************* Relative Humidity Measurement ******************/
+#if ZCL_RELATIVE_HUMIDITY_SUPPORT
+#define ZCL_RELATIVE_HUMIDITY
+#endif
+
 /************************ Occupancy Sensing ***************************/
 #if ZCL_OCCUPANCY_SENSING_SUPPORT
 #define ZCL_OCCUPANCY_SENSING
