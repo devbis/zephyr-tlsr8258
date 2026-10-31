@@ -231,6 +231,16 @@ config ZIGBEE_ZCL_DIAGNOSTICS
 	  Build the Diagnostics cluster (ZCL_DIAGNOSTICS_SUPPORT) so that an application
 	  can register it.
 
+config ZIGBEE_ZCL_REPORTING_TABLE_SIZE
+	int "Attribute reporting table entries"
+	default 4
+	range 1 16
+	depends on ZIGBEE_ZCL
+	help
+	  Number of attribute reports a peer can configure on this device. Each entry
+	  costs RAM and a share of the reporting NV item; changing the size discards
+	  the saved reporting configuration.
+
 config ZIGBEE_ZCL_POLL_CTRL
 	bool "Poll Control cluster"
 	help
