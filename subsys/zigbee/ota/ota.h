@@ -213,7 +213,5 @@ void ota_queryStart(uint16_t seconds);
 void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, uint8_t srvEndPoint);
 void ota_mcuReboot(void);
 void ota_upgradeAbort(void);
-uint32_t mcuBootAddrGet(void);
-bool ota_newImageValid(uint32_t new_image_addr);
 
 #endif	/* OTA_H */
