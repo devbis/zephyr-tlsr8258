@@ -52,7 +52,7 @@ static status_t zcl_iasWd_cmdHandler(zclIncoming_t *pInMsg);
 
 _CODE_ZCL_ status_t zcl_iasWd_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    return zcl_registerCluster(endpoint, ZCL_CLUSTER_SS_IAS_WD, manuCode, attrNum, attrTbl, zcl_iasWD_cmdHandler, cb);
+    return zcl_registerCluster(endpoint, ZCL_CLUSTER_SS_IAS_WD, manuCode, attrNum, attrTbl, zcl_iasWd_cmdHandler, cb);
 }
 
 _CODE_ZCL_ status_t zcl_iasWd_startWarning(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, startWarning_t *pStartWarning)
