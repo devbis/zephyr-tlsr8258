@@ -48,6 +48,10 @@ zephyr_library_compile_definitions_ifdef(CONFIG_ZIGBEE_GP
   ZCL_GP_SUPPORT=1
 )
 
+# ZCL_OTA_SUPPORT is turned into ZCL_OTA by zcl_config.h, which gates the OTA
+# cluster code. Public so that applications see the same ZCL layout.
+zephyr_compile_definitions_ifdef(CONFIG_ZIGBEE_OTA ZCL_OTA_SUPPORT=1)
+
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
@@ -58,6 +62,7 @@ zephyr_library_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/aps
   ${CMAKE_CURRENT_SOURCE_DIR}/bdb/includes
   ${CMAKE_CURRENT_SOURCE_DIR}/gp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ota
   ${CMAKE_CURRENT_SOURCE_DIR}/ss
   ${CMAKE_CURRENT_SOURCE_DIR}/mac
   ${CMAKE_CURRENT_SOURCE_DIR}/mac/includes

@@ -22,9 +22,13 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
+#include <zephyr/dfu/mcuboot.h>
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/sys/util.h>
 #include "zb_common.h"
 #include "../zcl/zcl_include.h"
 #include "ota.h"
+#include "zb_api.h"
 
 #ifdef ZCL_OTA
 /**********************************************************************
@@ -32,8 +36,13 @@
  */
 /* 4 + 8 + 8N + 69 + 9 + 8 + (20 + 8)N = 4096; N = 110*/
 #define FLASH_WRITE_COUNT_GET(size)     ((size / (110 * OTA_IMAGE_MAX_DATA_SIZE)) + 1)
-#define TL_IMAGE_START_FLAG             0x4b
-#define TL_START_UP_FLAG_WHOLE          0x544c4e4b
+/* The image is stored in MCUboot's secondary slot and activated by MCUboot. */
+#define OTA_SLOT_ADDR                   FIXED_PARTITION_OFFSET(slot1_partition)
+#define OTA_SLOT_SIZE                   FIXED_PARTITION_SIZE(slot1_partition)
+/* Sectors at the end of the slot that MCUboot keeps for its swap trailer. */
+#define OTA_SLOT_TRAILER_SECTORS        2
+#define OTA_IMAGE_MAX_SIZE              (OTA_SLOT_SIZE - OTA_SLOT_TRAILER_SECTORS * FLASH_SECTOR_SIZE)
+#define OTA_MCUBOOT_IMAGE_MAGIC         0x96f3b83dU
 
 /**********************************************************************
  * TYPEDEFS
@@ -80,8 +89,6 @@ zcl_ota_AppCallbacks_t zcl_otaCb = {
  * GLOBAL VARIABLES
  */
 
-//boot address flag
-u32 mcuBootAddr = 0;
 const u8 otaHdrMagic[] = {
     0x1e, 0xf1, 0xee, 0x0b
 };
@@ -120,128 +127,79 @@ void ota_upgradeEndReqSend(ota_upgradeEndReq_t *req);
 void ota_upgradeWait(u32 seconds);
 void ota_upgradeComplete(u8 status);
 
-/**********************************************************************
- * @brief		get mcu boot address
- *
- * return 		boot form 0x0 or FLASH_ADDR_OF_OTA_IMAGE
- * 				all 0xFF means invalid
- */
-u32 mcuBootAddrGet(void)
+static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
 {
-#if (BOOT_LOADER_MODE)
-    return 0;
-#else
-    u32 bootAddr = 0xFFFFFFFF;
-    u32 flashInfo = 0;
+    u8 check[32];
+    u32 end = pos + len;
 
-    flash_read(0 + FLASH_TLNK_FLAG_OFFSET, 4, (u8 *)&flashInfo);
-    if (flashInfo == TL_START_UP_FLAG_WHOLE) {
-            bootAddr = 0;
-    } else {
-        flash_read(FLASH_ADDR_OF_OTA_IMAGE + FLASH_TLNK_FLAG_OFFSET, 4, (u8 *)&flashInfo);
-        if (flashInfo == TL_START_UP_FLAG_WHOLE) {
-            bootAddr = FLASH_ADDR_OF_OTA_IMAGE;
+    if (end > OTA_IMAGE_MAX_SIZE) {
+        return FALSE;
+    }
+
+    if (pos == 0) {
+        /* leave the swap trailer area of the slot erased for MCUboot */
+        for (u32 i = OTA_SLOT_TRAILER_SECTORS; i > 0; i--) {
+            flash_erase(OTA_SLOT_ADDR + OTA_SLOT_SIZE - i * FLASH_SECTOR_SIZE);
         }
     }
 
-    return bootAddr;
-#endif
-}
+    /* erase each sector right before the first byte lands in it */
+    for (u32 sector = ROUND_UP(pos, FLASH_SECTOR_SIZE); sector < end; sector += FLASH_SECTOR_SIZE) {
+        flash_erase(OTA_SLOT_ADDR + sector);
+    }
 
-bool ota_newImageValid(u32 new_image_addr)
-{
-    bool ret = FALSE;
-    u32 bufCache[256/4];  //align-4
-    u8 *buf = (u8 *)bufCache;
-    flash_read(new_image_addr, 256, (u8 *)buf);
-    u32 fw_size = *(u32 *)(buf + 0x18);
+    flash_write(OTA_SLOT_ADDR + pos, len, (u8 *)data);
 
-    if (fw_size <= FLASH_OTA_IMAGE_MAX_SIZE) {
-        s32 totalLen = fw_size - 4;
-        u32 wLen = 0;
-        u32 sAddr = new_image_addr;
-        u32 oft = 0;
+    for (u32 off = 0; off < len; off += sizeof(check)) {
+        u32 n = MIN(len - off, sizeof(check));
 
-        u32 crcVal = 0;
-        flash_read(new_image_addr + fw_size - 4, 4, (u8 *)&crcVal);
-
-        u32 *pStartFlag = (u32 *)(buf + FLASH_TLNK_FLAG_OFFSET);
-        if ((*pStartFlag & 0xffffff00) != 0x544c4e00) {
+        flash_read(OTA_SLOT_ADDR + pos + off, n, check);
+        if (memcmp(check, data + off, n) != 0) {
             return FALSE;
         }
-
-        u32 curCRC = 0xffffffff;
-
-        while (totalLen > 0) {
-            wLen = (totalLen > 256) ? 256 : totalLen;
-            flash_read(sAddr, wLen, buf);
-            if (oft == 0) {
-                buf[FLASH_TLNK_FLAG_OFFSET] = TL_IMAGE_START_FLAG;
-            }
-            curCRC = xcrc32(buf, wLen, curCRC);
-
-            totalLen -= wLen;
-            sAddr += wLen;
-            oft += wLen;
-        }
-
-        if (curCRC == crcVal) {
-            ret = TRUE;
-        }
     }
 
-    return ret;
+    return TRUE;
 }
 
+/* The downloaded slot must hold an MCUboot image header that fits the slot. */
+static bool ota_slotImageValid(void)
+{
+    u32 hdr[4];
+
+    flash_read(OTA_SLOT_ADDR, sizeof(hdr), (u8 *)hdr);
+    if (hdr[0] != OTA_MCUBOOT_IMAGE_MAGIC) {
+        return FALSE;
+    }
+
+    /* hdr[2] holds ih_hdr_size (low 16 bits) and ih_protect_tlv_size (high 16 bits) */
+    return ((hdr[2] & 0xffff) + hdr[3]) <= OTA_IMAGE_MAX_SIZE;
+}
+
+/* Ask MCUboot to test the downloaded image on the next boot, then restart. */
 void ota_mcuReboot(void)
 {
-    u8 flashInfo = TL_IMAGE_START_FLAG;
-    u32 newAddr = FLASH_ADDR_OF_OTA_IMAGE;
-    bool reboot = 0;
-
-#if (BOOT_LOADER_MODE)
-    if (!ota_newImageValid(newAddr)) {
+    if (!ota_slotImageValid()) {
         return;
     }
 
-#if FLASH_PROTECT_ENABLE
-    flash_unlock();
-#endif
-
-    if (flash_writeWithCheck((newAddr + FLASH_TLNK_FLAG_OFFSET), 1, &flashInfo) == TRUE) {
-        reboot = 1;
-    }
-#else
-    u32 baseAddr = 0;
-
-    if (mcuBootAddr) {
-        baseAddr = FLASH_ADDR_OF_OTA_IMAGE;
-        newAddr = 0;
-    }
-    if (!ota_newImageValid(newAddr)) {
-        return;
-    }
-
-#if FLASH_PROTECT_ENABLE
-    flash_unlock();
-#endif
-
-    if (flash_writeWithCheck((newAddr + FLASH_TLNK_FLAG_OFFSET), 1, &flashInfo) == TRUE) {
-        flashInfo = 0;
-        flash_write((baseAddr + FLASH_TLNK_FLAG_OFFSET), 1, &flashInfo);//disable boot-up flag
-
-        reboot = 1;
-    }
-#endif
-
-#if FLASH_PROTECT_ENABLE
-    flash_lock();
-#endif
-
-    if (reboot) {
+    if (boot_request_upgrade(BOOT_UPGRADE_TEST) == 0) {
         SYSTEM_RESET();
     }
 }
+
+/* MCUboot reverts an unconfirmed image on the next reset. */
+static int ota_imageConfirmCb(void *arg)
+{
+    if (!zb_isDeviceJoinedNwk()) {
+        return 1000;
+    }
+
+    boot_write_img_confirmed();
+    return -1;
+}
+
+static ev_timer_event_t otaConfirmTimer;
 
 /**********************************************************************
  * @brief		server IEEE address preprogrammed for application
@@ -261,8 +219,7 @@ u8 ota_loadImageInfo(ota_hdrFields_t *oh)
     ota_hdrFields_t hdr;
     if (!lh) {
         lh = &hdr;
-        u32 flashAddr = (mcuBootAddr) ? 0 : FLASH_ADDR_OF_OTA_IMAGE;
-        flash_read(flashAddr, sizeof(hdr), (u8 *)&hdr);
+        flash_read(OTA_SLOT_ADDR, sizeof(hdr), (u8 *)&hdr);
     }
     if (lh->otaUpgradeFileID == OTA_UPGRADE_FILE_ID) {
         otaServerBinInfo.fileVer = lh->fileVer;
@@ -312,14 +269,6 @@ void ota_clientInfoRecover(void)
  */
 void ota_init(ota_type_e type, af_simple_descriptor_t *simpleDesc, ota_preamble_t *otaPreamble, ota_callBack_t *cb)
 {
-    //get current boot-up address
-    mcuBootAddr = mcuBootAddrGet();
-    if (mcuBootAddr == 0xFFFFFFFF) {
-        //should not happen
-        ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_BOOT_ADDR_ERROR);
-        return;
-    }
-
     otaCb = cb;
 
     memset((u8 *)&g_otaCtx, 0, sizeof(g_otaCtx));
@@ -346,6 +295,12 @@ void ota_init(ota_type_e type, af_simple_descriptor_t *simpleDesc, ota_preamble_
         otaClientInfo.clientOtaFlg = OTA_FLAG_INIT_DONE;
         otaClientInfo.crcValue = 0xffffffff;
         ota_clientInfoRecover();
+
+        if (!boot_is_img_confirmed()) {
+            otaConfirmTimer.cb = ota_imageConfirmCb;
+            otaConfirmTimer.data = NULL;
+            ev_on_timer(&otaConfirmTimer, CONFIG_ZIGBEE_OTA_CONFIRM_DELAY_S * 1000U);
+        }
     }
 }
 
@@ -1055,28 +1010,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
                     }
                 }
 
-                //Calculate CRC value
-                u32 dataEndPos = otaClientInfo.otaElementLen - otaClientInfo.otaElementInfo2;
-                u8 crcLen = 0;
-                if (dataEndPos - otaClientInfo.otaElementPos <= 4) {
-                    crcLen = 0;
-                } else if (dataEndPos - 4 - otaClientInfo.otaElementPos >= dataSize) {
-                    crcLen = dataSize;
-                } else {
-                    crcLen = dataEndPos - 4 - otaClientInfo.otaElementPos;
-                }
-                otaClientInfo.crcValue = xcrc32(&pData[i], crcLen, otaClientInfo.crcValue);
-
-                //write image to flash
-                if ((otaClientInfo.otaElementPos < FLASH_TLNK_FLAG_OFFSET + 1) &&
-                   ((otaClientInfo.otaElementPos + dataSize) >= FLASH_TLNK_FLAG_OFFSET + 1)) {
-                    if (pData[i + (FLASH_TLNK_FLAG_OFFSET - otaClientInfo.otaElementPos)] != TL_IMAGE_START_FLAG) {
-                        return ZCL_STA_INVALID_IMAGE;
-                    }
-                    pData[i + (FLASH_TLNK_FLAG_OFFSET - otaClientInfo.otaElementPos)] = 0xff;
-                }
-                u32 baseAddr = (mcuBootAddr) ? 0 : FLASH_ADDR_OF_OTA_IMAGE;
-                if (flash_writeWithCheck(baseAddr + otaClientInfo.otaElementPos, copyLen, &pData[i]) != TRUE) {
+                if (!ota_slotWrite(otaClientInfo.otaElementPos, &pData[i], copyLen)) {
                     return ZCL_STA_INVALID_IMAGE;
                 }
 
@@ -1086,19 +1020,10 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
                 otaClientInfo.offset = zcl_attr_fileOffset;
 
                 if (otaClientInfo.otaElementPos == otaClientInfo.otaElementLen) {
-                    u16 crcFirmware = 0;
-                    flash_read(baseAddr + 6, 2, (u8 *)&crcFirmware);
-                    if (((crcFirmware & 0xff) == 0x5D) && ((crcFirmware >> 8) & 0xff) == 0x02) {
-                        u32 crcReceived;
-                        flash_read(baseAddr + dataEndPos - 4, 4, (u8 *)&crcReceived);
-
-                        if (crcReceived != otaClientInfo.crcValue) {
-                            return ZCL_STA_INVALID_IMAGE;
-                        }
-                        validChecked = 1;
-                    } else {
+                    if (!ota_slotImageValid()) {
                         return ZCL_STA_INVALID_IMAGE;
                     }
+                    validChecked = 1;
 
                     otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_TAG1;
                 }
@@ -1256,8 +1181,7 @@ static status_t ota_imageBlockReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
             rsp.rsp.wait.reqTime = 0;
             rsp.rsp.wait.blockReqDelay = zcl_attr_minBlockPeriod;
         } else {
-            u32 flashAddr = (mcuBootAddr) ? 0 : FLASH_ADDR_OF_OTA_IMAGE;
-            flash_read(flashAddr + pImageBlockReq->fileOffset, len, buf);
+            flash_read(OTA_SLOT_ADDR + pImageBlockReq->fileOffset, len, buf);
             rsp.st = ZCL_STA_SUCCESS;
             rsp.rsp.success.manuCode = pImageBlockReq->manuCode;
             rsp.rsp.success.imageType = pImageBlockReq->imageType;
@@ -1407,7 +1331,7 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
             return ZCL_STA_SUCCESS;
         }
 
-        if (pQueryNextImageRsp->imageSize > FLASH_OTA_IMAGE_MAX_SIZE) {
+        if (pQueryNextImageRsp->imageSize > OTA_IMAGE_MAX_SIZE) {
             return ZCL_STA_INSUFFICIENT_SPACE;
         }
 
@@ -1429,20 +1353,11 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
             if (otaClientInfo.offset == g_otaCtx.downloadImageSize) {
                 /* the whole image already has been received, shall validate the image */
                 if (otaClientInfo.otaElementPos == otaClientInfo.otaElementLen) {
-                    /* validate the CRC */
-                    u32 baseAddr = (mcuBootAddr) ? 0 : FLASH_ADDR_OF_OTA_IMAGE;
-                    u16 crcFirmware = 0;
-                    flash_read(baseAddr + 6, 2, (u8 *)&crcFirmware);
-                    if (((crcFirmware & 0xff) == 0x5D) && ((crcFirmware >> 8) & 0xff) == 0x02) {
-                        u32 crcReceived;
-                        flash_read(baseAddr + otaClientInfo.otaElementLen - otaClientInfo.otaElementInfo2 - 4, 4, (u8 *)&crcReceived);
+                    /* if the image header is intact, exit and reboot directly, or restart OTA from 0 */
+                    if (ota_slotImageValid()) {
+                        ota_upgradeComplete(ZCL_STA_SUCCESS);
 
-                        /* if CRC is correct, exit and reboot directly, or restart OTA from 0 */
-                        if (crcReceived == otaClientInfo.crcValue) {
-                            ota_upgradeComplete(ZCL_STA_SUCCESS);
-
-                            return ZCL_STA_SUCCESS;
-                        }
+                        return ZCL_STA_SUCCESS;
                     }
                 }
             } else {
@@ -1463,22 +1378,6 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
         zcl_attr_imageTypeID = pQueryNextImageRsp->imageType;
         zcl_attr_downloadFileVer = pQueryNextImageRsp->fileVer;
         g_otaCtx.downloadImageSize = pQueryNextImageRsp->imageSize;
-
-        //double check the boot-up address to prevent unexpected
-        if (mcuBootAddr != mcuBootAddrGet()) {
-#if FLASH_PROTECT_ENABLE
-            flash_lock();
-#endif
-            ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_BOOT_ADDR_ERROR);
-            return ZCL_STA_ABORT;
-        }
-
-        u16 sectorNumUsed = g_otaCtx.downloadImageSize / FLASH_SECTOR_SIZE + 1;
-        u32 baseAddr = (mcuBootAddr) ? 0 : FLASH_ADDR_OF_OTA_IMAGE;
-
-        for (u16 i = 0; i < sectorNumUsed; i++) {
-            flash_erase(baseAddr + i * FLASH_SECTOR_SIZE);
-        }
 
         pOtaUpdateInfo = (ota_updateInfo_t *)ev_buf_allocate(sizeof(ota_updateInfo_t));
         if (!pOtaUpdateInfo) {
