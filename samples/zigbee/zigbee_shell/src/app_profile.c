@@ -54,6 +54,9 @@ void zcl_rx_handler(void *p);
 #include "zcl/general/zcl_greenPower.h"
 #include "gp/gp.h"
 #endif
+#if defined(CONFIG_ZIGBEE_OTA)
+#include "ota/ota.h"
+#endif
 #endif /* __ZEPHYR__ */
 
 /* ------------------------------------------------------------------ */
@@ -124,6 +127,12 @@ static u16 app_in_clusters[] = {
 	ZCL_CLUSTER_GEN_IDENTIFY,
 };
 
+#if defined(CONFIG_ZIGBEE_OTA)
+static u16 app_out_clusters[] = {
+	ZCL_CLUSTER_OTA,
+};
+#endif
+
 static af_simple_descriptor_t app_simple_desc = {
 	.app_profile_id = APP_PROFILE_HA_PROFILE_ID,
 	.app_dev_id = APP_PROFILE_HA_DEVICE_ID,
@@ -131,10 +140,42 @@ static af_simple_descriptor_t app_simple_desc = {
 	.app_dev_ver = 1U,
 	.reserved = 0U,
 	.app_in_cluster_count = 2U,
+#if defined(CONFIG_ZIGBEE_OTA)
+	.app_out_cluster_count = 1U,
+	.app_in_cluster_lst = app_in_clusters,
+	.app_out_cluster_lst = app_out_clusters,
+#else
 	.app_out_cluster_count = 0U,
 	.app_in_cluster_lst = app_in_clusters,
 	.app_out_cluster_lst = NULL,
+#endif
 };
+
+#if defined(CONFIG_ZIGBEE_OTA)
+/*
+ * Identity the server matches the OTA file against: raise file_ver with
+ * every release, and keep image_type and manufacturer_code equal to the OTA
+ * file header. totalImageSize is unused by the client.
+ */
+static ota_preamble_t app_ota_preamble = {
+	.fileVer = 0x00000001U,
+	.totalImageSize = 0U,
+	.imageType = 0x0001U,
+	.manufacturerCode = 0x1141U,
+};
+
+static void app_ota_event(u8 evt, u8 status)
+{
+	if ((evt == OTA_EVT_COMPLETE) && (status == ZCL_STA_SUCCESS)) {
+		LOG_INF("OTA image downloaded, rebooting into MCUboot");
+		ota_mcuReboot();
+	}
+}
+
+static ota_callBack_t app_ota_cb = {
+	.processMsgCbFunc = app_ota_event,
+};
+#endif
 
 /* ------------------------------------------------------------------ */
 /* ZCL cluster info table (for zcl_register)                          */
@@ -180,6 +221,11 @@ void app_profile_register(void)
 	}
 
 	zcl_register(APP_PROFILE_ENDPOINT, APP_CLUSTER_NUM, app_cluster_info);
+
+#if defined(CONFIG_ZIGBEE_OTA)
+	ota_init(OTA_TYPE_CLIENT, &app_simple_desc, &app_ota_preamble, &app_ota_cb);
+	ota_queryStart(OTA_PERIODIC_QUERY_INTERVAL);
+#endif
 }
 
 /*
