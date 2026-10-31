@@ -86,6 +86,10 @@ nv_sts_t zcl_reportingTab_restore(void)
 
 #if NV_ENABLE
     st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_REPORT, sizeof(zcl_reportingTab_t), (uint8_t *)&reportingTab);
+    if ((st == NV_SUCC) && (reportingTab.reportNum > ZCL_REPORTING_TABLE_NUM)) {
+        /* saved by a build with a larger table */
+        return NV_DATA_CHECK_ERROR;
+    }
     for (uint8_t i = 0; i < reportingTab.reportNum; i++) {
         memset(reportingTab.reportCfgInfo[i].prevData, 0xFF, REPORTABLE_CHANGE_MAX_ANALOG_SIZE);
     }
