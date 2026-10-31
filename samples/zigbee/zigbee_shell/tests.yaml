@@ -41,3 +41,10 @@ tests:
       - tlsr8258_tb03f
     extra_args:
       - EXTRA_CONF_FILE="router.conf;on_off.conf"
+  sample.zigbee.node.router.gp_sink:
+    platform_allow:
+      - tlsr8258_tb03f
+    integration_platforms:
+      - tlsr8258_tb03f
+    extra_args:
+      - EXTRA_CONF_FILE="router.conf;gp_sink.conf"

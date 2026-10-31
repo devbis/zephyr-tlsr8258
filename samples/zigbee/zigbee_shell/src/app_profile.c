@@ -46,11 +46,11 @@ LOG_MODULE_REGISTER(app_profile);
 void zcl_rx_handler(void *p);
 #if defined(CONFIG_ZIGBEE_GP)
 /*
- * gp/gp.h needs SEC_KEY_LEN (zb_common_stub.h) and the gpSwitchInfo_t/
+ * gp/gp.h needs SEC_KEY_LEN (zb_config.h) and the gpSwitchInfo_t/
  * zcl_gp_*Cmd_t types (zcl_greenPower.h) that the piecemeal ZCL includes
  * above do not pull in; gp.c itself gets them via the full zcl_include.h.
  */
-#include "zb_common_stub.h"
+#include <zephyr/zigbee/zb_config.h>
 #include "zcl/general/zcl_greenPower.h"
 #include "gp/gp.h"
 #endif
