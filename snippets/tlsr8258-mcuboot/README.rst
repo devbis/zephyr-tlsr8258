@@ -68,3 +68,36 @@ The loader receives the image over UART0 (TX on PB1, RX on PA0) with mcumgr seri
 recovery, after a reset: it listens for a command for 200 ms before it checks the
 application. The image has to be uploaded to the primary slot, which is where serial
 recovery writes.
+
+Zigbee over-the-air update
+**************************
+
+With ``CONFIG_ZIGBEE_OTA=y`` the Zigbee OTA client stores a downloaded image in slot 1 and
+asks the loader to swap it in. The sample enables it with ``EXTRA_CONF_FILE=ota.conf``:
+
+.. code-block:: console
+
+   west build -b tlsr8258_tb03f/tlsr8258 -S tlsr8258-mcuboot samples/zigbee/zigbee_shell \
+       -- -DEXTRA_CONF_FILE="router.conf;ota.conf"
+
+The last two sectors of slot 1 are reserved for the loader's trailer, so the largest image is
+the slot size minus ``0x2000``. The application has to call ``ota_mcuReboot()`` when
+``OTA_EVT_COMPLETE`` arrives; the loader then runs the new image once (test upgrade). The new
+image confirms itself after it has rejoined the network, ``CONFIG_ZIGBEE_OTA_CONFIRM_DELAY_S``
+seconds after the start at the latest; if it never rejoins, the next reset reverts to the old
+image.
+
+To publish an update:
+
+#. Raise ``fileVer`` in ``ota_preamble_t`` (``samples/zigbee/zigbee_shell/src/app_profile.c``)
+   and build.
+#. Sign the image as described above, with the slot size of slot 1.
+#. Wrap it in a Zigbee OTA file. ``--file-version``, ``--manufacturer`` and ``--image-type``
+   must match the preamble of the new firmware:
+
+   .. code-block:: console
+
+      scripts/zigbee_ota_pack.py --file-version 2 signed.bin firmware.ota
+
+#. Give ``firmware.ota`` to the OTA server (for example the ``ota`` section of the
+   Zigbee2MQTT configuration). The device queries the server every five minutes.
