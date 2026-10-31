@@ -33,9 +33,6 @@ family:
   - name: beetle
     socs:
     - name: beetle_r0
-  - name: phy6252
-    socs:
-    - name: phy6252
 - name: arm64
   series:
   - name: fvp_aem
