@@ -48,3 +48,10 @@ tests:
       - tlsr8258_tb03f
     extra_args:
       - EXTRA_CONF_FILE="router.conf;gp_sink.conf"
+  sample.zigbee.node.router.wwah:
+    platform_allow:
+      - tlsr8258_tb03f
+    integration_platforms:
+      - tlsr8258_tb03f
+    extra_args:
+      - EXTRA_CONF_FILE="router.conf;wwah.conf"
