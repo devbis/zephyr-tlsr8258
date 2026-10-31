@@ -57,6 +57,10 @@ void zcl_rx_handler(void *p);
 #if defined(CONFIG_ZIGBEE_OTA)
 #include "ota/ota.h"
 #endif
+#if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
+#include <zephyr/drivers/gpio.h>
+#include "zcl/general/zcl_onoff.h"
+#endif
 #endif /* __ZEPHYR__ */
 
 /* ------------------------------------------------------------------ */
@@ -118,6 +122,55 @@ static const zclAttrInfo_t app_identify_attr_tbl[] = {
 #define APP_IDENTIFY_ATTR_NUM                                                                      \
 	((u8)ARRAY_SIZE(app_identify_attr_tbl))
 
+#if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
+/* ------------------------------------------------------------------ */
+/* On/Off cluster: drives the board's led0                             */
+/* ------------------------------------------------------------------ */
+
+static const struct gpio_dt_spec app_led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+static bool app_onoff_state;
+static const u16 app_onoff_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+
+static const zclAttrInfo_t app_onoff_attr_tbl[] = {
+	{ZCL_ATTRID_ONOFF, ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE,
+	 (u8 *)&app_onoff_state},
+	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
+	 (u8 *)&app_onoff_cluster_rev},
+};
+
+#define APP_ONOFF_ATTR_NUM ((u8)ARRAY_SIZE(app_onoff_attr_tbl))
+
+static void app_onoff_set(bool on)
+{
+	app_onoff_state = on;
+	gpio_pin_set_dt(&app_led, on ? 1 : 0);
+	zcl_setAttrVal(APP_PROFILE_ENDPOINT, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF,
+		       (u8 *)&app_onoff_state);
+}
+
+static status_t app_onoff_cmd(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payload)
+{
+	ARG_UNUSED(addr_info);
+	ARG_UNUSED(payload);
+
+	switch (cmd_id) {
+	case ZCL_CMD_ONOFF_ON:
+		app_onoff_set(true);
+		break;
+	case ZCL_CMD_ONOFF_OFF:
+		app_onoff_set(false);
+		break;
+	case ZCL_CMD_ONOFF_TOGGLE:
+		app_onoff_set(!app_onoff_state);
+		break;
+	default:
+		return ZCL_STA_UNSUP_CLUSTER_COMMAND;
+	}
+
+	return ZCL_STA_SUCCESS;
+}
+#endif /* CONFIG_ZIGBEE_ZCL_ON_OFF */
+
 /* ------------------------------------------------------------------ */
 /* In-cluster list and simple descriptor                               */
 /* ------------------------------------------------------------------ */
@@ -125,6 +178,9 @@ static const zclAttrInfo_t app_identify_attr_tbl[] = {
 static u16 app_in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
+#if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
+	ZCL_CLUSTER_GEN_ON_OFF,
+#endif
 };
 
 #if defined(CONFIG_ZIGBEE_OTA)
@@ -139,7 +195,7 @@ static af_simple_descriptor_t app_simple_desc = {
 	.endpoint = APP_PROFILE_ENDPOINT,
 	.app_dev_ver = 1U,
 	.reserved = 0U,
-	.app_in_cluster_count = 2U,
+	.app_in_cluster_count = ARRAY_SIZE(app_in_clusters),
 #if defined(CONFIG_ZIGBEE_OTA)
 	.app_out_cluster_count = 1U,
 	.app_in_cluster_lst = app_in_clusters,
@@ -198,6 +254,16 @@ static zcl_specClusterInfo_t app_cluster_info[] = {
 		.clusterRegisterFunc = zcl_identify_register,
 		.clusterAppCb = NULL,
 	},
+#if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
+	{
+		.clusterId = ZCL_CLUSTER_GEN_ON_OFF,
+		.manuCode = 0U,
+		.attrNum = APP_ONOFF_ATTR_NUM,
+		.attrTbl = app_onoff_attr_tbl,
+		.clusterRegisterFunc = zcl_onOff_register,
+		.clusterAppCb = app_onoff_cmd,
+	},
+#endif
 };
 
 #define APP_CLUSTER_NUM ((u8)ARRAY_SIZE(app_cluster_info))
@@ -210,6 +276,12 @@ void app_profile_register(void)
 {
 	memcpy(&app_basic_mfr_name[1], APP_PROFILE_MFR_NAME, sizeof(APP_PROFILE_MFR_NAME));
 	memcpy(&app_basic_model_id[1], APP_PROFILE_MODEL_ID, sizeof(APP_PROFILE_MODEL_ID));
+
+#if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
+	if (gpio_is_ready_dt(&app_led)) {
+		gpio_pin_configure_dt(&app_led, GPIO_OUTPUT_INACTIVE);
+	}
+#endif
 
 	zcl_init(NULL);
 

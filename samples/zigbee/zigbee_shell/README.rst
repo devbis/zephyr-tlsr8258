@@ -18,6 +18,10 @@ drives over the UART that the board overlay names as ``zigbee,ncp-uart``; the
 ESP32-C6 overlay uses its USB serial/JTAG port. The host forms the network, so
 the node does not start commissioning on its own.
 
+``on_off.conf`` adds the On/Off cluster server on endpoint 1 and drives the ``led0`` alias
+(tested to build on ``tlsr8258_tb03f`` only). ``ota.conf`` adds the OTA client, see the
+``tlsr8258-mcuboot`` snippet.
+
 Requirements
 ************
 
