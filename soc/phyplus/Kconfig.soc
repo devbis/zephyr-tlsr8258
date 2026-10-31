@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FAMILY_PHYPLUS
+	bool
+
+config SOC_FAMILY
+	default "phyplus" if SOC_FAMILY_PHYPLUS
+
+rsource "*/Kconfig.soc"

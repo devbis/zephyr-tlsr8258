@@ -3,7 +3,7 @@
 
 config SOC_SERIES_PHY6252
 	bool
-	select SOC_FAMILY_ARM
+	select SOC_FAMILY_PHYPLUS
 
 config SOC_PHY6252
 	bool
