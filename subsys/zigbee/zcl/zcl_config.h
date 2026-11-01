@@ -175,6 +175,16 @@
 #define ZCL_THERMOSTAT
 #endif
 
+/*************************** FAN CONTROL *****************************/
+#if ZCL_FAN_CONTROL_SUPPORT
+#define ZCL_FAN_CONTROL
+#endif
+
+/********************* THERMOSTAT USER INTERFACE CONFIG ***************/
+#if ZCL_THERMOSTAT_UI_CFG_SUPPORT
+#define ZCL_THERMOSTAT_UI_CFG
+#endif
+
 /*************************************************** Closures ****************************************************/
 /*************************** Door Lock *******************************/
 #if ZCL_DOOR_LOCK_SUPPORT
