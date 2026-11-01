@@ -111,75 +111,6 @@ extern af_endpoint_descriptor_t *af_epDescriptorGet(void);
 extern u8 af_availableEpNumGet(void);
 extern af_endpoint_descriptor_t *af_zdoSimpleDescriptorGet(void);
 
-static u16 zb_dispatch_basic_read_attr(u8 *rsp, u16 pos, u16 max_len, u16 attr_id)
-{
-	const char *str = NULL;
-	u8 type = 0U;
-	u8 value = 0U;
-
-	if (rsp == NULL || pos + 3U > max_len) {
-		return pos;
-	}
-
-	COPY_U16TOBUFFER(&rsp[pos], attr_id);
-	pos += 2U;
-
-	switch (attr_id) {
-	case ZCL_ATTRID_BASIC_ZCL_VER:
-		type = ZCL_DATA_TYPE_UINT8;
-		value = 3U;
-		break;
-	case ZCL_ATTRID_BASIC_APP_VER:
-	case ZCL_ATTRID_BASIC_STACK_VER:
-	case ZCL_ATTRID_BASIC_HW_VER:
-		type = ZCL_DATA_TYPE_UINT8;
-		value = 1U;
-		break;
-	case ZCL_ATTRID_BASIC_MFR_NAME:
-		type = ZCL_DATA_TYPE_CHAR_STR;
-		str = zb_platform_app_basic_mfr_name();
-		break;
-	case ZCL_ATTRID_BASIC_MODEL_ID:
-		type = ZCL_DATA_TYPE_CHAR_STR;
-		str = zb_platform_app_basic_model_id();
-		break;
-	case ZCL_ATTRID_BASIC_POWER_SOURCE:
-		type = ZCL_DATA_TYPE_ENUM8;
-		value = POWER_SOURCE_BATTERY;
-		break;
-	case ZCL_ATTRID_GLOBAL_CLUSTER_REVISION:
-		if (pos + 1U + 1U + 2U > max_len) {
-			return pos - 2U;
-		}
-		rsp[pos++] = ZCL_STA_SUCCESS;
-		rsp[pos++] = ZCL_DATA_TYPE_UINT16;
-		COPY_U16TOBUFFER(&rsp[pos], ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT);
-		return pos + 2U;
-	default:
-		rsp[pos++] = ZCL_STA_UNSUPPORTED_ATTRIBUTE;
-		return pos;
-	}
-
-	rsp[pos++] = ZCL_STA_SUCCESS;
-	rsp[pos++] = type;
-	if (str != NULL) {
-		u8 len = (u8)strlen(str);
-
-		if (pos + 1U + len > max_len) {
-			return pos - 2U;
-		}
-		rsp[pos++] = len;
-		memcpy(&rsp[pos], str, len);
-		return pos + len;
-	}
-
-	if (pos + 1U > max_len) {
-		return pos - 2U;
-	}
-	rsp[pos++] = value;
-	return pos;
-}
-
 void af_aps_data_entry(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
@@ -201,61 +132,6 @@ void af_aps_data_entry(void *arg)
 			zdo_ep->cb_rx(arg);
 		} else {
 			zb_buf_free(buf);
-		}
-		return;
-	}
-
-	if (!IS_ENABLED(CONFIG_ZIGBEE_NCP) && ad->profile_id == HA_PROFILE_ID &&
-	    ad->cluster_id == ZCL_CLUSTER_GEN_BASIC &&
-	    ad->dst_ep != ZDO_EP && ad->asdu != NULL && ad->asduLength >= 5U &&
-	    (ad->asdu[0] & (ZCL_FRAME_CONTROL_TYPE | ZCL_FRAME_CONTROL_MANU_SPECIFIC)) ==
-		    ZCL_FRAME_TYPE_PROFILE_CMD &&
-	    ad->asdu[2] == ZCL_CMD_READ) {
-		u8 rsp[96];
-		epInfo_t dst;
-		u16 rsp_len = 3U;
-		u8 aps_cnt = 0U;
-
-		rsp[0] = ZCL_FRAME_TYPE_PROFILE_CMD | ZCL_FRAME_CONTROL_DIRECTION |
-			 ZCL_FRAME_CONTROL_DISABLE_DEFAULT_RSP;
-		rsp[1] = ad->asdu[1];
-		rsp[2] = ZCL_CMD_READ_RSP;
-		for (u16 in_pos = 3U; in_pos + 1U < ad->asduLength; in_pos += 2U) {
-			rsp_len = zb_dispatch_basic_read_attr(
-				rsp, rsp_len, sizeof(rsp),
-				(u16)ad->asdu[in_pos] | ((u16)ad->asdu[in_pos + 1U] << 8));
-		}
-
-		TL_SETSTRUCTCONTENT(dst, 0);
-		/*
-		 * Snapshot every field used after releasing the RX carrier.  `ad`
-		 * aliases `buf`; reading it after zb_buf_free() is a use-after-free
-		 * and can feed the TX request with recycled slab metadata.
-		 */
-		u8 tx_src_ep = ad->dst_ep;
-		u8 tx_dst_ep = ad->src_ep;
-		u16 tx_profile = ad->profile_id;
-		u16 tx_cluster = ad->cluster_id;
-		u16 tx_dst_short = ad->src_short_addr;
-
-		dst.profileId = tx_profile;
-		dst.dstEp = tx_dst_ep;
-		dst.radius = 30U;
-		dst.txOptions = APS_TX_OPT_ACK_TX;
-		dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
-		dst.dstAddr.shortAddr = tx_dst_short;
-
-		/*
-		 * Match the vendor zdo_send_req() ownership order: the RX
-		 * indication carrier is no longer needed after all request fields
-		 * and the response payload have been copied.  af_dataSend() needs a
-		 * separate TX carrier, and keeping this one live can exhaust the
-		 * shared slab at the exact post-idle read boundary.
-		 */
-		zb_buf_free(buf);
-		{
-			u8 tx_status = af_dataSend(tx_src_ep, &dst, tx_cluster, rsp_len,
-						   rsp, &aps_cnt);
 		}
 		return;
 	}
