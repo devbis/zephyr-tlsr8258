@@ -194,6 +194,8 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
  * tl_zbNwkBeaconPayloadUpdate() rebuilds the payload struct but does NOT set
  * beaconPayloadLen, so we set it here. permit_duration==0 closes the window.
  */
+extern u8 linkStExpiry;
+
 void zb_router_enable_parenting(u8 permit_duration)
 {
 	/*
@@ -223,5 +225,15 @@ void zb_router_enable_parenting(u8 permit_duration)
 		if (zb_zdoSendDevAnnance() == ZDO_SUCCESS) {
 			nwk_router_bootstrap_announce_sent = true;
 		}
+	}
+
+	/*
+	 * zdo_startup_complete() also starts the periodic Link Status, which a
+	 * restore does not reach. Without it the neighbors never list this router
+	 * as a two-way link: the coordinator drops it from its neighbor table, looks
+	 * for a route for every command and ends up reporting an address conflict.
+	 */
+	if (g_zbNwkCtx.joined != 0U && linkStExpiry == 0U) {
+		tl_zbNwkLinkStatusStart();
 	}
 }
