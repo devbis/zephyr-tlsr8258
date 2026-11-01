@@ -321,16 +321,6 @@ void zb_platform_app_register_endpoints(void)
 	app_device_register();
 }
 
-const char *zb_platform_app_basic_mfr_name(void)
-{
-	return "Telink";
-}
-
-const char *zb_platform_app_basic_model_id(void)
-{
-	return APP_MODEL_ID;
-}
-
 bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target)
 {
 	ARG_UNUSED(target);
