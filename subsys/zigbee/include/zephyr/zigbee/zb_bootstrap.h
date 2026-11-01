@@ -136,13 +136,6 @@ void zb_router_runtime_reset(void);
  */
 void zb_platform_wake(void);
 
-/*
- * Identity strings used by the Basic-cluster interview fallback. Applications
- * provide these hooks so the interview answers mirror the ZCL attribute table.
- */
-const char *zb_platform_app_basic_mfr_name(void);
-const char *zb_platform_app_basic_model_id(void);
-
 #define ZB_PLATFORM_RADIO_ERR_NONE          0U
 #define ZB_PLATFORM_RADIO_ERR_NOT_READY     1U
 #define ZB_PLATFORM_RADIO_ERR_SET_CHANNEL   2U
