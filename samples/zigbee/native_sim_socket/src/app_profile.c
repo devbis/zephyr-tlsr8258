@@ -139,16 +139,6 @@ void zb_platform_app_register_endpoints(void)
 #endif
 }
 
-const char *zb_platform_app_basic_mfr_name(void)
-{
-	return APP_PROFILE_MFR_NAME;
-}
-
-const char *zb_platform_app_basic_model_id(void)
-{
-	return APP_PROFILE_MODEL_ID;
-}
-
 const void *app_profile_get_simple_desc(void)
 {
 	return &app_simple_desc;
