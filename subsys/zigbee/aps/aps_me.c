@@ -208,8 +208,9 @@ u8 aps_bindingTblNvInit(void)
 {
 	nv_itemLengthCheckAdd(NV_ITEM_APS_BINDING_TABLE_V2, aps_binding_table_bytes());
 
+	/* the whole table, as aps_bindingTblSave2Flash() writes it */
 	u8 ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE_V2,
-				 sizeof(aps_binding_entry_t), (u8 *)bindTblEntryGet());
+				 aps_binding_table_bytes(), (u8 *)bindTblEntryGet());
 	if (ret != NV_SUCC) {
 		aps_oldBindingTblRecover();
 	}
