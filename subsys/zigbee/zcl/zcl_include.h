@@ -68,6 +68,8 @@
 
 /* HVAC */
 #include "hvac/zcl_thermostat.h"
+#include "hvac/zcl_fan_control.h"
+#include "hvac/zcl_thermostat_ui_cfg.h"
 
 /* Smart Energy */
 #include "smart_energy/zcl_metering.h"

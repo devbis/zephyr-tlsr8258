@@ -319,6 +319,19 @@ config ZIGBEE_ZCL_THERMOSTAT
 	  Build the Thermostat cluster (ZCL_THERMOSTAT_SUPPORT) so that an application
 	  can register it.
 
+config ZIGBEE_ZCL_FAN_CONTROL
+	bool "Fan Control cluster"
+	help
+	  Build the Fan Control cluster (ZCL_FAN_CONTROL_SUPPORT) so that an application
+	  can register it. It has attributes only, the application provides the table.
+
+config ZIGBEE_ZCL_THERMOSTAT_UI_CFG
+	bool "Thermostat User Interface Configuration cluster"
+	help
+	  Build the Thermostat User Interface Configuration cluster
+	  (ZCL_THERMOSTAT_UI_CFG_SUPPORT) so that an application can register it. It
+	  has attributes only, the application provides the table.
+
 config ZIGBEE_ZCL_DOOR_LOCK
 	bool "Door Lock cluster"
 	help
