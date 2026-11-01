@@ -290,6 +290,39 @@ uint8_t af_dataSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uin
 	if (pDstEpInfo == NULL || (cmdPld == NULL && cmdPldLen != 0U)) {
 		return APS_STATUS_INVALID_PARAMETER;
 	}
+	if (pDstEpInfo->dstAddrMode == APS_DSTADDR_EP_NOTPRESETNT) {
+		/*
+		 * Indirect addressing, as attribute reports use: one unicast to every
+		 * device the binding table has for this cluster and source endpoint.
+		 * A binding to a group is not served by this build.
+		 */
+		aps_binding_entry_t *table = bindTblEntryGet();
+		uint8_t sent = 0U;
+
+		for (uint8_t i = 0U; i < APS_BINDING_TABLE_SIZE; i++) {
+			epInfo_t dst = *pDstEpInfo;
+			uint16_t shortAddr;
+			uint16_t idx;
+
+			if (table[i].used != 1U || table[i].clusterId != clusterId ||
+			    table[i].srcEp != srcEp ||
+			    table[i].dstAddrMode != APS_LONG_DSTADDR_WITHEP ||
+			    zb_ShortAddrByExtAddr(&shortAddr, table[i].dstExtAddrInfo.extAddr, &idx) !=
+				    RET_OK) {
+				continue;
+			}
+
+			dst.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
+			dst.dstAddr.shortAddr = shortAddr;
+			dst.dstEp = table[i].dstExtAddrInfo.dstEp;
+			if (af_dataSend(srcEp, &dst, clusterId, cmdPldLen, cmdPld, apsCnt) ==
+			    APS_STATUS_SUCCESS) {
+				sent++;
+			}
+		}
+
+		return sent != 0U ? APS_STATUS_SUCCESS : APS_STATUS_NO_BOUND_DEVICE;
+	}
 	if (pDstEpInfo->dstAddrMode != APS_SHORT_DSTADDR_WITHEP) {
 		/* Group/IEEE-addressed sends are not used by this build's ZDO. */
 		return APS_STATUS_NOT_SUPPORTED;
