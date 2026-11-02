@@ -49,4 +49,29 @@ config TLSR8258_PM_GPIO_WAKEUP
 	  Arm the GPIO pins configured with
 	  tlsr8258_pm_configure_gpio_wakeup() as wakeup sources.
 
+config TLSR8258_PM_DEEP_RETENTION
+	bool "Deep sleep with SRAM retention"
+	depends on SOC_SERIES_TLSR825X_PM
+	help
+	  Enter deep sleep with the low 8, 16 or 32 KiB of SRAM kept powered
+	  instead of none. The wake is still a reset, so the firmware starts from
+	  the reset vector and initializes .data and .bss, but what is marked
+	  __tlsr8258_retained (power.h) keeps its value, and a sleepy device can
+	  count time and remember what it last reported across the sleep. The
+	  retained SRAM draws about a microamp more than none.
+
+	  Unverified on hardware: the boot code relies on the boot mirror
+	  surviving the sleep.
+
+config TLSR8258_PM_RETENTION_SIZE
+	int "Retained application RAM in bytes"
+	depends on TLSR8258_PM_DEEP_RETENTION
+	default 512
+	range 0 24576
+	help
+	  Size of the .tlsr8258_retained section at the start of the RAM behind the
+	  boot mirror. The boot mirror and this section must fit in 32 KiB.
+	  With the default 8 KiB mirror, 8 KiB (8192) or less keeps the cost at
+	  the 16 KiB retention mode.
+
 endif # SOC_SERIES_TLSR825X
