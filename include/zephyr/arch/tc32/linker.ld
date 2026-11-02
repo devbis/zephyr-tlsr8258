@@ -156,6 +156,26 @@ SECTIONS
 	_image_ram_start = ORIGIN(RAM);
 	. = ORIGIN(RAM);
 
+#if defined(CONFIG_TLSR8258_PM_DEEP_RETENTION)
+	/*
+	 * RAM that a deep sleep keeps: first in the RAM, right behind the boot
+	 * mirror, so that it lies in the low SRAM the SoC retains. Not loaded and
+	 * not cleared, the boot code does not touch it (see power.h).
+	 */
+	SECTION_DATA_PROLOGUE(.tlsr8258_retained,(NOLOAD),)
+	{
+		. = ALIGN(4);
+		__tlsr8258_retained_start = .;
+		*(.tlsr8258_retained)
+		*(".tlsr8258_retained.*")
+		. = ALIGN(4);
+		__tlsr8258_retained_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+
+	ASSERT(__tlsr8258_retained_end - __tlsr8258_retained_start <= CONFIG_TLSR8258_PM_RETENTION_SIZE,
+	       "the variables marked __tlsr8258_retained do not fit CONFIG_TLSR8258_PM_RETENTION_SIZE")
+#endif
+
 #include <snippets-ram-sections.ld>
 
 	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
