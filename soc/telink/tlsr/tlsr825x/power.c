@@ -423,6 +423,26 @@ static uint32_t tlsr8258_pm_suspend_stall(uint32_t duration_ms)
 	return TLSR8258_STATUS_GPIO_ERR_NO_ENTER_PM;
 }
 
+#ifdef CONFIG_TLSR8258_PM_DEEP_RETENTION
+/*
+ * The SRAM to keep powered: the boot mirror, which the boot code runs from after
+ * the wake, and the retained application RAM behind it.
+ */
+#define TLSR8258_PM_RETAINED_END (CONFIG_TC32_BOOT_MIRROR_SIZE + CONFIG_TLSR8258_PM_RETENTION_SIZE)
+
+#if TLSR8258_PM_RETAINED_END <= 0x2000
+#define TLSR8258_PM_DEEP_MODE TLSR8258_PM_SLEEP_DEEP_RET_LOW8K
+#elif TLSR8258_PM_RETAINED_END <= 0x4000
+#define TLSR8258_PM_DEEP_MODE TLSR8258_PM_SLEEP_DEEP_RET_LOW16K
+#elif TLSR8258_PM_RETAINED_END <= 0x8000
+#define TLSR8258_PM_DEEP_MODE TLSR8258_PM_SLEEP_DEEP_RET_LOW32K
+#else
+#error "the boot mirror and the retained RAM do not fit in the 32 KiB the SoC can retain"
+#endif
+#else
+#define TLSR8258_PM_DEEP_MODE TLSR8258_PM_SLEEP_DEEP
+#endif
+
 static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 					uint32_t wakeup_tick, uint32_t wakeup_src)
 {
@@ -435,7 +455,8 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 	bool timer_wakeup = (wakeup_src & TLSR8258_PM_WAKEUP_TIMER_BITS) != 0u;
 	uint8_t wakeup_src_u8 = (uint8_t)wakeup_src;
 	uint16_t calib = tlsr8258_pm_calib;
-	bool deep = (sleep_mode == TLSR8258_PM_SLEEP_DEEP);
+	bool deep = (sleep_mode != TLSR8258_PM_SLEEP_SUSPEND);
+	bool retention = deep && (sleep_mode != TLSR8258_PM_SLEEP_DEEP);
 	bool wake_gate_ready;
 
 	if (timer_wakeup) {
@@ -516,12 +537,12 @@ static uint32_t tlsr8258_pm_enter_sleep(enum tlsr8258_pm_sleep_mode sleep_mode,
 						 4u);
 	}
 	tlsr8258_analog_write(TLSR8258_AREG_0X7E, (uint8_t)sleep_mode);
-	/* Both modes implemented here are non-retention: disable the SRAM
-	 * retention path (0x08) and mark "about to enter PM" for the analog
-	 * domain. DEEPSLEEP_MODE_RET_SRAM_LOW32K would skip this -- see
-	 * power.h's tlsr8258_pm_sleep_mode doc comment.
+	/*
+	 * SUSPEND and plain DEEP: disable the SRAM retention path (0x08). The
+	 * retention modes leave it enabled, so the SRAM stays powered, and mark
+	 * "about to enter PM" for the analog domain.
 	 */
-	TLSR8258_REG_PM_RET_SRAM_CTRL = 0x08u;
+	TLSR8258_REG_PM_RET_SRAM_CTRL = retention ? 0x00u : 0x08u;
 	tlsr8258_analog_write(TLSR8258_AREG_PM_STATUS, 1u);
 	if (deep) {
 		/* The vendor sets this before every deep sleep entry. */
@@ -659,7 +680,7 @@ static int tlsr8258_pm_enter_soft_off(void)
 		return -ENOTSUP;
 	}
 
-	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_DEEP, wakeup_tick, wakeup_src);
+	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_DEEP_MODE, wakeup_tick, wakeup_src);
 
 	/*
 	 * A successful entry never returns: wake is a reset. Reaching this line
@@ -763,7 +784,7 @@ int tlsr8258_pm_deep_sleep_for_ms(uint32_t duration_ms)
 		return -ENOTSUP;
 	}
 
-	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_SLEEP_DEEP, wakeup_tick, wakeup_src);
+	status = tlsr8258_pm_enter_sleep(TLSR8258_PM_DEEP_MODE, wakeup_tick, wakeup_src);
 
 	/*
 	 * A successful sleep normally never returns here: TLSR8258_PM_SLEEP_DEEP
