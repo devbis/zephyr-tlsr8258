@@ -166,7 +166,7 @@ extern const uint8_t zcl_group_attrNum;
  *
  * @return      Status
  */
-status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t arrtNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 /**
  * @brief       API to send Add command in Group cluster
