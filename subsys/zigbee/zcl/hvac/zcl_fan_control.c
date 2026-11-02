@@ -10,7 +10,7 @@
 _CODE_ZCL_ status_t zcl_fan_control_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum,
 					     const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-	return zcl_registerCluster(endpoint, ZCL_CLUSTER_HAVC_FAN_CONTROL, manuCode, attrNum,
+	return zcl_registerCluster(endpoint, ZCL_CLUSTER_HVAC_FAN_CONTROL, manuCode, attrNum,
 				   attrTbl, NULL, cb);
 }
 

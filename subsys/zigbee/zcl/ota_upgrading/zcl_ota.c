@@ -50,9 +50,9 @@
  */
 static status_t zcl_ota_cmdHandler(zclIncoming_t *pInMsg);
 
-_CODE_ZCL_ status_t zcl_ota_register(uint8_t endpoint, uint16_t manuCode, uint8_t arrtNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_ota_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    return zcl_registerCluster(endpoint, ZCL_CLUSTER_OTA, manuCode, arrtNum, attrTbl, zcl_ota_cmdHandler, cb);
+    return zcl_registerCluster(endpoint, ZCL_CLUSTER_OTA, manuCode, attrNum, attrTbl, zcl_ota_cmdHandler, cb);
 }
 
 _CODE_ZCL_ status_t zcl_ota_imageNotifySend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_imageNotify_t *pReq)
