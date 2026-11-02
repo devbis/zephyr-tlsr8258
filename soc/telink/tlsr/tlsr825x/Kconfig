@@ -60,8 +60,9 @@ config TLSR8258_PM_DEEP_RETENTION
 	  count time and remember what it last reported across the sleep. The
 	  retained SRAM draws about a microamp more than none.
 
-	  Unverified on hardware: the boot code relies on the boot mirror
-	  surviving the sleep.
+	  The sleep entry is the vendor's LOW32K sequence as reproduced in
+	  tlsr8258-hal, which woke on silicon. What is not verified here is the
+	  boot after the wake: it relies on the boot mirror surviving the sleep.
 
 config TLSR8258_PM_RETENTION_SIZE
 	int "Retained application RAM in bytes"
