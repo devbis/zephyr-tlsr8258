@@ -11,7 +11,7 @@ _CODE_ZCL_ status_t zcl_thermostat_ui_cfg_register(u8 endpoint, u16 manuCode, u8
 						   const zclAttrInfo_t attrTbl[],
 						   cluster_forAppCb_t cb)
 {
-	return zcl_registerCluster(endpoint, ZCL_CLUSTER_HAVC_USER_INTERFACE_CONFIG, manuCode,
+	return zcl_registerCluster(endpoint, ZCL_CLUSTER_HVAC_USER_INTERFACE_CONFIG, manuCode,
 				   attrNum, attrTbl, NULL, cb);
 }
 
