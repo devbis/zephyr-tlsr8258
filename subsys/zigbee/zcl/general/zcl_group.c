@@ -51,9 +51,9 @@
 static status_t zcl_group_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t arrtNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    return zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_GROUPS, manuCode, arrtNum, attrTbl, zcl_group_cmdHandler, cb);
+    return zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_GROUPS, manuCode, attrNum, attrTbl, zcl_group_cmdHandler, cb);
 }
 
 

@@ -134,7 +134,7 @@ typedef union {
     bothMode_t *pBothMode;
 } sequenceMode_t;
 
-#define HEAT_SERPOINT_FIELD_PRESENT     0x01
+#define HEAT_SETPOINT_FIELD_PRESENT     0x01
 #define COOL_SETPOINT_FIELD_PRESENT     0x02
 #define BOTH_SETPOINT_FIELD_PRESENT     0x03
 
@@ -171,7 +171,7 @@ typedef struct {
 } zcl_thermostat_getRelayStatusLogRspCmd_t;
 
 
-status_t zcl_thermostat_register(uint8_t endpoint, uint16_t manuCode, uint8_t arrtNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_thermostat_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 status_t zcl_thermostat_setpointRaiseLowerCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_setpointRaiseLowerCmd_t *pCmd);
 #define zcl_thermostat_setpointRaiseLowerCmdSend(a,b,c,d)       (zcl_thermostat_setpointRaiseLowerCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
