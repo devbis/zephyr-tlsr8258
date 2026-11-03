@@ -146,10 +146,7 @@ void nwk_leaveCmdSendCnf(void *arg, uint16_t dstAddr)
 {
 	addrExt_t extAddr;
 
-	ZB_IEEE_ADDR_INVALID(extAddr);
-	if (!ZB_NWK_IS_ADDRESS_BROADCAST(dstAddr)) {
-		(void)zb_address_ieee_by_short(dstAddr, extAddr);
-	}
+	nwk_leaveCnfAddr(extAddr, dstAddr);
 
 	nwk_nlmeLeaveCnf(arg, ((uint8_t *)arg)[9], extAddr);
 }
