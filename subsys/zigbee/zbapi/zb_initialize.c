@@ -7,6 +7,7 @@
 #include "zb_initialize.h"
 #include "second_clock.h"
 #include "ss_zdoSecurityME.h"
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 zb_info_t g_zbInfo = {0};
 aps_pib_attributes_t aps_ib = {0};
@@ -60,6 +61,8 @@ _attribute_no_inline_ void zb_nwkKeySet(void)
 void zb_reset(void)
 {
 	tl_zbMacReset();
+	/* the reset cleared the PIB, the device's own address with it */
+	zb_platform_apply_runtime_ieee_addr();
 	tl_zbNwkInit(1);
 	aps_init();
 #if defined(ZB_ROUTER_ROLE)
