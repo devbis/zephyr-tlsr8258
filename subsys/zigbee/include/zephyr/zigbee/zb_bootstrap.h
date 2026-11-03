@@ -74,6 +74,15 @@ void zb_platform_app_network_left(void);
 void zb_platform_network_left(void);
 
 /**
+ * @brief Put the device's own IEEE address into the MAC PIB.
+ *
+ * tl_zbMacReset() clears the PIB, the address with it; a device that does not put it back
+ * associates, after a leave, with an address of zeros, and the coordinator's answer never
+ * matches it.
+ */
+void zb_platform_apply_runtime_ieee_addr(void);
+
+/**
  * @brief Application hook for a device announcement.
  *
  * Called on a router or coordinator when a device announces itself. The
