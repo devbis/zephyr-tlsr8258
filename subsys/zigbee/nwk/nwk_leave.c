@@ -143,10 +143,7 @@ void nwk_leaveCmdSendCnf(void *arg, uint16_t dstAddr)
 {
 	addrExt_t extAddr;
 
-	ZB_IEEE_ADDR_INVALID(extAddr);
-	if (!ZB_NWK_IS_ADDRESS_BROADCAST(dstAddr)) {
-		(void)zb_address_ieee_by_short(dstAddr, extAddr);
-	}
+	nwk_leaveCnfAddr(extAddr, dstAddr);
 
 	nwk_nlmeLeaveCnf(arg, ((zb_mscp_data_conf_t *)arg)->status, extAddr);
 }
