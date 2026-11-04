@@ -11,11 +11,6 @@
 
 #include "zb_znp_internal.h"
 
-#define ZNP_NV_MAX_ITEMS 96U
-#define ZNP_NV_POOL_SIZE 3840U
-
-#define ZNP_NV_EXPORT_VERSION 1U
-
 struct znp_nv_item {
 	uint16_t id;
 	uint16_t len;
@@ -170,65 +165,49 @@ void znp_nv_reset(void)
 	generation++;
 }
 
-size_t znp_nv_export(uint8_t *buf, size_t max)
+size_t znp_nv_persist_count(void)
 {
-	size_t n = 2U;
+	size_t count = 0U;
 
-	if (max < n) {
-		return 0U;
+	for (uint8_t i = 0U; i < item_count; i++) {
+		if (!nv_is_derived(items[i].id)) {
+			count++;
+		}
 	}
 
-	buf[0] = ZNP_NV_EXPORT_VERSION;
-	buf[1] = 0U;
-	for (uint8_t i = 0; i < item_count; i++) {
-		const struct znp_nv_item *item = &items[i];
-
-		if (nv_is_derived(item->id)) {
-			continue;
-		}
-		if (n + 4U + item->len > max) {
-			return 0U;
-		}
-
-		(void)znp_put_u16(&buf[n], item->id);
-		(void)znp_put_u16(&buf[n + 2U], item->len);
-		memcpy(&buf[n + 4U], &pool[item->pool_off], item->len);
-		n += 4U + item->len;
-		buf[1]++;
-	}
-
-	return n;
+	return count;
 }
 
-bool znp_nv_import(const uint8_t *buf, size_t len)
+bool znp_nv_persist_get(size_t index, uint16_t *id, uint16_t *len, const uint8_t **data)
 {
-	size_t n = 2U;
-
-	if (len < n || buf[0] != ZNP_NV_EXPORT_VERSION) {
-		return false;
+	for (uint8_t i = 0U; i < item_count; i++) {
+		if (nv_is_derived(items[i].id)) {
+			continue;
+		}
+		if (index == 0U) {
+			*id = items[i].id;
+			*len = items[i].len;
+			*data = &pool[items[i].pool_off];
+			return true;
+		}
+		index--;
 	}
 
-	znp_nv_reset();
-	for (uint8_t i = 0; i < buf[1]; i++) {
-		uint16_t id;
-		uint16_t item_len;
+	return false;
+}
 
-		if (n + 4U > len) {
-			return false;
-		}
-		id = znp_get_u16(&buf[n]);
-		item_len = znp_get_u16(&buf[n + 2U]);
-		n += 4U;
-		if (n + item_len > len) {
-			return false;
-		}
+uint8_t *znp_nv_restore_item(uint16_t id, uint16_t len)
+{
+	static const uint8_t erased = 0xffU;
+	struct znp_nv_item *item;
 
-		(void)znp_nv_item_init(id, item_len, &buf[n], 0U);
-		(void)znp_nv_write(id, 0U, &buf[n], item_len);
-		n += item_len;
+	if (nv_find(id) != NULL || len == 0U ||
+	    znp_nv_item_init(id, len, &erased, 0U) != ZNP_STATUS_NV_ITEM_UNINIT) {
+		return NULL;
 	}
 
-	return true;
+	item = nv_find(id);
+	return (item != NULL) ? &pool[item->pool_off] : NULL;
 }
 
 uint8_t znp_nv_set_derived(uint16_t id, const uint8_t *data, size_t len)
