@@ -168,18 +168,22 @@ static inline bool znp_cmd_dispatch(const struct znp_cmd *table, size_t count, u
 }
 
 /* NV items (zb_znp_nv.c). */
+#define ZNP_NV_MAX_ITEMS 96U
+#define ZNP_NV_POOL_SIZE 2048U
+
 uint16_t znp_nv_length(uint16_t id);
 uint8_t znp_nv_item_init(uint16_t id, uint16_t len, const uint8_t *init, uint8_t init_len);
 uint8_t znp_nv_read(uint16_t id, uint16_t offset, uint8_t *out, size_t max, size_t *out_len);
 uint8_t znp_nv_write(uint16_t id, uint16_t offset, const uint8_t *data, size_t len);
 uint8_t znp_nv_delete(uint16_t id);
 void znp_nv_reset(void);
-#define ZNP_NV_EXPORT_MAX 4096U
 
 /* Counts changes the host made to items that are worth keeping. */
 uint32_t znp_nv_generation(void);
-size_t znp_nv_export(uint8_t *buf, size_t max);
-bool znp_nv_import(const uint8_t *buf, size_t len);
+size_t znp_nv_persist_count(void);
+bool znp_nv_persist_get(size_t index, uint16_t *id, uint16_t *len,
+			const uint8_t **data);
+uint8_t *znp_nv_restore_item(uint16_t id, uint16_t len);
 /* Store a stack-owned value, creating or resizing the item; not a host change. */
 uint8_t znp_nv_set_derived(uint16_t id, const uint8_t *data, size_t len);
 
