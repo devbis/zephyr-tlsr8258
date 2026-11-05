@@ -10,6 +10,7 @@ from pathlib import Path
 
 from elftools.elf.elffile import ELFFile
 
+# The XIP window of the image; the defaults are the application's, a loader passes its own (--xip-base, --xip-end)
 FLASH_BASE = 0x11010100
 FLASH_ORIGIN = 0x11000000
 FLASH_END = 0x11030000
@@ -96,7 +97,7 @@ def make_image(elf):
     image.extend(b"\xff" * (-len(image) % 4))
     descriptor_offset = IMAGE_OFFSET + len(image)
     image.extend(descriptor)
-    if IMAGE_OFFSET + len(image) > 0x30000:
+    if FLASH_ORIGIN + IMAGE_OFFSET + len(image) > FLASH_END:
         raise ValueError("image and descriptor exceed the application slot")
 
     struct.pack_into("<I", image, 0, len(segments) + 1)
@@ -112,10 +113,14 @@ def make_image(elf):
 
 
 def main():
+    global FLASH_BASE, FLASH_END
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("elf", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--xip-base", type=lambda v: int(v, 0), default=FLASH_BASE)
+    parser.add_argument("--xip-end", type=lambda v: int(v, 0), default=FLASH_END)
     args = parser.parse_args()
+    FLASH_BASE, FLASH_END = args.xip_base, args.xip_end
     with args.elf.open("rb") as source:
         elf = ELFFile(source)
         validate_ram_functions(elf)
