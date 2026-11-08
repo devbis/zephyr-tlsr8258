@@ -232,6 +232,16 @@ jobs:
             --gnu-toolchains riscv64-zephyr-elf
           echo "ZEPHYR_SDK_INSTALL_DIR=$install_dir" >> "$GITHUB_ENV"
 
+      - name: Install BL702 image packer
+        if: matrix.soc == 'bl702'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_venv="$RUNNER_TEMP/bflb-mcu-tool"
+          python -m venv "$tool_venv"
+          "$tool_venv/bin/python" -m pip install --disable-pip-version-check 'bflb-mcu-tool==1.10.0'
+          echo "BFLB_MCU_TOOL_PYTHON=$tool_venv/bin/python" >> "$GITHUB_ENV"
+
       - name: Build firmware
         shell: bash
         env:
@@ -328,6 +338,57 @@ jobs:
           install -m 0644 "$firmware" \
             "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
 
+          if [[ "$SOC" == bl702 ]]; then
+            tool_root="$("$BFLB_MCU_TOOL_PYTHON" -c 'import pathlib, bflb_mcu_tool; print(pathlib.Path(bflb_mcu_tool.__file__).resolve().parent)')"
+            # bflb-mcu-tool takes the flash from the packaged configuration, with
+            # no option to override it. Select the KH25V80 (ID c22014) of the
+            # board: the loader configuration names it, and the boot header must
+            # not keep the default manufacturer ID 0xff, which makes the tool
+            # leave the generic flash settings in place.
+            "$BFLB_MCU_TOOL_PYTHON" - "$tool_root/chips/bl702" <<'PY'
+          import configparser
+          import pathlib
+          import sys
+
+          chip = pathlib.Path(sys.argv[1])
+
+
+          def rewrite(name, section, option, value, destination=None):
+              source = chip / name
+              config = configparser.ConfigParser()
+              if not config.read(source) or not config.has_section(section):
+                  raise SystemExit(f"Missing BL702 configuration: {source}")
+              config.set(section, option, value)
+              with open(destination or source, "w", encoding="utf-8") as stream:
+                  config.write(stream)
+
+
+          rewrite("eflash_loader/eflash_loader_cfg.conf", "FLASH_CFG", "flash_id", "c22014",
+                  chip / "eflash_loader/eflash_loader_cfg.ini")
+          rewrite("efuse_bootheader/efuse_bootheader_cfg.conf", "BOOTHEADER_CFG", "mfg_id", "0xc2")
+          PY
+            "$RUNNER_TEMP/bflb-mcu-tool/bin/bflb-mcu-tool" \
+              --chipname=bl702 \
+              --xtal=32M \
+              --firmware="$firmware" \
+              --build
+
+            bflb_firmware="$tool_root/chips/bl702/img_create_mcu/whole_img.bin"
+            test -s "$bflb_firmware"
+            "$BFLB_MCU_TOOL_PYTHON" - "$bflb_firmware" <<'PY'
+          import pathlib
+          import sys
+
+          image = pathlib.Path(sys.argv[1]).read_bytes()
+          if image[:4] != b"BFNP":
+              raise SystemExit("BL702 BFLB image is missing the BFNP boot header")
+          if image[0x19] != 0xC2:
+              raise SystemExit("BL702 BFLB image does not carry the KH25V80 flash settings")
+          PY
+            install -m 0644 "$bflb_firmware" \
+              "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
+          fi
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -382,6 +443,8 @@ jobs:
           The release contains router, end-device, and coordinator images for TLSR8258,
           nRF52840, ESP32-C6, ESP32-H2, and BL702 (dt_xt_zb1_devkit), and router, end-device,
           and coordinator images for EFR32MG21 (slwrb4180a) and Ai-Thinker PB-03F (PHY6252).
+          The BL702 `.bin` files include the native BFNP boot header and can be programmed over UART
+          with `bflb-mcu-tool` (`--chipname=bl702 --xtal=32M`).
           The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
           and ZHA.
           The end devices for TLSR8258 and BL702 are sleepy: they deep sleep between parent polls.
