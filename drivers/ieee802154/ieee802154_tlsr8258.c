@@ -264,26 +264,11 @@ static tlsr8258_rx_notify_t tlsr8258_rx_notify;
  * runs, which clears radio_data. Keep them outside radio_data so init can
  * apply them.
  */
-static uint8_t tlsr8258_filter_pan_id_shadow[TLSR8258_PAN_ID_SIZE] = {0xffu, 0xffu};
-static uint8_t tlsr8258_filter_short_addr_shadow[TLSR8258_SHORT_ADDR_SIZE] = {0xffu, 0xffu};
-static uint8_t tlsr8258_filter_ieee_addr_shadow[TLSR8258_IEEE_ADDR_SIZE];
 static uint16_t tlsr8258_channel_shadow = 11u;
 
 void tlsr8258_radio_register_rx_notify(tlsr8258_rx_notify_t notify)
 {
 	tlsr8258_rx_notify = notify;
-}
-
-int tlsr8258_radio_get_ieee_addr(uint8_t ieee_addr[8])
-{
-	const struct tlsr8258_radio_data *radio = &tlsr8258_radio_data_0;
-
-	if (radio->iface == NULL) {
-		return -EAGAIN;
-	}
-
-	memcpy(ieee_addr, radio->mac_addr, TLSR8258_IEEE_ADDR_SIZE);
-	return 0;
 }
 
 /*
@@ -304,27 +289,6 @@ bool tlsr8258_radio_ack_frame_pending_get(uint8_t seq, bool *pending)
 
 	*pending = tlsr8258_last_ack_fp;
 	return true;
-}
-
-void tlsr8258_radio_update_filters(uint16_t pan_id, uint16_t short_addr, const uint8_t *ieee_addr)
-{
-	struct tlsr8258_radio_data *radio = &tlsr8258_radio_data_0;
-
-	sys_put_le16(pan_id, tlsr8258_filter_pan_id_shadow);
-	sys_put_le16(short_addr, tlsr8258_filter_short_addr_shadow);
-	if (ieee_addr != NULL) {
-		memcpy(tlsr8258_filter_ieee_addr_shadow, ieee_addr, TLSR8258_IEEE_ADDR_SIZE);
-	}
-
-	if (radio == NULL) {
-		return;
-	}
-
-	sys_put_le16(pan_id, radio->filter_pan_id);
-	sys_put_le16(short_addr, radio->filter_short_addr);
-	if (ieee_addr != NULL) {
-		memcpy(radio->filter_ieee_addr, ieee_addr, TLSR8258_IEEE_ADDR_SIZE);
-	}
 }
 
 static void tlsr8258_load_tbl(const struct tblcmdset *tbl, size_t len)
@@ -2074,10 +2038,8 @@ static int tlsr8258_init(const struct device *dev)
 	}
 
 	memset(radio, 0, sizeof(*radio));
-	memcpy(radio->filter_pan_id, tlsr8258_filter_pan_id_shadow, TLSR8258_PAN_ID_SIZE);
-	memcpy(radio->filter_short_addr, tlsr8258_filter_short_addr_shadow,
-	       TLSR8258_SHORT_ADDR_SIZE);
-	memcpy(radio->filter_ieee_addr, tlsr8258_filter_ieee_addr_shadow, TLSR8258_IEEE_ADDR_SIZE);
+	memset(radio->filter_pan_id, 0xff, TLSR8258_PAN_ID_SIZE);
+	memset(radio->filter_short_addr, 0xff, TLSR8258_SHORT_ADDR_SIZE);
 	tlsr8258_radio_current_channel_set(radio, tlsr8258_channel_shadow);
 
 	if (!tlsr8258_rx_queue_init(&radio->rx_queue, radio->rx_slots, TLSR8258_RX_SLOT_COUNT)) {

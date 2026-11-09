@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/ieee802154/native_sim_socket.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_radio.h>
@@ -130,29 +129,6 @@ int zb_radio_port_set_trx_state(enum zb_radio_port_trx_state state,
 	return (rc == -EALREADY) ? 0 : rc;
 }
 
-/* MAC deadlines are in clock_time() units, which count microseconds here. */
-uint32_t sysTimerPerUs = 1U;
-
-uint32_t zb_radio_port_clock_time_us(void)
-{
-	return (uint32_t)k_ticks_to_us_floor32(k_uptime_ticks());
-}
-
-bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us)
-{
-	return (uint32_t)(zb_radio_port_clock_time_us() - ref_us) > span_us;
-}
-
-uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
-{
-	return delta_us;
-}
-
-void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
-{
-	zb_radio_l2_register_rx_sink(sink);
-}
-
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr)
 {
@@ -190,11 +166,3 @@ void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 		}
 	}
 }
-
-#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET)
-/* The socket driver has no RX thread; drain it from the Zigbee thread. */
-void zb_platform_radio_rx_poll(void)
-{
-	ieee802154_native_sim_socket_poll();
-}
-#endif
