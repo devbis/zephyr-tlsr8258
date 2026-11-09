@@ -144,27 +144,9 @@ uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 	return delta_us / TLSR8258_SYSTEM_TICK_CYCLES_PER_US;
 }
 
-static zb_radio_port_rx_sink_t zb_tlsr_rx_sink;
-
-static int zb_radio_port_tlsr8258_rx(const struct tlsr8258_rx_frame_view *frame)
-{
-	const struct zb_radio_rx_frame_view view = {
-		.dma = frame->dma,
-		.len = frame->len,
-		.rssi_dbm = frame->rssi_dbm,
-	};
-
-	if (zb_tlsr_rx_sink == NULL) {
-		return -ENOSYS;
-	}
-
-	return zb_tlsr_rx_sink(&view);
-}
-
 void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
 {
-	zb_tlsr_rx_sink = sink;
-	tlsr8258_radio_register_rx_sink((sink != NULL) ? zb_radio_port_tlsr8258_rx : NULL);
+	zb_radio_l2_register_rx_sink(sink);
 	tlsr8258_radio_register_rx_notify((sink != NULL) ? zb_platform_wake : NULL);
 }
 
