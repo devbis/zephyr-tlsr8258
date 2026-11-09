@@ -547,6 +547,14 @@ config ZIGBEE_AES_SOFTWARE
 
 config ZIGBEE_RADIO_PORT_GENERIC
 	bool
-	depends on NET_L2_CUSTOM_IEEE802154 && !IEEE802154_TELINK_TLSR8258 && !IEEE802154_TELINK_TLSR8269
+	depends on NET_L2_CUSTOM_IEEE802154 && !IEEE802154_TELINK_TLSR8269
 	select ZIGBEE_RADIO_PORT
 	default y
+
+config ZIGBEE_RADIO_PORT_GENERIC_HOOKS
+	bool
+	depends on ZIGBEE_RADIO_PORT_GENERIC && !IEEE802154_TELINK_TLSR8258
+	default y
+	help
+	  The MAC clock and the receive delivery of the generic port. Radios
+	  that need their own provide them in a port file instead.
