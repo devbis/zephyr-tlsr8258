@@ -150,6 +150,8 @@ struct tlsr8258_radio_data {
 	struct tlsr8258_rx_slot rx_slots[TLSR8258_RX_SLOT_COUNT];
 	bool started;
 	bool promiscuous;
+	/* Frame Pending in the ACK of every Data Request, the Zigbee rule. */
+	bool auto_ack_fpb;
 };
 
 /*
@@ -255,6 +257,16 @@ static inline bool tlsr8258_ack_tx_pending_get(struct tlsr8258_radio_data *radio
 static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *radio)
 {
 	return *(volatile uint8_t *)&radio->promiscuous != 0u;
+}
+
+static inline void tlsr8258_radio_auto_ack_fpb_set(struct tlsr8258_radio_data *radio, bool enabled)
+{
+	*(volatile uint8_t *)&radio->auto_ack_fpb = enabled ? 1u : 0u;
+}
+
+static inline bool tlsr8258_radio_auto_ack_fpb_get(struct tlsr8258_radio_data *radio)
+{
+	return *(volatile uint8_t *)&radio->auto_ack_fpb != 0u;
 }
 
 /* Given from the RF interrupt for every queued frame, taken by the RX thread. */
@@ -576,6 +588,26 @@ static uint8_t tlsr8258_mac_hdr_size(uint16_t fcf, uint8_t psdu_len)
 	return (idx <= psdu_len) ? idx : 0u;
 }
 
+/* A MAC command frame whose command is Data Request (0x04). */
+static bool tlsr8258_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len)
+{
+	uint16_t fcf;
+	uint8_t hdr;
+
+	if (psdu_len < 3u) {
+		return false;
+	}
+
+	fcf = sys_get_le16(psdu);
+	if ((fcf & 0x07u) != 0x03u) {
+		return false;
+	}
+
+	hdr = tlsr8258_mac_hdr_size(fcf, psdu_len);
+
+	return (hdr != 0u) && (hdr < psdu_len) && (psdu[hdr] == 0x04u);
+}
+
 /*
  * self-originated / src-matches-local / data-req / beacon-req helpers moved to
  * tlsr8258_core_* in ieee802154_tlsr8258_fake_phy_core.h and are now driven via
@@ -812,6 +844,11 @@ static void tlsr8258_send_ack_if_needed(const uint8_t *payload, uint8_t length, 
 	ack_psdu[0] = 0x02u;
 	ack_psdu[1] = 0x00u;
 	ack_psdu[2] = payload[2];
+	if (tlsr8258_radio_auto_ack_fpb_get(radio) &&
+	    tlsr8258_psdu_is_data_request(payload, length)) {
+		/* The radio cannot tell in the turnaround time whether data is pending. */
+		ack_psdu[0] |= TLSR8258_FRAME_PENDING;
+	}
 	if (tlsr8258_set_tx_payload_to(radio->ack_buffer, ack_psdu, sizeof(ack_psdu)) < 0) {
 		if (tx_prepared) {
 			tlsr8258_rf_set_rxmode_vendor();
@@ -2020,6 +2057,16 @@ static int tlsr8258_configure(const struct device *dev, enum ieee802154_config_t
 
 	if (type == IEEE802154_CONFIG_PROMISCUOUS) {
 		tlsr8258_radio_promiscuous_set(radio, config->promiscuous);
+		return 0;
+	}
+
+	if (type == IEEE802154_CONFIG_AUTO_ACK_FPB) {
+		if (config->auto_ack_fpb.enabled &&
+		    (config->auto_ack_fpb.mode != IEEE802154_FPB_ADDR_MATCH_ZIGBEE)) {
+			return -ENOTSUP;
+		}
+
+		tlsr8258_radio_auto_ack_fpb_set(radio, config->auto_ack_fpb.enabled);
 		return 0;
 	}
 
