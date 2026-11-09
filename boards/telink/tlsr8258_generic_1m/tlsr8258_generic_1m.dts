@@ -17,6 +17,7 @@
 	};
 
 	chosen {
+		zephyr,entropy = &rng;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash;
 		zephyr,console = &uart0;
@@ -73,5 +74,9 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&rng {
 	status = "okay";
 };
