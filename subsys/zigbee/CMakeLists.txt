@@ -156,6 +156,9 @@ zephyr_library_sources_ifdef(CONFIG_NET_L2_CUSTOM_IEEE802154
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC
   platform/zephyr/zb_radio_port_generic.c
 )
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC_HOOKS
+  platform/zephyr/zb_radio_port_generic_hooks.c
+)
 
 # Common utilities
 zephyr_library_sources(
