@@ -11,10 +11,9 @@
  * rf_tx_irq_handler, rf_mac_ack_build).
  *
  * Received frames are checked, filtered against the PAN, short and IEEE
- * address set through tlsr8269_radio_update_filters(), acknowledged when the
- * frame requests it, and queued for tlsr8269_radio_rx_poll(), which hands them
- * to the registered sink in the Zigbee L2 layout. The Zephyr network-stack
- * path (NET_L2_IEEE802154) is not implemented; it is only the raw-mode entry.
+ * address set through the filter API, acknowledged when the frame requests
+ * it, and queued for the RX thread, which hands them to the network stack
+ * through net_recv_data().
  */
 
 #define DT_DRV_COMPAT telink_tlsr8269_zb
@@ -25,7 +24,6 @@
 #include <string.h>
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/ieee802154/tlsr8269.h>
 #include <zephyr/drivers/flash.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
@@ -92,7 +90,9 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8269, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define TLSR8269_TX_BUF_SIZE        (TLSR8269_TX_HDR_LEN + TLSR8269_PHY_MAX_PSDU)
 #define TLSR8269_ACK_BUF_SIZE       12u
 #define TLSR8269_RX_QUEUE_DEPTH     4u
-#define TLSR8269_RX_FRAME_MAX       (TLSR8269_RX_FRAME_PSDU_OFFSET + TLSR8269_PHY_MAX_PSDU)
+#define TLSR8269_RX_PSDU_MAX        (TLSR8269_PHY_MAX_PSDU - TLSR8269_FCS_LEN)
+#define TLSR8269_RSSI_TO_LQI_MIN    -87
+#define TLSR8269_RSSI_TO_LQI_SCALE  3
 #define TLSR8269_TX_TIMEOUT_MS      10u
 #define TLSR8269_ACK_TX_WAIT_US     120u
 #define TLSR8269_ACK_TX_DONE_US     1000u
@@ -203,7 +203,7 @@ static void tlsr8269_rf_init(void)
 
 
 struct tlsr8269_rx_slot {
-	uint8_t dma[TLSR8269_RX_FRAME_MAX];
+	uint8_t psdu[TLSR8269_RX_PSDU_MAX];
 	uint8_t len;
 	int8_t rssi_dbm;
 };
@@ -225,8 +225,9 @@ struct tlsr8269_radio_data {
 };
 
 static struct tlsr8269_radio_data tlsr8269_radio_data_0;
-static tlsr8269_rx_sink_t tlsr8269_rx_sink;
-static tlsr8269_rx_notify_t tlsr8269_rx_notify;
+
+/* Given from the RF interrupt for every queued frame, taken by the RX thread. */
+static K_SEM_DEFINE(tlsr8269_rx_sem, 0, 1);
 
 
 /* Vendor RF_TrxStateSet(): retune to a physical offset (MHz - 2400). */
@@ -410,10 +411,8 @@ static void tlsr8269_rx_queue_push(struct tlsr8269_radio_data *data, const uint8
 	idx = (uint8_t)((data->rx_head + data->rx_count) % TLSR8269_RX_QUEUE_DEPTH);
 	slot = &data->rx_queue[idx];
 
-	memset(slot->dma, 0, TLSR8269_RX_FRAME_PSDU_OFFSET);
-	slot->dma[4] = phy_len;
-	memcpy(&slot->dma[TLSR8269_RX_FRAME_PSDU_OFFSET], &p[TLSR8269_RX_HDR_LEN], phy_len);
-	slot->len = (uint8_t)(TLSR8269_RX_FRAME_PSDU_OFFSET + phy_len);
+	slot->len = (uint8_t)(phy_len - TLSR8269_FCS_LEN);
+	memcpy(slot->psdu, &p[TLSR8269_RX_HDR_LEN], slot->len);
 	slot->rssi_dbm = (int8_t)(p[4] - 110);
 	data->rx_count++;
 }
@@ -445,10 +444,7 @@ static void tlsr8269_rx_handle(struct tlsr8269_radio_data *data)
 
 	tlsr8269_rx_queue_push(data, p, phy_len);
 	tlsr8269_rx_rearm(data);
-
-	if (tlsr8269_rx_notify != NULL) {
-		tlsr8269_rx_notify();
-	}
+	k_sem_give(&tlsr8269_rx_sem);
 }
 
 /*
@@ -470,33 +466,59 @@ static void tlsr8269_rf_isr(const void *arg)
 	}
 }
 
-void tlsr8269_radio_register_rx_sink(tlsr8269_rx_sink_t sink)
+static uint8_t tlsr8269_lqi_from_rssi(int8_t rssi)
 {
-	tlsr8269_rx_sink = sink;
+	int32_t lqi;
+
+	if (rssi < TLSR8269_RSSI_TO_LQI_MIN) {
+		return 0u;
+	}
+
+	lqi = TLSR8269_RSSI_TO_LQI_SCALE * (rssi - TLSR8269_RSSI_TO_LQI_MIN);
+	return (uint8_t)MIN(lqi, 0xff);
 }
 
-void tlsr8269_radio_register_rx_notify(tlsr8269_rx_notify_t notify)
+static void tlsr8269_rx_deliver(struct tlsr8269_radio_data *data,
+				const struct tlsr8269_rx_slot *slot)
 {
-	tlsr8269_rx_notify = notify;
+	struct net_pkt *pkt;
+
+	if (data->iface == NULL) {
+		return;
+	}
+
+	pkt = net_pkt_rx_alloc_with_buffer(data->iface, slot->len, NET_AF_UNSPEC, 0, K_NO_WAIT);
+	if (pkt == NULL) {
+		return;
+	}
+
+	if (net_pkt_write(pkt, slot->psdu, slot->len) < 0) {
+		net_pkt_unref(pkt);
+		return;
+	}
+
+	net_pkt_set_ieee802154_rssi_dbm(pkt, slot->rssi_dbm);
+	net_pkt_set_ieee802154_lqi(pkt, tlsr8269_lqi_from_rssi(slot->rssi_dbm));
+
+	if (net_recv_data(data->iface, pkt) < 0) {
+		net_pkt_unref(pkt);
+	}
 }
 
-void tlsr8269_radio_rx_poll(void)
+/* Runs only in the RX thread, the single consumer of rx_queue. */
+static void tlsr8269_rx_drain(struct tlsr8269_radio_data *data)
 {
 	struct tlsr8269_rx_slot local;
-	struct tlsr8269_rx_frame_view view;
 	bool have;
 
 	for (;;) {
 		unsigned int key = irq_lock();
 
-		have = tlsr8269_radio_data_0.rx_count > 0u;
+		have = data->rx_count > 0u;
 		if (have) {
-			memcpy(&local, &tlsr8269_radio_data_0.rx_queue[tlsr8269_radio_data_0.rx_head],
-			       sizeof(local));
-			tlsr8269_radio_data_0.rx_head =
-				(uint8_t)((tlsr8269_radio_data_0.rx_head + 1u) %
-					  TLSR8269_RX_QUEUE_DEPTH);
-			tlsr8269_radio_data_0.rx_count--;
+			memcpy(&local, &data->rx_queue[data->rx_head], sizeof(local));
+			data->rx_head = (uint8_t)((data->rx_head + 1u) % TLSR8269_RX_QUEUE_DEPTH);
+			data->rx_count--;
 		}
 		irq_unlock(key);
 
@@ -504,26 +526,24 @@ void tlsr8269_radio_rx_poll(void)
 			break;
 		}
 
-		if (tlsr8269_rx_sink != NULL) {
-			view.dma = local.dma;
-			view.len = local.len;
-			view.rssi_dbm = local.rssi_dbm;
-			(void)tlsr8269_rx_sink(&view);
-		}
+		tlsr8269_rx_deliver(data, &local);
 	}
 }
 
-void tlsr8269_radio_update_filters(uint16_t pan_id, uint16_t short_addr, const uint8_t *ieee_addr)
+static void tlsr8269_rx_thread(void *p1, void *p2, void *p3)
 {
-	unsigned int key = irq_lock();
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
 
-	tlsr8269_radio_data_0.pan_id = pan_id;
-	tlsr8269_radio_data_0.short_addr = short_addr;
-	if (ieee_addr != NULL) {
-		memcpy(tlsr8269_radio_data_0.ieee_addr, ieee_addr, sizeof(tlsr8269_radio_data_0.ieee_addr));
+	while (true) {
+		k_sem_take(&tlsr8269_rx_sem, K_FOREVER);
+		tlsr8269_rx_drain(&tlsr8269_radio_data_0);
 	}
-	irq_unlock(key);
 }
+
+K_THREAD_DEFINE(tlsr8269_rx, CONFIG_IEEE802154_TLSR8269_RX_STACK_SIZE, tlsr8269_rx_thread, NULL,
+		NULL, NULL, K_PRIO_PREEMPT(CONFIG_IEEE802154_TLSR8269_RX_PRIO), 0, 0);
 
 /* Persistent IEEE address from the ieee-addr partition; generated once when erased. */
 static void tlsr8269_ieee_addr_load(uint8_t mac[8])
@@ -565,16 +585,6 @@ static void tlsr8269_ieee_addr_load(uint8_t mac[8])
 	sys_rand_get(mac, 8);
 	mac[0] = (mac[0] & (uint8_t)~BIT(0)) | BIT(1);
 #endif
-}
-
-int tlsr8269_radio_get_ieee_addr(uint8_t ieee_addr[8])
-{
-	if (ieee_addr == NULL) {
-		return -EINVAL;
-	}
-
-	memcpy(ieee_addr, tlsr8269_radio_data_0.ieee_addr, 8);
-	return 0;
 }
 
 

@@ -15,4 +15,20 @@ config IEEE802154_TLSR8269_INIT_PRIO
 	int "TLSR8269 IEEE 802.15.4 initialization priority"
 	default 80
 
+config IEEE802154_TLSR8269_RX_STACK_SIZE
+	int "TLSR8269 RX thread stack size"
+	default 1024
+	help
+	  Stack of the thread that hands received frames to the network
+	  stack. The L2 receive path runs in it.
+
+config IEEE802154_TLSR8269_RX_PRIO
+	int "TLSR8269 RX thread priority"
+	default 4
+	range 0 NUM_PREEMPT_PRIORITIES
+	help
+	  Preemptive priority of the RX thread. Keep it above the thread that
+	  consumes the frames, so that a frame is handed over as soon as it is
+	  received.
+
 endif # IEEE802154_TELINK_TLSR8269
