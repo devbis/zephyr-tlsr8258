@@ -65,9 +65,7 @@ static struct zb_radio_ctx g_radio;
 static u8 zb_radio_legacy_rx_buf[8];
 
 static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
-static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len, const uint8_t **psdu,
-				    uint8_t *psdu_len);
-static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t rssi_dbm);
+static int zb_radio_process_rx_frame(const uint8_t *psdu, uint8_t len, int8_t rssi_dbm);
 extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
 extern void zb_macDataSendHandler(void);
 extern void mac_trxTask(void *arg);
@@ -429,7 +427,7 @@ static bool zb_radio_live_rssi_sample(s8 *rssi)
 static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 {
 	int16_t rssi_clamped;
-	const uint8_t *rx_dma;
+	const uint8_t *rx_psdu;
 	uint8_t rx_len;
 	int8_t rssi_dbm;
 	int rc;
@@ -442,18 +440,18 @@ static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 		return -EINVAL;
 	}
 
-	rx_dma = frame->dma;
+	rx_psdu = frame->psdu;
 	rx_len = frame->len;
 	rssi_dbm = frame->rssi_dbm;
 
-	if ((rx_dma == NULL) || (rx_len == 0U)) {
+	if ((rx_psdu == NULL) || (rx_len == 0U)) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
-		LOG_DBG("RX callback ignored invalid frame (buf=%p len=%u)", rx_dma, rx_len);
+		LOG_DBG("RX callback ignored invalid frame (buf=%p len=%u)", rx_psdu, rx_len);
 		return -EINVAL;
 	}
 
-	rc = zb_radio_process_rx_frame(rx_dma, rx_len, rssi_dbm);
+	rc = zb_radio_process_rx_frame(rx_psdu, rx_len, rssi_dbm);
 	if (rc < 0) {
 		atomic_inc(&g_radio.rx_drop_count);
 		zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_INVALID_RX);
@@ -476,27 +474,40 @@ static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 	return 0;
 }
 
-static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t rssi_dbm)
+/*
+ * The vendor MAC receive entry takes the frame in the TLSR8258 RF DMA layout:
+ * a 5-byte header whose last byte is the PHY length (PSDU plus FCS), the PSDU,
+ * and a 2-byte status trailer. The radio ports hand over the bare PSDU, so
+ * build that layout here, the only place that needs it.
+ */
+#define ZB_RADIO_RX_DMA_HDR_LEN     5U
+#define ZB_RADIO_RX_DMA_PHY_LEN_OFS 4U
+#define ZB_RADIO_RX_DMA_TRAILER_LEN 2U
+#define ZB_RADIO_RX_FCS_LEN         2U
+#define ZB_RADIO_RX_PSDU_MAX        (127U - ZB_RADIO_RX_FCS_LEN)
+
+static int zb_radio_process_rx_frame(const uint8_t *psdu_in, uint8_t len, int8_t rssi_dbm)
 {
-	const uint8_t *psdu = NULL;
-	uint8_t psdu_len = 0U;
+	uint8_t dma_buf[ZB_RADIO_RX_DMA_HDR_LEN + ZB_RADIO_RX_PSDU_MAX +
+			ZB_RADIO_RX_DMA_TRAILER_LEN];
+	const uint8_t *dma = dma_buf;
+	const uint8_t *psdu;
+	uint8_t psdu_len;
 	uint8_t mac_len;
 	u8 ack_pkt;
 
-	if ((dma == NULL) || (dma_len == 0U)) {
+	if ((psdu_in == NULL) || (len == 0U) || (len > ZB_RADIO_RX_PSDU_MAX)) {
 		return -EINVAL;
 	}
 
+	memset(dma_buf, 0, ZB_RADIO_RX_DMA_HDR_LEN);
+	dma_buf[ZB_RADIO_RX_DMA_PHY_LEN_OFS] = len + ZB_RADIO_RX_FCS_LEN;
+	memcpy(&dma_buf[ZB_RADIO_RX_DMA_HDR_LEN], psdu_in, len);
+	memset(&dma_buf[ZB_RADIO_RX_DMA_HDR_LEN + len], 0, ZB_RADIO_RX_DMA_TRAILER_LEN);
+	psdu = &dma_buf[ZB_RADIO_RX_DMA_HDR_LEN];
+	/* The MAC entry point takes a length that includes the FCS and strips it. */
+	psdu_len = len + ZB_RADIO_RX_FCS_LEN;
 	atomic_set(&g_radio.rx_done, 1);
-	if (zb_radio_extract_rx_psdu(dma, dma_len, &psdu, &psdu_len) < 0) {
-		return -EINVAL;
-	}
-	/*
-	 * zb_radio_extract_rx_psdu() returns the DMA length field, which already
-	 * counts the two FCS bytes the MAC entry point strips.  Adding them again
-	 * left every frame two bytes too long, which only shows up where the
-	 * length is authenticated: the APS Transport-Key failed its CCM check.
-	 */
 	mac_len = psdu_len;
 
 #if defined(ZB_ROUTER_ROLE)
@@ -529,45 +540,6 @@ static int zb_radio_process_rx_frame(const uint8_t *dma, uint8_t dma_len, int8_t
 		dma = frame;
 	}
 	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, mac_len, ack_pkt, 0U, rssi_dbm);
-	return 0;
-}
-
-static int zb_radio_extract_rx_psdu(const uint8_t *dma, uint8_t dma_len, const uint8_t **psdu,
-				    uint8_t *psdu_len)
-{
-	uint8_t payload_len;
-	uint8_t fallback_len;
-	uint8_t available_len;
-
-	if ((dma == NULL) || (psdu == NULL) || (psdu_len == NULL) || (dma_len < 7U)) {
-		return -EINVAL;
-	}
-
-	payload_len = dma[4];
-	available_len = (uint8_t)(dma_len - 5U);
-	if ((payload_len < 2U) || (payload_len > available_len)) {
-		if (dma[0] < 9U) {
-			return -EINVAL;
-		}
-
-		fallback_len = (uint8_t)(dma[0] - 9U);
-		if ((fallback_len < 2U) || (fallback_len > available_len)) {
-			return -EINVAL;
-		}
-
-		payload_len = fallback_len;
-	}
-
-	if (payload_len > available_len) {
-		return -EINVAL;
-	}
-
-	/*
-	 * The legacy MAC callback receives a length including FCS and removes
-	 * those bytes before parsing the frame.
-	 */
-	*psdu = &dma[5];
-	*psdu_len = payload_len;
 	return 0;
 }
 
