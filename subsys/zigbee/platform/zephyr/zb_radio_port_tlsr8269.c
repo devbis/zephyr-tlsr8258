@@ -145,17 +145,44 @@ uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 
 static zb_radio_port_rx_sink_t zb_tlsr_rx_sink;
 
+/*
+ * The RF DMA buffer has a 5-byte header whose byte 4 is the PHY length (PSDU
+ * plus FCS) in front of the PSDU; hand the stack the bare PSDU.
+ */
 static int zb_radio_port_tlsr8269_rx(const struct tlsr8269_rx_frame_view *frame)
 {
-	const struct zb_radio_rx_frame_view view = {
-		.dma = frame->dma,
-		.len = frame->len,
-		.rssi_dbm = frame->rssi_dbm,
-	};
+	const uint8_t *dma = frame->dma;
+	uint8_t payload_len;
+	uint8_t available_len;
+	struct zb_radio_rx_frame_view view;
 
 	if (zb_tlsr_rx_sink == NULL) {
 		return -ENOSYS;
 	}
+	if ((dma == NULL) || (frame->len < 7U)) {
+		return -EINVAL;
+	}
+
+	payload_len = dma[4];
+	available_len = (uint8_t)(frame->len - 5U);
+	if ((payload_len < 2U) || (payload_len > available_len)) {
+		uint8_t fallback_len;
+
+		if (dma[0] < 9U) {
+			return -EINVAL;
+		}
+
+		fallback_len = (uint8_t)(dma[0] - 9U);
+		if ((fallback_len < 2U) || (fallback_len > available_len)) {
+			return -EINVAL;
+		}
+
+		payload_len = fallback_len;
+	}
+
+	view.psdu = &dma[5];
+	view.len = payload_len - 2U;
+	view.rssi_dbm = frame->rssi_dbm;
 
 	return zb_tlsr_rx_sink(&view);
 }
