@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/ieee802154/tlsr8258.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/linker/section_tags.h>
@@ -90,6 +89,7 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8258, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 	((uint32_t)TLSR8258_ACK_TURNAROUND_US * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000u))
 #define TLSR8258_ACK_REQUEST           BIT(5)
 #define TLSR8258_FRAME_PENDING         BIT(4)
+#define TLSR8258_ACK_FCF  0x02u
 #define TLSR8258_IEEE_ADDR_SIZE        8u
 #define TLSR8258_SHORT_ADDR_SIZE       2u
 #define TLSR8258_PAN_ID_SIZE           2u
@@ -277,7 +277,7 @@ static volatile uint8_t tlsr8258_last_ack_seq;
 static volatile bool tlsr8258_last_ack_fp;
 static volatile bool tlsr8258_last_ack_valid;
 
-bool tlsr8258_radio_ack_frame_pending_get(uint8_t seq, bool *pending)
+static bool tlsr8258_ack_frame_pending_get(uint8_t seq, bool *pending)
 {
 	if (!tlsr8258_last_ack_valid || (tlsr8258_last_ack_seq != seq)) {
 		return false;
@@ -1768,8 +1768,8 @@ static int tlsr8258_tx_sync_followup(struct tlsr8258_radio_data *radio, uint8_t 
 	return tlsr8258_radio_op_result_errno(&radio->op);
 }
 
-static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode, struct net_pkt *pkt,
-		       struct net_buf *frag)
+static int tlsr8258_tx_frame(const struct device *dev, enum ieee802154_tx_mode mode,
+			     struct net_pkt *pkt, struct net_buf *frag)
 {
 	struct tlsr8258_radio_data *radio = dev->data;
 	uint8_t tx_seq = (frag != NULL && frag->len >= 3u) ? frag->data[2] : 0xffu;
@@ -1938,6 +1938,69 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode, s
 
 	TLSR_REG16(0x0f20) = RF_IRQ_ALL;
 	return tlsr8258_radio_op_result_errno(&radio->op);
+}
+
+/*
+ * The ACK of a frame sent on the synchronous path arrives after that path has
+ * returned, and the receive interrupt records it. Wait for it, as the ACK of
+ * the other frames is waited for, and hand its Frame Pending bit to the L2.
+ */
+#define TLSR8258_ACK_WAIT_US      1500u
+#define TLSR8258_ACK_WAIT_STEP_US 20u
+
+static void tlsr8258_ack_report(struct tlsr8258_radio_data *radio, uint8_t seq)
+{
+	uint8_t psdu[3] = {TLSR8258_ACK_FCF, 0u, seq};
+	struct net_pkt *pkt;
+	bool pending = false;
+	uint32_t waited_us = 0u;
+
+	while (!tlsr8258_ack_frame_pending_get(seq, &pending)) {
+		if (waited_us >= TLSR8258_ACK_WAIT_US) {
+			return;
+		}
+		k_busy_wait(TLSR8258_ACK_WAIT_STEP_US);
+		waited_us += TLSR8258_ACK_WAIT_STEP_US;
+	}
+
+	if (radio->iface == NULL) {
+		return;
+	}
+
+	if (pending) {
+		psdu[0] |= TLSR8258_FRAME_PENDING;
+	}
+
+	pkt = net_pkt_rx_alloc_with_buffer(radio->iface, sizeof(psdu), NET_AF_UNSPEC, 0, K_NO_WAIT);
+	if (pkt == NULL) {
+		return;
+	}
+
+	if (net_pkt_write(pkt, psdu, sizeof(psdu)) == 0) {
+		(void)ieee802154_handle_ack(radio->iface, pkt);
+	}
+	net_pkt_unref(pkt);
+}
+
+static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode, struct net_pkt *pkt,
+		       struct net_buf *frag)
+{
+	struct tlsr8258_radio_data *radio = dev->data;
+	bool expect_ack = (frag != NULL) && (frag->len >= 3u) &&
+			  tlsr8258_ack_requested(frag->data, frag->len);
+	uint8_t seq = expect_ack ? frag->data[2] : 0u;
+	int ret;
+
+	if (expect_ack) {
+		tlsr8258_last_ack_valid = false;
+	}
+
+	ret = tlsr8258_tx_frame(dev, mode, pkt, frag);
+	if ((ret == 0) && expect_ack) {
+		tlsr8258_ack_report(radio, seq);
+	}
+
+	return ret;
 }
 
 static int tlsr8258_ed_scan(const struct device *dev, uint16_t duration,

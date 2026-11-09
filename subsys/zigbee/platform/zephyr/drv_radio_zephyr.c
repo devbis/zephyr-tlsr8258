@@ -212,21 +212,12 @@ void zb_radio_note_tx_frame(const u8 *frame)
 #define ZB_RADIO_TX_DONE_NO_ACK ((void *)1)
 
 /*
- * The TLSR8258 driver and the native_sim socket medium do not pass the Frame
+ * The TLSR8269 driver and the native_sim socket medium do not pass the Frame
  * Pending bit of a received ACK to ieee802154_handle_ack().
  */
 #define ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN                                                         \
-	(IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258) ||                                          \
-	 IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) ||                                          \
+	(IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) ||                                          \
 	 IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET))
-
-bool __weak zb_radio_port_ack_frame_pending_get(uint8_t seq, bool *pending)
-{
-	ARG_UNUSED(seq);
-	ARG_UNUSED(pending);
-
-	return false;
-}
 
 static bool zb_radio_psdu_is_data_request(const u8 *psdu, u8 psdu_len)
 {
@@ -290,19 +281,6 @@ static void zb_radio_tx_complete_deferred(void *arg)
 		 * and the sequence number, and matches the latter against the
 		 * frame still awaiting acknowledgment.
 		 */
-		bool ack_fp;
-
-		/*
-		 * The radio receives the ACK after tx() has returned, so the Frame
-		 * Pending bit computed at submit time is only a guess; by now the
-		 * receive interrupt has recorded the real one. Without it a joined
-		 * end device never keeps its receiver on for the data its parent
-		 * announces in the ACK of a poll.
-		 */
-		if (zb_radio_port_ack_frame_pending_get(g_radio.last_tx_seq, &ack_fp)) {
-			g_radio.last_ack_frame_pending = ack_fp;
-		}
-
 		u8 ack_frame[3] = {
 			/*
 			 * Frame type ACK, as zb_radio_psdu_is_ack() reads it, and
