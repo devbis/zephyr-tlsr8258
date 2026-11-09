@@ -71,8 +71,8 @@ int zb_zbhci_uart_init(const struct device *uart_dev);
 
 /**
  * Drain and process any bytes waiting on the ZBHCI UART. Non-blocking; must
- * be called periodically from the Zigbee thread's own loop (matching
- * zb_platform_radio_rx_poll()'s pattern), never from an ISR -- Zephyr's
+ * be called periodically from the Zigbee thread's own loop, never from an
+ * ISR -- Zephyr's
  * interrupt-driven UART API is not used here because the Zigbee thread never
  * yields, which would starve native_sim's interrupt-emulation thread.
  */

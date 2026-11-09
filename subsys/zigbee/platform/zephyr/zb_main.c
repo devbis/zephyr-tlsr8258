@@ -121,14 +121,12 @@ const uint8_t *zb_platform_runtime_ieee_addr_get(void)
 K_SEM_DEFINE(zb_ev_sem, 0, 1);
 
 /*
- * The native_sim socket radio, the ZBHCI UART and the stack's own poll
- * callbacks (energy detection during a scan) are run from this thread by
- * polling, so while any of them is active the wait is bounded. Every other
- * source (task posts, timers, radio receive) wakes the thread through
- * zb_platform_wake().
+ * The ZBHCI UART and the stack's own poll callbacks (energy detection during
+ * a scan) are run from this thread by polling, so while any of them is active
+ * the wait is bounded. Every other source (task posts, timers, radio receive)
+ * wakes the thread through zb_platform_wake().
  */
-#define ZB_THREAD_POLLED_SOURCES                                                                   \
-	(IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET) || IS_ENABLED(CONFIG_ZIGBEE_NCP))
+#define ZB_THREAD_POLLED_SOURCES IS_ENABLED(CONFIG_ZIGBEE_NCP)
 #define ZB_THREAD_POLL_MS 1U
 
 void zb_platform_wake(void)
@@ -726,15 +724,6 @@ static void zb_link_watchdog_tick(void)
 #endif
 }
 
-/*
- * Radio RX poll hook, called on every pass of the Zigbee thread loop. A radio
- * backend that queues received frames overrides it to hand them to the MAC
- * from this thread.
- */
-__weak void zb_platform_radio_rx_poll(void)
-{
-}
-
 #if defined(CONFIG_ZIGBEE_ED)
 /*
  * An end device never opens permit join, so the commissioning save that
@@ -849,11 +838,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			/*
 			 * The router must consume RF frames while commissioning is still
 			 * in progress.  AssocResp and the indirect Transport-Key arrive
-			 * before bootstrap_done; postponing the TLSR RX FIFO drain until
-			 * below made the radio ACK those frames while the Zigbee stack
-			 * never saw them.
+			 * before bootstrap_done; postponing the hand-over of the received
+			 * frames until below made the radio ACK those frames while the
+			 * Zigbee stack never saw them.
 			 */
-			zb_platform_radio_rx_poll();
 			zb_radio_l2_rx_poll();
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || defined(CONFIG_ZIGBEE_ED)
 			for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
@@ -869,7 +857,6 @@ static void zb_thread_fn(void *a, void *b, void *c)
 
 		ev_timer_process();
 		ev_poll_process();
-		zb_platform_radio_rx_poll();
 		zb_radio_l2_rx_poll();
 		/*
 		 * The radio sink can enqueue RX callbacks after the poll pass above.

@@ -15,7 +15,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <string.h>
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/ieee802154/native_sim_socket.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/ieee802154.h>
 #include <zephyr/net/ieee802154_radio.h>
@@ -109,8 +108,12 @@ static void native_sim_socket_deliver(const struct device *dev, const uint8_t *p
 	}
 }
 
-/* The driver is polled from ieee802154_native_sim_socket_poll(). */
-static const struct device *native_sim_socket_poll_dev;
+/*
+ * The socket is read by the RX thread and by the synchronous TX and CCA paths,
+ * which wait for the STATUS reply of the medium; rx_lock serializes them.
+ */
+static const struct device *native_sim_socket_rx_dev;
+static K_MUTEX_DEFINE(native_sim_socket_rx_lock);
 
 static const char *cmd_server_host;
 static unsigned int cmd_server_port;
@@ -296,7 +299,7 @@ static bool native_sim_socket_rx_fifo_deliver_one(const struct device *dev)
 	return true;
 }
 
-static void native_sim_socket_rx_worker(const struct device *dev)
+static void native_sim_socket_rx_worker_locked(const struct device *dev)
 {
 	for (size_t i = 0; i < NATIVE_SIM_SOCKET_RX_WORKER_BUDGET; i++) {
 		if (!native_sim_socket_rx_fifo_deliver_one(dev)) {
@@ -355,6 +358,13 @@ static void native_sim_socket_publish_state(const struct device *dev, enum nss_m
 	}
 }
 
+static void native_sim_socket_rx_worker(const struct device *dev)
+{
+	k_mutex_lock(&native_sim_socket_rx_lock, K_FOREVER);
+	native_sim_socket_rx_worker_locked(dev);
+	k_mutex_unlock(&native_sim_socket_rx_lock);
+}
+
 static void native_sim_socket_handle_status(struct native_sim_socket_data *data,
 					    const struct nss_medium_msg *msg)
 {
@@ -375,7 +385,7 @@ static void native_sim_socket_handle_status(struct native_sim_socket_data *data,
 }
 
 /* Returns true when a datagram was consumed. */
-static bool native_sim_socket_try_rx_once(const struct device *dev)
+static bool native_sim_socket_try_rx_once_locked(const struct device *dev)
 {
 	const struct native_sim_socket_config *cfg = dev->config;
 	struct native_sim_socket_data *data = dev->data;
@@ -437,6 +447,17 @@ static bool native_sim_socket_try_rx_once(const struct device *dev)
 	return true;
 }
 
+static bool native_sim_socket_try_rx_once(const struct device *dev)
+{
+	bool handled;
+
+	k_mutex_lock(&native_sim_socket_rx_lock, K_FOREVER);
+	handled = native_sim_socket_try_rx_once_locked(dev);
+	k_mutex_unlock(&native_sim_socket_rx_lock);
+
+	return handled;
+}
+
 /*
  * Service the socket for up to wait_ms milliseconds. Without the behavioral
  * PHY this returns as soon as a datagram was handled; with it, the delayed
@@ -467,20 +488,30 @@ static void native_sim_socket_pump_rx(const struct device *dev, int wait_ms)
 	}
 }
 
-void ieee802154_native_sim_socket_poll(void)
+static void native_sim_socket_rx_thread(void *p1, void *p2, void *p3)
 {
-	const struct device *dev = native_sim_socket_poll_dev;
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
 
-	if (dev == NULL) {
-		return;
-	}
+	while (true) {
+		const struct device *dev = native_sim_socket_rx_dev;
 
-	while (native_sim_socket_try_rx_once(dev)) {
-	}
+		if (dev != NULL) {
+			while (native_sim_socket_try_rx_once(dev)) {
+			}
 #if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_BEHAVIORAL_PHY)
-	native_sim_socket_rx_worker(dev);
+			native_sim_socket_rx_worker(dev);
 #endif
+		}
+
+		k_sleep(K_MSEC(1));
+	}
 }
+
+K_THREAD_DEFINE(native_sim_socket_rx, CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_STACK_SIZE,
+		native_sim_socket_rx_thread, NULL, NULL, NULL,
+		K_PRIO_PREEMPT(CONFIG_IEEE802154_NATIVE_SIM_SOCKET_RX_PRIO), 0, 0);
 
 static enum ieee802154_hw_caps native_sim_socket_get_capabilities(const struct device *dev)
 {
@@ -673,12 +704,7 @@ static int native_sim_socket_start(const struct device *dev)
 			native_sim_socket_server_port(cfg), native_sim_socket_node_id(cfg));
 	}
 
-	/*
-	 * The socket has a single reader: ieee802154_native_sim_socket_poll()
-	 * and the synchronous TX/CCA paths, all called from the thread that
-	 * owns the radio. A separate RX thread would race them on recv().
-	 */
-	native_sim_socket_poll_dev = dev;
+	native_sim_socket_rx_dev = dev;
 
 	data->started = true;
 	native_sim_socket_publish_state(dev, NSS_MEDIUM_MSG_HELLO);

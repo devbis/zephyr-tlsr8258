@@ -141,9 +141,8 @@ void zb_zbhci_uart_poll(void)
 	unsigned char byte;
 
 	/*
-	 * Polled from the Zigbee thread's own loop (zb_main.c), the same
-	 * pattern zb_platform_radio_rx_poll() uses: that thread never yields
-	 * (see the comment on its while(1) loop), so Zephyr's async
+	 * Polled from the Zigbee thread's own loop (zb_main.c): that thread
+	 * never yields (see the comment on its while(1) loop), so Zephyr's async
 	 * interrupt-driven UART API -- serviced by a separate thread on
 	 * native_sim -- would starve. uart_poll_in() is a plain non-blocking
 	 * read and needs no interrupt/callback machinery.
