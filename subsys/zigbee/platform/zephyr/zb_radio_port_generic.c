@@ -129,6 +129,11 @@ int zb_radio_port_set_trx_state(enum zb_radio_port_trx_state state,
 	return (rc == -EALREADY) ? 0 : rc;
 }
 
+void zb_radio_port_register_rx_sink(zb_radio_port_rx_sink_t sink)
+{
+	zb_radio_l2_register_rx_sink(sink);
+}
+
 void zb_radio_port_update_filters(uint16_t pan_id, uint16_t short_addr,
 				  const uint8_t *ieee_addr)
 {
