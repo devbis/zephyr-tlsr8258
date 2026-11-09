@@ -21,44 +21,6 @@ extern "C" {
 #define TLSR8258_RX_FRAME_PSDU_OFFSET 5U
 
 /**
- * @brief Received frame as laid out by the RF DMA.
- *
- * @p dma[4] is the PHY length byte, the PSDU (including the FCS) starts at
- * @ref TLSR8258_RX_FRAME_PSDU_OFFSET. The view is only valid for the
- * duration of the sink call.
- */
-struct tlsr8258_rx_frame_view {
-	/** RF DMA buffer. */
-	const uint8_t *dma;
-	/** Number of valid bytes in @p dma. */
-	uint8_t len;
-	/** Received signal strength in dBm. */
-	int8_t rssi_dbm;
-};
-
-/**
- * @brief Raw receive sink.
- *
- * @param frame Received frame.
- *
- * @retval 0 Frame consumed.
- * @retval -ENODATA Frame consumed, handling deferred.
- * @retval <0 Frame rejected.
- */
-typedef int (*tlsr8258_rx_sink_t)(const struct tlsr8258_rx_frame_view *frame);
-
-/**
- * @brief Deliver received frames to a raw sink instead of the network stack.
- *
- * The sink is called from tlsr8258_radio_rx_poll(), never from interrupt
- * context. Frames that fail the address filter are dropped before they are
- * queued.
- *
- * @param sink Sink to install, or NULL to restore delivery to the L2.
- */
-void tlsr8258_radio_register_rx_sink(tlsr8258_rx_sink_t sink);
-
-/**
  * @brief Receive notification.
  *
  * Called from the radio interrupt each time a frame is queued for
