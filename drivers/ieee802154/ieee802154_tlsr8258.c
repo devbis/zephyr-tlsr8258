@@ -257,7 +257,6 @@ static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *ra
 	return *(volatile uint8_t *)&radio->promiscuous != 0u;
 }
 
-static tlsr8258_rx_sink_t tlsr8258_rx_sink;
 static tlsr8258_rx_notify_t tlsr8258_rx_notify;
 
 /*
@@ -269,11 +268,6 @@ static uint8_t tlsr8258_filter_pan_id_shadow[TLSR8258_PAN_ID_SIZE] = {0xffu, 0xf
 static uint8_t tlsr8258_filter_short_addr_shadow[TLSR8258_SHORT_ADDR_SIZE] = {0xffu, 0xffu};
 static uint8_t tlsr8258_filter_ieee_addr_shadow[TLSR8258_IEEE_ADDR_SIZE];
 static uint16_t tlsr8258_channel_shadow = 11u;
-
-void tlsr8258_radio_register_rx_sink(tlsr8258_rx_sink_t sink)
-{
-	tlsr8258_rx_sink = sink;
-}
 
 void tlsr8258_radio_register_rx_notify(tlsr8258_rx_notify_t notify)
 {
@@ -1024,12 +1018,6 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 			tlsr8258_rf_set_rxmode_vendor();
 			return;
 		}
-	} else if (tlsr8258_rx_sink != NULL) {
-		if (!tlsr8258_filter_match(radio, payload) &&
-		    !tlsr8258_assoc_resp_for_us(radio, payload, length)) {
-			tlsr8258_rf_set_rxmode_vendor();
-			return;
-		}
 	} else {
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 		if (!tlsr8258_filter_match(radio, payload) &&
@@ -1088,28 +1076,11 @@ static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 				 const struct tlsr8258_rx_frame *frame)
 {
 	const uint8_t *rx = frame->dma;
-	struct tlsr8258_rx_frame_view view;
-	int rc;
 #if !defined(CONFIG_IEEE802154_RAW_MODE)
 	uint8_t length;
 	int8_t rssi;
 	struct net_pkt *pkt;
 #endif
-
-	if (tlsr8258_rx_sink != NULL) {
-		view.dma = rx;
-		view.len = frame->len;
-		view.rssi_dbm = frame->rssi_dbm;
-		rc = tlsr8258_rx_sink(&view);
-		if (rc < 0) {
-			if (rc == -ENODATA) {
-				LOG_DBG("RX sink deferred frame (len=%u)", frame->len);
-			} else {
-				LOG_WRN("RX sink rejected frame (rc=%d len=%u)", rc, frame->len);
-			}
-		}
-		return;
-	}
 
 #if defined(CONFIG_IEEE802154_RAW_MODE)
 	ARG_UNUSED(rx);
@@ -1899,11 +1870,7 @@ static int tlsr8258_tx(const struct device *dev, enum ieee802154_tx_mode mode, s
 		radio->op.ack_tx_pending = false;
 		return -EAGAIN;
 	}
-	/*
-	 * With a raw RX sink installed the upper layer handles follow-up frames
-	 * itself, so tx() does not wait for them.
-	 */
-	expect_post_tx_rx = (tlsr8258_rx_sink == NULL) && expect_post_tx_followup;
+	expect_post_tx_rx = expect_post_tx_followup;
 	wait_budget_us = expect_post_tx_rx ? 150000u : CONFIG_IEEE802154_TLSR8258_TX_WAIT_US;
 	k_timeout_t wait_timeout = K_USEC(wait_budget_us);
 	saved_irq_mask = TLSR_REG16(0x0f1c);
