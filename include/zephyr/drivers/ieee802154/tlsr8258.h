@@ -21,29 +21,6 @@ extern "C" {
 #define TLSR8258_RX_FRAME_PSDU_OFFSET 5U
 
 /**
- * @brief Receive notification.
- *
- * Called from the radio interrupt each time a frame is queued for
- * tlsr8258_radio_rx_poll(). It must not block.
- */
-typedef void (*tlsr8258_rx_notify_t)(void);
-
-/**
- * @brief Install the receive notification.
- *
- * @param notify Callback to install, or NULL to remove it.
- */
-void tlsr8258_radio_register_rx_notify(tlsr8258_rx_notify_t notify);
-
-/**
- * @brief Drain the receive queue into the installed sink or the L2.
- *
- * Must be called from thread context. There is no receive worker thread in
- * the driver: the caller owns the only consumer of the queue.
- */
-void tlsr8258_radio_rx_poll(void);
-
-/**
  * @brief Get the Frame Pending bit of the last ACK the radio received.
  *
  * The ACK of a transmitted frame arrives after tx() has returned, so its
