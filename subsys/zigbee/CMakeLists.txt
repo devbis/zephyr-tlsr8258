@@ -147,9 +147,9 @@ endif()
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258
   platform/zephyr/zb_radio_port_tlsr8258.c
 )
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269
-  platform/zephyr/zb_radio_port_tlsr8269.c
-)
+if(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258 OR CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
+  zephyr_library_sources(platform/zephyr/zb_radio_port_tlsr82xx.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_NET_L2_CUSTOM_IEEE802154
   platform/zephyr/zb_radio_l2.c
 )
