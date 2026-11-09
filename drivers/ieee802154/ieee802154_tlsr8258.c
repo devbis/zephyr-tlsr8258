@@ -1478,10 +1478,13 @@ static void tlsr8258_iface_init(struct net_if *iface)
 	const struct device *dev = net_if_get_device(iface);
 	struct tlsr8258_radio_data *radio = dev->data;
 	uint8_t *mac = radio->mac_addr;
+	uint8_t link_addr[TLSR8258_IEEE_ADDR_SIZE];
 
 	tlsr8258_ieee_addr_load(mac);
 
-	net_if_set_link_addr(iface, mac, TLSR8258_IEEE_ADDR_SIZE, NET_LINK_IEEE802154);
+	/* mac_addr is in over-the-air order, the link address is big-endian. */
+	sys_memcpy_swap(link_addr, mac, TLSR8258_IEEE_ADDR_SIZE);
+	net_if_set_link_addr(iface, link_addr, TLSR8258_IEEE_ADDR_SIZE, NET_LINK_IEEE802154);
 	memcpy(radio->filter_ieee_addr, mac, TLSR8258_IEEE_ADDR_SIZE);
 	radio->iface = iface;
 	ieee802154_init(iface);
