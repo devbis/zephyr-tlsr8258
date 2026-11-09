@@ -204,6 +204,11 @@
 			status = "disabled";
 		};
 
+		rng: rng {
+			compatible = "telink,tlsr8258-rng";
+			status = "disabled";
+		};
+
 		zb: ieee802154@800f00 {
 			compatible = "telink,tlsr8258-zb";
 			reg = <0x00800f00 0x00000040>;
