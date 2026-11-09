@@ -3,12 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
- * Minimal sys_rand_get() backend for the TLSR8258 Zephyr port.
+ * Minimal sys_rand_get() backend for the radios that have no Zephyr entropy
+ * driver, the TLSR8269 at present.
  *
- * The TLSR8258 does not yet have a Zephyr entropy driver, so no
- * CONFIG_*_RANDOM_GENERATOR is available.  The ZCL layer calls
- * sys_rand_get() (via zb_random()) for ZCL sequence numbers and
- * ZLL commissioning; those uses do not require cryptographic strength.
+ * Without an entropy driver no CONFIG_*_RANDOM_GENERATOR is available. The ZCL
+ * layer calls sys_rand_get() (via zb_random()) for ZCL sequence numbers and
+ * ZLL commissioning, and the radio driver for an extended address that is not
+ * in the flash yet; none of them needs cryptographic strength, but all units
+ * that start alike get the same numbers.
  *
  * This file provides z_impl_sys_rand_get() using a 64-bit LCG seeded
  * and mixed with k_cycle_get_32() on every call.  It is deliberately
