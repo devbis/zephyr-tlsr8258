@@ -12,9 +12,17 @@
 #include <zephyr/device.h>
 #include <zephyr/net/ieee802154_radio.h>
 
+/**
+ * @brief Received frame handed to the Zigbee stack.
+ *
+ * Valid only for the duration of the sink call.
+ */
 struct zb_radio_rx_frame_view {
-	const uint8_t *dma;
+	/** PSDU without its FCS. */
+	const uint8_t *psdu;
+	/** Length of @p psdu in bytes. */
 	uint8_t len;
+	/** Received signal strength in dBm. */
 	int8_t rssi_dbm;
 };
 
