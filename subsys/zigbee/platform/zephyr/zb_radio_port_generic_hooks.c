@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <zephyr/drivers/ieee802154/native_sim_socket.h>
 #include <zephyr/kernel.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
@@ -51,13 +50,5 @@ bool zb_radio_port_clock_time_exceed(uint32_t ref_us, uint32_t span_us)
 uint32_t zb_radio_port_clock_delta_to_us(uint32_t delta_us)
 {
 	return delta_us;
-}
-#endif
-
-#if defined(CONFIG_IEEE802154_NATIVE_SIM_SOCKET)
-/* The socket driver has no RX thread; drain it from the Zigbee thread. */
-void zb_platform_radio_rx_poll(void)
-{
-	ieee802154_native_sim_socket_poll();
 }
 #endif
