@@ -144,16 +144,13 @@ if(NOT CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR
    AND NOT CONFIG_ARM64_RANDOM_GENERATOR)
   zephyr_library_sources(platform/zephyr/drv_rand_zephyr.c)
 endif()
-if(CONFIG_ZIGBEE_RADIO_PORT_TLSR8258 OR CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
-  zephyr_library_sources(platform/zephyr/zb_radio_port_tlsr82xx.c)
-endif()
 zephyr_library_sources_ifdef(CONFIG_NET_L2_CUSTOM_IEEE802154
   platform/zephyr/zb_radio_l2.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC
   platform/zephyr/zb_radio_port_generic.c
 )
-zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC_HOOKS
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_RADIO_PORT_GENERIC
   platform/zephyr/zb_radio_port_generic_hooks.c
 )
 
