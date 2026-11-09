@@ -491,18 +491,6 @@ config ZIGBEE_WWAH
 	  wwah_init() after registering its endpoint. The attributes the
 	  hub sets are stored in NV and applied again after a reset.
 
-config ZIGBEE_MAC_TIMER_CYCLES_PER_US
-	int "Zigbee MAC timer cycles per microsecond"
-	default 24 if ZIGBEE_RADIO_PORT_TLSR8258
-	default 24 if ZIGBEE_RADIO_PORT_TLSR8269
-	default 16
-	range 1 1000
-	help
-	  Compatibility scale for vendor MAC code that measures deadlines in
-	  clock_time() cycles. The TLSR8258 Zigbee MAC path is hardware-verified
-	  with the vendor 24-cycle timing scale even though Zephyr's system timer
-	  runs at 16 MHz.
-
 module = ZIGBEE
 module-str = zigbee
 source "subsys/logging/Kconfig.template.log_config"
