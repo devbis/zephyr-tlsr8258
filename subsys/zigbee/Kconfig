@@ -491,6 +491,16 @@ config ZIGBEE_WWAH
 	  wwah_init() after registering its endpoint. The attributes the
 	  hub sets are stored in NV and applied again after a reset.
 
+config ZIGBEE_MAC_CLOCK_HW_CYCLES
+	bool "Count the MAC deadlines in cycles of the hardware counter"
+	depends on ZIGBEE_RADIO_PORT_GENERIC
+	default y if SOC_FAMILY_TELINK_TLSR
+	help
+	  The MAC measures its deadlines in microseconds taken from the kernel
+	  tick. Select this when the tick is too coarse for them, as the 100 Hz
+	  tick of the TLSR8258: the MAC then counts the cycles of the hardware
+	  counter, which must run at a whole number of MHz.
+
 module = ZIGBEE
 module-str = zigbee
 source "subsys/logging/Kconfig.template.log_config"
@@ -539,10 +549,3 @@ config ZIGBEE_RADIO_PORT_GENERIC
 	select ZIGBEE_RADIO_PORT
 	default y
 
-config ZIGBEE_RADIO_PORT_GENERIC_HOOKS
-	bool
-	depends on ZIGBEE_RADIO_PORT_GENERIC && !IEEE802154_TELINK_TLSR8258 && !IEEE802154_TELINK_TLSR8269
-	default y
-	help
-	  The MAC clock and the receive delivery of the generic port. Radios
-	  that need their own provide them in a port file instead.
