@@ -33,15 +33,6 @@ LOG_MODULE_REGISTER(zigbee_radio_l2, CONFIG_ZIGBEE_LOG_LEVEL);
 /* The L2 hands over the PSDU without its FCS. */
 #define ZB_L2_PSDU_MAX (IEEE802154_MAX_PHY_PACKET_SIZE - IEEE802154_FCS_LENGTH)
 
-/*
- * The MAC receive path takes frames in the TLSR8258 RF DMA layout: a 5-byte
- * header whose last byte is the PHY length (PSDU plus FCS), the PSDU, and a
- * 2-byte status trailer.
- */
-#define ZB_L2_DMA_HDR_LEN     5U
-#define ZB_L2_DMA_PHY_LEN_OFS 4U
-#define ZB_L2_DMA_TRAILER_LEN 2U
-
 struct zb_l2_frame {
 	uint8_t psdu[ZB_L2_PSDU_MAX];
 	uint8_t len;
@@ -67,9 +58,8 @@ void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink)
 void zb_radio_l2_rx_poll(void)
 {
 	struct zb_l2_frame frame;
-	uint8_t dma[ZB_L2_DMA_HDR_LEN + ZB_L2_PSDU_MAX + ZB_L2_DMA_TRAILER_LEN];
 	struct zb_radio_rx_frame_view view = {
-		.dma = dma,
+		.psdu = frame.psdu,
 	};
 
 	if (rx_sink == NULL) {
@@ -77,10 +67,7 @@ void zb_radio_l2_rx_poll(void)
 	}
 
 	while (k_msgq_get(&zb_l2_rx_queue, &frame, K_NO_WAIT) == 0) {
-		memset(dma, 0, sizeof(dma));
-		dma[ZB_L2_DMA_PHY_LEN_OFS] = frame.len + IEEE802154_FCS_LENGTH;
-		memcpy(&dma[ZB_L2_DMA_HDR_LEN], frame.psdu, frame.len);
-		view.len = ZB_L2_DMA_HDR_LEN + frame.len + ZB_L2_DMA_TRAILER_LEN;
+		view.len = frame.len;
 		view.rssi_dbm = frame.rssi;
 		(void)rx_sink(&view);
 	}
