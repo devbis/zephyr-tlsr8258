@@ -44,19 +44,6 @@ void tlsr8258_radio_register_rx_notify(tlsr8258_rx_notify_t notify);
 void tlsr8258_radio_rx_poll(void);
 
 /**
- * @brief Set the address filter used for software ACKs and receive filtering.
- *
- * The values persist across radio re-initialization.
- *
- * @param pan_id PAN identifier.
- * @param short_addr Short address.
- * @param ieee_addr Extended address in little-endian byte order, or NULL to
- *                  keep the current one.
- */
-void tlsr8258_radio_update_filters(uint16_t pan_id, uint16_t short_addr,
-				   const uint8_t *ieee_addr);
-
-/**
  * @brief Get the Frame Pending bit of the last ACK the radio received.
  *
  * The ACK of a transmitted frame arrives after tx() has returned, so its
@@ -70,19 +57,6 @@ void tlsr8258_radio_update_filters(uint16_t pan_id, uint16_t short_addr,
  * @retval false No ACK with that sequence number has been received.
  */
 bool tlsr8258_radio_ack_frame_pending_get(uint8_t seq, bool *pending);
-
-/**
- * @brief Get the extended address of the radio.
- *
- * The address is read from the ieee_addr_partition factory data when the
- * network interface is initialized.
- *
- * @param ieee_addr Buffer for the address, 8 bytes, in over-the-air order.
- *
- * @retval 0 Address copied.
- * @retval -EAGAIN The interface is not initialized yet.
- */
-int tlsr8258_radio_get_ieee_addr(uint8_t ieee_addr[8]);
 
 #ifdef __cplusplus
 }
