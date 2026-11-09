@@ -257,7 +257,8 @@ static inline bool tlsr8258_radio_promiscuous_get(struct tlsr8258_radio_data *ra
 	return *(volatile uint8_t *)&radio->promiscuous != 0u;
 }
 
-static tlsr8258_rx_notify_t tlsr8258_rx_notify;
+/* Given from the RF interrupt for every queued frame, taken by the RX thread. */
+static K_SEM_DEFINE(tlsr8258_rx_sem, 0, 1);
 
 /*
  * Filter, channel and address requests can arrive before tlsr8258_init()
@@ -265,11 +266,6 @@ static tlsr8258_rx_notify_t tlsr8258_rx_notify;
  * apply them.
  */
 static uint16_t tlsr8258_channel_shadow = 11u;
-
-void tlsr8258_radio_register_rx_notify(tlsr8258_rx_notify_t notify)
-{
-	tlsr8258_rx_notify = notify;
-}
 
 /*
  * Sequence number and Frame Pending bit of the last ACK received. The receive
@@ -1030,9 +1026,8 @@ static void tlsr8258_rx_capture_common(uint16_t irq_status, uint8_t *snapshot,
 	rx_dma_len =
 		(snapshot_len >= TLSR8258_PAYLOAD_OFFSET) ? snapshot_len : (uint16_t)rx[0] + 4u;
 	rx_dma_len = MIN(rx_dma_len, (uint16_t)TLSR8258_RX_BUF_SIZE);
-	if (tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm) &&
-	    (tlsr8258_rx_notify != NULL)) {
-		tlsr8258_rx_notify();
+	if (tlsr8258_rx_queue_try_enqueue(&radio->rx_queue, rx, (uint8_t)rx_dma_len, rx_rssi_dbm)) {
+		k_sem_give(&tlsr8258_rx_sem);
 	}
 }
 
@@ -1091,9 +1086,9 @@ static void tlsr8258_rx_dispatch(struct tlsr8258_radio_data *radio,
 }
 
 /*
- * Deliver queued frames. Runs only in the thread that calls
- * tlsr8258_radio_rx_poll(), the single consumer of rx_queue. TX completion
- * is signalled from the ISR and does not depend on this drain.
+ * Deliver queued frames. Runs only in the RX thread, the single consumer of
+ * rx_queue. TX completion is signalled from the ISR and does not depend on
+ * this drain.
  */
 static void tlsr8258_rx_drain_pending(struct tlsr8258_radio_data *radio)
 {
@@ -2017,12 +2012,22 @@ static void tlsr82xx_irq_config(const struct device *dev)
 /* Set once tlsr8258_init() has initialized the RX queue. */
 static bool tlsr8258_hw_inited;
 
-void tlsr8258_radio_rx_poll(void)
+static void tlsr8258_rx_thread(void *p1, void *p2, void *p3)
 {
-	if (tlsr8258_hw_inited) {
-		tlsr8258_rx_drain_pending(&tlsr8258_radio_data_0);
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	while (true) {
+		k_sem_take(&tlsr8258_rx_sem, K_FOREVER);
+		if (tlsr8258_hw_inited) {
+			tlsr8258_rx_drain_pending(&tlsr8258_radio_data_0);
+		}
 	}
 }
+
+K_THREAD_DEFINE(tlsr8258_rx, CONFIG_IEEE802154_TLSR8258_RX_STACK_SIZE, tlsr8258_rx_thread, NULL,
+		NULL, NULL, K_PRIO_PREEMPT(CONFIG_IEEE802154_TLSR8258_RX_PRIO), 0, 0);
 
 static const struct tlsr8258_radio_config tlsr8258_radio_config_0 = {
 	.irq_config_func = tlsr82xx_irq_config,
@@ -2047,7 +2052,6 @@ static int tlsr8258_init(const struct device *dev)
 	}
 	k_sem_init(&radio->tx_wait, 0, 1);
 
-	/* RX is delivered from tlsr8258_radio_rx_poll(); there is no RX thread. */
 	config->irq_config_func(dev);
 	tlsr8258_hw_inited = true;
 
