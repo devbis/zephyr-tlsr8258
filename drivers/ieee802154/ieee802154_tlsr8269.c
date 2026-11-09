@@ -609,11 +609,31 @@ static int tlsr8269_set_channel(const struct device *dev, uint16_t channel)
 static int tlsr8269_filter(const struct device *dev, bool set, enum ieee802154_filter_type type,
 			   const struct ieee802154_filter *filter)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(set);
-	ARG_UNUSED(type);
-	ARG_UNUSED(filter);
-	return -ENOTSUP;
+	struct tlsr8269_radio_data *data = dev->data;
+	unsigned int key;
+
+	if (!set || filter == NULL) {
+		return -ENOTSUP;
+	}
+
+	key = irq_lock();
+	switch (type) {
+	case IEEE802154_FILTER_TYPE_IEEE_ADDR:
+		memcpy(data->ieee_addr, filter->ieee_addr, sizeof(data->ieee_addr));
+		break;
+	case IEEE802154_FILTER_TYPE_SHORT_ADDR:
+		data->short_addr = filter->short_addr;
+		break;
+	case IEEE802154_FILTER_TYPE_PAN_ID:
+		data->pan_id = filter->pan_id;
+		break;
+	default:
+		irq_unlock(key);
+		return -ENOTSUP;
+	}
+	irq_unlock(key);
+
+	return 0;
 }
 
 static int tlsr8269_set_txpower(const struct device *dev, int16_t dbm)
@@ -725,7 +745,13 @@ static int tlsr8269_attr_get(const struct device *dev, enum ieee802154_attr attr
 
 static void tlsr8269_iface_init(struct net_if *iface)
 {
+	uint8_t link_addr[sizeof(tlsr8269_radio_data_0.ieee_addr)];
+
 	tlsr8269_radio_data_0.iface = iface;
+
+	/* ieee_addr is in over-the-air order, the link address is big-endian. */
+	sys_memcpy_swap(link_addr, tlsr8269_radio_data_0.ieee_addr, sizeof(link_addr));
+	net_if_set_link_addr(iface, link_addr, sizeof(link_addr), NET_LINK_IEEE802154);
 }
 
 static const struct ieee802154_radio_api tlsr8269_radio_api = {
