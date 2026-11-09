@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config ENTROPY_TLSR8258_RNG
+	bool "Telink TLSR8258 ADC noise entropy driver"
+	default y
+	depends on DT_HAS_TELINK_TLSR8258_RNG_ENABLED
+	select ENTROPY_HAS_DRIVER
+	select ENTROPY_NEEDS_PRNG
+	help
+	  Enable the entropy driver of the TLSR8258. It conditions the noise of
+	  the SAR ADC and shares the converter with the ADC driver, so
+	  entropy_get_entropy() is slow: the random generator takes a seed from
+	  it and does not ask it again.

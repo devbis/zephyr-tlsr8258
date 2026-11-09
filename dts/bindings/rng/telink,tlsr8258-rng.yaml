@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Telink TLSR8258 random number source. It samples the noise of the SAR ADC
+  with both inputs of the miscellaneous channel on ground, the way the vendor
+  random_generator_init() does, so it shares the ADC with the adc driver.
+
+compatible: "telink,tlsr8258-rng"
+
+include: base.yaml
