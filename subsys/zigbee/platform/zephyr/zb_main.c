@@ -905,5 +905,12 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	}
 }
 
+#ifdef CONFIG_ZIGBEE_RUN_IN_MAIN
+void zb_main_run(void)
+{
+	zb_thread_fn(NULL, NULL, NULL);
+}
+#else
 K_THREAD_DEFINE(zb_thread, CONFIG_ZIGBEE_STACK_SIZE, zb_thread_fn, NULL, NULL, NULL,
 		CONFIG_ZIGBEE_THREAD_PRIO, 0, 0);
+#endif
