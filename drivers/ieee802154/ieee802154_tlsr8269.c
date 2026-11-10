@@ -32,6 +32,7 @@
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/drivers/ieee802154/ieee802154_tlsr8269.h>
 #include <zephyr/random/random.h>
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/sys/byteorder.h>
@@ -226,8 +227,13 @@ struct tlsr8269_radio_data {
 
 static struct tlsr8269_radio_data tlsr8269_radio_data_0;
 
+#ifdef CONFIG_IEEE802154_TLSR8269_RX_THREAD
 /* Given from the RF interrupt for every queued frame, taken by the RX thread. */
 static K_SEM_DEFINE(tlsr8269_rx_sem, 0, 1);
+#else
+/* Called from the RF interrupt for every queued frame. */
+static void (*tlsr8269_rx_notify)(void);
+#endif
 
 
 /* Vendor RF_TrxStateSet(): retune to a physical offset (MHz - 2400). */
@@ -444,7 +450,13 @@ static void tlsr8269_rx_handle(struct tlsr8269_radio_data *data)
 
 	tlsr8269_rx_queue_push(data, p, phy_len);
 	tlsr8269_rx_rearm(data);
+#ifdef CONFIG_IEEE802154_TLSR8269_RX_THREAD
 	k_sem_give(&tlsr8269_rx_sem);
+#else
+	if (tlsr8269_rx_notify != NULL) {
+		tlsr8269_rx_notify();
+	}
+#endif
 }
 
 /*
@@ -505,7 +517,7 @@ static void tlsr8269_rx_deliver(struct tlsr8269_radio_data *data,
 	}
 }
 
-/* Runs only in the RX thread, the single consumer of rx_queue. */
+/* Runs only in one thread, the single consumer of rx_queue. */
 static void tlsr8269_rx_drain(struct tlsr8269_radio_data *data)
 {
 	struct tlsr8269_rx_slot local;
@@ -530,6 +542,7 @@ static void tlsr8269_rx_drain(struct tlsr8269_radio_data *data)
 	}
 }
 
+#ifdef CONFIG_IEEE802154_TLSR8269_RX_THREAD
 static void tlsr8269_rx_thread(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1);
@@ -544,6 +557,17 @@ static void tlsr8269_rx_thread(void *p1, void *p2, void *p3)
 
 K_THREAD_DEFINE(tlsr8269_rx, CONFIG_IEEE802154_TLSR8269_RX_STACK_SIZE, tlsr8269_rx_thread, NULL,
 		NULL, NULL, K_PRIO_PREEMPT(CONFIG_IEEE802154_TLSR8269_RX_PRIO), 0, 0);
+#else
+void tlsr8269_rx_set_notify(void (*notify)(void))
+{
+	tlsr8269_rx_notify = notify;
+}
+
+void tlsr8269_rx_service(void)
+{
+	tlsr8269_rx_drain(&tlsr8269_radio_data_0);
+}
+#endif
 
 /* Persistent IEEE address from the ieee-addr partition; generated once when erased. */
 static void tlsr8269_ieee_addr_load(uint8_t mac[8])
