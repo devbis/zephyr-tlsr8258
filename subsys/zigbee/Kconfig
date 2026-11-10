@@ -62,6 +62,30 @@ config ZIGBEE_STACK_SIZE
 	int "Zigbee thread stack size"
 	default 2048
 
+config ZIGBEE_TASKQ_DEPTH
+	int "Depth of the NWK/MAC layer queues"
+	default 32
+	range 4 64
+	help
+	  Entries of the EV task, NWK to MAC and NWK to high-layer primitive
+	  queues, 8 bytes each. A node that only ever has a few frames in
+	  flight, such as an end device, needs far fewer than a router.
+
+config ZIGBEE_TASKQ_RX_DEPTH
+	int "Depth of the MAC to NWK and high-layer to NWK queues"
+	default 64
+	range 4 64
+	help
+	  Entries of the two queues that take RF bursts, 8 bytes each.
+
+config ZIGBEE_CALLBACK_QUEUE_DEPTH
+	int "Depth of the deferred-callback queues"
+	default 64
+	range 8 64
+	help
+	  Entries, 8 bytes each, of the general and of the RX callback queue
+	  drained by the Zigbee thread.
+
 config ZIGBEE_THREAD_PRIO
 	int "Zigbee thread priority"
 	default 5
