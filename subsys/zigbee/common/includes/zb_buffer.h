@@ -60,5 +60,13 @@ u8 zb_buf_rx_free_count(void);
 u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len);
 /* Copy the received frame captured behind src, see zb_buf_rx_payload_capture(). */
 void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src);
+/**
+ * Pointer into dst that corresponds to p, a pointer into src, after
+ * TL_COPY_BUF(dst, src). p may point into the buffer or into the received
+ * frame it holds.
+ *
+ * @return The pointer in dst, or NULL when dst has no copy of the frame.
+ */
+u8 *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const u8 *p);
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_BUFFER_H_ */

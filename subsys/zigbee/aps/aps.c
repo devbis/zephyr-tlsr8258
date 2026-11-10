@@ -276,11 +276,18 @@ void aps_deliver_group_msg(void *arg)
 		aps_data_ind_t *srcInd = (aps_data_ind_t *)aps_group_q.active_buf;
 		aps_data_ind_t *dstInd = (aps_data_ind_t *)out;
 
-		dstInd->asdu = out->buf + (srcInd->asdu - aps_group_q.active_buf->buf);
+		dstInd->asdu = zb_buf_rebase(aps_group_q.active_buf, out, srcInd->asdu);
 		dstInd->dst_ep = aps_group_q.active_eps[aps_group_q.active_buf->hdr.handle];
+		if (dstInd->asdu == NULL) {
+			/* No copy of the frame to point into: skip this endpoint. */
+			zb_buf_free(out);
+			out = NULL;
+		}
 	}
 	aps_group_q.active_buf->hdr.handle++;
-	tl_zbTaskPost(af_aps_data_entry, out);
+	if (out != NULL) {
+		tl_zbTaskPost(af_aps_data_entry, out);
+	}
 
 	if (aps_group_q.active_buf->hdr.handle >= aps_group_q.active_ep_count) {
 		zb_buf_free(aps_group_q.active_buf);
