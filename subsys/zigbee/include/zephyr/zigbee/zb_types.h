@@ -11,6 +11,14 @@
 #include <string.h>
 #include <zephyr/sys/util.h>
 
+#ifdef CONFIG_SOC_FAMILY_STM32
+/*
+ * The STM32 CMSIS device header declares enumerators SUCCESS and ERROR; it
+ * must be seen before the macros below.
+ */
+#include <soc.h>
+#endif
+
 typedef uint8_t  status_t;
 typedef uint32_t UTCTime;
 typedef uint32_t arg_t;
