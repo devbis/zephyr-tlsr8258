@@ -86,6 +86,14 @@ config ZIGBEE_CALLBACK_QUEUE_DEPTH
 	  Entries, 8 bytes each, of the general and of the RX callback queue
 	  drained by the Zigbee thread.
 
+config ZIGBEE_BUF_POOL_NUM
+	int "Number of Zigbee buffers"
+	default 0
+	range 0 64
+	help
+	  Blocks in the Zigbee buffer pool. 0 selects the number the role and the
+	  radio port were sized for.
+
 config ZIGBEE_THREAD_PRIO
 	int "Zigbee thread priority"
 	default 5
