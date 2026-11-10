@@ -13,6 +13,10 @@
 #include <zephyr/net/net_l2.h>
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/atomic.h>
+#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) && !defined(CONFIG_IEEE802154_TLSR8269_RX_THREAD)
+#include <zephyr/drivers/ieee802154/ieee802154_tlsr8269.h>
+#define ZB_L2_RX_FROM_ZB_THREAD 1
+#endif
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
@@ -53,6 +57,10 @@ uint32_t zb_radio_l2_rx_drop_count(void)
 void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink)
 {
 	rx_sink = sink;
+#ifdef ZB_L2_RX_FROM_ZB_THREAD
+	/* The Zigbee thread drains the driver, so the interrupt only wakes it. */
+	tlsr8269_rx_set_notify(zb_platform_wake);
+#endif
 }
 
 void zb_radio_l2_rx_poll(void)
@@ -66,6 +74,9 @@ void zb_radio_l2_rx_poll(void)
 		return;
 	}
 
+#ifdef ZB_L2_RX_FROM_ZB_THREAD
+	tlsr8269_rx_service();
+#endif
 	while (k_msgq_get(&zb_l2_rx_queue, &frame, K_NO_WAIT) == 0) {
 		view.len = frame.len;
 		view.rssi_dbm = frame.rssi;
