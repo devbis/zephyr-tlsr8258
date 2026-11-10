@@ -68,7 +68,9 @@ typedef struct zb_buf_s {
  * fit all 36 blocks together with the router runtime. 33 retains the burst
  * headroom while fitting the actual Zephyr layout.
  */
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
+#if CONFIG_ZIGBEE_BUF_POOL_NUM > 0
+#define ZB_BUF_POOL_NUM CONFIG_ZIGBEE_BUF_POOL_NUM
+#elif defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
 /* 32 KB SRAM part: the ED pool is trimmed to fit the RAM budget. */
 #define ZB_BUF_POOL_NUM 14
 #elif defined(ZB_ROUTER_ROLE) || defined(CONFIG_ZIGBEE_ROUTER)
