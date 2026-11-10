@@ -29,8 +29,11 @@ LOG_MODULE_REGISTER(zigbee_radio_l2, CONFIG_ZIGBEE_LOG_LEVEL);
  * deepest driver-side queue.
  */
 #if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
-/* 32 KB SRAM part: each queued frame costs ~127 bytes of RAM. */
-#define ZB_L2_RX_DEPTH 6
+/*
+ * 32 KB SRAM part: each queued frame costs ~127 bytes of RAM. The driver
+ * queue is 4 deep, so 4 here cannot truncate a burst it delivers.
+ */
+#define ZB_L2_RX_DEPTH 4
 #else
 #define ZB_L2_RX_DEPTH 16
 #endif
