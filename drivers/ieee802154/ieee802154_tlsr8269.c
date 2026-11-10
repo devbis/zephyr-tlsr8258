@@ -103,6 +103,9 @@ LOG_MODULE_REGISTER(ieee802154_tlsr8269, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
 #define TLSR8269_FCF_ACK_REQ        BIT(5)
 #define TLSR8269_FRAME_TYPE_ACK     0x02u
+#define TLSR8269_FRAME_TYPE_CMD     0x03u
+#define TLSR8269_FCF_FRAME_PENDING  BIT(4)
+#define TLSR8269_CMD_DATA_REQUEST   0x04u
 #define TLSR8269_ADDR_MODE_SHORT    0x02u
 #define TLSR8269_ADDR_MODE_EXT      0x03u
 #define TLSR8269_DMA_WINDOW_HI      0x80u
@@ -217,6 +220,8 @@ struct tlsr8269_radio_data {
 	uint16_t pan_id;
 	uint16_t short_addr;
 	uint8_t ieee_addr[8];
+	/* Frame Pending in the ACK of every Data Request, the Zigbee rule. */
+	volatile uint8_t auto_ack_fpb;
 	uint8_t rx_buf[TLSR8269_RX_BUF_SIZE] __aligned(16);
 	uint8_t tx_buf[TLSR8269_TX_BUF_SIZE] __aligned(4);
 	uint8_t ack_buf[TLSR8269_ACK_BUF_SIZE] __aligned(4);
@@ -369,12 +374,54 @@ static bool tlsr8269_ack_needed(const struct tlsr8269_radio_data *data, const ui
 	return false;
 }
 
+/* Size of the MAC header of a PSDU without FCS, 0 when it does not fit. */
+static uint8_t tlsr8269_mac_hdr_size(uint16_t fcf, uint8_t len)
+{
+	uint8_t idx = 3u;
+	uint8_t dst_mode = (uint8_t)((fcf >> 10) & 0x03u);
+	uint8_t src_mode = (uint8_t)((fcf >> 14) & 0x03u);
+
+	if (dst_mode != 0u) {
+		idx += 2u;
+		idx += (dst_mode == TLSR8269_ADDR_MODE_EXT) ? 8u : 2u;
+	}
+
+	if (src_mode != 0u) {
+		if ((fcf & BIT(6)) == 0u) {
+			idx += 2u;
+		}
+		idx += (src_mode == TLSR8269_ADDR_MODE_EXT) ? 8u : 2u;
+	}
+
+	return (idx <= len) ? idx : 0u;
+}
+
+/* A MAC command frame whose command is Data Request. */
+static bool tlsr8269_is_data_request(const uint8_t *psdu, uint8_t len)
+{
+	uint16_t fcf;
+	uint8_t hdr;
+
+	if (len < 3u) {
+		return false;
+	}
+
+	fcf = sys_get_le16(psdu);
+	if ((fcf & 0x07u) != TLSR8269_FRAME_TYPE_CMD) {
+		return false;
+	}
+
+	hdr = tlsr8269_mac_hdr_size(fcf, len);
+
+	return (hdr != 0u) && (hdr < len) && (psdu[hdr] == TLSR8269_CMD_DATA_REQUEST);
+}
+
 /*
  * Vendor rf_mac_ack_build() and the ACK branch of rf_rx_irq_handler(): switch
  * to TX, wait ZB_TX_WAIT_US, start the ACK DMA, poll TX-done, return to RX.
  * The ZB_RT line is masked for the duration, as the vendor code does.
  */
-static void tlsr8269_send_ack(struct tlsr8269_radio_data *data, uint8_t seq)
+static void tlsr8269_send_ack(struct tlsr8269_radio_data *data, uint8_t seq, bool pending)
 {
 	uint32_t waited = 0u;
 
@@ -382,7 +429,7 @@ static void tlsr8269_send_ack(struct tlsr8269_radio_data *data, uint8_t seq)
 	memset(data->ack_buf, 0, sizeof(data->ack_buf));
 	data->ack_buf[0] = 4u;
 	data->ack_buf[4] = 5u;
-	data->ack_buf[5] = TLSR8269_FRAME_TYPE_ACK;
+	data->ack_buf[5] = TLSR8269_FRAME_TYPE_ACK | (pending ? TLSR8269_FCF_FRAME_PENDING : 0u);
 	data->ack_buf[6] = 0u;
 	data->ack_buf[7] = seq;
 
@@ -445,7 +492,12 @@ static void tlsr8269_rx_handle(struct tlsr8269_radio_data *data)
 	}
 
 	if (tlsr8269_ack_needed(data, &p[TLSR8269_RX_HDR_LEN], phy_len - TLSR8269_FCS_LEN)) {
-		tlsr8269_send_ack(data, p[TLSR8269_RX_HDR_LEN + 2u]);
+		/* The radio cannot tell in the turnaround time whether data is pending. */
+		bool pending = (data->auto_ack_fpb != 0u) &&
+			       tlsr8269_is_data_request(&p[TLSR8269_RX_HDR_LEN],
+							phy_len - TLSR8269_FCS_LEN);
+
+		tlsr8269_send_ack(data, p[TLSR8269_RX_HDR_LEN + 2u], pending);
 	}
 
 	tlsr8269_rx_queue_push(data, p, phy_len);
@@ -762,9 +814,18 @@ static int tlsr8269_ed_scan(const struct device *dev, uint16_t duration,
 static int tlsr8269_configure(const struct device *dev, enum ieee802154_config_type type,
 			      const struct ieee802154_config *config)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(type);
-	ARG_UNUSED(config);
+	struct tlsr8269_radio_data *data = dev->data;
+
+	if (type == IEEE802154_CONFIG_AUTO_ACK_FPB) {
+		if (config->auto_ack_fpb.enabled &&
+		    (config->auto_ack_fpb.mode != IEEE802154_FPB_ADDR_MATCH_ZIGBEE)) {
+			return -ENOTSUP;
+		}
+
+		data->auto_ack_fpb = config->auto_ack_fpb.enabled ? 1u : 0u;
+		return 0;
+	}
+
 	return -ENOTSUP;
 }
 
