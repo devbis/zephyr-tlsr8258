@@ -106,6 +106,14 @@ config ZIGBEE_RX_SNAPSHOTS
 	  received and given back with its buffer. A frame that finds the pool
 	  empty is dropped like one that finds no buffer.
 
+config ZIGBEE_RUN_IN_MAIN
+	bool "Run the Zigbee loop in the main thread"
+	help
+	  Do not create the Zigbee thread. The application's main() calls
+	  zb_main_run(), which never returns, so one stack and one thread object
+	  serve both. Set MAIN_STACK_SIZE to the stack the Zigbee loop needs and
+	  MAIN_THREAD_PRIORITY to ZIGBEE_THREAD_PRIO; ZIGBEE_STACK_SIZE is unused.
+
 config ZIGBEE_THREAD_PRIO
 	int "Zigbee thread priority"
 	default 5

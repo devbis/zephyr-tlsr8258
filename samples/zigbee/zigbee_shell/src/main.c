@@ -127,5 +127,9 @@ int main(void)
 		LOG_ERR("ZNP UART init failed (%d)", rc);
 	}
 #endif
+	if (IS_ENABLED(CONFIG_ZIGBEE_RUN_IN_MAIN)) {
+		zb_main_run();
+	}
+
 	return 0;
 }
