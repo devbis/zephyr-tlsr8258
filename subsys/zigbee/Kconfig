@@ -94,6 +94,18 @@ config ZIGBEE_BUF_POOL_NUM
 	  Blocks in the Zigbee buffer pool. 0 selects the number the role and the
 	  radio port were sized for.
 
+config ZIGBEE_RX_SNAPSHOTS
+	int "Receive frame snapshots shared by the Zigbee buffers"
+	default 0
+	range 0 32
+	help
+	  Every Zigbee buffer carries a 128 byte copy of the frame it was
+	  received in. Only buffers that hold a received frame need it, and they
+	  are few at a time, so 0 keeps one per buffer, as before, while a
+	  number N makes the copies a separate pool of N, taken when a frame is
+	  received and given back with its buffer. A frame that finds the pool
+	  empty is dropped like one that finds no buffer.
+
 config ZIGBEE_THREAD_PRIO
 	int "Zigbee thread priority"
 	default 5
