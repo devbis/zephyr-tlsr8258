@@ -383,7 +383,6 @@ uint8_t nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload, ui
 	zb_buf_t *copy;
 	uint8_t *copyPayload;
 	nwk_brc_delay_ctx_t *ctx;
-	uintptr_t payloadOffset;
 
 	if (!ev_timer_enough()) {
 		/* Returned whenever the timer pool cannot take another entry. */
@@ -398,8 +397,11 @@ uint8_t nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload, ui
 	/* ZB_BUF_SIZE payload bytes plus the id/handle/rssi of the buffer header. */
 	ZB_COPY_BUF(copy, buf);
 
-	payloadOffset = (uintptr_t)(payload - buf->buf);
-	copyPayload = copy->buf + payloadOffset;
+	copyPayload = zb_buf_rebase(buf, copy, payload);
+	if (copyPayload == NULL) {
+		zb_buf_free(copy);
+		return NWK_STATUS_FRAME_NOT_BUFFERED;
+	}
 	ctx = (nwk_brc_delay_ctx_t *)copy;
 
 	ctx->payloadLen = payloadLen;
