@@ -23,8 +23,8 @@ struct zb_task_item {
  * own FIFO so interview and post-join encrypted frames cannot be starved by
  * control callbacks.
  */
-#define ZB_TASK_POST_QUEUE_DEPTH 64U
-#define ZB_TASK_RX_QUEUE_DEPTH   64U
+#define ZB_TASK_POST_QUEUE_DEPTH CONFIG_ZIGBEE_CALLBACK_QUEUE_DEPTH
+#define ZB_TASK_RX_QUEUE_DEPTH   CONFIG_ZIGBEE_CALLBACK_QUEUE_DEPTH
 #define ZB_TASK_TX_QUEUE_DEPTH   4U
 /*
  * A callback is allowed to post another callback.  Draining until the queue

@@ -32,19 +32,19 @@ extern void zb_buf_free(zb_buf_t *buf);
  * are posted from the radio receive path faster than the Zigbee thread drains
  * them under permit-join load, so the queues are deeper than the vendor's 8.
  */
-#define ZB_TASKQ_DEPTH          32
+#define ZB_TASKQ_DEPTH          CONFIG_ZIGBEE_TASKQ_DEPTH
 /*
  * MAC indications arrive in RF bursts; keep room while zb_thread drains
  * the NWK dispatcher in bounded batches.
  */
-#define ZB_MAC2NWK_TASKQ_DEPTH  64
+#define ZB_MAC2NWK_TASKQ_DEPTH  CONFIG_ZIGBEE_TASKQ_RX_DEPTH
 /*
  * ZDP/APS responses are posted from the MAC2NWK consumer while the
  * coordinator is retrying an interview request.  They must not share the
  * smaller control queue budget: a burst of confirms/status callbacks can
  * otherwise make af_dataSend() fail after RX and decrypt already succeeded.
  */
-#define ZB_HIGH2NWK_TASKQ_DEPTH 64
+#define ZB_HIGH2NWK_TASKQ_DEPTH CONFIG_ZIGBEE_TASKQ_RX_DEPTH
 
 K_MSGQ_DEFINE(zb_taskq_ev_task, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
 K_MSGQ_DEFINE(zb_taskq_mac2nwk, sizeof(tl_zb_task_t), ZB_MAC2NWK_TASKQ_DEPTH, 4);
