@@ -36,10 +36,31 @@
 #define ZB_BUF_RX_HEADROOM 0U
 #endif
 
+#define ZB_BUF_RX_SNAPSHOT_BYTES (ZB_BUF_RX_HEADROOM + ZB_BUF_RX_SNAPSHOT_SIZE)
+
+/* A separate pool of received-frame copies instead of one per buffer. */
+#define ZB_BUF_SNAPSHOT_POOL (CONFIG_ZIGBEE_RX_SNAPSHOTS != 0)
+
+#if ZB_BUF_SNAPSHOT_POOL
 typedef struct {
 	zb_buf_t zb;
-	u8 rx_snapshot[ZB_BUF_RX_HEADROOM + ZB_BUF_RX_SNAPSHOT_SIZE];
 } zb_buf_block_t;
+
+K_MEM_SLAB_DEFINE_STATIC(zb_snap_slab, ZB_BUF_RX_SNAPSHOT_BYTES, CONFIG_ZIGBEE_RX_SNAPSHOTS,
+			 __alignof__(zb_buf_t));
+
+/*
+ * Snapshot block a buffer holds plus one (0: none), by buffer index, and the buffer
+ * a block belongs to.
+ */
+static u8 zb_snap_of_buf[ZB_BUF_POOL_NUM];
+static u8 zb_buf_of_snap[CONFIG_ZIGBEE_RX_SNAPSHOTS];
+#else
+typedef struct {
+	zb_buf_t zb;
+	u8 rx_snapshot[ZB_BUF_RX_SNAPSHOT_BYTES];
+} zb_buf_block_t;
+#endif
 
 K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
 			 __alignof__(zb_buf_t));
@@ -84,6 +105,51 @@ static inline void zb_buf_mark_free(u32 index)
 {
 	zb_buf_in_use[index >> 5] &= ~BIT(index & 31U);
 }
+
+#if ZB_BUF_SNAPSHOT_POOL
+static inline u8 *zb_snap_addr(u32 snap)
+{
+	return (u8 *)zb_snap_slab.buffer + (size_t)snap * ZB_BUF_RX_SNAPSHOT_BYTES;
+}
+
+/* Give the snapshot of a buffer back to its pool. Call with zb_buf_lock held. */
+static void zb_snap_release(u32 buf_index)
+{
+	u8 held = zb_snap_of_buf[buf_index];
+
+	if (held != 0U) {
+		zb_snap_of_buf[buf_index] = 0U;
+		k_mem_slab_free(&zb_snap_slab, zb_snap_addr(held - 1U));
+	}
+}
+
+/* The snapshot of a buffer, taken from the pool when it has none. NULL when the pool is empty. */
+static u8 *zb_snap_get(zb_buf_t *buf)
+{
+	k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
+	u32 index;
+	u8 *snap = NULL;
+
+	if (zb_buf_index(buf, &index)) {
+		if (zb_snap_of_buf[index] == 0U) {
+			void *block;
+
+			if (k_mem_slab_alloc(&zb_snap_slab, &block, K_NO_WAIT) == 0) {
+				u32 snap_index = (u32)((u8 *)block - (u8 *)zb_snap_slab.buffer) /
+						 ZB_BUF_RX_SNAPSHOT_BYTES;
+
+				zb_snap_of_buf[index] = (u8)(snap_index + 1U);
+				zb_buf_of_snap[snap_index] = (u8)index;
+			}
+		}
+		if (zb_snap_of_buf[index] != 0U) {
+			snap = zb_snap_addr(zb_snap_of_buf[index] - 1U);
+		}
+	}
+	k_spin_unlock(&zb_buf_lock, key);
+	return snap;
+}
+#endif
 
 zb_buf_t *zb_buf_allocate(void)
 {
@@ -130,6 +196,9 @@ void zb_buf_free(zb_buf_t *buf)
 			return;
 		}
 		zb_buf_mark_free(index);
+#if ZB_BUF_SNAPSHOT_POOL
+		zb_snap_release(index);
+#endif
 		k_spin_unlock(&zb_buf_lock, key);
 	}
 	buf->hdr.used = 0;
@@ -157,6 +226,17 @@ zb_buf_t *zb_buf_owner_of(const void *payload)
 	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
 	size_t block = zb_buf_slab.info.block_size;
 	size_t total = (size_t)zb_buf_slab.info.num_blocks * block;
+
+#if ZB_BUF_SNAPSHOT_POOL
+	uintptr_t snap_base = (uintptr_t)zb_snap_slab.buffer;
+
+	if ((payload != NULL) && (addr >= snap_base) &&
+	    (addr < snap_base + (size_t)CONFIG_ZIGBEE_RX_SNAPSHOTS * ZB_BUF_RX_SNAPSHOT_BYTES)) {
+		u8 owner = zb_buf_of_snap[(addr - snap_base) / ZB_BUF_RX_SNAPSHOT_BYTES];
+
+		return (zb_buf_t *)(base + (size_t)owner * block);
+	}
+#endif
 
 	if ((payload == NULL) || (addr < base) || (addr >= base + total)) {
 		return NULL;
@@ -236,21 +316,42 @@ u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 
 u8 zb_buf_rx_free_count(void)
 {
+#if ZB_BUF_SNAPSHOT_POOL
+	return (u8)MIN(k_mem_slab_num_free_get(&zb_buf_slab),
+		       k_mem_slab_num_free_get(&zb_snap_slab));
+#else
 	return (u8)k_mem_slab_num_free_get(&zb_buf_slab);
+#endif
 }
 
 u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
 {
+#if ZB_BUF_SNAPSHOT_POOL
+	u8 *snapshot;
+
+	if (buf == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
+		return NULL;
+	}
+
+	snapshot = zb_snap_get(buf);
+	if (snapshot == NULL) {
+		return NULL;
+	}
+#else
 	zb_buf_block_t *block = (zb_buf_block_t *)buf;
+	u8 *snapshot;
 
 	if (block == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
 		return NULL;
 	}
 
-	memset(block->rx_snapshot, 0, sizeof(block->rx_snapshot));
-	memcpy(&block->rx_snapshot[ZB_BUF_RX_HEADROOM], data, len);
+	snapshot = block->rx_snapshot;
+#endif
 
-	return &block->rx_snapshot[ZB_BUF_RX_HEADROOM];
+	memset(snapshot, 0, ZB_BUF_RX_SNAPSHOT_BYTES);
+	memcpy(&snapshot[ZB_BUF_RX_HEADROOM], data, len);
+
+	return &snapshot[ZB_BUF_RX_HEADROOM];
 }
 
 /*
@@ -266,6 +367,51 @@ void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src)
 		return;
 	}
 
+#if ZB_BUF_SNAPSHOT_POOL
+	u32 src_index;
+	u8 *to;
+
+	if (!zb_buf_index(src, &src_index) || zb_snap_of_buf[src_index] == 0U) {
+		return;
+	}
+
+	to = zb_snap_get(dst);
+	if (to != NULL) {
+		memcpy(to, zb_snap_addr(zb_snap_of_buf[src_index] - 1U), ZB_BUF_RX_SNAPSHOT_BYTES);
+	}
+#else
 	memcpy(((zb_buf_block_t *)dst)->rx_snapshot, ((const zb_buf_block_t *)src)->rx_snapshot,
 	       sizeof(((zb_buf_block_t *)dst)->rx_snapshot));
+#endif
+}
+
+u8 *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const u8 *p)
+{
+#if ZB_BUF_SNAPSHOT_POOL
+	uintptr_t addr = (uintptr_t)p;
+	u8 *result = NULL;
+	u32 src_index;
+	u32 dst_index;
+	k_spinlock_key_t key;
+
+	if (addr >= (uintptr_t)src && addr < (uintptr_t)src + sizeof(zb_buf_t)) {
+		return (u8 *)dst + (addr - (uintptr_t)src);
+	}
+
+	key = k_spin_lock(&zb_buf_lock);
+	if (zb_buf_index(src, &src_index) && zb_buf_index(dst, &dst_index) &&
+	    zb_snap_of_buf[src_index] != 0U && zb_snap_of_buf[dst_index] != 0U) {
+		uintptr_t from = (uintptr_t)zb_snap_addr(zb_snap_of_buf[src_index] - 1U);
+
+		if (addr >= from && addr < from + ZB_BUF_RX_SNAPSHOT_BYTES) {
+			result = zb_snap_addr(zb_snap_of_buf[dst_index] - 1U) + (addr - from);
+		}
+	}
+	k_spin_unlock(&zb_buf_lock, key);
+
+	return result;
+#else
+	/* The received frame follows the buffer in its block, so one offset serves both. */
+	return (u8 *)dst->buf + (p - src->buf);
+#endif
 }

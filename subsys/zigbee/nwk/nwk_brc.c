@@ -365,7 +365,6 @@ u8 nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLe
 	zb_buf_t *copy;
 	u8 *copyPayload;
 	nwk_brc_delay_ctx_t *ctx;
-	uintptr_t payloadOffset;
 
 	if (!ev_timer_enough()) {
 		/* The value 20 has no named constant in the SDK headers; it is returned
@@ -381,8 +380,11 @@ u8 nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLe
 	/* ZB_BUF_SIZE payload bytes plus the id/handle/rssi of the buffer header. */
 	TL_COPY_BUF(copy, buf);
 
-	payloadOffset = (uintptr_t)(payload - buf->buf);
-	copyPayload = copy->buf + payloadOffset;
+	copyPayload = zb_buf_rebase(buf, copy, payload);
+	if (copyPayload == NULL) {
+		zb_buf_free(copy);
+		return NWK_STATUS_FRAME_NOT_BUFFERED;
+	}
 	ctx = (nwk_brc_delay_ctx_t *)copy;
 
 	ctx->payloadLen = payloadLen;
