@@ -8,7 +8,7 @@
 
 #include "zb_common.h"
 
-extern u32 g_secondCnt;
+extern uint32_t g_secondCnt;
 int secondClockPeriodic(void *arg);
 void secondClockInit(void);
 void secondClockStop(void);

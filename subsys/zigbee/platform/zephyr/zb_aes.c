@@ -44,7 +44,7 @@ LOG_MODULE_REGISTER(zigbee_aes, CONFIG_ZIGBEE_LOG_LEVEL);
  */
 struct zb_aes_session {
 	struct cipher_ctx ctx;
-	u8 key[AES_BLOCK_SIZE];
+	uint8_t key[AES_BLOCK_SIZE];
 	bool open;
 };
 
@@ -53,7 +53,7 @@ static struct zb_aes_session zb_aes_enc;
 static struct zb_aes_session zb_aes_dec;
 #endif
 
-static int zb_aes_session_get(struct zb_aes_session *session, enum cipher_op op, const u8 *key)
+static int zb_aes_session_get(struct zb_aes_session *session, enum cipher_op op, const uint8_t *key)
 {
 	const struct device *dev = ZB_AES_DEVICE();
 	int ret;
@@ -90,7 +90,7 @@ static int zb_aes_session_get(struct zb_aes_session *session, enum cipher_op op,
 	return 0;
 }
 
-static void zb_aes_run(struct zb_aes_session *session, enum cipher_op op, u8 *key, u8 *in, u8 *out)
+static void zb_aes_run(struct zb_aes_session *session, enum cipher_op op, uint8_t *key, uint8_t *in, uint8_t *out)
 {
 	struct cipher_pkt pkt = {
 		.in_buf = in,
@@ -118,7 +118,7 @@ static void zb_aes_run(struct zb_aes_session *session, enum cipher_op op, u8 *ke
 
 #endif /* ZB_AES_DEVICE */
 
-void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result)
+void zb_aes_encrypt(uint8_t *key, uint8_t *plain, uint8_t *result)
 {
 #if defined(ZB_AES_DEVICE)
 	zb_aes_run(&zb_aes_enc, CRYPTO_CIPHER_OP_ENCRYPT, key, plain, result);
@@ -127,7 +127,7 @@ void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 #endif
 }
 
-void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
+void zb_aes_decrypt(uint8_t *key, uint8_t *cipher, uint8_t *result)
 {
 #if defined(CONFIG_ZIGBEE_AES_HW_DECRYPT)
 	zb_aes_run(&zb_aes_dec, CRYPTO_CIPHER_OP_DECRYPT, key, cipher, result);

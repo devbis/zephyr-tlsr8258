@@ -77,26 +77,26 @@
  *  @brief  Structure definition for reset alarm in alarm cluster
  */
 typedef struct {
-    u8 alarmCode;       //!< alarm code
-    u16 clusterId;      //!< cluster id
+    uint8_t alarmCode;       //!< alarm code
+    uint16_t clusterId;      //!< cluster id
 } resetAlarm_t;
 
 /**
  *  @brief  Structure definition for alarm in alarm cluster
  */
 typedef struct {
-    u8 alarmCode;       //!< alarm code
-    u16 clusterId;      //!< cluster id
+    uint8_t alarmCode;       //!< alarm code
+    uint16_t clusterId;      //!< cluster id
 } alarm_t;
 
 /**
  *  @brief  Structure definition for get alarm response command in alarm cluster
  */
 typedef struct {
-    u8 status;          //!< status code
-    u8 alarmCode;       //!< Identifying code for the cause of the alarm
-    u16 clusterId;      //!< The identifier of the cluster whose attribute generated this alarm
-    u32 timeStamp;      //!< The time at which the alarm occurred
+    uint8_t status;          //!< status code
+    uint8_t alarmCode;       //!< Identifying code for the cause of the alarm
+    uint16_t clusterId;      //!< The identifier of the cluster whose attribute generated this alarm
+    uint32_t timeStamp;      //!< The time at which the alarm occurred
 } getAlarmRsp_t;
 /** @} end of group ZCL_ALARM_Types */
 
@@ -105,17 +105,17 @@ typedef struct {
  *  @brief  Structure definition for alarm table entry in alarm cluster
  */
 typedef struct _attribute_packed_ {
-    u8 alarmCode;       //!< Identifying code for the cause of the alarm
-    u16 clusterId;      //!< The identifier of the cluster whose attribute generated this alarm
-    u32 timeStamp;      //!< The time at which the alarm occurred
+    uint8_t alarmCode;       //!< Identifying code for the cause of the alarm
+    uint16_t clusterId;      //!< The identifier of the cluster whose attribute generated this alarm
+    uint32_t timeStamp;      //!< The time at which the alarm occurred
 } zcl_alarmEntry_t;
 
 /**
  *  @brief  Structure definition for alarm table
  */
 typedef struct _attribute_packed_ {
-    u8 used;
-    u8 endpoint;
+    uint8_t used;
+    uint8_t endpoint;
     zcl_alarmEntry_t alarm;
 } zcl_alarmTable_t;
 
@@ -159,14 +159,14 @@ typedef struct {
 /**
  *  @brief  External variable for alarm Attribute
  */
-extern u16 zcl_attr_alarmCount;
+extern uint16_t zcl_attr_alarmCount;
 
 /**
  *  @brief  External variable for alarm Attribute table
  */
 extern const zclAttrInfo_t alarm_attrTbl[];
 
-extern const u8 zcl_alarm_attrNum;
+extern const uint8_t zcl_alarm_attrNum;
 
 /** @} end of group ZCL_Scene_Variables */
 #endif
@@ -183,7 +183,7 @@ extern const u8 zcl_alarm_attrNum;
  *
  * @return      Status
  */
-status_t zcl_alarm_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_alarm_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 /**
@@ -197,7 +197,7 @@ status_t zcl_alarm_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      status_t
  */
-status_t zcl_alarm_alarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, alarm_t *pAlarm);
+status_t zcl_alarm_alarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, alarm_t *pAlarm);
 #define zcl_alarm_alarmCmd(a,b,c,d)             (zcl_alarm_alarm((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -211,7 +211,7 @@ status_t zcl_alarm_alarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u
  *
  * @return      status_t
  */
-status_t zcl_alarm_resetAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, resetAlarm_t *pResetAlarm);
+status_t zcl_alarm_resetAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, resetAlarm_t *pResetAlarm);
 #define zcl_alarm_resetAlarmCmd(a,b,c,d)        (zcl_alarm_resetAlarm((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -224,7 +224,7 @@ status_t zcl_alarm_resetAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultR
  *
  * @return      status_t
  */
-status_t zcl_alarm_resetAllAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_alarm_resetAllAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_alarm_resetAllAlarmCmd(a,b,c)       (zcl_alarm_resetAllAlarm((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -237,7 +237,7 @@ status_t zcl_alarm_resetAllAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefau
  *
  * @return      status_t
  */
-status_t zcl_alarm_getAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_alarm_getAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_alarm_getAlarmCmd(a,b,c)            (zcl_alarm_getAlarm((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -250,7 +250,7 @@ status_t zcl_alarm_getAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp
  *
  * @return      status_t
  */
-status_t zcl_alarm_resetAlarmLog(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_alarm_resetAlarmLog(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_alarm_resetAlarmLogCmd(a,b,c)       (zcl_alarm_resetAlarmLog((a), (b), (c), ZCL_SEQ_NUM))
 
 
@@ -264,7 +264,7 @@ status_t zcl_alarm_resetAlarmLog(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefau
  *
  * @return      status code
  */
-status_t zcl_alarm_AddAlarmTab(u8 endpoint, u8 alarmCode, u16 clusterId, u32 timeStamp);
+status_t zcl_alarm_AddAlarmTab(uint8_t endpoint, uint8_t alarmCode, uint16_t clusterId, uint32_t timeStamp);
 
 
 /** @} end of group ZCL_Alarms_Fountions */

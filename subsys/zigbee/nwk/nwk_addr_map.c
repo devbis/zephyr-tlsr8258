@@ -17,26 +17,26 @@
  *   activeHead -> entry->activeNext -> ...   (entries currently mapped)
  *
  * The lookups walk the *active* list, not the array.  The vendor's
- * tl_zbShortAddrByExtAddr is the one exception to the used-bit check: it
+ * zb_ShortAddrByExtAddr is the one exception to the used-bit check: it
  * compares every node until the active-list link is NULL.  The other lookup
  * variants stop at the first entry whose used bit is clear.  The table index
  * handed back to callers is recomputed from the entry address, which is why
  * the vendor object calls __udivsi3 with a divisor of 20
- * (sizeof(tl_zb_addr_map_entry_t)).
+ * (sizeof(zb_addr_map_entry_t)).
  *
- * The list selector of tl_addrMapListAdd/Delete is 0 for the active list and
+ * The list selector of zb_addrMapListAdd/Delete is 0 for the active list and
  * non-zero for the free list.
  */
 
 #define ADDR_MAP_LIST_ACTIVE 0
 #define ADDR_MAP_LIST_FREE   1
 
-static u16 addr_map_idx_of(const tl_zb_addr_map_entry_t *entry)
+static uint16_t addr_map_idx_of(const zb_addr_map_entry_t *entry)
 {
-	return (u16)(entry - &g_nwkAddrMap.addrMap[0]);
+	return (uint16_t)(entry - &g_nwkAddrMap.addrMap[0]);
 }
 
-void tl_addrMapListAdd(u8 freeList, tl_zb_addr_map_entry_t *entry)
+void zb_addrMapListAdd(uint8_t freeList, zb_addr_map_entry_t *entry)
 {
 	if (freeList) {
 		entry->freeNext = g_nwkAddrMap.freeHead;
@@ -47,10 +47,10 @@ void tl_addrMapListAdd(u8 freeList, tl_zb_addr_map_entry_t *entry)
 	}
 }
 
-void tl_addrMapListDelete(u8 freeList, tl_zb_addr_map_entry_t *entry)
+void zb_addrMapListDelete(uint8_t freeList, zb_addr_map_entry_t *entry)
 {
-	tl_zb_addr_map_entry_t *cur;
-	tl_zb_addr_map_entry_t *next;
+	zb_addr_map_entry_t *cur;
+	zb_addr_map_entry_t *next;
 
 	if (freeList) {
 		cur = g_nwkAddrMap.freeHead;
@@ -97,9 +97,9 @@ void tl_addrMapListDelete(u8 freeList, tl_zb_addr_map_entry_t *entry)
 	}
 }
 
-void tl_zbNwkAddrMapRst(void)
+void zb_NwkAddrMapRst(void)
 {
-	tl_zb_addr_map_entry_t *entry;
+	zb_addr_map_entry_t *entry;
 
 	memset(&g_nwkAddrMap, 0, addrMapTblSizeGet());
 
@@ -110,8 +110,8 @@ void tl_zbNwkAddrMapRst(void)
 
 	/* The comparison is signed, so a table size of 0 or 1 skips the chaining
 	 * loop entirely and only the first entry is terminated. */
-	if ((s16)TL_ZB_NWK_ADDR_MAP_SIZE > 1) {
-		for (u16 i = 0; i < (u16)(TL_ZB_NWK_ADDR_MAP_SIZE - 1U); i++) {
+	if ((int16_t)ZB_NWK_ADDR_MAP_SIZE > 1) {
+		for (uint16_t i = 0; i < (uint16_t)(ZB_NWK_ADDR_MAP_SIZE - 1U); i++) {
 			entry->used = 0;
 			entry->activeNext = NULL;
 			entry->freeNext = entry + 1;
@@ -126,14 +126,14 @@ void tl_zbNwkAddrMapRst(void)
 	g_nwkAddrMap.validNum = 0;
 }
 
-void tl_zbNwkAddrMapInit(void)
+void zb_NwkAddrMapInit(void)
 {
-	tl_zbNwkAddrMapRst();
+	zb_NwkAddrMapRst();
 }
 
-void tl_zbNwkAddrMapDelete(u16 idx)
+void zb_NwkAddrMapDelete(uint16_t idx)
 {
-	tl_zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[idx];
+	zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[idx];
 
 	if (!entry->used) {
 		return;
@@ -143,16 +143,16 @@ void tl_zbNwkAddrMapDelete(u16 idx)
 	 * change: used and bind are cleared, then the entry is unlinked. */
 	entry->used = 0;
 	entry->bind = 0;
-	tl_addrMapListDelete(ADDR_MAP_LIST_ACTIVE, entry);
+	zb_addrMapListDelete(ADDR_MAP_LIST_ACTIVE, entry);
 
 	entry->freeNext = g_nwkAddrMap.freeHead;
 	g_nwkAddrMap.freeHead = entry;
 	g_nwkAddrMap.validNum--;
 }
 
-u8 tl_zbShortAddrByExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx)
+uint8_t zb_ShortAddrByExtAddr(uint16_t *shortAddr, addrExt_t extAddr, uint16_t *idx)
 {
-	for (tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
+	for (zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
 		if (ZB_IEEE_ADDR_CMP(e->extAddr, extAddr)) {
 			*shortAddr = e->shortAddr;
 			*idx = addr_map_idx_of(e);
@@ -163,9 +163,9 @@ u8 tl_zbShortAddrByExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx)
 	return 0xffU;
 }
 
-u8 tl_zbExtAddrByShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx)
+uint8_t zb_ExtAddrByShortAddr(uint16_t shortAddr, addrExt_t extAddr, uint16_t *idx)
 {
-	for (tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
+	for (zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
 		if (!e->used) {
 			break;
 		}
@@ -180,9 +180,9 @@ u8 tl_zbExtAddrByShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx)
 	return 0xffU;
 }
 
-addrExt_t *tl_zbExtAddrPtrByShortAddr(u16 shortAddr)
+addrExt_t *zb_ExtAddrPtrByShortAddr(uint16_t shortAddr)
 {
-	for (tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
+	for (zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
 		if (!e->used) {
 			break;
 		}
@@ -195,19 +195,19 @@ addrExt_t *tl_zbExtAddrPtrByShortAddr(u16 shortAddr)
 	return NULL;
 }
 
-void tl_zbExtAddrByIdx(u16 idx, addrExt_t extAddr)
+void zb_ExtAddrByIdx(uint16_t idx, addrExt_t extAddr)
 {
 	ZB_IEEE_ADDR_COPY(extAddr, g_nwkAddrMap.addrMap[idx].extAddr);
 }
 
-u16 tl_zbshortAddrByIdx(u16 idx)
+uint16_t zb_shortAddrByIdx(uint16_t idx)
 {
 	return g_nwkAddrMap.addrMap[idx].shortAddr;
 }
 
-u8 tl_idxByShortAddr(u16 *idx, u16 shortAddr)
+uint8_t zb_idxByShortAddr(uint16_t *idx, uint16_t shortAddr)
 {
-	for (tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
+	for (zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
 		if (!e->used) {
 			break;
 		}
@@ -221,9 +221,9 @@ u8 tl_idxByShortAddr(u16 *idx, u16 shortAddr)
 	return 0xffU;
 }
 
-u8 tl_idxByExtAddr(u16 *idx, addrExt_t extAddr)
+uint8_t zb_idxByExtAddr(uint16_t *idx, addrExt_t extAddr)
 {
-	for (tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
+	for (zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead; e != NULL; e = e->activeNext) {
 		if (!e->used) {
 			break;
 		}
@@ -237,14 +237,14 @@ u8 tl_idxByExtAddr(u16 *idx, addrExt_t extAddr)
 	return 0xffU;
 }
 
-zb_nwk_status_t tl_zbNwkAddrMapAdd(u16 shortAddr, addrExt_t extAddr, u16 *ref)
+zb_nwk_status_t zb_NwkAddrMapAdd(uint16_t shortAddr, addrExt_t extAddr, uint16_t *ref)
 {
-	u16 idxShort = 0;
-	u16 idxExt = 0;
-	u8 stsShort = tl_idxByShortAddr(&idxShort, shortAddr);
-	u8 stsExt = tl_idxByExtAddr(&idxExt, extAddr);
-	u16 idx = idxShort;
-	tl_zb_addr_map_entry_t *entry;
+	uint16_t idxShort = 0;
+	uint16_t idxExt = 0;
+	uint8_t stsShort = zb_idxByShortAddr(&idxShort, shortAddr);
+	uint8_t stsExt = zb_idxByExtAddr(&idxExt, extAddr);
+	uint16_t idx = idxShort;
+	zb_addr_map_entry_t *entry;
 
 	*ref = idxShort;
 
@@ -253,7 +253,7 @@ zb_nwk_status_t tl_zbNwkAddrMapAdd(u16 shortAddr, addrExt_t extAddr, u16 *ref)
 		 * same node is dropped ("4c:".."56:"). */
 		if ((stsShort == RET_OK) && (idxShort != idxExt)) {
 			*ref = idxExt;
-			tl_zbNwkAddrMapDelete(idxShort);
+			zb_NwkAddrMapDelete(idxShort);
 		}
 
 		idx = idxExt;
@@ -294,14 +294,14 @@ allocate:
 	entry->aps_dup_clock = 0;
 	*ref = addr_map_idx_of(entry);
 
-	tl_addrMapListDelete(ADDR_MAP_LIST_FREE, entry);
+	zb_addrMapListDelete(ADDR_MAP_LIST_FREE, entry);
 	entry->activeNext = g_nwkAddrMap.activeHead;
 	g_nwkAddrMap.activeHead = entry;
 
 	return NWK_STATUS_SUCCESS;
 }
 
-u8 tl_addrByShort(u16 shortAddr, u8 addIfMissing, u8 unused, u16 *idx)
+uint8_t zb_addrByShort(uint16_t shortAddr, uint8_t addIfMissing, uint8_t unused, uint16_t *idx)
 {
 	(void)unused;
 
@@ -310,7 +310,7 @@ u8 tl_addrByShort(u16 shortAddr, u8 addIfMissing, u8 unused, u16 *idx)
 		return 0xffU;
 	}
 
-	if (tl_idxByShortAddr(idx, shortAddr) == RET_OK) {
+	if (zb_idxByShortAddr(idx, shortAddr) == RET_OK) {
 		return RET_OK;
 	}
 
@@ -318,14 +318,14 @@ u8 tl_addrByShort(u16 shortAddr, u8 addIfMissing, u8 unused, u16 *idx)
 		return 0xffU;
 	}
 
-	return (u8)tl_zbNwkAddrMapAdd(shortAddr, (u8 *)g_zero_addr, idx);
+	return (uint8_t)zb_NwkAddrMapAdd(shortAddr, (uint8_t *)g_zero_addr, idx);
 }
 
-void tl_addrMappingForBind(u8 bind, u16 idx)
+void zb_addrMappingForBind(uint8_t bind, uint16_t idx)
 {
-	tl_zb_addr_map_entry_t *entry;
+	zb_addr_map_entry_t *entry;
 
-	if (TL_ZB_NWK_ADDR_MAP_SIZE <= idx) {
+	if (ZB_NWK_ADDR_MAP_SIZE <= idx) {
 		return;
 	}
 
@@ -338,19 +338,19 @@ void tl_addrMappingForBind(u8 bind, u16 idx)
 	entry->bind = bind & 1U;
 }
 
-u8 zb_address_ieee_by_short(u16 short_addr, addrExt_t ieee_address)
+uint8_t zb_address_ieee_by_short(uint16_t short_addr, addrExt_t ieee_address)
 {
-	u16 idx;
+	uint16_t idx;
 
 	/* The vendor tail-calls the lookup, so the caller sees 0 on success and
 	 * 0xff on failure - not a boolean. */
-	return tl_zbExtAddrByShortAddr(short_addr, ieee_address, &idx);
+	return zb_ExtAddrByShortAddr(short_addr, ieee_address, &idx);
 }
 
-tl_zb_addr_map_entry_t *tl_zbNwkAddrMapEntryGet(u16 orderIndex)
+zb_addr_map_entry_t *zb_NwkAddrMapEntryGet(uint16_t orderIndex)
 {
-	tl_zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead;
-	u16 i = 0;
+	zb_addr_map_entry_t *e = g_nwkAddrMap.activeHead;
+	uint16_t i = 0;
 
 	if (e == NULL) {
 		return NULL;
@@ -379,11 +379,11 @@ void nwk_nodeAddrInfoStore(void *arg)
 	memset(&itemInfo, 0, sizeof(itemInfo));
 
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(entry),
-			    (u8 *)&itemInfo) == NV_SUCC) {
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+			    (uint8_t *)&itemInfo) == NV_SUCC) {
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
 						NV_ITEM_ADDRESS_FOR_NEIGHBOR, itemInfo.opSect, i,
-						sizeof(entry), (u8 *)&entry) != NV_SUCC) {
+						sizeof(entry), (uint8_t *)&entry) != NV_SUCC) {
 				continue;
 			}
 
@@ -406,15 +406,15 @@ void nwk_nodeAddrInfoStore(void *arg)
 
 	if (!alreadyStored) {
 		(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_NEIGHBOR,
-				       sizeof(*info), (u8 *)info);
+				       sizeof(*info), (uint8_t *)info);
 	}
 
-	ev_buf_free((u8 *)info);
+	ev_buf_free((uint8_t *)info);
 }
 
-s32 nwk_parentNodeInfoStore(void)
+int32_t nwk_parentNodeInfoStore(void)
 {
-	tl_zb_normal_neighbor_entry_t *parent = tl_zbNeighborTableSearchForParent();
+	zb_normal_neighbor_entry_t *parent = zb_NeighborTableSearchForParent();
 	zb_addrForNeighbor_t rec;
 	zb_addrForNeighbor_t entry;
 	itemIfno_t itemInfo;
@@ -423,11 +423,11 @@ s32 nwk_parentNodeInfoStore(void)
 
 	/* Drop whatever is currently stored as the parent (relationship == 0). */
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(entry),
-			    (u8 *)&itemInfo) == NV_SUCC) {
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+			    (uint8_t *)&itemInfo) == NV_SUCC) {
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
 						NV_ITEM_ADDRESS_FOR_NEIGHBOR, itemInfo.opSect, i,
-						sizeof(entry), (u8 *)&entry) != NV_SUCC) {
+						sizeof(entry), (uint8_t *)&entry) != NV_SUCC) {
 				continue;
 			}
 
@@ -442,7 +442,7 @@ s32 nwk_parentNodeInfoStore(void)
 	}
 
 	if (parent != NULL) {
-		u16 idx = parent->addrmapIdx;
+		uint16_t idx = parent->addrmapIdx;
 
 		rec.shortAddr = g_nwkAddrMap.addrMap[idx].shortAddr;
 		ZB_IEEE_ADDR_COPY(rec.extAddr, g_nwkAddrMap.addrMap[idx].extAddr);
@@ -452,13 +452,13 @@ s32 nwk_parentNodeInfoStore(void)
 		rec.rxOnWhileIdle = parent->rxOnWhileIdle;
 
 		(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_NEIGHBOR,
-				       sizeof(rec), (u8 *)&rec);
+				       sizeof(rec), (uint8_t *)&rec);
 	}
 
 	return -1;
 }
 
-s32 nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv)
+int32_t nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv)
 {
 	zb_addrForNeighbor_t entry;
 	itemIfno_t itemInfo;
@@ -470,11 +470,11 @@ s32 nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv)
 		memset(&itemInfo, 0, sizeof(itemInfo));
 
 		if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE,
-				    sizeof(timeoutInfo), (u8 *)&itemInfo) == NV_SUCC) {
-			for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+				    sizeof(timeoutInfo), (uint8_t *)&itemInfo) == NV_SUCC) {
+			for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 				if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT,
 							itemInfo.opSect, i, sizeof(timeoutInfo),
-							(u8 *)&timeoutInfo) != NV_SUCC) {
+							(uint8_t *)&timeoutInfo) != NV_SUCC) {
 					continue;
 				}
 
@@ -491,14 +491,14 @@ s32 nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv)
 	memset(&itemInfo, 0, sizeof(itemInfo));
 
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(entry),
-			    (u8 *)&itemInfo) != NV_SUCC) {
+			    (uint8_t *)&itemInfo) != NV_SUCC) {
 		return 3;
 	}
 
-	for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+	for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 		if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_NEIGHBOR,
 					itemInfo.opSect, i, sizeof(entry),
-					(u8 *)&entry) != NV_SUCC) {
+					(uint8_t *)&entry) != NV_SUCC) {
 			continue;
 		}
 
@@ -518,7 +518,7 @@ s32 nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv)
 	return 3;
 }
 
-s32 nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv)
+int32_t nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv)
 {
 	zb_addrForBind_t entry;
 	itemIfno_t itemInfo;
@@ -526,11 +526,11 @@ s32 nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv)
 	memset(&itemInfo, 0, sizeof(itemInfo));
 
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(entry),
-			    (u8 *)&itemInfo) == NV_SUCC) {
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+			    (uint8_t *)&itemInfo) == NV_SUCC) {
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_BIND,
 						itemInfo.opSect, i, sizeof(entry),
-						(u8 *)&entry) != NV_SUCC) {
+						(uint8_t *)&entry) != NV_SUCC) {
 				continue;
 			}
 
@@ -550,18 +550,18 @@ s32 nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv)
 			}
 
 			(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_BIND,
-					       sizeof(*pAddrNv), (u8 *)pAddrNv);
+					       sizeof(*pAddrNv), (uint8_t *)pAddrNv);
 			return 0;
 		}
 	}
 
 	(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_BIND,
-			       sizeof(*pAddrNv), (u8 *)pAddrNv);
+			       sizeof(*pAddrNv), (uint8_t *)pAddrNv);
 
 	return 3;
 }
 
-s32 nwk_bindAddrInfoDelete(zb_addrForBind_t *pAddrNv)
+int32_t nwk_bindAddrInfoDelete(zb_addrForBind_t *pAddrNv)
 {
 	zb_addrForBind_t entry;
 	itemIfno_t itemInfo;
@@ -569,14 +569,14 @@ s32 nwk_bindAddrInfoDelete(zb_addrForBind_t *pAddrNv)
 	memset(&itemInfo, 0, sizeof(itemInfo));
 
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(entry),
-			    (u8 *)&itemInfo) != NV_SUCC) {
+			    (uint8_t *)&itemInfo) != NV_SUCC) {
 		return 3;
 	}
 
-	for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+	for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 		if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ADDRESS_FOR_BIND,
 					itemInfo.opSect, i, sizeof(entry),
-					(u8 *)&entry) != NV_SUCC) {
+					(uint8_t *)&entry) != NV_SUCC) {
 			continue;
 		}
 

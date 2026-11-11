@@ -36,9 +36,9 @@ ZTEST(join_layout, test_neighbor_timer_fields)
 {
 	const size_t after_links = 2U * sizeof(void *);
 
-	zassert_equal(OFFSETOF(tl_zb_normal_neighbor_entry_t, authTimeout), after_links);
-	zassert_equal(OFFSETOF(tl_zb_normal_neighbor_entry_t, timeoutCnt), after_links + 4U);
-	zassert_equal(OFFSETOF(tl_zb_normal_neighbor_entry_t, devTimeout), after_links + 8U);
+	zassert_equal(OFFSETOF(zb_normal_neighbor_entry_t, authTimeout), after_links);
+	zassert_equal(OFFSETOF(zb_normal_neighbor_entry_t, timeoutCnt), after_links + 4U);
+	zassert_equal(OFFSETOF(zb_normal_neighbor_entry_t, devTimeout), after_links + 8U);
 }
 
 /*
@@ -54,11 +54,11 @@ ZTEST(join_layout, test_aps_command_self_check_fields)
 	 * it and the receive timestamp, with no padding of its own.
 	 */
 	zassert_equal(OFFSETOF(aps_data_ind_t, src_short_addr),
-		      OFFSETOF(aps_data_ind_t, asdu) + sizeof(void *) + sizeof(u32));
+		      OFFSETOF(aps_data_ind_t, asdu) + sizeof(void *) + sizeof(uint32_t));
 	zassert_equal(OFFSETOF(aps_data_ind_t, rx_tick),
 		      OFFSETOF(aps_data_ind_t, asdu) + sizeof(void *));
-	zassert_equal(OFFSETOF(tl_zb_mac_pib_t, extAddress), 12);
-	zassert_equal(OFFSETOF(tl_zb_mac_pib_t, shortAddress), 26);
+	zassert_equal(OFFSETOF(zb_mac_pib_t, extAddress), 12);
+	zassert_equal(OFFSETOF(zb_mac_pib_t, shortAddress), 26);
 	zassert_equal(OFFSETOF(zb_info_t, macPib), 0);
 }
 
@@ -145,11 +145,11 @@ ZTEST(join_layout, test_nwk_ctx_state_nibbles)
 ZTEST(join_layout, test_designated_coordinator_field)
 {
 	zassert_equal(OFFSETOF(aps_pib_attributes_t, aps_designated_coordinator),
-		      sizeof(u32) + EXT_ADDR_LEN);
+		      sizeof(uint32_t) + EXT_ADDR_LEN);
 }
 
 /*
- * tl_zbMacTx() records the sequence number from the third byte of the frame
+ * zb_MacTx() records the sequence number from the third byte of the frame
  * it queues, so every caller must hand over the frame start; the buffer
  * header that follows the payload area must not move under that frame.
  */
@@ -169,7 +169,7 @@ ZTEST(join_layout, test_buffer_header_follows_payload)
 ZTEST(join_layout, test_update_device_indication_overlay)
 {
 	const size_t asdu_first = OFFSETOF(aps_data_ind_t, asdu);
-	const size_t asdu_last = asdu_first + sizeof(u8 *) - 1U;
+	const size_t asdu_last = asdu_first + sizeof(uint8_t *) - 1U;
 	const size_t ind_first = OFFSETOF(ss_apsmeUpdateDeviceInd_t, devAddr);
 	const size_t ind_last = OFFSETOF(ss_apsmeUpdateDeviceInd_t, status);
 

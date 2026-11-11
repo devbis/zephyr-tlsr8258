@@ -41,23 +41,23 @@
 
 #if 0
 #ifdef ZCL_TEMPERATURE_MEASUREMENT_ATTR_MEASUREDVALUE_ENABLE
-extern s16 zcl_attr_MeasuredValue;
+extern int16_t zcl_attr_MeasuredValue;
 #endif
 #ifdef ZCL_TEMPERATURE_MEASUREMENT_ATTR_MINMEASUREDVALUE_ENABLE
-extern s16 zcl_attr_MinMeasuredValue;
+extern int16_t zcl_attr_MinMeasuredValue;
 #endif
 #ifdef ZCL_TEMPERATURE_MEASUREMENT_ATTR_MAXMEASUREDVALUE_ENABLE
-extern s16 zcl_attr_MaxMeasuredValue;
+extern int16_t zcl_attr_MaxMeasuredValue;
 #endif
 #ifdef ZCL_TEMPERATURE_MEASUREMENT_ATTR_TOLERANCE_ENABLE
-extern u16 zcl_attr_Tolerance;
+extern uint16_t zcl_attr_Tolerance;
 #endif
 
 extern const zclAttrInfo_t temperature_measurement_attrTbl[];
-extern const u8 zcl_temperature_measurement_attrNum;
+extern const uint8_t zcl_temperature_measurement_attrNum;
 #endif
 
 
-status_t zcl_temperature_measurement_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_temperature_measurement_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_TEMPERATURE_MEASUREMENT_H */

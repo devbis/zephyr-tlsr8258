@@ -89,13 +89,13 @@
 typedef struct ev_bufItem {
     struct ev_bufItem *next;
 #if EV_BUFFER_DEBUG
-    u8  groupIndex;
-    u8  flag;
-    u16 line;
+    uint8_t  groupIndex;
+    uint8_t  flag;
+    uint16_t line;
 #else
-    u32 groupIndex;
+    uint32_t groupIndex;
 #endif
-    u8  data[1];
+    uint8_t  data[1];
 } ev_bufItem_t;
 
 /**
@@ -145,10 +145,10 @@ void ev_buf_init(void);
  *              NULL means the there is no available buffer.
  */
 #if EV_BUFFER_DEBUG
-u8 *my_ev_buf_allocate(u16 size, u16 line);
+uint8_t *my_ev_buf_allocate(uint16_t size, uint16_t line);
 #define ev_buf_allocate(size)   my_ev_buf_allocate(size, __LINE__)
 #else
-u8 *ev_buf_allocate(u16 size);
+uint8_t *ev_buf_allocate(uint16_t size);
 #endif
 
 /**
@@ -159,10 +159,10 @@ u8 *ev_buf_allocate(u16 size);
  * @return      Status.
  */
 #if EV_BUFFER_DEBUG
-buf_sts_t my_ev_buf_free(u8 *pBuf, u16 line);
+buf_sts_t my_ev_buf_free(uint8_t *pBuf, uint16_t line);
 #define ev_buf_free(pBuf)       my_ev_buf_free(pBuf, __LINE__)
 #else
-buf_sts_t ev_buf_free(u8 *pBuf);
+buf_sts_t ev_buf_free(uint8_t *pBuf);
 #endif
 
 /**
@@ -172,7 +172,7 @@ buf_sts_t ev_buf_free(u8 *pBuf);
  *
  * @return      Pointer of bufferItem
  */
-ev_bufItem_t *ev_buf_getHead(u8 *pd);
+ev_bufItem_t *ev_buf_getHead(uint8_t *pd);
 
 /**
  * @brief       judge if the buffer is ev buffer
@@ -181,11 +181,11 @@ ev_bufItem_t *ev_buf_getHead(u8 *pd);
  *
  * @return      1: if ev buffer; 0: others
  */
-u8 is_ev_buf(void *arg);
+uint8_t is_ev_buf(void *arg);
 
-u16 ev_buf_getFreeMaxSize(void);
+uint16_t ev_buf_getFreeMaxSize(void);
 
-u8 *long_ev_buf_get(void);
+uint8_t *long_ev_buf_get(void);
 /**  @} end of group EV_BUFFER_FUNCTIONS */
 
 /**  @} end of group EV_BUFFER */

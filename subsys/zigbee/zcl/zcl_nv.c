@@ -63,7 +63,7 @@ nv_sts_t zcl_reportingTab_save(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_REPORT, sizeof(zcl_reportingTab_t), (u8 *)&reportingTab);
+    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_REPORT, sizeof(zcl_reportingTab_t), (uint8_t *)&reportingTab);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -85,12 +85,12 @@ nv_sts_t zcl_reportingTab_restore(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_REPORT, sizeof(zcl_reportingTab_t), (u8 *)&reportingTab);
+    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_REPORT, sizeof(zcl_reportingTab_t), (uint8_t *)&reportingTab);
     if ((st == NV_SUCC) && (reportingTab.reportNum > ZCL_REPORTING_TABLE_NUM)) {
         /* saved by a build with a larger table */
         return NV_DATA_CHECK_ERROR;
     }
-    for (u8 i = 0; i < reportingTab.reportNum; i++) {
+    for (uint8_t i = 0; i < reportingTab.reportNum; i++) {
         memset(reportingTab.reportCfgInfo[i].prevData, 0xFF, REPORTABLE_CHANGE_MAX_ANALOG_SIZE);
     }
 #else
@@ -116,7 +116,7 @@ nv_sts_t zcl_sceneTable_save(void)
 
 #ifdef ZCL_SCENE
 #if NV_ENABLE
-    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE, sizeof(zcl_sceneTable_t) * ZCL_SCENE_TABLE_NUM, (u8 *)&g_zcl_sceneTab);
+    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_SCENE_TABLE, sizeof(zcl_sceneTable_t) * ZCL_SCENE_TABLE_NUM, (uint8_t *)&g_zcl_sceneTab);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -141,7 +141,7 @@ nv_sts_t zcl_sceneTable_restore(void)
 #ifdef ZCL_SCENE
 #if NV_ENABLE
     nv_itemLengthCheckAdd(NV_ITEM_ZCL_SCENE_TABLE, ZCL_SCENE_TABLE_NUM * sizeof(zcl_sceneTable_t));
-    st = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_SCENE_TABLE, sizeof(zcl_sceneTable_t), (u8 *)&g_zcl_sceneTab);
+    st = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_SCENE_TABLE, sizeof(zcl_sceneTable_t), (uint8_t *)&g_zcl_sceneTab);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -165,7 +165,7 @@ nv_sts_t zcl_apsLinkKeyAuthInfo_save(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_AUTH_INFO, sizeof(wwah_apsLinkKeyAuthInfo_t), (u8 *)&g_zcl_apsLinkKeyAuthInfo);
+    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_AUTH_INFO, sizeof(wwah_apsLinkKeyAuthInfo_t), (uint8_t *)&g_zcl_apsLinkKeyAuthInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -187,7 +187,7 @@ nv_sts_t zcl_apsLinkKeyAuthInfo_restore(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_AUTH_INFO, sizeof(wwah_apsLinkKeyAuthInfo_t), (u8 *)&g_zcl_apsLinkKeyAuthInfo);
+    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_AUTH_INFO, sizeof(wwah_apsLinkKeyAuthInfo_t), (uint8_t *)&g_zcl_apsLinkKeyAuthInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -209,7 +209,7 @@ nv_sts_t zcl_apsAcksRequireInfo_save(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_ACKS_INFO, sizeof(wwah_apsAcksRequireInfo_t), (u8 *)&g_zcl_apsAcksRequireInfo);
+    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_ACKS_INFO, sizeof(wwah_apsAcksRequireInfo_t), (uint8_t *)&g_zcl_apsAcksRequireInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -231,7 +231,7 @@ nv_sts_t zcl_apsAcksRequireInfo_restore(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_ACKS_INFO, sizeof(wwah_apsAcksRequireInfo_t), (u8 *)&g_zcl_apsAcksRequireInfo);
+    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_APS_ACKS_INFO, sizeof(wwah_apsAcksRequireInfo_t), (uint8_t *)&g_zcl_apsAcksRequireInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -253,7 +253,7 @@ nv_sts_t zcl_useTCForClusterInfo_save(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_USE_TC_CLUSTER_INFO, sizeof(wwah_useTCForClusterInfo_t), (u8 *)&g_zcl_useTCForClusterInfo);
+    st = nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_USE_TC_CLUSTER_INFO, sizeof(wwah_useTCForClusterInfo_t), (uint8_t *)&g_zcl_useTCForClusterInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif
@@ -275,7 +275,7 @@ nv_sts_t zcl_useTCForClusterInfo_restore(void)
     nv_sts_t st = NV_SUCC;
 
 #if NV_ENABLE
-    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_USE_TC_CLUSTER_INFO, sizeof(wwah_useTCForClusterInfo_t), (u8 *)&g_zcl_useTCForClusterInfo);
+    st = nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_USE_TC_CLUSTER_INFO, sizeof(wwah_useTCForClusterInfo_t), (uint8_t *)&g_zcl_useTCForClusterInfo);
 #else
     st = NV_ENABLE_PROTECT_ERROR;
 #endif

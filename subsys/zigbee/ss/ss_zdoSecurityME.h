@@ -21,21 +21,21 @@ void ss_zdoChildTableStore(void *arg);
 void ss_zdoChildAuthStart(void *arg);
 void ss_zdoRemoveDeviceIndHandle(void *arg);
 #endif
-void ss_zdoNwkKeySwitch(u8 keySeqNum);
-void ss_zdoNwkKeyConfigure(u8 *key, u8 keySeqNum, bool active);
-void ss_zdoLinkKeyConfigure(addrExt_t extAddr, u8 *key, u8 keyAttr, u8 apsLinkKeyType);
-void ss_zdoUseKey(u8 keySeqNum);
-u8 ss_keyIsEmpty(const u8 *key);
-void *ss_zdoGetNwkKeyBySeqNum(u8 seqNum);
+void ss_zdoNwkKeySwitch(uint8_t keySeqNum);
+void ss_zdoNwkKeyConfigure(uint8_t *key, uint8_t keySeqNum, bool active);
+void ss_zdoLinkKeyConfigure(addrExt_t extAddr, uint8_t *key, uint8_t keyAttr, uint8_t apsLinkKeyType);
+void ss_zdoUseKey(uint8_t keySeqNum);
+uint8_t ss_keyIsEmpty(const uint8_t *key);
+void *ss_zdoGetNwkKeyBySeqNum(uint8_t seqNum);
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 void ss_zdoUpdateDeviceIndHandle(void *arg);
 #endif
 #if defined(ZB_COORDINATOR_ROLE)
-u8 ss_zdoAcceptNewDevAllow(void);
+uint8_t ss_zdoAcceptNewDevAllow(void);
 void ss_zdoTcInit(void);
 void ss_tcSwitchKeyTimerStart(void);
 void ss_tcTransportKeyTimerStart(void *arg);
-void ss_tcSwitchKey(u8 keySeqNum);
+void ss_tcSwitchKey(uint8_t keySeqNum);
 #endif
 
 #endif

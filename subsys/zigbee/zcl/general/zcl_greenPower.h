@@ -125,27 +125,27 @@ typedef enum {
  ******************** Format of command ***************************
  *****************************************************************/
 typedef union {
-    u8 link;
+    uint8_t link;
     struct {
-        u8 rssi:6;
-        u8 lqi:2;
+        uint8_t rssi:6;
+        uint8_t lqi:2;
     } bits;
 } gpGppGpdLink_t;
 
 typedef union {
-    u16 opts;
+    uint16_t opts;
     struct {
-        u16 appId:3;
-        u16 alsoUnicast:1;
-        u16 alsoDerivedGroup:1;
-        u16 alsoCommGroup:1;
-        u16 secLevel:2;
-        u16 secKeyType:3;
-        u16 rxAfterTx:1;
-        u16 gpTxQueueFull:1;
-        u16 bidirectionalCap:1;
-        u16 proxyInfoPresent:1;
-        u16 reserved:1;
+        uint16_t appId:3;
+        uint16_t alsoUnicast:1;
+        uint16_t alsoDerivedGroup:1;
+        uint16_t alsoCommGroup:1;
+        uint16_t secLevel:2;
+        uint16_t secKeyType:3;
+        uint16_t rxAfterTx:1;
+        uint16_t gpTxQueueFull:1;
+        uint16_t bidirectionalCap:1;
+        uint16_t proxyInfoPresent:1;
+        uint16_t reserved:1;
     } bits;
 } gpNotiOpt_t;
 
@@ -154,32 +154,32 @@ typedef union {
  */
 typedef struct {
     gpdId_t	gpdId;
-    u8 *pGpdCmdPayload;
-    u32 gpdSecFrameCnt;
+    uint8_t *pGpdCmdPayload;
+    uint32_t gpdSecFrameCnt;
     gpNotiOpt_t options;
-    u16 gppShortAddr;
-    u8 endpoint;
-    u8 gpdCmdID;
-    u8 payloadLen;
+    uint16_t gppShortAddr;
+    uint8_t endpoint;
+    uint8_t gpdCmdID;
+    uint8_t payloadLen;
     gpGppGpdLink_t gppGpdLink;
 } zcl_gp_notificationCmd_t;
 
 typedef union {
-    u24 opts;
+    uint32_t opts;
     struct {
-        u24 appId:3;
-        u24 addSink:1;
-        u24 removeGPD:1;
-        u24 commMode:2;
-        u24 gpdFixed:1;
-        u24 gpdMacSeqNumCap:1;
-        u24 secLevel:2;
-        u24 secKeyType:3;
-        u24 gpdSecFrameCntPresent:1;
-        u24 gpdSecKeyPresent:1;
-        u24 assignedAliasPresent:1;
-        u24 groupcastRadiusPresent:1;
-        u24 reserved:6;
+        uint32_t appId:3;
+        uint32_t addSink:1;
+        uint32_t removeGPD:1;
+        uint32_t commMode:2;
+        uint32_t gpdFixed:1;
+        uint32_t gpdMacSeqNumCap:1;
+        uint32_t secLevel:2;
+        uint32_t secKeyType:3;
+        uint32_t gpdSecFrameCntPresent:1;
+        uint32_t gpdSecKeyPresent:1;
+        uint32_t assignedAliasPresent:1;
+        uint32_t groupcastRadiusPresent:1;
+        uint32_t reserved:6;
     } bits;
 } gpPairingOpt_t;
 
@@ -190,14 +190,14 @@ typedef struct {
     gpdId_t	gpdId;
     addrExt_t sinkIeeeAddr;
     gpPairingOpt_t options;
-    u32 gpdSecFrameCnt;
-    u8 gpdKey[16];
-    u16 sinkNwkAddr;
-    u16 sinkGroupID;
-    u16 assignedAlias;
-    u8 endpoint;
-    u8 deviceID;
-    u8 groupcastRadius;
+    uint32_t gpdSecFrameCnt;
+    uint8_t gpdKey[16];
+    uint16_t sinkNwkAddr;
+    uint16_t sinkGroupID;
+    uint16_t assignedAlias;
+    uint8_t endpoint;
+    uint8_t deviceID;
+    uint8_t groupcastRadius;
 } zcl_gp_pairingCmd_t;
 
 enum {
@@ -206,14 +206,14 @@ enum {
 };
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 action:1;
-        u8 commWindowPresent:1;
-        u8 exitMode:2;
-        u8 channelPresent:1;
-        u8 unicastCommunication:1;
-        u8 reserved:2;
+        uint8_t action:1;
+        uint8_t commWindowPresent:1;
+        uint8_t exitMode:2;
+        uint8_t channelPresent:1;
+        uint8_t unicastCommunication:1;
+        uint8_t reserved:2;
     } bits;
 } gpProxyCommModeOpt_t;
 
@@ -222,21 +222,21 @@ typedef union {
  */
 typedef struct {
     gpProxyCommModeOpt_t options;
-    u8 channel;
-    u16 commissioningWindow;
+    uint8_t channel;
+    uint16_t commissioningWindow;
 } zcl_gp_proxyCommissioningModeCmd_t;
 
 typedef union {
-    u16 opts;
+    uint16_t opts;
     struct {
-        u16 appId:3;
-        u16 rxAfterTx:1;
-        u16 secLevel:2;         //0x00,0x02,0x03
-        u16 secKeyType:3;       //0x00 - 0x07
-        u16 secPrcFailed:1;
-        u16 bidirectionalCap:1;
-        u16 proxyInfoPresent:1;
-        u16 reserved:4;
+        uint16_t appId:3;
+        uint16_t rxAfterTx:1;
+        uint16_t secLevel:2;         //0x00,0x02,0x03
+        uint16_t secKeyType:3;       //0x00 - 0x07
+        uint16_t secPrcFailed:1;
+        uint16_t bidirectionalCap:1;
+        uint16_t proxyInfoPresent:1;
+        uint16_t reserved:4;
     } bits;
 } gpCommNotiOpt_t;
 
@@ -245,23 +245,23 @@ typedef union {
  */
 typedef struct {
     gpdId_t gpdId;
-    u8 *pGpdCmdPayload;
-    u32 gpdSecFrameCnt;
-    u32 mic;
+    uint8_t *pGpdCmdPayload;
+    uint32_t gpdSecFrameCnt;
+    uint32_t mic;
     gpCommNotiOpt_t options;
-    u16 gppShortAddr;
-    u8 endpoint;
-    u8 gpdCmdID;
-    u8 payloadLen;
+    uint16_t gppShortAddr;
+    uint8_t endpoint;
+    uint8_t gpdCmdID;
+    uint8_t payloadLen;
     gpGppGpdLink_t gppGpdLink;
 } zcl_gp_commissioningNotificationCmd_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 appId:3;
-        u8 transmitOnEndpointMatch:1;
-        u8 reserved:4;
+        uint8_t appId:3;
+        uint8_t transmitOnEndpointMatch:1;
+        uint8_t reserved:4;
     } bits;
 } gpResponseOpt_t;
 
@@ -270,13 +270,13 @@ typedef union {
  */
 typedef struct {
     gpdId_t gpdId;
-    u8 *pGpdCmdPayload;
-    u16 tempMasterShortAddr;
+    uint8_t *pGpdCmdPayload;
+    uint16_t tempMasterShortAddr;
     gpResponseOpt_t options;
-    u8 tempMasterTxChannel;
-    u8 endpoint;
-    u8 gpdCmdID;
-    u8 payloadLen;
+    uint8_t tempMasterTxChannel;
+    uint8_t endpoint;
+    uint8_t gpdCmdID;
+    uint8_t payloadLen;
 } zcl_gp_responseCmd_t;
 
 enum {
@@ -286,27 +286,27 @@ enum {
 };
 
 typedef union {
-    u16 opts;
+    uint16_t opts;
     struct {
-        u16 appId:3;
-        u16 action:2;
-        u16 numOfTrans:3;
-        u16 addInfoPresent:1;
-        u16 reserved:7;
+        uint16_t appId:3;
+        uint16_t action:2;
+        uint16_t numOfTrans:3;
+        uint16_t addInfoPresent:1;
+        uint16_t reserved:7;
     } bits;
 } transUpdateOpt_t;
 
 typedef struct {
-    u8 *pZbCmdPayload;
-    u8 *pAdditionalInfo;
-    u16 profile;
-    u16 cluster;
-    u8 index;
-    u8 gpdCmdId;
-    u8 endpoint;
-    u8 zbCmdId;
-    u8 zbCmdPayloadLen;
-    u8 addInfoLen;
+    uint8_t *pZbCmdPayload;
+    uint8_t *pAdditionalInfo;
+    uint16_t profile;
+    uint16_t cluster;
+    uint8_t index;
+    uint8_t gpdCmdId;
+    uint8_t endpoint;
+    uint8_t zbCmdId;
+    uint8_t zbCmdPayloadLen;
+    uint8_t addInfoLen;
 } gpTranslation_t;
 
 /**
@@ -314,51 +314,51 @@ typedef struct {
  */
 typedef struct {
     gpdId_t gpdId;
-    u8 *pBuf;//buffer point of translation
+    uint8_t *pBuf;//buffer point of translation
     transUpdateOpt_t options;
-    u8 endpoint;
-    u8 bufLen;//length of translation buffer
+    uint8_t endpoint;
+    uint8_t bufLen;//length of translation buffer
 } zcl_gp_transTabUpdateCmd_t;
 
 /**
  *  @brief	Format of the GP Translation Table Request command
  */
 typedef struct {
-    u8 startIdx;
+    uint8_t startIdx;
 } zcl_gp_transTabReqCmd_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 appId:3;
-        u8 addInfoPresent:1;
-        u8 reserved:4;
+        uint8_t appId:3;
+        uint8_t addInfoPresent:1;
+        uint8_t reserved:4;
     } bits;
 } transOpt_t;
 
 typedef struct {
     gpdId_t gpdId;
-    u16 profile;
-    u16 cluster;
-    u8 gpdEndpoint;
-    u8 gpdCmdId;
-    u8 endpoint;
-    u8 zbCmdId;
-    u8 zbCmdPayloadLen;
-    u8 *pZbPayloadAndAdditionalInfo;
+    uint16_t profile;
+    uint16_t cluster;
+    uint8_t gpdEndpoint;
+    uint8_t gpdCmdId;
+    uint8_t endpoint;
+    uint8_t zbCmdId;
+    uint8_t zbCmdPayloadLen;
+    uint8_t *pZbPayloadAndAdditionalInfo;
 } gpTransTabList_t;
 
 /**
  *  @brief	Format of the GP Translation Table Response command
  */
 typedef struct {
-    u8 *pBuf;//buffer point to the translation table list
-    u8 bufLen;//length of translation table list buffer
-    u8 status;
+    uint8_t *pBuf;//buffer point to the translation table list
+    uint8_t bufLen;//length of translation table list buffer
+    uint8_t status;
     transOpt_t options;
-    u8 totalNumOfEntries;
-    u8 startIdx;
-    u8 entriesCnt;
+    uint8_t totalNumOfEntries;
+    uint8_t startIdx;
+    uint8_t entriesCnt;
 } zcl_gp_transTabRspCmd_t;
 
 /**
@@ -374,111 +374,111 @@ enum {
 };
 
 typedef union {
-    u8 acts;
+    uint8_t acts;
     struct {
-        u8 action:3;
-        u8 sendGpPairing:1;
-        u8 reserved:4;
+        uint8_t action:3;
+        uint8_t sendGpPairing:1;
+        uint8_t reserved:4;
     } bits;
 } gpPairingCfgActions_t;
 
 typedef union {
-    u16 opts;
+    uint16_t opts;
     struct {
-        u16 appId:3;
-        u16 commMode:2;
-        u16 seqNumCap:1;
-        u16 rxOnCap:1;
-        u16 fixedLocation:1;
-        u16 assignedAlias:1;
-        u16 secUse:1;
-        u16 appInfoPresent:1;
-        u16 reserved:5;
+        uint16_t appId:3;
+        uint16_t commMode:2;
+        uint16_t seqNumCap:1;
+        uint16_t rxOnCap:1;
+        uint16_t fixedLocation:1;
+        uint16_t assignedAlias:1;
+        uint16_t secUse:1;
+        uint16_t appInfoPresent:1;
+        uint16_t reserved:5;
     } bits;
 } gpPairingCfgOpt_t;
 
 typedef union {
-    u8 info;
+    uint8_t info;
     struct {
-        u8 manuIdPresent:1;
-        u8 modelIdPresent:1;
-        u8 gpdCmdsPresent:1;
-        u8 clusterListPresent:1;
-        u8 switchInfoPresent:1;
-        u8 gpdAppDescCmdFollows:1;
-        u8 reserved:2;
+        uint8_t manuIdPresent:1;
+        uint8_t modelIdPresent:1;
+        uint8_t gpdCmdsPresent:1;
+        uint8_t clusterListPresent:1;
+        uint8_t switchInfoPresent:1;
+        uint8_t gpdAppDescCmdFollows:1;
+        uint8_t reserved:2;
     } bits;
 } gpAppInfo_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 secLevel:2;          //0x00,0x02,0x03
-        u8 secKeyType:3;        //0x00 - 0x07
-        u8 reserved:3;
+        uint8_t secLevel:2;          //0x00,0x02,0x03
+        uint8_t secKeyType:3;        //0x00 - 0x07
+        uint8_t reserved:3;
     } bits;
 } gpSecOpt_t;
 
 typedef struct {
-    u16 groupId;
-    u16 alias;
+    uint16_t groupId;
+    uint16_t alias;
 } gpSinkGroupListItem_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 sClusterNum:4;
-        u8 cClusterNum:4;
+        uint8_t sClusterNum:4;
+        uint8_t cClusterNum:4;
     } bits;
 } gpClusterId_t;
 
 typedef struct {
-    u8 *sClusterList;
-    u8 *cClusterList;
+    uint8_t *sClusterList;
+    uint8_t *cClusterList;
     gpClusterId_t clusterID;
 } gpCommCluster_t;
 
 typedef union {
-    u8 cfg;
+    uint8_t cfg;
     struct {
-        u8 contactNum:4;
-        u8 switchType:2;
-        u8 reserved:2;
+        uint8_t contactNum:4;
+        uint8_t switchType:2;
+        uint8_t reserved:2;
     } bits;
 } gpGenericSwCfg_t;
 
 typedef struct {
-    u8 switchInfoLen;
+    uint8_t switchInfoLen;
     gpGenericSwCfg_t switchCfg;
-    u8 contactStatus;
+    uint8_t contactStatus;
 } gpSwitchInfo_t;
 
 /**
  *  @brief	Format of the GP Pairing Configuration command
  */
 typedef struct {
-    u8 *pGroupList;
-    u8 *pPairedEndpoints;
-    u8 *pGpdCmdList;
-    u8 *pClusterList;
-    u8 *pReportDescriptor;
-    u32 gpdSecFrameCnt;
-    u8 gpdSecKey[SEC_KEY_LEN];
+    uint8_t *pGroupList;
+    uint8_t *pPairedEndpoints;
+    uint8_t *pGpdCmdList;
+    uint8_t *pClusterList;
+    uint8_t *pReportDescriptor;
+    uint32_t gpdSecFrameCnt;
+    uint8_t gpdSecKey[SEC_KEY_LEN];
     gpdId_t gpdId;
     gpPairingCfgOpt_t options;
-    u16 gpdAssignedAlias;
-    u16 manufacturerId;
-    u16 modelId;
+    uint16_t gpdAssignedAlias;
+    uint16_t manufacturerId;
+    uint16_t modelId;
     gpPairingCfgActions_t actions;
     gpAppInfo_t appInfo;
-    u8 endpoint;
-    u8 deviceId;
-    u8 groupcastRadius;
+    uint8_t endpoint;
+    uint8_t deviceId;
+    uint8_t groupcastRadius;
     gpSecOpt_t secOptions;
-    u8 numOfPairedEndpoints;
+    uint8_t numOfPairedEndpoints;
     gpSwitchInfo_t switchInfo;
-    u8 numOfGpdCmds;
-    u8 reportDescLen;
+    uint8_t numOfGpdCmds;
+    uint8_t reportDescLen;
 } zcl_gp_pairingConfigurationCmd_t;
 
 /**
@@ -490,11 +490,11 @@ enum {
 };
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 appId:3;
-        u8 reqType:2;
-        u8 reserved:3;
+        uint8_t appId:3;
+        uint8_t reqType:2;
+        uint8_t reserved:3;
     } bits;
 } gpSinkProxyTabReqOpt_t;
 
@@ -504,20 +504,20 @@ typedef union {
 typedef struct {
     gpdId_t gpdId;
     gpSinkProxyTabReqOpt_t options;
-    u8 endpoint;
-    u8 index;
+    uint8_t endpoint;
+    uint8_t index;
 } zcl_gp_sinkTabReqCmd_t;
 
 /**
  *  @brief	Format of the GP Sink Table Response command
  */
 typedef struct {
-    u8 *sinkTabEntry;   //buffer pointer of sink table entries field
-    u8 entriesLen;      //buffer length of sink table entries
-    u8 status;
-    u8 totalTabEntries;
-    u8 startIdx;
-    u8 entriesCnt;
+    uint8_t *sinkTabEntry;   //buffer pointer of sink table entries field
+    uint8_t entriesLen;      //buffer length of sink table entries
+    uint8_t status;
+    uint8_t totalTabEntries;
+    uint8_t startIdx;
+    uint8_t entriesCnt;
 } zcl_gp_sinkTabRspCmd_t;
 
 /**
@@ -526,30 +526,30 @@ typedef struct {
 typedef struct {
     gpdId_t gpdId;
     gpSinkProxyTabReqOpt_t options;
-    u8 endpoint;
-    u8 index;
+    uint8_t endpoint;
+    uint8_t index;
 } zcl_gp_proxyTabReqCmd_t;
 
 /**
  *  @brief	Format of the GP Proxy Table Response command
  */
 typedef struct {
-    u8 *proxyTabEntry;
-    u8 entriesLen;
-    u8 status;
-    u8 totalTabEntries;
-    u8 startIdx;
-    u8 entriesCnt;
+    uint8_t *proxyTabEntry;
+    uint8_t entriesLen;
+    uint8_t status;
+    uint8_t totalTabEntries;
+    uint8_t startIdx;
+    uint8_t entriesCnt;
 } zcl_gp_proxyTabRspCmd_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 action:1;
-        u8 involveGpmInSec:1;
-        u8 involveGpmInPairing:1;
-        u8 involveProxies:1;
-        u8 reserved:4;
+        uint8_t action:1;
+        uint8_t involveGpmInSec:1;
+        uint8_t involveGpmInPairing:1;
+        uint8_t involveProxies:1;
+        uint8_t reserved:4;
     } bits;
 } gpSinkCommModeOpt_t;
 
@@ -557,10 +557,10 @@ typedef union {
  *  @brief	Format of the GP Sink Commissioning Mode command
  */
 typedef struct {
-    u16 gpmAddrForSec;
-    u16 gpmAddrForPairing;
+    uint16_t gpmAddrForSec;
+    uint16_t gpmAddrForPairing;
     gpSinkCommModeOpt_t options;
-    u8 sinkEndpoint;
+    uint8_t sinkEndpoint;
 } zcl_gp_sinkCommissioningModeCmd_t;
 
 #if 0
@@ -582,21 +582,21 @@ typedef struct {
 /**
  *  @brief  External variable for GP Attribute
  */
-extern const u8 zclGpAttr_gppMaxProxyTabEntries;
-extern const u16 zclGpAttr_clusterRev;
-extern u8 zclGpAttr_proxyTabEntry[];
+extern const uint8_t zclGpAttr_gppMaxProxyTabEntries;
+extern const uint16_t zclGpAttr_clusterRev;
+extern uint8_t zclGpAttr_proxyTabEntry[];
 #if 0
-extern u8 zclGpAttr_gppNotificationRetryNum;
-extern u8 zclGpAttr_gppNotificationTimer;
-extern u8 zclGpAttr_gppMaxSearchCnt;
-extern u8 *pZclGpAttr_gppBlockedGPDID;
+extern uint8_t zclGpAttr_gppNotificationRetryNum;
+extern uint8_t zclGpAttr_gppNotificationTimer;
+extern uint8_t zclGpAttr_gppMaxSearchCnt;
+extern uint8_t *pZclGpAttr_gppBlockedGPDID;
 #endif
-extern u8 zclGpAttr_gppFunc[];
-extern u8 zclGpAttr_gppActiveFunc[];
+extern uint8_t zclGpAttr_gppFunc[];
+extern uint8_t zclGpAttr_gppActiveFunc[];
 
-extern u8 zclGpAttr_gpSharedSecKeyType;
-extern u8 zclGpAttr_gpSharedSecKey[];
-extern u8 zclGpAttr_gpLinkKey[];
+extern uint8_t zclGpAttr_gpSharedSecKeyType;
+extern uint8_t zclGpAttr_gpSharedSecKey[];
+extern uint8_t zclGpAttr_gpLinkKey[];
 
 
 
@@ -605,45 +605,45 @@ extern u8 zclGpAttr_gpLinkKey[];
  */
 extern const zclAttrInfo_t gp_attrTbl[];
 
-extern const u8 zcl_gp_attrNum;
+extern const uint8_t zcl_gp_attrNum;
 #endif
 
-status_t zcl_gp_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_gp_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_gp_notificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_notificationCmd_t *pCmd);
+status_t zcl_gp_notificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_notificationCmd_t *pCmd);
 #define zcl_gp_notificationCmdSend(a,b,c,d)                     (zcl_gp_notificationCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_commissioningNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_commissioningNotificationCmd_t *pCmd);
+status_t zcl_gp_commissioningNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_commissioningNotificationCmd_t *pCmd);
 #define zcl_gp_commissioningNotificationCmdSend(a,b,c,d)        (zcl_gp_commissioningNotificationCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_sinkTabReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkTabReqCmd_t *pCmd);
+status_t zcl_gp_sinkTabReqCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkTabReqCmd_t *pCmd);
 #define zcl_gp_sinkTabReqCmdSend(a,b,c,d)                       (zcl_gp_sinkTabReqCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_proxyTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyTabRspCmd_t *pCmd);
+status_t zcl_gp_proxyTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyTabRspCmd_t *pCmd);
 #define zcl_gp_proxyTableRspCmdSend(a,b,c,d,e)                  (zcl_gp_proxyTableRspCmd((a), (b), (c), (d), (e)))
 
-status_t zcl_gp_pairingCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_pairingCmd_t *pCmd);
+status_t zcl_gp_pairingCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_pairingCmd_t *pCmd);
 #define zcl_gp_pairingCmdSend(a,b,c,d)                          (zcl_gp_pairingCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_proxyCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyCommissioningModeCmd_t *pCmd);
+status_t zcl_gp_proxyCommissioningModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyCommissioningModeCmd_t *pCmd);
 #define zcl_gp_proxyCommissioningModeCmdSend(a,b,c,d)           (zcl_gp_proxyCommissioningModeCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_responseCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_responseCmd_t *pCmd);
+status_t zcl_gp_responseCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_responseCmd_t *pCmd);
 #define zcl_gp_responseCmdSend(a,b,c,d)                         (zcl_gp_responseCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_sinkTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkTabRspCmd_t *pCmd);
+status_t zcl_gp_sinkTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkTabRspCmd_t *pCmd);
 #define zcl_gp_sinkTableRspCmdSend(a,b,c,d,e)                   (zcl_gp_sinkTableRspCmd((a), (b), (c), (d), (e)))
 
-status_t zcl_gp_transTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_transTabRspCmd_t *pCmd);
+status_t zcl_gp_transTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_transTabRspCmd_t *pCmd);
 #define zcl_gp_transTableRspCmdSend(a,b,c,d,e)                  (zcl_gp_transTableRspCmd((a), (b), (c), (d), (e)))
 
-status_t zcl_gp_proxyTableReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyTabReqCmd_t *pCmd);
+status_t zcl_gp_proxyTableReqCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyTabReqCmd_t *pCmd);
 #define zcl_gp_proxyTableReqCmdSend(a,b,c,d)                    (zcl_gp_proxyTableReqCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_sinkCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkCommissioningModeCmd_t *pCmd);
+status_t zcl_gp_sinkCommissioningModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkCommissioningModeCmd_t *pCmd);
 #define zcl_gp_sinkCommissioningModeCmdSend(a,b,c,d)            (zcl_gp_sinkCommissioningModeCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_pairingConfigurationCmd_t *pCmd);
+status_t zcl_gp_pairingCfgCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_pairingConfigurationCmd_t *pCmd);
 #define zcl_gp_pairingCfgCmdSend(a,b,c,d)                       (zcl_gp_pairingCfgCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 #endif	/* ZCL_GREEN_POWER_H */

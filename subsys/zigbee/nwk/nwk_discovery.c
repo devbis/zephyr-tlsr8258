@@ -20,14 +20,14 @@ static bool nwk_beacon_payload_is_valid(const zb_mac_beacon_payload_t *payload)
 	       payload->txoffset[1] == 0xffU && payload->txoffset[2] == 0xffU;
 }
 
-static void nwk_nlmeNwkDiscCnf(void *arg, u8 status)
+static void nwk_nlmeNwkDiscCnf(void *arg, uint8_t status)
 {
 	((nlme_nwkDisc_cnf_t *)arg)->status = status;
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
-	tl_zbTaskPost(zdo_nlme_network_discovery_confirm_cb, arg);
+	zb_TaskPost(zdo_nlme_network_discovery_confirm_cb, arg);
 }
 
-void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
+void zb_NwkNlmeNwkDiscRequestHandler(void *arg)
 {
 	nlme_nwkDisc_req_t *req = (nlme_nwkDisc_req_t *)arg;
 	if (g_zbNwkCtx.state != NLME_STATE_IDLE) {
@@ -43,7 +43,7 @@ void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg)
 	g_zbNwkCtx.state = NLME_STATE_DISC;
 	((zb_mac_mlme_scan_req_t *)arg)->scanType = ACTIVE_SCAN;
 	((zb_mac_mlme_scan_req_t *)arg)->scanDuration = req->scanDuration;
-	tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_SCAN_REQ, arg);
+	zb_PrimitivePost(ZB_Q_NWK2MAC, MAC_MLME_SCAN_REQ, arg);
 }
 
 void nwk_discoveryScanCnfHandler(void *arg)
@@ -58,7 +58,7 @@ void nwk_discoveryScanCnfHandler(void *arg)
 	nwk_nlmeNwkDiscCnf(arg, scanCnf->status);
 }
 
-void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
+void zb_MacMlmeBeaconNotifyIndicationHandler(void *arg)
 {
 	zb_mlme_beacon_notify_ind_t *ind = (zb_mlme_beacon_notify_ind_t *)arg;
 	zb_mac_beacon_payload_t *payload = (zb_mac_beacon_payload_t *)ind->psdu;
@@ -70,19 +70,19 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 	}
 
 	if (state == NLME_STATE_DISC) {
-		if (TL_ZB_ASSOCJOIN_PERMIT_PANID != MAC_INVALID_PANID &&
-		    TL_ZB_ASSOCJOIN_PERMIT_PANID != ind->panDesc.coordPanId) {
+		if (ZB_ASSOCJOIN_PERMIT_PANID != MAC_INVALID_PANID &&
+		    ZB_ASSOCJOIN_PERMIT_PANID != ind->panDesc.coordPanId) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
 
-		if (TL_ZB_ASSOCJOIN_FILTER_PANID != MAC_INVALID_PANID &&
-		    TL_ZB_ASSOCJOIN_FILTER_PANID == ind->panDesc.coordPanId) {
+		if (ZB_ASSOCJOIN_FILTER_PANID != MAC_INVALID_PANID &&
+		    ZB_ASSOCJOIN_FILTER_PANID == ind->panDesc.coordPanId) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
 
-		if ((((u8)(ind->panDesc.superframeSpec >> 8)) & 0x7fU) == 0U) {
+		if ((((uint8_t)(ind->panDesc.superframeSpec >> 8)) & 0x7fU) == 0U) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
@@ -105,9 +105,9 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 			return;
 		}
 
-		if (tl_zbNwkPanidConflictDetect(ind->panDesc.coordPanId, payload->extended_panid)) {
+		if (zb_NwkPanidConflictDetect(ind->panDesc.coordPanId, payload->extended_panid)) {
 			g_sysDiags.panIdConflict++;
-			tl_zbNwkPanidConflictProcess(arg);
+			zb_NwkPanidConflictProcess(arg);
 			return;
 		}
 
@@ -125,7 +125,7 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 	}
 #endif
 
-	tl_zb_addition_neighbor_entry_t entry;
+	zb_addition_neighbor_entry_t entry;
 	memset(&entry, 0, sizeof(entry));
 
 	memcpy(entry.extPanId, payload->extended_panid, sizeof(entry.extPanId));
@@ -133,12 +133,12 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 	entry.addrMode = ind->panDesc.coordAddr.addrMode;
 	entry.logicChannel = ind->panDesc.logicalChannel;
 	entry.depth = payload->device_depth;
-	entry.beaconOrder = (u8)(ind->panDesc.superframeSpec & 0x0fU);
-	entry.permitJoining = (u8)((ind->panDesc.superframeSpec >> 15) & 0x01U);
+	entry.beaconOrder = (uint8_t)(ind->panDesc.superframeSpec & 0x0fU);
+	entry.permitJoining = (uint8_t)((ind->panDesc.superframeSpec >> 15) & 0x01U);
 	entry.routerCapacity = payload->router_capacity;
 	entry.edCapacity = payload->end_device_capacity;
 	entry.stackProfile = payload->stack_profile;
-	entry.superframeOrder = (u8)((ind->panDesc.superframeSpec >> 4) & 0x0fU);
+	entry.superframeOrder = (uint8_t)((ind->panDesc.superframeSpec >> 4) & 0x0fU);
 	entry.lqi = ind->panDesc.linkQuality;
 	entry.nwkUpdateId = payload->nwk_update_id;
 
@@ -170,6 +170,6 @@ void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg)
 				   ? NWK_DEVICE_TYPE_COORDINATOR
 				   : NWK_DEVICE_TYPE_ROUTER;
 
-	(void)tl_zbAdditionNeighborTableUpdate(&entry);
+	(void)zb_AdditionNeighborTableUpdate(&entry);
 	zb_buf_free((zb_buf_t *)arg);
 }

@@ -96,16 +96,16 @@
  *  @brief  Definition format for ZCL_CMD_OFF_WITH_EFFECT command
  */
 typedef struct {
-    u8 effectId;
-    u8 effectVariant;
+    uint8_t effectId;
+    uint8_t effectVariant;
 } zcl_onoff_offWithEffectCmd_t;
 
 typedef union {
     struct {
-        u8 acceptOnlyWhenOn:1;
-        u8 reserved:7;
+        uint8_t acceptOnlyWhenOn:1;
+        uint8_t reserved:7;
     } bits;
-    u8 onOffCtrl;
+    uint8_t onOffCtrl;
 } zcl_onoffCtrl_t;
 
 /**
@@ -113,8 +113,8 @@ typedef union {
  */
 typedef struct {
     zcl_onoffCtrl_t onOffCtrl;
-    u16 onTime;
-    u16 offWaitTime;
+    uint16_t onTime;
+    uint16_t offWaitTime;
 } zcl_onoff_onWithTimeOffCmd_t;
 
 /**
@@ -133,7 +133,7 @@ typedef union {
 /**
  *  @brief  Definition for onoff command callback function type
  */
-typedef void (*zcl_OnOffCb_t)(u8 cmdId, zcl_onoff_cmdPayload_t *cmdPayload);
+typedef void (*zcl_OnOffCb_t)(uint8_t cmdId, zcl_onoff_cmdPayload_t *cmdPayload);
 
 /**
  *  @brief  Structure definition for commands callback functions in OnOff cluster
@@ -151,19 +151,19 @@ typedef struct {
  */
 typedef struct {
 #ifdef ZCL_ATTR_ON_TIME_ENABLE
-    u16 onTime;
+    uint16_t onTime;
 #endif
 #ifdef ZCL_ATTR_OFF_WAIT_TIME_ENABLE
-    u16 offWaitTime;
+    uint16_t offWaitTime;
 #endif
 #ifdef ZCL_ATTR_ONOFF_ENABLE
-    u8 onOff;
+    uint8_t onOff;
 #endif
 #ifdef ZCL_ATTR_GLOBAL_SCENE_CONTROL_ENABLE
-    u8 globalSceneControl;
+    uint8_t globalSceneControl;
 #endif
 #ifdef ZCL_ATTR_START_UP_ONOFF_ENABLE
-    u8 startUpOnOff;
+    uint8_t startUpOnOff;
 #endif
 } zcl_onoff_attr_t;
 
@@ -194,7 +194,7 @@ extern zcl_onoff_attr_t                 g_zclOnOffAttr;
  */
 extern const zclAttrInfo_t onoff_attrTbl[];
 
-extern const u8 zcl_onOff_attrNum;
+extern const uint8_t zcl_onOff_attrNum;
 
 /** @} end of group ZCL_ONOFF_Variables */
 #endif
@@ -211,7 +211,7 @@ extern const u8 zcl_onOff_attrNum;
  *
  * @return      Status
  */
-status_t zcl_onOff_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_onOff_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 /**
@@ -224,7 +224,7 @@ status_t zcl_onOff_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      status_t
  */
-status_t zcl_onOff_on(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_onOff_on(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_onOff_onCmd(a,b,c)          (zcl_onOff_on((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -237,7 +237,7 @@ status_t zcl_onOff_on(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 s
  *
  * @return      status_t
  */
-status_t zcl_onOff_off(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_onOff_off(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_onOff_offCmd(a,b,c)         (zcl_onOff_off((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -250,7 +250,7 @@ status_t zcl_onOff_off(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 
  *
  * @return      status_t
  */
-status_t zcl_onOff_toggle(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_onOff_toggle(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_onOff_toggleCmd(a,b,c)      (zcl_onOff_toggle((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -263,7 +263,7 @@ status_t zcl_onOff_toggle(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, 
  * @param[in]	pOffWithEffect
  * @return      status_t
  */
-status_t zcl_onOff_offWithEffect(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_onoff_offWithEffectCmd_t *pOffWithEffect);
+status_t zcl_onOff_offWithEffect(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_onoff_offWithEffectCmd_t *pOffWithEffect);
 #define zcl_onOff_offWithEffectCmd(a,b,c,d)     (zcl_onOff_offWithEffect((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -276,7 +276,7 @@ status_t zcl_onOff_offWithEffect(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefau
  *
  * @return      None
  */
-status_t zcl_onOff_onWithRecallGlobalScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_onOff_onWithRecallGlobalScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_onOff_onWithRecallGlobalSceneCmd(a,b,c)     (zcl_onOff_onWithRecallGlobalScene((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -289,7 +289,7 @@ status_t zcl_onOff_onWithRecallGlobalScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
  * @param[in]   pOnWithTimedOff
  * @return      None
  */
-status_t zcl_onOff_onWithTimedOff(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_onoff_onWithTimeOffCmd_t *pOnWithTimedOff);
+status_t zcl_onOff_onWithTimedOff(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_onoff_onWithTimeOffCmd_t *pOnWithTimedOff);
 #define zcl_onOff_onWithTimedOffCmd(a,b,c,d)    (zcl_onOff_onWithTimedOff((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /** @} end of group ZCL_ONOFF_Fountions */

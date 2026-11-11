@@ -53,17 +53,17 @@ typedef enum {
 * @brief	dGP-DATA.indication
 */
 typedef struct {
-    u8 *gpMpdu;
-    u16 srcPanId;
-    u16 dstPanId;
-    tl_zb_addr_t srcAddr;
-    tl_zb_addr_t dstAddr;
-    u8 srcAddrMode;
-    u8 dstAddrMode;
-    s8 rssi;
-    u8 lqi;
-    u8 seqNum;
-    u8 gpMpduLen;
+    uint8_t *gpMpdu;
+    uint16_t srcPanId;
+    uint16_t dstPanId;
+    zb_addr_t srcAddr;
+    zb_addr_t dstAddr;
+    uint8_t srcAddrMode;
+    uint8_t dstAddrMode;
+    int8_t rssi;
+    uint8_t lqi;
+    uint8_t seqNum;
+    uint8_t gpMpduLen;
 } dgp_data_ind_t;
 
 /************************************************************************************************
@@ -94,54 +94,54 @@ typedef enum {
 * @brief	GP-DATA.indication
 */
 typedef struct {
-    u8 *gpdAsdu;        //gpdAsdu[0] is cmdId.
-    u32 srcId;
-    u32 gpdSecFrameCnt;
-    u32 mic;
-    tl_zb_addr_t srcAddr;
-    u16 srcPanId;
+    uint8_t *gpdAsdu;        //gpdAsdu[0] is cmdId.
+    uint32_t srcId;
+    uint32_t gpdSecFrameCnt;
+    uint32_t mic;
+    zb_addr_t srcAddr;
+    uint16_t srcPanId;
     bool autoCommissioning;
     bool rxAfterTx;
-    u8 status;
-    s8 rssi;
-    u8 lqi;
-    u8 seqNum;
-    u8 srcAddrMode;
-    u8 appId;
-    u8 gpdfSecurityLevel;//0x00,0x02,0x03
-    u8 gpdfKeyType;     //0x00 - 0x07
-    u8 endpoint;
-    u8 gpdCmdId;
-    u8 gpdAsduLen;      //length of ZGP App Payload.
-    u8 frameType;
+    uint8_t status;
+    int8_t rssi;
+    uint8_t lqi;
+    uint8_t seqNum;
+    uint8_t srcAddrMode;
+    uint8_t appId;
+    uint8_t gpdfSecurityLevel;//0x00,0x02,0x03
+    uint8_t gpdfKeyType;     //0x00 - 0x07
+    uint8_t endpoint;
+    uint8_t gpdCmdId;
+    uint8_t gpdAsduLen;      //length of ZGP App Payload.
+    uint8_t frameType;
 } gp_data_ind_t;
 
 /***************************************************************************
 * @brief	GP-DATA.request txOptions
 */
 typedef struct {
-    u8 useGpTxQueue:1;
-    u8 useCSMACA:1;
-    u8 useMACACK:1;
-    u8 txFrameType:2;
-    u8 txOnMatchingEndpoint:1;
-    u8 reserved:2;
+    uint8_t useGpTxQueue:1;
+    uint8_t useCSMACA:1;
+    uint8_t useMACACK:1;
+    uint8_t txFrameType:2;
+    uint8_t txOnMatchingEndpoint:1;
+    uint8_t reserved:2;
 } gpDataReq_txOpt_t;
 
 /***************************************************************************
 * @brief	GP-DATA.request
 */
 typedef struct {
-    u8 *gpdAsdu;
-    u24 gpTxQueueEntryLifetime;
+    uint8_t *gpdAsdu;
+    uint32_t gpTxQueueEntryLifetime;
     gpdId_t gpdId;
     gpDataReq_txOpt_t txOptions;
     bool action;
-    u8 appId;
-    u8 endpoint;
-    u8 gpdCmdId;
-    u8 gpdAsduLen;
-    u8 gpepHandle;
+    uint8_t appId;
+    uint8_t endpoint;
+    uint8_t gpdCmdId;
+    uint8_t gpdAsduLen;
+    uint8_t gpepHandle;
 } gp_data_req_t;
 
 typedef enum {
@@ -157,8 +157,8 @@ typedef enum {
 * @brief	GP-DATA.confirm
 */
 typedef struct {
-    u8 status;
-    u8 gpepHandle;
+    uint8_t status;
+    uint8_t gpepHandle;
 } gp_data_cnf_t;
 
 /***************************************************************************
@@ -166,12 +166,12 @@ typedef struct {
 */
 typedef struct {
     gpdId_t gpdId;
-    u32 gpdSecFrameCnt;
-    u8 appId;
-    u8 endpoint;
-    u8 gpdfSecurityLevel;//0x00,0x02,0x03
-    u8 gpdfKeyType;//0x00,0x01
-    u8 dgpStubHandle;
+    uint32_t gpdSecFrameCnt;
+    uint8_t appId;
+    uint8_t endpoint;
+    uint8_t gpdfSecurityLevel;//0x00,0x02,0x03
+    uint8_t gpdfKeyType;//0x00,0x01
+    uint8_t dgpStubHandle;
 } gp_sec_req_t;
 
 typedef enum {
@@ -187,22 +187,22 @@ typedef enum {
 */
 typedef struct {
     gpdId_t gpdId;
-    u32 gpdSecFrameCnt;
-    u8 status;
-    u8 dgpStubHandle;
-    u8 appId;
-    u8 endpoint;
-    u8 gpdKey[16];
-    u8 gpdfSecurityLevel;//0x00,0x02,0x03
-    u8 gpdfKeyType;//0x00 - 0x07
+    uint32_t gpdSecFrameCnt;
+    uint8_t status;
+    uint8_t dgpStubHandle;
+    uint8_t appId;
+    uint8_t endpoint;
+    uint8_t gpdKey[16];
+    uint8_t gpdfSecurityLevel;//0x00,0x02,0x03
+    uint8_t gpdfKeyType;//0x00 - 0x07
 } gp_sec_rsp_t;
 
 /***************************************************************************
 * @brief	GP application payload for appId 0b000 and 0b010
 */
 typedef struct {
-    u8 *gpdCmdPayload;
-    u8 gpdCmdId;
+    uint8_t *gpdCmdPayload;
+    uint8_t gpdCmdId;
 } gp_appPayload_t;
 
 /***************************************************************************
@@ -210,8 +210,8 @@ typedef struct {
 */
 typedef struct {
     gp_data_req_t *buf; //hold gpDataReq buffer
-    u8 gpepHandle;
-    u8 used;
+    uint8_t gpepHandle;
+    uint8_t used;
 } gp_data_req_pending_t;
 
 /***************************************************************************
@@ -219,19 +219,19 @@ typedef struct {
 */
 typedef struct {
     gp_data_ind_t *buf; //hold gpDataInd buffer
-    u32 frameCounter;
+    uint32_t frameCounter;
     gpdId_t gpdId;
-    u8 timeout;
-    u8 dGpStubHandle;
-    u8 appId:3;
-    u8 gpdfSecKey:1;
-    u8 gpdfSecLevel:2;
-    u8 used:1;
-    u8 reserved:1;
+    uint8_t timeout;
+    uint8_t dGpStubHandle;
+    uint8_t appId:3;
+    uint8_t gpdfSecKey:1;
+    uint8_t gpdfSecLevel:2;
+    uint8_t used:1;
+    uint8_t reserved:1;
 } gp_data_ind_entry_t;
 
 
-typedef bool (*gpDeviceAnnounceCheckCb_t)(u16 sinkNwkAddr, addrExt_t sinkIeeeAddr);
+typedef bool (*gpDeviceAnnounceCheckCb_t)(uint16_t sinkNwkAddr, addrExt_t sinkIeeeAddr);
 
 /***************************************************************************
 * @brief	Define for dStub notify GPEP
@@ -249,8 +249,8 @@ typedef struct {
 extern gp_data_ind_entry_t g_gpDataIndSecReqTab[];
 
 
-gp_nwkHdrFrameCtrl_t gpNwkHdrFrameCtrlBuild(u8 frameType, bool autoComm, u8 appId,
-                                            u8 secLevel, u8 secKey,
+gp_nwkHdrFrameCtrl_t gpNwkHdrFrameCtrlBuild(uint8_t frameType, bool autoComm, uint8_t appId,
+                                            uint8_t secLevel, uint8_t secKey,
                                             bool rxAfterTx, bool direction,
                                             gp_extNwkFrameCtrl_t *pExtNwkFrameCtrl);
 
@@ -259,8 +259,8 @@ void gpTxQueueFree(void);
 void gpTxQueueMaintenceClear(void);
 gp_data_ind_entry_t *gpDataIndEntryFreeGet(void);
 void gpDataIndSecReqEntryClear(gp_data_ind_entry_t *pEntry);
-u8 dGpStubHandleGet(void);
-gp_data_ind_entry_t *gpDataIndGet(u8 handle);
+uint8_t dGpStubHandleGet(void);
+gp_data_ind_entry_t *gpDataIndGet(uint8_t handle);
 
 void gpDataReq(void *arg);
 void gpSecRsp(void *arg);

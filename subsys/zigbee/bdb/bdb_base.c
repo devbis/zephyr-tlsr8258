@@ -10,7 +10,7 @@
 #include "zb_api.h"
 #include "zcl_zll_commissioning.h"
 
-void bdb_linkKeyCfg(bdb_commissionSetting_t *setting, u8 isFactoryNew)
+void bdb_linkKeyCfg(bdb_commissionSetting_t *setting, uint8_t isFactoryNew)
 {
 	ss_ib.distributeLinkKey = setting->linkKey.distributeLinkKey.key;
 	ss_ib.tcLinkKey = setting->linkKey.tcLinkKey.key;
@@ -20,7 +20,7 @@ void bdb_linkKeyCfg(bdb_commissionSetting_t *setting, u8 isFactoryNew)
 	}
 }
 
-void bdb_touchLinkPreCfg(u8 endpoint, bdb_commissionSetting_t *setting,
+void bdb_touchLinkPreCfg(uint8_t endpoint, bdb_commissionSetting_t *setting,
 			 const zcl_touchlinkAppCallbacks_t *tlCb)
 {
 	if (!setting->touchlinkEnable) {
@@ -51,7 +51,7 @@ void bdb_coordinatorStart(void)
 }
 #endif
 
-void bdb_endDeviceStart(u8 repower)
+void bdb_endDeviceStart(uint8_t repower)
 {
 	if (!repower) {
 		g_zbNwkCtx.joined = 1;
@@ -65,7 +65,7 @@ void bdb_endDeviceStart(u8 repower)
 	zb_rejoinReq(1UL << g_zbInfo.macPib.phyChannelCur, g_bdbAttrs.scanDuration);
 }
 
-void bdb_outgoingFrameCountUpdate(u8 repower)
+void bdb_outgoingFrameCountUpdate(uint8_t repower)
 {
 	if (!repower) {
 		ss_ib.outgoingFrameCounter = drv_pm_deepSleep_frameCnt_get();
@@ -76,13 +76,13 @@ void bdb_outgoingFrameCountUpdate(u8 repower)
 	nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
 }
 
-void bdb_scanCfg(u32 chanMask, u8 duration)
+void bdb_scanCfg(uint32_t chanMask, uint8_t duration)
 {
 	aps_ib.aps_channel_mask = chanMask;
 	zdo_cfg_attributes.config_nwk_scan_duration = duration;
 }
 
-void bdb_factoryNewDevCfg(u8 touchLinkEn, u8 chan)
+void bdb_factoryNewDevCfg(uint8_t touchLinkEn, uint8_t chan)
 {
 	ZB_EXTPANID_ZERO(aps_ib.aps_use_ext_panid);
 	g_zbInfo.nwkNib.panId = g_zbInfo.macPib.panId;
@@ -95,6 +95,6 @@ void bdb_factoryNewDevCfg(u8 touchLinkEn, u8 chan)
 		return;
 	}
 
-	tl_zbMacChannelSet(chan);
+	zb_MacChannelSet(chan);
 	rf_setTrxState(RF_STATE_RX);
 }

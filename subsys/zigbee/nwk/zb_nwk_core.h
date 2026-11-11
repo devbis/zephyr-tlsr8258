@@ -9,19 +9,19 @@
 /* The most link status entries one frame can carry. */
 #define NWK_LINK_STATUS_ENTRY_MAX_PER_FRAME 26
 
-void tl_zbNwkNibInit(u8 coldReset);
-u32 getPassiveAckTimeout(void);
-u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu);
-u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr);
-u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr);
-void tl_zbNwkLinkStatusStop(void);
-void tl_zbNwkNeighborTabAging(void);
-u8 nwk_linkStEntryBuild(linkStatus_entry_t *list, u8 maxEntries);
-void nwkLinkStatusCmdSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
-void tl_zbNwkSendLinkStatus(void);
-void tl_zbNwkLinkStatusStart(void);
-int tl_zbNwkLinkStatusTimerEvtCb(void *arg);
+void zb_NwkNibInit(uint8_t coldReset);
+uint32_t getPassiveAckTimeout(void);
+uint8_t nwkHdrParse(nwk_hdr_t *pNwkHdr, uint8_t *msdu);
+uint8_t getNwkHdrSize(nwk_hdr_t *pNwkHdr);
+uint8_t *nwkHdrBuilder(uint8_t *buf, nwk_hdr_t *pNwkHdr);
+void zb_NwkLinkStatusStop(void);
+void zb_NwkNeighborTabAging(void);
+uint8_t nwk_linkStEntryBuild(linkStatus_entry_t *list, uint8_t maxEntries);
+void nwkLinkStatusCmdSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle);
+void zb_NwkSendLinkStatus(void);
+void zb_NwkLinkStatusStart(void);
+int zb_NwkLinkStatusTimerEvtCb(void *arg);
 int nwk_linkStPeriodic(void *arg);
-void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, u8 handle);
+void zb_NwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, uint8_t handle);
 
 #endif

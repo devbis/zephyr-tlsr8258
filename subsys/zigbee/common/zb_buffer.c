@@ -6,9 +6,9 @@
 #include "zb_common.h"
 #include <stdint.h>
 
-/* Both are .bss-local u32 debug variables in the vendor object. */
-static u32 T_zbBufFreeDbg = 0;
-static u32 T_zbBufDbg = 0;
+/* Both are .bss-local uint32_t debug variables in the vendor object. */
+static uint32_t T_zbBufFreeDbg = 0;
+static uint32_t T_zbBufDbg = 0;
 
 _attribute_ram_code_ _attribute_no_inline_ zb_buf_t *zb_buf_get(void);
 
@@ -19,27 +19,27 @@ static bool zb_buf_inPool(const void *p)
 	return (uintptr_t)p >= (uintptr_t)&g_mPool.pool[0];
 }
 
-void tl_zbBufferInit(void)
+void zb_BufferInit(void)
 {
-	u32 poolBytes = zbBufferSizeGet();
-	u8 poolCount;
+	uint32_t poolBytes = zbBufferSizeGet();
+	uint8_t poolCount;
 
 	memset(&g_mPool, 0, poolBytes);
 
 	g_mPool.head = &g_mPool.pool[0];
 	poolCount = ZB_BUF_POOL_SIZE;
-	for (u8 i = 0; (u8)(i + 1U) < poolCount; i++) {
+	for (uint8_t i = 0; (uint8_t)(i + 1U) < poolCount; i++) {
 		g_mPool.pool[i].next = &g_mPool.pool[i + 1U];
 	}
 	g_mPool.pool[(poolCount > 0U) ? (poolCount - 1U) : 0U].next = NULL;
 }
 
-u8 *tl_phyRxBufTozbBuf(u8 *p)
+uint8_t *zb_phyRxBufTozbBuf(uint8_t *p)
 {
 	return p - RX_ZBBUF_OFFSET;
 }
 
-u8 *tl_zbBufToPhyRxBuf(u8 *p)
+uint8_t *zb_BufToPhyRxBuf(uint8_t *p)
 {
 	return p + RX_ZBBUF_OFFSET;
 }
@@ -48,9 +48,9 @@ u8 *tl_zbBufToPhyRxBuf(u8 *p)
  * whole body runs with interrupts disabled, validates the pointer and the pool
  * head, keeps the per-buffer alloc/free counters, and never clears the payload.
  * It always returns BUFFER_SUCC. */
-u8 zb_buf_free(zb_buf_t *buf)
+uint8_t zb_buf_free(zb_buf_t *buf)
 {
-	u32 irq = drv_disable_irq();
+	uint32_t irq = drv_disable_irq();
 
 	/* The raw MAC TX buffer is not part of the pool. */
 	if (buf == (zb_buf_t *)g_zbMacCtx.txRawDataBuf) {
@@ -72,10 +72,10 @@ u8 zb_buf_free(zb_buf_t *buf)
 	/* A buffer still queued in the MAC TX FIFO, a free without a
 	 * matching allocate, or a buffer that is not marked used. */
 	if (buf->hdr.macTxFifo || (buf->freeCnt > buf->allocCnt) || (buf->hdr.used == 0U)) {
-		T_zbBufFreeDbg = ((u32)buf->hdr.macTxFifo << 24) |
+		T_zbBufFreeDbg = ((uint32_t)buf->hdr.macTxFifo << 24) |
 				 ((buf->freeCnt > buf->allocCnt) ? 0x10000U : 0U) |
-				 (u32)buf->hdr.used;
-		T_zbBufDbg = (u32)(unsigned long)buf;
+				 (uint32_t)buf->hdr.used;
+		T_zbBufDbg = (uint32_t)(unsigned long)buf;
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_BUFFER_EXCEPTION_FREE_MULTI);
 	}
 
@@ -93,22 +93,22 @@ u8 zb_buf_free(zb_buf_t *buf)
 	}
 
 	buf->hdr.used = 0;
-	buf->hdr.handle = TL_RETURN_INVALID;
+	buf->hdr.handle = ZB_RETURN_INVALID;
 
 	drv_restore_irq(irq);
 
 	return BUFFER_SUCC;
 }
 
-void *tl_bufInitalloc(zb_buf_t *p, u8 size)
+void *zb_bufInitalloc(zb_buf_t *p, uint8_t size)
 {
-	return &p->buf[((u8)(ZB_BUF_SIZE - (u8)(size + 8U))) & (u8)~3U];
+	return &p->buf[((uint8_t)(ZB_BUF_SIZE - (uint8_t)(size + 8U))) & (uint8_t)~3U];
 }
 
 void zb_buf_clear(zb_buf_t *p)
 {
-	u8 used = p->hdr.used;
-	u32 irq = drv_disable_irq();
+	uint8_t used = p->hdr.used;
+	uint32_t irq = drv_disable_irq();
 
 	memset(&p->hdr, 0, sizeof(p->hdr));
 	p->hdr.used = used;
@@ -132,17 +132,17 @@ _attribute_ram_code_ zb_buf_t *zb_buf_allocate(void)
 	return zb_buf_get();
 }
 
-_attribute_ram_code_ u8 *tl_getRxBuf(void)
+_attribute_ram_code_ uint8_t *zb_getRxBuf(void)
 {
 	zb_buf_t *buf = zb_buf_get();
 
-	return (buf != NULL) ? tl_zbBufToPhyRxBuf((u8 *)buf) : NULL;
+	return (buf != NULL) ? zb_BufToPhyRxBuf((uint8_t *)buf) : NULL;
 }
 
 /* Reconstructed from _router/zb_buffer.s:.ram_code+0 (0x194 bytes). */
 _attribute_ram_code_ _attribute_no_inline_ zb_buf_t *zb_buf_get(void)
 {
-	u32 irq = drv_disable_irq();
+	uint32_t irq = drv_disable_irq();
 
 	if (g_mPool.usedNum < ZB_BUF_POOL_SIZE) {
 		zb_buf_t *buf = g_mPool.head;

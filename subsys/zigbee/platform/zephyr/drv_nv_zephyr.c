@@ -68,21 +68,21 @@ static bool zb_nvs_init_attempted;
 static bool zb_nvs_geometry_ready;
 static bool zb_nvs_degraded_logged;
 static bool zb_nvs_mount_failed;
-static u8 nv_item_len_chk_num;
+static uint8_t nv_item_len_chk_num;
 /*
  * Highest index in use per module, valid when its bit in nv_index_top_known
  * is set.
  */
 static int16_t nv_index_top[NV_MAX_MODULS];
-static u8 nv_index_top_known;
+static uint8_t nv_index_top_known;
 /* The top index the stored hint allows, valid with nv_index_top_known. */
 static int16_t nv_index_hint_top[NV_MAX_MODULS];
 
 BUILD_ASSERT(NV_MAX_MODULS <= 8, "nv_index_top_known holds one bit per module");
 
 typedef struct {
-	u8 item_id;
-	u16 len;
+	uint8_t item_id;
+	uint16_t len;
 } nv_item_len_chk_t;
 
 static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
@@ -91,22 +91,22 @@ static nv_item_len_chk_t nv_item_len_chk_tbl[NV_ITEM_LEN_CHK_TABLE_NUM];
  * are not singleton values. Keep one bounded scratch record so the adapter
  * can strip its metadata before copying into the caller's payload buffer.
  */
-static u8 nv_index_scratch[NV_INDEX_HEADER_LEN + NV_INDEX_VALUE_MAX];
+static uint8_t nv_index_scratch[NV_INDEX_HEADER_LEN + NV_INDEX_VALUE_MAX];
 
 static void nv_index_top_invalidate_all(void)
 {
 	nv_index_top_known = 0U;
 }
 
-static void nv_index_top_invalidate(u8 id)
+static void nv_index_top_invalidate(uint8_t id)
 {
-	nv_index_top_known &= (u8)~BIT(id);
+	nv_index_top_known &= (uint8_t)~BIT(id);
 }
 
-static void nv_index_top_set(u8 id, int16_t top)
+static void nv_index_top_set(uint8_t id, int16_t top)
 {
 	nv_index_top[id] = top;
-	nv_index_top_known |= (u8)BIT(id);
+	nv_index_top_known |= (uint8_t)BIT(id);
 }
 
 void zb_platform_persistence_runtime_reset(void)
@@ -124,7 +124,7 @@ bool zb_platform_persistence_can_write(void)
 	return zb_nvs_ready;
 }
 
-static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len);
+static uint16_t nv_item_expected_read_len(uint8_t itemId, uint16_t requested_len);
 
 static void zb_nvs_log_degraded(const char *reason, int rc)
 {
@@ -222,27 +222,27 @@ static bool zb_nvs_ensure_ready(void)
 	return true;
 }
 
-static inline uint16_t nv_key(u8 id, u8 itemId)
+static inline uint16_t nv_key(uint8_t id, uint8_t itemId)
 {
 	return (uint16_t)((id << 8) | itemId);
 }
 
-static inline uint16_t nv_index_key(u8 id, u8 opIdx)
+static inline uint16_t nv_index_key(uint8_t id, uint8_t opIdx)
 {
-	return (uint16_t)(NV_INDEX_KEY_BASE | ((u16)id << 8) | opIdx);
+	return (uint16_t)(NV_INDEX_KEY_BASE | ((uint16_t)id << 8) | opIdx);
 }
 
-static inline uint16_t nv_index_hint_key(u8 id)
+static inline uint16_t nv_index_hint_key(uint8_t id)
 {
 	return (uint16_t)(NV_INDEX_HINT_KEY_BASE | id);
 }
 
-static bool nv_index_hint_read(u8 id, int16_t *top)
+static bool nv_index_hint_read(uint8_t id, int16_t *top)
 {
-	u16 hint;
+	uint16_t hint;
 	ssize_t len = nvs_read(&zb_nvs, nv_index_hint_key(id), &hint, sizeof(hint));
 
-	if (len != (ssize_t)sizeof(hint) || hint > (u16)NV_INDEX_MAX + 1U) {
+	if (len != (ssize_t)sizeof(hint) || hint > (uint16_t)NV_INDEX_MAX + 1U) {
 		return false;
 	}
 
@@ -250,19 +250,19 @@ static bool nv_index_hint_read(u8 id, int16_t *top)
 	return true;
 }
 
-static void nv_index_hint_write(u8 id, int16_t top)
+static void nv_index_hint_write(uint8_t id, int16_t top)
 {
-	u16 hint = (u16)(top + 1);
+	uint16_t hint = (uint16_t)(top + 1);
 
 	(void)nvs_write(&zb_nvs, nv_index_hint_key(id), &hint, sizeof(hint));
 	nv_index_hint_top[id] = top;
 }
 
-static bool nv_index_record_read(u8 id, u8 itemId, u8 opIdx, u16 len, u8 *buf)
+static bool nv_index_record_read(uint8_t id, uint8_t itemId, uint8_t opIdx, uint16_t len, uint8_t *buf)
 {
 	ssize_t stored_len;
-	u16 payload_len;
-	u16 expected_len;
+	uint16_t payload_len;
+	uint16_t expected_len;
 
 	stored_len = nvs_read(&zb_nvs, nv_index_key(id, opIdx), nv_index_scratch,
 			      sizeof(nv_index_scratch));
@@ -272,9 +272,9 @@ static bool nv_index_record_read(u8 id, u8 itemId, u8 opIdx, u16 len, u8 *buf)
 		return false;
 	}
 
-	payload_len = (u16)nv_index_scratch[2] | ((u16)nv_index_scratch[3] << 8);
+	payload_len = (uint16_t)nv_index_scratch[2] | ((uint16_t)nv_index_scratch[3] << 8);
 	expected_len = nv_item_expected_read_len(itemId, len);
-	if (payload_len != (u16)(stored_len - NV_INDEX_HEADER_LEN) || expected_len > len ||
+	if (payload_len != (uint16_t)(stored_len - NV_INDEX_HEADER_LEN) || expected_len > len ||
 	    payload_len < len) {
 		return false;
 	}
@@ -287,9 +287,9 @@ static bool nv_index_record_read(u8 id, u8 itemId, u8 opIdx, u16 len, u8 *buf)
 }
 
 /* Read only the header of an indexed record. */
-static bool nv_index_header_read(u8 id, u8 opIdx, u8 *item_id)
+static bool nv_index_header_read(uint8_t id, uint8_t opIdx, uint8_t *item_id)
 {
-	u8 hdr[NV_INDEX_HEADER_LEN];
+	uint8_t hdr[NV_INDEX_HEADER_LEN];
 	ssize_t rc;
 
 	rc = nvs_read(&zb_nvs, nv_index_key(id, opIdx), hdr, sizeof(hdr));
@@ -305,7 +305,7 @@ static bool nv_index_header_read(u8 id, u8 opIdx, u8 *item_id)
 }
 
 /* Highest index in use in a module, NV_INDEX_TOP_EMPTY when none. */
-static int16_t nv_index_top_get(u8 id)
+static int16_t nv_index_top_get(uint8_t id)
 {
 	if ((nv_index_top_known & BIT(id)) == 0U) {
 		int16_t top = NV_INDEX_TOP_EMPTY;
@@ -313,7 +313,7 @@ static int16_t nv_index_top_get(u8 id)
 		bool hinted = nv_index_hint_read(id, &start);
 
 		for (int16_t i = start; i >= 0; i--) {
-			if (nv_index_header_read(id, (u8)i, NULL)) {
+			if (nv_index_header_read(id, (uint8_t)i, NULL)) {
 				top = i;
 				break;
 			}
@@ -330,17 +330,17 @@ static int16_t nv_index_top_get(u8 id)
 }
 
 /* Latest record of item_id, or of any item for ITEM_FIELD_IDLE. */
-static bool nv_index_latest(u8 id, u8 item_id, u8 *op_idx)
+static bool nv_index_latest(uint8_t id, uint8_t item_id, uint8_t *op_idx)
 {
 	for (int16_t i = nv_index_top_get(id); i >= 0; i--) {
-		u8 stored_item;
+		uint8_t stored_item;
 
-		if (!nv_index_header_read(id, (u8)i, &stored_item) ||
+		if (!nv_index_header_read(id, (uint8_t)i, &stored_item) ||
 		    (item_id != ITEM_FIELD_IDLE && stored_item != item_id)) {
 			continue;
 		}
 
-		*op_idx = (u8)i;
+		*op_idx = (uint8_t)i;
 		return true;
 	}
 
@@ -351,7 +351,7 @@ static bool nv_index_latest(u8 id, u8 item_id, u8 *op_idx)
  * Move the records of a module down over deleted slots, keeping their
  * order, so that the next append finds room.
  */
-static bool nv_index_compact(u8 id)
+static bool nv_index_compact(uint8_t id)
 {
 	int16_t top = nv_index_top_get(id);
 	int16_t dst = 0;
@@ -359,7 +359,7 @@ static bool nv_index_compact(u8 id)
 	for (int16_t i = 0; i <= top; i++) {
 		ssize_t len;
 
-		len = nvs_read(&zb_nvs, nv_index_key(id, (u8)i), nv_index_scratch,
+		len = nvs_read(&zb_nvs, nv_index_key(id, (uint8_t)i), nv_index_scratch,
 			       sizeof(nv_index_scratch));
 		if (len == -ENOENT) {
 			continue;
@@ -368,9 +368,9 @@ static bool nv_index_compact(u8 id)
 			return false;
 		}
 		if (i != dst) {
-			if (nvs_write(&zb_nvs, nv_index_key(id, (u8)dst), nv_index_scratch,
+			if (nvs_write(&zb_nvs, nv_index_key(id, (uint8_t)dst), nv_index_scratch,
 				      (size_t)len) < 0 ||
-			    nvs_delete(&zb_nvs, nv_index_key(id, (u8)i)) < 0) {
+			    nvs_delete(&zb_nvs, nv_index_key(id, (uint8_t)i)) < 0) {
 				nv_index_top_invalidate(id);
 				return false;
 			}
@@ -383,7 +383,7 @@ static bool nv_index_compact(u8 id)
 	return true;
 }
 
-static bool nv_index_append_slot(u8 id, u8 *op_idx)
+static bool nv_index_append_slot(uint8_t id, uint8_t *op_idx)
 {
 	int16_t top = nv_index_top_get(id);
 
@@ -397,15 +397,15 @@ static bool nv_index_append_slot(u8 id, u8 *op_idx)
 		}
 	}
 
-	*op_idx = (u8)(top + 1);
+	*op_idx = (uint8_t)(top + 1);
 	return true;
 }
 
-static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len)
+static uint16_t nv_item_expected_read_len(uint8_t itemId, uint16_t requested_len)
 {
-	u16 expected_len = requested_len;
+	uint16_t expected_len = requested_len;
 
-	for (u8 i = 0; i < nv_item_len_chk_num; i++) {
+	for (uint8_t i = 0; i < nv_item_len_chk_num; i++) {
 		if (nv_item_len_chk_tbl[i].item_id == itemId &&
 		    nv_item_len_chk_tbl[i].len > expected_len) {
 			expected_len = nv_item_len_chk_tbl[i].len;
@@ -416,17 +416,17 @@ static u16 nv_item_expected_read_len(u8 itemId, u16 requested_len)
 	return expected_len;
 }
 
-static nv_sts_t nv_clear_module_items(u8 module_id)
+static nv_sts_t nv_clear_module_items(uint8_t module_id)
 {
 	int rc;
 
-	for (u16 item_id = 0; item_id <= UINT8_MAX; item_id++) {
-		rc = nvs_delete(&zb_nvs, nv_key(module_id, (u8)item_id));
+	for (uint16_t item_id = 0; item_id <= UINT8_MAX; item_id++) {
+		rc = nvs_delete(&zb_nvs, nv_key(module_id, (uint8_t)item_id));
 		if (rc < 0 && rc != -ENOENT) {
 			return NV_INVALID_MODULS;
 		}
 
-		rc = nvs_delete(&zb_nvs, nv_index_key(module_id, (u8)item_id));
+		rc = nvs_delete(&zb_nvs, nv_index_key(module_id, (uint8_t)item_id));
 		if (rc < 0 && rc != -ENOENT) {
 			nv_index_top_invalidate(module_id);
 			return NV_INVALID_MODULS;
@@ -438,9 +438,9 @@ static nv_sts_t nv_clear_module_items(u8 module_id)
 	return NV_SUCC;
 }
 
-nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
+nv_sts_t nv_flashWriteNew(uint8_t single, uint16_t id, uint8_t itemId, uint16_t len, uint8_t *buf)
 {
-	u8 op_idx;
+	uint8_t op_idx;
 	ssize_t written;
 
 	if (!zb_nvs_ensure_ready()) {
@@ -451,39 +451,39 @@ nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf)
 	}
 
 	if (single) {
-		written = nvs_write(&zb_nvs, nv_key((u8)id, itemId), buf, len);
+		written = nvs_write(&zb_nvs, nv_key((uint8_t)id, itemId), buf, len);
 		return written >= 0 ? NV_SUCC : NV_NOT_ENOUGH_SAPCE;
 	}
 
-	if (len > NV_INDEX_VALUE_MAX || !nv_index_append_slot((u8)id, &op_idx)) {
+	if (len > NV_INDEX_VALUE_MAX || !nv_index_append_slot((uint8_t)id, &op_idx)) {
 		return NV_NOT_ENOUGH_SAPCE;
 	}
 
 	if ((int16_t)op_idx > nv_index_hint_top[id]) {
-		nv_index_hint_write((u8)id, MIN((int16_t)op_idx + NV_INDEX_HINT_SLACK,
+		nv_index_hint_write((uint8_t)id, MIN((int16_t)op_idx + NV_INDEX_HINT_SLACK,
 						(int16_t)NV_INDEX_MAX));
 	}
 
 	nv_index_scratch[0] = NV_INDEX_MAGIC;
 	nv_index_scratch[1] = itemId;
-	nv_index_scratch[2] = (u8)len;
-	nv_index_scratch[3] = (u8)(len >> 8);
+	nv_index_scratch[2] = (uint8_t)len;
+	nv_index_scratch[3] = (uint8_t)(len >> 8);
 	memcpy(&nv_index_scratch[NV_INDEX_HEADER_LEN], buf, len);
-	written = nvs_write(&zb_nvs, nv_index_key((u8)id, op_idx), nv_index_scratch,
+	written = nvs_write(&zb_nvs, nv_index_key((uint8_t)id, op_idx), nv_index_scratch,
 			    len + NV_INDEX_HEADER_LEN);
 	if (written < 0) {
 		return NV_NOT_ENOUGH_SAPCE;
 	}
 
-	nv_index_top_set((u8)id, (int16_t)op_idx);
+	nv_index_top_set((uint8_t)id, (int16_t)op_idx);
 	return NV_SUCC;
 }
 
-nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
+nv_sts_t nv_flashReadNew(uint8_t single, uint8_t id, uint8_t itemId, uint16_t len, uint8_t *buf)
 {
 	ssize_t actual_len;
 	ssize_t rc;
-	u16 expected_len;
+	uint16_t expected_len;
 
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -494,7 +494,7 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 
 	if (!single && itemId == ITEM_FIELD_IDLE) {
 		itemIfno_t *info = (itemIfno_t *)buf;
-		u8 op_idx;
+		uint8_t op_idx;
 
 		if (info == NULL || len < sizeof(*info) ||
 		    !nv_index_latest(id, ITEM_FIELD_IDLE, &op_idx)) {
@@ -512,7 +512,7 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	actual_len = nvs_read(&zb_nvs, nv_key(id, itemId), NULL, 0);
 
 	if (actual_len == -ENOENT) {
-		u8 op_idx;
+		uint8_t op_idx;
 
 		/*
 		 * A single item never lives in the index. Probing it anyway
@@ -547,7 +547,7 @@ nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf)
 	return NV_SUCC;
 }
 
-nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
+nv_sts_t nv_flashSingleItemRemove(uint8_t id, uint8_t itemId, uint16_t len)
 {
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -557,7 +557,7 @@ nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len)
 	return rc == 0 ? NV_SUCC : NV_ITEM_NOT_FOUND;
 }
 
-nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
+nv_sts_t nv_flashSingleItemSizeGet(uint8_t id, uint8_t itemId, uint16_t *len)
 {
 	if (len == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -567,7 +567,7 @@ nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len)
 	if (rc < 0) {
 		return NV_ITEM_NOT_FOUND;
 	}
-	*len = (u16)rc;
+	*len = (uint16_t)rc;
 	return NV_SUCC;
 }
 
@@ -606,7 +606,7 @@ nv_sts_t nv_resetAll(void)
 	return NV_SUCC;
 }
 
-nv_sts_t nv_resetModule(u8 modules)
+nv_sts_t nv_resetModule(uint8_t modules)
 {
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -624,7 +624,7 @@ nv_sts_t nv_resetToFactoryNew(void)
 }
 
 /* Frame counter stored in dedicated NVS entry */
-nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount)
+nv_sts_t nv_nwkFrameCountSaveToFlash(uint32_t frameCount)
 {
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -635,7 +635,7 @@ nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount)
 	return rc >= 0 ? NV_SUCC : NV_NOT_ENOUGH_SAPCE;
 }
 
-nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount)
+nv_sts_t nv_nwkFrameCountFromFlash(uint32_t *frameCount)
 {
 	if (frameCount == NULL || !zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
@@ -650,7 +650,7 @@ nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount)
 	return rc >= 0 ? NV_SUCC : NV_DATA_CHECK_ERROR;
 }
 
-nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx, u16 len, u8 *buf)
+nv_sts_t nv_flashReadByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx, uint16_t len, uint8_t *buf)
 {
 	if (opSect != 0U || opIdx > NV_INDEX_MAX || id >= NV_MAX_MODULS) {
 		return NV_ITEM_NOT_FOUND;
@@ -659,14 +659,14 @@ nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx, u16 len, u8
 		return NV_NO_MEDIA;
 	}
 
-	return nv_index_record_read(id, itemId, (u8)opIdx, len, buf) ? NV_SUCC : NV_ITEM_NOT_FOUND;
+	return nv_index_record_read(id, itemId, (uint8_t)opIdx, len, buf) ? NV_SUCC : NV_ITEM_NOT_FOUND;
 }
 
-nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx)
+nv_sts_t nv_itemDeleteByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx)
 {
 	int rc;
 
-	u8 stored_item;
+	uint8_t stored_item;
 
 	if (opSect != 0U || opIdx > NV_INDEX_MAX || id >= NV_MAX_MODULS) {
 		return NV_ITEM_NOT_FOUND;
@@ -674,10 +674,10 @@ nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx)
 	if (!zb_nvs_ensure_ready()) {
 		return NV_NO_MEDIA;
 	}
-	if (!nv_index_header_read(id, (u8)opIdx, &stored_item) || stored_item != itemId) {
+	if (!nv_index_header_read(id, (uint8_t)opIdx, &stored_item) || stored_item != itemId) {
 		return NV_ITEM_NOT_FOUND;
 	}
-	rc = nvs_delete(&zb_nvs, nv_index_key(id, (u8)opIdx));
+	rc = nvs_delete(&zb_nvs, nv_index_key(id, (uint8_t)opIdx));
 	if (rc != 0) {
 		return NV_ITEM_NOT_FOUND;
 	}
@@ -689,9 +689,9 @@ nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx)
 	return NV_SUCC;
 }
 
-void nv_itemLengthCheckAdd(u8 itemId, u16 len)
+void nv_itemLengthCheckAdd(uint8_t itemId, uint16_t len)
 {
-	for (u8 i = 0; i < nv_item_len_chk_num; i++) {
+	for (uint8_t i = 0; i < nv_item_len_chk_num; i++) {
 		if (nv_item_len_chk_tbl[i].item_id == itemId) {
 			nv_item_len_chk_tbl[i].len = len;
 			return;

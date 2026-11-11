@@ -16,7 +16,7 @@
  * @param plain  16-byte plaintext block.
  * @param result 16-byte output block, may alias @p key or @p plain.
  */
-void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result);
+void zb_aes_encrypt(uint8_t *key, uint8_t *plain, uint8_t *result);
 
 /**
  * @brief Decrypt one AES-128 block.
@@ -25,15 +25,15 @@ void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result);
  * @param cipher 16-byte ciphertext block.
  * @param result 16-byte output block, may alias @p key or @p cipher.
  */
-void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result);
+void zb_aes_decrypt(uint8_t *key, uint8_t *cipher, uint8_t *result);
 
 /**
  * @brief Software AES-128 block encrypt/decrypt, same contract as above.
  *
  * Only linked when CONFIG_ZIGBEE_AES_SOFTWARE is set.
  */
-void zb_aes_sw_encrypt(u8 *key, u8 *plain, u8 *result);
-void zb_aes_sw_decrypt(u8 *key, u8 *cipher, u8 *result);
+void zb_aes_sw_encrypt(uint8_t *key, uint8_t *plain, uint8_t *result);
+void zb_aes_sw_decrypt(uint8_t *key, uint8_t *cipher, uint8_t *result);
 
 /*
  * The imported stack calls the vendor SDK's drv_security.h entry points. This

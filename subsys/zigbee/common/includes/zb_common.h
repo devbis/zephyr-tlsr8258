@@ -34,24 +34,24 @@
  * expects.
  */
 typedef struct {
-	u8 id;              /* primitive id */
-	u8 handle;
-	s8 rssi;
-	u8 used:1;
-	u8 macTxFifo:1;
-	u8 leaveRejoin:1;
-	u8 active:1;        /* only for mac command buffer */
-	u8 pending:1;       /* only for endDev: parent has pending data */
-	u8 rejoinStartAgain:1;
-	u8 resvHdr:2;
+	uint8_t id;              /* primitive id */
+	uint8_t handle;
+	int8_t rssi;
+	uint8_t used:1;
+	uint8_t macTxFifo:1;
+	uint8_t leaveRejoin:1;
+	uint8_t active:1;        /* only for mac command buffer */
+	uint8_t pending:1;       /* only for endDev: parent has pending data */
+	uint8_t rejoinStartAgain:1;
+	uint8_t resvHdr:2;
 } zb_buf_hdr_t;
 
 typedef struct zb_buf_s {
-	u8  buf[ZB_BUF_SIZE];
+	uint8_t  buf[ZB_BUF_SIZE];
 	zb_buf_hdr_t hdr;
 	struct zb_buf_s *next;
-	u32 allocCnt;
-	u32 freeCnt;
+	uint32_t allocCnt;
+	uint32_t freeCnt;
 } zb_buf_t;
 
 #ifndef ZB_BUF_POOL_NUM
@@ -60,7 +60,7 @@ typedef struct zb_buf_s {
  * ED. This was cut to 24 during the RAM crunch, on the (now disproven) belief
  * that buffer exhaustion was not an interview factor. On-HW counter reads
  * (2026-08-03) of a SUCCESSFUL interview showed zb_nwk_ed_trace[47]=9 —
- * tl_phyRxBufTozbBuf() returned NULL 9 times because the pool ran dry during the
+ * zb_phyRxBufTozbBuf() returned NULL 9 times because the pool ran dry during the
  * interview-request burst, dropping frames at the driver->stack boundary and
  * contributing to interview flakiness. The rx_worker strip freed ~2.2 KB RAM, so
  * Keep the router pool at 33: the vendor value is 36, but the Zephyr buffer
@@ -90,41 +90,41 @@ typedef struct zb_buf_s {
 #define SEC_KEY_LEN 16
 #endif
 
-/* Task queue API matching SDK's tl_zb_callback_t / tl_zbTaskPost signature */
-typedef void (*tl_zb_callback_t)(void *arg);
-u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg);
-u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg);
-u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg);
+/* Task queue API matching SDK's zb_callback_t / zb_TaskPost signature */
+typedef void (*zb_callback_t)(void *arg);
+uint8_t zb_TaskPost(zb_callback_t fn, void *arg);
+uint8_t zb_RxTaskPost(zb_callback_t fn, void *arg);
+uint8_t zb_TxTaskPost(zb_callback_t fn, void *arg);
 void zb_taskq_process(void);
 bool zb_taskq_is_empty(void);
 bool zb_taskq_layer_queues_empty(void);
-#define TL_SCHEDULE_TASK tl_zbTaskPost
+#define ZB_SCHEDULE_TASK zb_TaskPost
 
 /* Layer-queue identifiers used by the SDK macros wrapping
- * tl_zbPrimitivePost(layerQ, primitive, arg). Matches
+ * zb_PrimitivePost(layerQ, primitive, arg). Matches
  * tl_zigbee_sdk/zigbee/common/includes/zb_task_queue.h.
  */
 enum {
-	TL_Q_EV_TASK = 0,
-	TL_Q_MAC2NWK,
-	TL_Q_NWK2MAC,
-	TL_Q_HIGH2NWK,
-	TL_Q_NWK2HIGH,
-	TL_Q_TYPE_MAX,
+	ZB_Q_EV_TASK = 0,
+	ZB_Q_MAC2NWK,
+	ZB_Q_NWK2MAC,
+	ZB_Q_HIGH2NWK,
+	ZB_Q_NWK2HIGH,
+	ZB_Q_TYPE_MAX,
 };
 
-u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg);
+uint8_t zb_PrimitivePost(uint8_t layerQ, uint8_t primitive, void *arg);
 
-/* Task queue entry mirroring the SDK's tl_zb_task_t. Stays
+/* Task queue entry mirroring the SDK's zb_task_t. Stays
  * binary-compatible with libzigbee's zb_task_queue.c so ported NWK
  * sources can pop entries from the queue the way the vendor expects.
  */
-typedef struct tl_zb_task_s {
-	tl_zb_callback_t tlCb;
+typedef struct zb_task_s {
+	zb_callback_t tlCb;
 	void *data;
-} tl_zb_task_t;
+} zb_task_t;
 
-tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo);
+zb_task_t *zb_TaskQPop(uint8_t idx, zb_task_t *taskInfo);
 
 /* NWK protocol version (mirrors tl_zigbee_sdk
  * zigbee/common/includes/zb_config.h).
@@ -138,8 +138,8 @@ tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo);
 #define ZB_PROTOCOL_VERSION_GP 3
 #endif
 
-extern const u8 g_zero_addr[8];
-extern u32 g_secondCnt;
+extern const uint8_t g_zero_addr[8];
+extern uint32_t g_secondCnt;
 
 /* Generic return codes used broadly across SDK sources. */
 enum {
@@ -165,56 +165,56 @@ enum {
 /* System diagnostics counters (mirrors zb_common.h sys_diagnostics_t) */
 /* diagnostics for stack */
 typedef struct {
-    u16 numberOfResets;
-    u16 persistentMemoryWrites;
+    uint16_t numberOfResets;
+    uint16_t persistentMemoryWrites;
 
-    u32 macRxCrcFail;
-    u32 macTxCcaFail;
-    u32 macRxBcast;
-    u32 macTxBcast;
-    u32 macRxUcast;
-    u32 macTxUcast;
-    u16 macTxUcastRetry;
-    u16 macTxUcastFail;
+    uint32_t macRxCrcFail;
+    uint32_t macTxCcaFail;
+    uint32_t macRxBcast;
+    uint32_t macTxBcast;
+    uint32_t macRxUcast;
+    uint32_t macTxUcast;
+    uint16_t macTxUcastRetry;
+    uint16_t macTxUcastFail;
 
-    u16 nwkTxCnt;
-    u16 nwkTxEnDecryptFail;
+    uint16_t nwkTxCnt;
+    uint16_t nwkTxEnDecryptFail;
 
-    u16 apsRxBcast;
-    u16 apsTxBcast;
-    u16 apsRxUcast;
-    u16 apsTxUcastSuccess;
-    u16 apsTxUcastRetry;
-    u16 apsTxUcastFail;
+    uint16_t apsRxBcast;
+    uint16_t apsTxBcast;
+    uint16_t apsRxUcast;
+    uint16_t apsTxUcastSuccess;
+    uint16_t apsTxUcastRetry;
+    uint16_t apsTxUcastFail;
 
-    u16 routeDiscInitiated;
-    u16 neighborAdded;
-    u16 neighborRemoved;
-    u16 neighborStale;
-    u16 joinIndication;
-    u16 childMoved;
+    uint16_t routeDiscInitiated;
+    uint16_t neighborAdded;
+    uint16_t neighborRemoved;
+    uint16_t neighborStale;
+    uint16_t joinIndication;
+    uint16_t childMoved;
 
-    u32 panIdConflictCheck;
+    uint32_t panIdConflictCheck;
 
-    u16 nwkFCFailure;
-    u16 apsFCFailure;
-    u16 apsUnauthorizedKey;
-    u16 nwkDecryptFailures;
-    u16 apsDecryptFailures;
-    u16 packetBufferAllocateFailures;
-    u16 relayedUcast;
-    u16 phytoMACqueuelimitreached;
-    u16 packetValidateDropCount;
+    uint16_t nwkFCFailure;
+    uint16_t apsFCFailure;
+    uint16_t apsUnauthorizedKey;
+    uint16_t nwkDecryptFailures;
+    uint16_t apsDecryptFailures;
+    uint16_t packetBufferAllocateFailures;
+    uint16_t relayedUcast;
+    uint16_t phytoMACqueuelimitreached;
+    uint16_t packetValidateDropCount;
 
-    u8 lastMessageLQI;
-    s8 lastMessageRSSI;
-    u8 macTxIrqTimeoutCnt;
-    u8 macTxIrqCnt;
-    u8 macRxIrqCnt;
-    u8 phyLengthError;
-    u8 panIdConflict;
-    u8 panIdModified;
-    u8 nwkAddrConflict;
+    uint8_t lastMessageLQI;
+    int8_t lastMessageRSSI;
+    uint8_t macTxIrqTimeoutCnt;
+    uint8_t macTxIrqCnt;
+    uint8_t macRxIrqCnt;
+    uint8_t phyLengthError;
+    uint8_t panIdConflict;
+    uint8_t panIdModified;
+    uint8_t nwkAddrConflict;
 } sys_diagnostics_t;
 extern sys_diagnostics_t g_sysDiags;
 
@@ -223,24 +223,24 @@ extern sys_diagnostics_t g_sysDiags;
 
 #define EXT_ADDR_LEN                    8
 #define SRC_ID_LEN                      4
-#define TL_SETSTRUCTCONTENT(s, v)       (memset((u8 *)&(s), (v), sizeof(s)))
+#define ZB_SETSTRUCTCONTENT(s, v)       (memset((uint8_t *)&(s), (v), sizeof(s)))
 #define COPY_U16TOBUFFER(buf, data)     do { \
-	(((u8 *)(buf))[0]) = (u8)(data); \
-	(((u8 *)(buf))[1]) = (u8)((data) >> 8); \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
 } while (0)
 #define COPY_BUFFERTOU16(data, buf)     do { \
 	(data) = ((buf)[0]) + (((buf)[1]) << 8); \
 } while (0)
 #define COPY_U24TOBUFFER(buf, data)     do { \
-	(((u8 *)(buf))[0]) = (u8)(data); \
-	(((u8 *)(buf))[1]) = (u8)((data) >> 8); \
-	(((u8 *)(buf))[2]) = (u8)((data) >> 16); \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
+	(((uint8_t *)(buf))[2]) = (uint8_t)((data) >> 16); \
 } while (0)
 #define COPY_U32TOBUFFER(buf, data)     do { \
-	(((u8 *)(buf))[0]) = (u8)(data); \
-	(((u8 *)(buf))[1]) = (u8)((data) >> 8); \
-	(((u8 *)(buf))[2]) = (u8)((data) >> 16); \
-	(((u8 *)(buf))[3]) = (u8)((data) >> 24); \
+	(((uint8_t *)(buf))[0]) = (uint8_t)(data); \
+	(((uint8_t *)(buf))[1]) = (uint8_t)((data) >> 8); \
+	(((uint8_t *)(buf))[2]) = (uint8_t)((data) >> 16); \
+	(((uint8_t *)(buf))[3]) = (uint8_t)((data) >> 24); \
 } while (0)
 #define ZB_IS_64BIT_ADDR_ZERO(addr)     (!memcmp((addr), g_zero_addr, EXT_ADDR_LEN))
 #define ZB_IS_64BIT_ADDR_INVALID(addr)  (!memcmp((addr), g_invalid_addr, EXT_ADDR_LEN))
@@ -259,14 +259,14 @@ extern sys_diagnostics_t g_sysDiags;
 #define ZB_CCM_M                          4
 #endif
 
-#ifndef TL_RETURN_INVALID
-#define TL_RETURN_INVALID                 0xff
+#ifndef ZB_RETURN_INVALID
+#define ZB_RETURN_INVALID                 0xff
 #endif
 
-extern const u8 g_null_securityKey[];
-extern const u8 nwkKeyDefault[];
-extern const u8 touchLinkKeyCertification[];
-extern const u8 touchLinkKeyMaster[];
+extern const uint8_t g_null_securityKey[];
+extern const uint8_t nwkKeyDefault[];
+extern const uint8_t touchLinkKeyCertification[];
+extern const uint8_t touchLinkKeyMaster[];
 
 #ifndef ZB_IS_16BYTE_SECURITY_KEY_ZERO
 #define ZB_IS_16BYTE_SECURITY_KEY_ZERO(key) \
@@ -357,8 +357,8 @@ extern const addrExt_t g_zero_addr;
 #define ZB_APSDE_DATA_IND_DEFINED
 typedef struct apsdeDataInd_s {
 	aps_data_ind_t indInfo;
-	u16 asduLen;
-	u8  asdu[];
+	uint16_t asduLen;
+	uint8_t  asdu[];
 } apsdeDataInd_t;
 #endif
 
@@ -378,16 +378,16 @@ enum {
 	REJOIN_SECURITY,
 };
 
-static inline u16 zb_random(void)
+static inline uint16_t zb_random(void)
 {
-	return (u16)sys_rand32_get();
+	return (uint16_t)sys_rand32_get();
 }
 
 #define ZB_RANDOM() zb_random()
 
 /* Global stack state shape expected by open Zigbee sources. */
 typedef struct {
-	tl_zb_mac_pib_t macPib;
+	zb_mac_pib_t macPib;
 	nwk_nib_t nwkNib;
 	touchlink_attr_t touchlinkAttr;
 	bdb_attr_t bdbAttr;
@@ -399,9 +399,9 @@ extern zb_info_t g_zbInfo;
 #define g_touchlinkAttr g_zbInfo.touchlinkAttr
 #define g_bdbAttrs      g_zbInfo.bdbAttr
 
-extern const u8 tcLinkKeyCentralDefault[];
-extern const u8 linkKeyDistributedCertification[];
-extern const u8 linkKeyDistributedMaster[];
+extern const uint8_t tcLinkKeyCentralDefault[];
+extern const uint8_t linkKeyDistributedCertification[];
+extern const uint8_t linkKeyDistributedMaster[];
 void zb_info_save(void *arg);
 void zb_reset(void);
 
@@ -412,25 +412,25 @@ void zb_reset(void);
  * implemented partly by the imported stack and partly by the platform layer,
  * and the imported sources reach all of them through this header.
  */
-extern const tl_zb_mac_pib_t macPibDefault;
+extern const zb_mac_pib_t macPibDefault;
 extern const nwk_nib_t nwkNibDefault;
 extern const zdo_attrCfg_t zdoCfgAttrDefault;
 
 void zb_init(void);
 void zb_nwkKeySet(void);
-void os_init(u8 isRetention);
-u8 zb_info_load(void);
-bool tl_stackBusy(void);
+void os_init(uint8_t isRetention);
+uint8_t zb_info_load(void);
+bool zb_stackBusy(void);
 
 void zb_sched_init(void);
-extern u8 ZB_TASKQ_USERUSE_SIZE;
-u8 tl_zbUserTaskQNum(void);
+extern uint8_t ZB_TASKQ_USERUSE_SIZE;
+uint8_t zb_UserTaskQNum(void);
 
-u32 zbBufferSizeGet(void);
-u32 neighborTblSizeGet(void);
-u32 addrMapTblSizeGet(void);
-u32 brcTransRecordTblSizeGet(void);
-nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(u8 idx);
+uint32_t zbBufferSizeGet(void);
+uint32_t neighborTblSizeGet(void);
+uint32_t addrMapTblSizeGet(void);
+uint32_t brcTransRecordTblSizeGet(void);
+nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(uint8_t idx);
 aps_binding_entry_t *bindTblEntryGet(void);
 
 /*

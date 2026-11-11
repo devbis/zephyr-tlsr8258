@@ -17,21 +17,21 @@
 static ev_timer_event_t *macPendingWaitTimerEvt;
 tx_data_queue *g_pTxQueue = NULL;
 mac_timer_evt_t g_macTimerEvt;
-static u8 tx_fifo_rptr = 0;
-static u8 tx_fifo_wptr = 0;
+static uint8_t tx_fifo_rptr = 0;
+static uint8_t tx_fifo_wptr = 0;
 
 static void mac_trxTask(void *arg);
 
 typedef struct {
 	void *curTx;
-	u8 state;
-	u8 unused; /* offset 5, cleared when a new frame starts CSMA */
-	u8 csmaBackoffCnt;
-	u8 backoffExponent;
-	u8 frameRetryCnt;
-	u8 ackRequired;
-	u8 skipFreeTxBuf;
-	u8 ackSeqNum;
+	uint8_t state;
+	uint8_t unused; /* offset 5, cleared when a new frame starts CSMA */
+	uint8_t csmaBackoffCnt;
+	uint8_t backoffExponent;
+	uint8_t frameRetryCnt;
+	uint8_t ackRequired;
+	uint8_t skipFreeTxBuf;
+	uint8_t ackSeqNum;
 } mac_trx_vars_t;
 
 static mac_trx_vars_t mac_trx_vars;
@@ -54,9 +54,9 @@ int mac_waitTxIrqCb(void *arg)
 	(void)arg;
 
 	if (g_macTimerEvt.state != MAC_TIMER_EVENT_IDLE) {
-		rf_busyFlag &= (u8)~TX_BUSY;
+		rf_busyFlag &= (uint8_t)~TX_BUSY;
 		rf_setTrxState(RF_STATE_RX);
-		tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_SEND_FAIL);
+		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_SEND_FAIL);
 	}
 
 	return -1;
@@ -67,7 +67,7 @@ int mac_ackWaitingTimerCb(void *arg)
 	(void)arg;
 
 	if (g_macTimerEvt.state != MAC_TIMER_EVENT_IDLE) {
-		tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_ACK_RETRY);
+		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_ACK_RETRY);
 	}
 
 	return -1;
@@ -78,19 +78,19 @@ void mac_rxDataParse(void *arg)
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	mac_rx_pending_meta_t *pending = (mac_rx_pending_meta_t *)arg;
 	mac_phy_ind_meta_t *meta = (mac_phy_ind_meta_t *)arg;
-	u8 *raw = pending->raw;
-	u32 timestamp = pending->timestamp;
-	s8 rssi = pending->rssi;
-	u8 len = pending->len;
-	u8 linkQuality;
-	u8 frameType;
-	u8 hdrSize;
-	tl_zb_mac_mhr_t mhr;
+	uint8_t *raw = pending->raw;
+	uint32_t timestamp = pending->timestamp;
+	int8_t rssi = pending->rssi;
+	uint8_t len = pending->len;
+	uint8_t linkQuality;
+	uint8_t frameType;
+	uint8_t hdrSize;
+	zb_mac_mhr_t mhr;
 
 	buf->hdr.rssi = rssi;
 	linkQuality = rf_getLqi(rssi);
 	frameType = raw[0] & 0x07U;
-	hdrSize = tl_zbMacHdrParse(&mhr, raw);
+	hdrSize = zb_MacHdrParse(&mhr, raw);
 
 	if (len <= hdrSize || g_zbMacCtx.status == ZB_MAC_STATE_ED_SCAN) {
 		zb_buf_free(buf);
@@ -125,23 +125,23 @@ void mac_rxDataParse(void *arg)
 		COPY_U16TOBUFFER(meta->srcAddr, mhr.srcAddr.shortAddr);
 	}
 
-	tl_zbPhyIndication(buf, (u8 *)&mhr, hdrSize);
+	zb_PhyIndication(buf, (uint8_t *)&mhr, hdrSize);
 }
 
 static void mac_csmaStart(void *arg)
 {
-	u32 r;
+	uint32_t r;
 
 	r = drv_disable_irq();
 	if (rf_performCCA() != PHY_CCA_IDLE && g_zbInfo.macPib.maxCsmaBackoffs != 0U) {
 		drv_restore_irq(r);
-		tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
+		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
 		return;
 	}
 
 	{
 		if ((rf_busyFlag & TX_ACKPACKET) != 0U) {
-			rf_busyFlag &= (u8)~TX_ACKPACKET;
+			rf_busyFlag &= (uint8_t)~TX_ACKPACKET;
 		}
 
 		mac_trx_vars.state = MAC_TX_UNDERWAY;
@@ -178,12 +178,12 @@ void zb_macTimerEventProc(void *arg)
 		return;
 	}
 
-	if ((s32)(g_macTimerEvt.deadline - mac_currentTickGet()) > 0) {
+	if ((int32_t)(g_macTimerEvt.deadline - mac_currentTickGet()) > 0) {
 		return;
 	}
 
 	{
-		u32 r = drv_disable_irq();
+		uint32_t r = drv_disable_irq();
 		void (*cb)(void *) = g_macTimerEvt.cb;
 
 		if (cb != NULL) {
@@ -194,11 +194,11 @@ void zb_macTimerEventProc(void *arg)
 	}
 }
 
-u8 mac_data_pending(void)
+uint8_t mac_data_pending(void)
 {
-	u8 pending = (u8)(tx_fifo_wptr - tx_fifo_rptr);
+	uint8_t pending = (uint8_t)(tx_fifo_wptr - tx_fifo_rptr);
 
-	return pending ? (u8)(pending - 1U) : 0U;
+	return pending ? (uint8_t)(pending - 1U) : 0U;
 }
 
 tx_data_queue *get_next_data(void)
@@ -215,7 +215,7 @@ void free_tx_buff(zb_buf_t *buf)
 	(void)buf;
 
 	{
-		u32 r = drv_disable_irq();
+		uint32_t r = drv_disable_irq();
 
 		tx_fifo_rptr++;
 		drv_restore_irq(r);
@@ -235,9 +235,9 @@ void mac_resetTx_info(void)
 void mac_sendTxCnf(tx_data_queue *entry)
 {
 	zb_buf_t *txBuf;
-	u8 handle;
-	u8 status;
-	u8 needPendingWait = 0;
+	uint8_t handle;
+	uint8_t status;
+	uint8_t needPendingWait = 0;
 
 	mac_resetTx_info();
 
@@ -264,11 +264,11 @@ void mac_sendTxCnf(tx_data_queue *entry)
 	} else
 #endif
 	{
-		tl_zbMaxTxConfirmCb(txBuf, status);
+		zb_MaxTxConfirmCb(txBuf, status);
 	}
 
 	if (needPendingWait != 0U) {
-		u32 r;
+		uint32_t r;
 
 		g_zbMacCtx.indirectData = 1;
 
@@ -281,11 +281,11 @@ void mac_sendTxCnf(tx_data_queue *entry)
 
 		g_macTimerEvt.cb = mac_pendingWaitTimerCb;
 		{
-			u32 now = mac_currentTickGet();
-			s32 waitMs = ((s32)g_zbInfo.macPib.frameTotalWaitTime << 4) / 1000;
-			u32 ticksPerMs = sysTimerPerUs * 1000U;
+			uint32_t now = mac_currentTickGet();
+			int32_t waitMs = ((int32_t)g_zbInfo.macPib.frameTotalWaitTime << 4) / 1000;
+			uint32_t ticksPerMs = sysTimerPerUs * 1000U;
 
-			g_macTimerEvt.deadline = now + ticksPerMs * (u32)waitMs;
+			g_macTimerEvt.deadline = now + ticksPerMs * (uint32_t)waitMs;
 		}
 		g_macTimerEvt.state = MAC_TIMER_EVENT_PENDING_WAIT;
 		drv_restore_irq(r);
@@ -298,10 +298,10 @@ void mac_sendTxCnf(tx_data_queue *entry)
 static void mac_trxTask(void *arg)
 {
 	tx_data_queue *entry = (tx_data_queue *)mac_trx_vars.curTx;
-	u8 event = (u8)(uintptr_t)arg;
-	s8 rssi = (s8)((uintptr_t)arg >> 8);
-	u8 framePending = (u8)((uintptr_t)arg >> 16);
-	u8 state = mac_trx_vars.state;
+	uint8_t event = (uint8_t)(uintptr_t)arg;
+	int8_t rssi = (int8_t)((uintptr_t)arg >> 8);
+	uint8_t framePending = (uint8_t)((uintptr_t)arg >> 16);
+	uint8_t state = mac_trx_vars.state;
 
 	if (entry == NULL) {
 		return;
@@ -334,7 +334,7 @@ static void mac_trxTask(void *arg)
 		}
 
 		if (mac_trx_vars.csmaBackoffCnt <= g_zbInfo.macPib.maxCsmaBackoffs) {
-			u16 backoffUs = 200U;
+			uint16_t backoffUs = 200U;
 
 			mac_trx_vars.csmaBackoffCnt++;
 			rf_TrxStateGet();
@@ -347,11 +347,11 @@ static void mac_trxTask(void *arg)
 			}
 
 			if (mac_trx_vars.backoffExponent != 0U) {
-				u32 mod = (1UL << mac_trx_vars.backoffExponent) - 1UL;
-				u32 slots = drv_u32Rand() & 0xffffU;
+				uint32_t mod = (1UL << mac_trx_vars.backoffExponent) - 1UL;
+				uint32_t slots = drv_u32Rand() & 0xffffU;
 
 				slots = mod ? (slots % mod) : 0U;
-				backoffUs = (u16)(slots * 320U);
+				backoffUs = (uint16_t)(slots * 320U);
 				if (backoffUs == 0U) {
 					backoffUs = 200U;
 				}
@@ -372,14 +372,14 @@ static void mac_trxTask(void *arg)
 			mac_trx_vars.frameRetryCnt++;
 			g_sysDiags.macTxUcastRetry++;
 			mac_trx_vars.state = MAC_TX_RETRY;
-			tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_NEW_DATA);
+			zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_NEW_DATA);
 			return;
 		}
 
 		g_sysDiags.macTxCcaFail++;
 		mac_trx_vars.state = MAC_TX_DONE;
 		entry->cnfStatus = MAC_STA_CHANNEL_ACCESS_FAILURE;
-		tl_zbTaskPost((tl_zb_callback_t)mac_sendTxCnf, entry);
+		zb_TaskPost((zb_callback_t)mac_sendTxCnf, entry);
 		return;
 
 	case MAC_TX_UNDERWAY:
@@ -390,13 +390,13 @@ static void mac_trxTask(void *arg)
 			mac_sendTxCnf(entry);
 		} else if (event == MAC_TX_EV_SEND_SUCC &&
 			   g_macTimerEvt.state == MAC_TIMER_EVENT_TX_WAIT) {
-			u32 r;
+			uint32_t r;
 
 			g_macTimerEvt.state = MAC_TIMER_EVENT_IDLE;
 			if (mac_trx_vars.ackRequired == 0U) {
 				mac_trx_vars.state = MAC_TX_DONE;
 				entry->cnfStatus = MAC_SUCCESS;
-				tl_zbTaskPost((tl_zb_callback_t)mac_sendTxCnf, entry);
+				zb_TaskPost((zb_callback_t)mac_sendTxCnf, entry);
 				return;
 			}
 
@@ -421,7 +421,7 @@ static void mac_trxTask(void *arg)
 				mac_trx_vars.frameRetryCnt++;
 				g_sysDiags.macTxUcastRetry++;
 				mac_trx_vars.state = MAC_TX_RETRY;
-				tl_zbTaskPost(mac_trxTask, (void *)MAC_TX_EV_NEW_DATA);
+				zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_NEW_DATA);
 				return;
 			}
 
@@ -467,14 +467,14 @@ void mac_trigger_tx(void *arg)
 	}
 }
 
-void tl_zbSwitchOffRx(void)
+void zb_SwitchOffRx(void)
 {
 	if (g_zbInfo.macPib.rxOnWhenIdle == 0U) {
 		rf_setTrxState(RF_STATE_OFF);
 	}
 
 	g_zbMacCtx.indirectData = 0;
-	tl_zbTaskPost(mac_trigger_tx, NULL);
+	zb_TaskPost(mac_trigger_tx, NULL);
 }
 
 int mac_pendingWaitTimerCb(void *arg)
@@ -482,7 +482,7 @@ int mac_pendingWaitTimerCb(void *arg)
 	(void)arg;
 
 	if (g_macTimerEvt.state != MAC_TIMER_EVENT_IDLE) {
-		tl_zbSwitchOffRx();
+		zb_SwitchOffRx();
 	}
 
 	return -1;
@@ -492,31 +492,31 @@ void mac_pendingWaitTimerCancel(void)
 {
 	if (g_macTimerEvt.state == MAC_TIMER_EVENT_PENDING_WAIT) {
 		g_macTimerEvt.state = MAC_TIMER_EVENT_IDLE;
-		tl_zbSwitchOffRx();
+		zb_SwitchOffRx();
 	}
 }
 
-u8 tl_zbMacTx(zb_buf_t *txBuf, u8 *txData, u8 psduLen, u8 ack, void *pendingList)
+uint8_t zb_MacTx(zb_buf_t *txBuf, uint8_t *txData, uint8_t psduLen, uint8_t ack, void *pendingList)
 {
-	u8 status = MAC_STA_NO_RESOURCES;
-	u32 r;
-	u8 depth;
+	uint8_t status = MAC_STA_NO_RESOURCES;
+	uint32_t r;
+	uint8_t depth;
 	tx_data_queue *entry;
-	u8 ackReq = ack ? 1U : 0U;
+	uint8_t ackReq = ack ? 1U : 0U;
 
-	if ((s8)psduLen < 0) {
+	if ((int8_t)psduLen < 0) {
 		mac_trigger_tx(NULL);
 		return MAC_STA_FRAME_TOO_LONG;
 	}
 
 	r = drv_disable_irq();
-	depth = (u8)(tx_fifo_wptr - tx_fifo_rptr);
+	depth = (uint8_t)(tx_fifo_wptr - tx_fifo_rptr);
 	if (depth < MAC_TX_QUEUE_SIZE) {
 		entry = &g_pTxQueue[tx_fifo_wptr & (MAC_TX_QUEUE_SIZE - 1U)];
 
 		tx_fifo_wptr++;
 
-		entry->buf = (u8 *)txBuf;
+		entry->buf = (uint8_t *)txBuf;
 		entry->fAck = ackReq;
 		entry->psduLen = psduLen;
 		entry->txData = txData;
@@ -540,14 +540,14 @@ void mac_trxInit(void)
 	zb_mac_phy_init();
 }
 
-u8 mac_getTrxState(void)
+uint8_t mac_getTrxState(void)
 {
 	return mac_trx_vars.state;
 }
 
-u8 tl_zbMacStateBusy(void)
+uint8_t zb_MacStateBusy(void)
 {
-	if ((u8)(g_zbMacCtx.status - ZB_MAC_STATE_ACTIVE_SCAN) <= 1U) {
+	if ((uint8_t)(g_zbMacCtx.status - ZB_MAC_STATE_ACTIVE_SCAN) <= 1U) {
 		return 1;
 	}
 
@@ -556,25 +556,25 @@ u8 tl_zbMacStateBusy(void)
 	}
 
 	if (tx_fifo_wptr > tx_fifo_rptr) {
-		return (u8)(tx_fifo_wptr - tx_fifo_rptr - 1U);
+		return (uint8_t)(tx_fifo_wptr - tx_fifo_rptr - 1U);
 	}
 
 	return 0;
 }
 
-_attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt)
+_attribute_ram_code_ uint8_t *zb_macDataFilter(uint8_t *macPld, uint8_t len, uint8_t *needDrop, uint8_t *ackPkt)
 {
-	u8 frameType = macPld[0] & MAC_FCF_FRAME_TYPE_MASK;
-	u8 dstAddrMode = macPld[1] & MAC_FCF_DST_ADDR_BIT;
-	u8 srcAddrMode = macPld[1] & MAC_FCF_SRC_ADDR_BIT;
-	u8 *srcAddr = macPld + 3;
+	uint8_t frameType = macPld[0] & MAC_FCF_FRAME_TYPE_MASK;
+	uint8_t dstAddrMode = macPld[1] & MAC_FCF_DST_ADDR_BIT;
+	uint8_t srcAddrMode = macPld[1] & MAC_FCF_SRC_ADDR_BIT;
+	uint8_t *srcAddr = macPld + 3;
 
 	if (srcAddrMode != ADDR_MODE_NONE && (macPld[0] & 0x80U) == 0U) {
 		srcAddr += 2;
 	}
 
 	/* The vendor checks the MAC payload length after subtracting FCF/DSN. */
-	if ((u8)(len - 3U) > 126U) {
+	if ((uint8_t)(len - 3U) > 126U) {
 		*needDrop = 9;
 		g_sysDiags.phyLengthError++;
 		return NULL;
@@ -607,7 +607,7 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 	}
 
 	if (dstAddrMode != ADDR_MODE_NONE) {
-		u16 dstPanId = (u16)macPld[3] | ((u16)macPld[4] << 8);
+		uint16_t dstPanId = (uint16_t)macPld[3] | ((uint16_t)macPld[4] << 8);
 
 		srcAddr = macPld + 5;
 		if (srcAddrMode != ADDR_MODE_NONE && (macPld[0] & 0x80U) == 0U) {
@@ -620,7 +620,7 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 		}
 
 		if (dstAddrMode == 0x08U) {
-			u16 dstShort = (u16)macPld[5] | ((u16)macPld[6] << 8);
+			uint16_t dstShort = (uint16_t)macPld[5] | ((uint16_t)macPld[6] << 8);
 
 			if (dstShort != MAC_SHORT_ADDR_BROADCAST &&
 			    dstShort != g_zbInfo.macPib.shortAddress) {
@@ -631,7 +631,7 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 		}
 
 		if (dstAddrMode == MAC_FCF_DST_ADDR_BIT) {
-			const u8 *localExt = g_zbInfo.macPib.extAddress;
+			const uint8_t *localExt = g_zbInfo.macPib.extAddress;
 
 			if (macPld[5] != localExt[0] || macPld[6] != localExt[1] ||
 			    macPld[7] != localExt[2] || macPld[8] != localExt[3] ||
@@ -651,29 +651,29 @@ _attribute_ram_code_ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *
 }
 
 /* .ram_code in the vendor object (_router/mac_trx.s:.ram_code+0x15c). */
-_attribute_ram_code_ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt,
-						u32 timestamp, s8 rssi)
+_attribute_ram_code_ void zb_macDataRecvHandler(uint8_t *rxBuf, uint8_t *data, uint8_t len, uint8_t ackPkt,
+						uint32_t timestamp, int8_t rssi)
 {
 	zb_buf_t *buf;
 
 	if (ackPkt != 0U) {
-		u8 frameCtrl = data[0];
-		u8 seqNum = data[2];
+		uint8_t frameCtrl = data[0];
+		uint8_t seqNum = data[2];
 
 		if (mac_trx_vars.state == MAC_TX_WAIT_ACK && mac_trx_vars.ackSeqNum == seqNum) {
-			u32 event = MAC_TX_EV_ACK_RECV | ((u32)(u8)rssi << 8) |
-				    ((u32)(frameCtrl & MAC_FCF_FRAME_PENDING_MASK) << 16) |
-				    ((u32)seqNum << 24);
+			uint32_t event = MAC_TX_EV_ACK_RECV | ((uint32_t)(uint8_t)rssi << 8) |
+				    ((uint32_t)(frameCtrl & MAC_FCF_FRAME_PENDING_MASK) << 16) |
+				    ((uint32_t)seqNum << 24);
 
 			mac_trxTask((void *)(uintptr_t)event);
 		}
 		return;
 	}
 
-	buf = (zb_buf_t *)tl_phyRxBufTozbBuf(rxBuf);
+	buf = (zb_buf_t *)zb_phyRxBufTozbBuf(rxBuf);
 
 	if (buf == NULL) {
-		rf_busyFlag &= (u8)~RX_BUSY;
+		rf_busyFlag &= (uint8_t)~RX_BUSY;
 		return;
 	}
 
@@ -683,16 +683,16 @@ _attribute_ram_code_ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 
 		pending->raw = data;
 		pending->timestamp = timestamp;
 		pending->rssi = rssi;
-		pending->len = (u8)(len - 2U);
+		pending->len = (uint8_t)(len - 2U);
 	}
 
-	rf_busyFlag &= (u8)~RX_BUSY;
-	if (tl_zbUserTaskQNum() >= (u8)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
+	rf_busyFlag &= (uint8_t)~RX_BUSY;
+	if (zb_UserTaskQNum() >= (uint8_t)(ZB_TASKQ_USERUSE_SIZE - 5U)) {
 		zb_buf_free(buf);
 		return;
 	}
 
-	tl_zbTaskPost(mac_rxDataParse, buf);
+	zb_TaskPost(mac_rxDataParse, buf);
 }
 
 _attribute_ram_code_ void zb_macDataSendHandler(void)

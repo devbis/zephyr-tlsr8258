@@ -10,12 +10,12 @@
 #include "mac_common.h"
 #include "mac_trx.h"
 
-void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status)
+void zb_MacMcpsDataRequestSendConfirm(zb_buf_t *buf, uint8_t status)
 {
 	zb_mscp_data_req_t *req = (zb_mscp_data_req_t *)buf;
 	zb_mscp_data_conf_t *cnf = (zb_mscp_data_conf_t *)buf;
-	u16 macDstAddr = MAC_ADDR_USE_EXT;
-	u8 handle = req->msduHandle;
+	uint16_t macDstAddr = MAC_ADDR_USE_EXT;
+	uint8_t handle = req->msduHandle;
 
 	if (req->dstAddr.addrMode == ADDR_MODE_SHORT) {
 		macDstAddr = req->dstAddr.addr.shortAddr;
@@ -30,7 +30,7 @@ void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status)
 
 		gpCnf->status = status;
 		gpCnf->gpMpduHandle = handle;
-		tl_zbTaskPost(cGp_dataCnf, buf);
+		zb_TaskPost(cGp_dataCnf, buf);
 		return;
 	}
 #endif
@@ -42,18 +42,18 @@ void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status)
 	cnf->rssi = buf->hdr.rssi;
 	cnf->lqi = rf_getLqi(cnf->rssi);
 
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MCPS_DATA_CNF, buf);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MCPS_DATA_CNF, buf);
 }
 
-void tl_zbMacMcpsDataRequestProc(void *arg)
+void zb_MacMcpsDataRequestProc(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	zb_mscp_data_req_t *req;
-	tl_zb_mac_mhr_t mhr;
-	u8 hdrSize;
-	u8 psduLen;
-	u8 *txData;
-	u8 txStatus;
+	zb_mac_mhr_t mhr;
+	uint8_t hdrSize;
+	uint8_t psduLen;
+	uint8_t *txData;
+	uint8_t txStatus;
 
 	/* Caller guarantees buf is valid; the vendor path omits a local null guard. */
 	req = (zb_mscp_data_req_t *)buf;
@@ -78,28 +78,28 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
 	}
 
 	mhr.frameCtrl = MAC_FRAME_TYPE_DATA |
-			((u16)(req->txOptions & MAC_TX_OPTION_ACKNOWLEDGED_BIT)
+			((uint16_t)(req->txOptions & MAC_TX_OPTION_ACKNOWLEDGED_BIT)
 			 << MAC_FCF_ACK_REQUEST_POS) |
-			((u16)req->dstAddr.addrMode << MAC_FCF_DST_ADDR_MODE_POS) |
-			((u16)req->srcAddr.addrMode << MAC_FCF_SRC_ADDR_MODE_POS);
+			((uint16_t)req->dstAddr.addrMode << MAC_FCF_DST_ADDR_MODE_POS) |
+			((uint16_t)req->srcAddr.addrMode << MAC_FCF_SRC_ADDR_MODE_POS);
 
 	if ((req->srcAddr.addrMode != ADDR_MODE_NONE) &&
 	    (req->dstAddr.addrMode != ADDR_MODE_NONE) && (req->dstPanId == g_zbMacPib.panId)) {
 		mhr.frameCtrl |= MAC_FCF_INTRA_PAN_MASK;
 	}
 
-	hdrSize = tl_zbMacHdrSize(mhr.frameCtrl);
+	hdrSize = zb_MacHdrSize(mhr.frameCtrl);
 	buf->hdr.handle = req->msduHandle;
-	psduLen = (u8)(hdrSize + req->msduLength);
+	psduLen = (uint8_t)(hdrSize + req->msduLength);
 	txData = req->msdu - hdrSize;
 	/* The builder's return value is discarded: the pending context and
-	 * tl_zbMacTx() both want the complete frame, header first. */
-	(void)tl_zbMacHdrBuilder(txData, &mhr);
+	 * zb_MacTx() both want the complete frame, header first. */
+	(void)zb_MacHdrBuilder(txData, &mhr);
 
 	buf->hdr.macTxFifo = 1;
 #if defined(ZB_ROUTER_ROLE)
 	if ((req->txOptions & MAC_TX_OPTION_INDIRECT_TRANSMISSION_BIT) != 0U) {
-		u32 pendingAddr[2];
+		uint32_t pendingAddr[2];
 		mac_pending_tx_ctx_t *ctx = (mac_pending_tx_ctx_t *)buf;
 
 		ctx->txData = txData;
@@ -111,23 +111,23 @@ void tl_zbMacMcpsDataRequestProc(void *arg)
 	} else
 #endif
 	{
-		txStatus = tl_zbMacTx(buf, txData, psduLen,
+		txStatus = zb_MacTx(buf, txData, psduLen,
 				      (mhr.frameCtrl & MAC_FCF_ACK_REQ_BIT) ? 1U : 0U, NULL);
 	}
 
 	if (txStatus != MAC_SUCCESS) {
-		tl_zbMacMcpsDataRequestSendConfirm(buf, txStatus);
+		zb_MacMcpsDataRequestSendConfirm(buf, txStatus);
 	}
 }
 
-void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
+void zb_PhyMldeIndication(zb_buf_t *buf, uint8_t *raw, uint8_t len)
 {
 	mac_phy_ind_meta_t meta = *(mac_phy_ind_meta_t *)buf;
 	zb_mscp_data_ind_t *ind = (zb_mscp_data_ind_t *)buf;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
 
 	ind->msdu = meta.payload;
-	ind->msduLength = (u8)(meta.payloadLen - len);
+	ind->msduLength = (uint8_t)(meta.payloadLen - len);
 	ind->dstAddr.addrMode = mhr->dstAddrMode;
 	memcpy(&ind->dstAddr.addr, &mhr->dstAddr, sizeof(ind->dstAddr.addr));
 	ind->dstPanId = mhr->dstPanId;
@@ -143,5 +143,5 @@ void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len)
 		buf->hdr.pending = 1;
 	}
 
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MCPS_DATA_IND, buf);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MCPS_DATA_IND, buf);
 }

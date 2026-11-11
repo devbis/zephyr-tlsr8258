@@ -25,6 +25,9 @@
 # commits adapt some of the imported SDK files, so running this on an adapted
 # tree reverts those adaptations: that is the intended flow. Re-run it, amend
 # the matching import commit, then rebase the adaptation commits back on top.
+# The last of them is the rename of the vendor types and identifiers; it is
+# produced by scripts/zigbee/rename_vendor.py, so re-run that script instead of
+# resolving conflicts in it.
 #
 # With --check nothing is copied: the tree is compared against both upstreams
 # and every file that differs is listed, which on the import commits

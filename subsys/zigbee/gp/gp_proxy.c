@@ -58,13 +58,13 @@ void gp_proxyInit(void)
     COPY_U24TOBUFFER(zclGpAttr_gppActiveFunc, GPP_ACTIVE_FUNCTIONALITY);
 }
 
-gpSecRsp_status_t gpProxySecOperation(u8 appId, gpdId_t gpdId,
-                                      u8 endpoint, u32 gpdSecFrameCnt,
-                                      u8 gpdfSecurityLevel, u8 gpdfKeyType,
-                                      u8 *pKeyType, u8 *pKey)
+gpSecRsp_status_t gpProxySecOperation(uint8_t appId, gpdId_t gpdId,
+                                      uint8_t endpoint, uint32_t gpdSecFrameCnt,
+                                      uint8_t gpdfSecurityLevel, uint8_t gpdfKeyType,
+                                      uint8_t *pKeyType, uint8_t *pKey)
 {
-    u8 secChkFail = FALSE;
-    u8 epChkFail = FALSE;
+    uint8_t secChkFail = FALSE;
+    uint8_t epChkFail = FALSE;
     gpSecRsp_status_t status = GP_SEC_RSP_ERROR;
 
     //A.3.7.3.3
@@ -162,11 +162,11 @@ static void gpCommissioningWindowTimeoutStop(void)
     //printf("windowTimeoutStop\n");
 
     if (g_gppCtx.commissioningWindowTimeoutEvt) {
-        TL_ZB_TIMER_CANCEL(&g_gppCtx.commissioningWindowTimeoutEvt);
+        ZB_TIMER_CANCEL(&g_gppCtx.commissioningWindowTimeoutEvt);
     }
 }
 
-static s32 gpCommissioningWindowTimeoutCb(void *arg)
+static int32_t gpCommissioningWindowTimeoutCb(void *arg)
 {
     //printf("gpCommWindowTimeoutCb\n");
 
@@ -189,7 +189,7 @@ static status_t gp_proxyTabEntryUpdate(gpProxyTabEntry_t *pEntry, zcl_gp_pairing
                 return ZCL_STA_INSUFFICIENT_SPACE;
             }
         } else if (pCmd->options.bits.commMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
-            u16 alias = pCmd->options.bits.assignedAliasPresent ? pCmd->assignedAlias : 0xffff;
+            uint16_t alias = pCmd->options.bits.assignedAliasPresent ? pCmd->assignedAlias : 0xffff;
             if (sinkGroupListAdd(pEntry, pCmd->sinkGroupID, alias) == FAILURE) {
                 return ZCL_STA_INSUFFICIENT_SPACE;
             }
@@ -329,12 +329,12 @@ static status_t gpPairingCmdProcess(zcl_gp_pairingCmd_t *pCmd)
 
     if ((NIB_NETWORK_ADDRESS() == gpAliasSrcAddrDerived(pCmd->options.bits.appId, pCmd->gpdId)) ||
        ((NIB_NETWORK_ADDRESS() == pCmd->assignedAlias) && pCmd->options.bits.assignedAliasPresent)) {
-        tl_zbNwkAddrConflictStatusSend(NWK_BROADCAST_RX_ON_WHEN_IDLE, NIB_NETWORK_ADDRESS(), TRUE);
+        zb_NwkAddrConflictStatusSend(NWK_BROADCAST_RX_ON_WHEN_IDLE, NIB_NETWORK_ADDRESS(), TRUE);
 
-        NIB_NETWORK_ADDRESS() = g_zbMacPib.shortAddress = tl_zbNwkStochasticAddrCal();
+        NIB_NETWORK_ADDRESS() = g_zbMacPib.shortAddress = zb_NwkStochasticAddrCal();
 
-        u16 ref = 0;
-        tl_zbNwkAddrMapAdd(g_zbMacPib.shortAddress, g_zbMacPib.extAddress, &ref);
+        uint16_t ref = 0;
+        zb_NwkAddrMapAdd(g_zbMacPib.shortAddress, g_zbMacPib.extAddress, &ref);
         zb_info_save(NULL);
 
         zb_zdoSendDevAnnance();
@@ -352,7 +352,7 @@ static status_t gpPairingCmdProcess(zcl_gp_pairingCmd_t *pCmd)
  *
  * @return  None
  */
-void gpProxyCommissioningModeCmdProcess(u16 srcAddr, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
+void gpProxyCommissioningModeCmdProcess(uint16_t srcAddr, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
 {
     if (g_gppCtx.gppInCommMode && (g_gppCtx.gpCommissionerAddr != srcAddr)) {
         //if we are in commissioning mode and the source address is not the device that set the
@@ -378,7 +378,7 @@ void gpProxyCommissioningModeCmdProcess(u16 srcAddr, zcl_gp_proxyCommissioningMo
             //start the commissioning window timeout
             gpCommissioningWindowTimeoutStop();
             if (g_gppCtx.gpCommissioningWindow) {
-                g_gppCtx.commissioningWindowTimeoutEvt = TL_ZB_TIMER_SCHEDULE(gpCommissioningWindowTimeoutCb,
+                g_gppCtx.commissioningWindowTimeoutEvt = ZB_TIMER_SCHEDULE(gpCommissioningWindowTimeoutCb,
                                                                               NULL,
                                                                               g_gppCtx.gpCommissioningWindow * 1000);
             }
@@ -408,7 +408,7 @@ void gpResponseCmdProcess(zcl_gp_responseCmd_t *pCmd)
     //printf("GPP_gpResponseCmdCb: mode = %x\n", g_gppCtx.gppInCommMode);
 
     gp_data_req_t gpDataReq;
-    TL_SETSTRUCTCONTENT(gpDataReq, 0);
+    ZB_SETSTRUCTCONTENT(gpDataReq, 0);
 
     if(pCmd->tempMasterShortAddr == NIB_NETWORK_ADDRESS()){
             g_gppCtx.firstToForward = TRUE;//TODO: not sure
@@ -421,7 +421,7 @@ void gpResponseCmdProcess(zcl_gp_responseCmd_t *pCmd)
     gpDataReq.txOptions.useGpTxQueue = 1;
     gpDataReq.txOptions.txOnMatchingEndpoint = pCmd->options.bits.transmitOnEndpointMatch;
     gpDataReq.appId = pCmd->options.bits.appId;
-    memcpy((u8 *)&gpDataReq.gpdId, (u8 *)&pCmd->gpdId, sizeof(gpdId_t));
+    memcpy((uint8_t *)&gpDataReq.gpdId, (uint8_t *)&pCmd->gpdId, sizeof(gpdId_t));
     gpDataReq.endpoint = pCmd->endpoint;
     gpDataReq.gpdCmdId = pCmd->gpdCmdID;
     gpDataReq.gpdAsduLen = pCmd->payloadLen;
@@ -432,11 +432,11 @@ void gpResponseCmdProcess(zcl_gp_responseCmd_t *pCmd)
     if (gpDataReq.action) {
         if (pCmd->gpdCmdID == GPDF_CMD_ID_CHANNEL_CONFIGURATION) {
             gpd_channelConfigurationCmd_payload_t channel;
-            TL_SETSTRUCTCONTENT(channel, 0);
+            ZB_SETSTRUCTCONTENT(channel, 0);
 
             channel.channel = *(pCmd->pGpdCmdPayload);
 
-            gpSwitchToTransmitChannel((u8)channel.bits.operationChannel, pCmd->tempMasterTxChannel);
+            gpSwitchToTransmitChannel((uint8_t)channel.bits.operationChannel, pCmd->tempMasterTxChannel);
         }
     }
 }
@@ -453,7 +453,7 @@ void gpResponseCmdProcess(zcl_gp_responseCmd_t *pCmd)
 static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_proxyTabReqCmd_t *pCmd)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
@@ -461,9 +461,9 @@ static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_pro
     dstEpInfo.profileId = pAddrInfo->profileId;
 
     zcl_gp_proxyTabRspCmd_t proxyTabRspCmd;
-    TL_SETSTRUCTCONTENT(proxyTabRspCmd, 0);
+    ZB_SETSTRUCTCONTENT(proxyTabRspCmd, 0);
 
-    u8 *pBuf = NULL;
+    uint8_t *pBuf = NULL;
 
     proxyTabRspCmd.totalTabEntries = gp_getProxyTabEntryTotalNum();
 
@@ -480,8 +480,8 @@ static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_pro
     if (pCmd->options.bits.reqType == REQUEST_TABLE_ENTRIES_BY_GPD_ID) {
         gpProxyTabEntry_t *pEntry = gp_getProxyTabByGpdId(pCmd->options.bits.appId, pCmd->gpdId);
         if (pEntry) {
-            u8 len = gp_getProxyTabEntryLen(pEntry);
-            pBuf = (u8 *)ev_buf_allocate(len);
+            uint8_t len = gp_getProxyTabEntryLen(pEntry);
+            pBuf = (uint8_t *)ev_buf_allocate(len);
             if (!pBuf) {
                 return;
             }
@@ -505,11 +505,11 @@ static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_pro
         proxyTabRspCmd.status = ZCL_STA_NOT_FOUND;
         proxyTabRspCmd.startIdx = pCmd->index;
 
-        u8 entryLen = 0;
-        u8 maxEntryLen = 0;
-        u8 activeEntryCnt = 0;
+        uint8_t entryLen = 0;
+        uint8_t maxEntryLen = 0;
+        uint8_t activeEntryCnt = 0;
 
-        for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+        for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
             maxEntryLen = entryLen;
 
             if (g_gpProxyTab.gpProxyTab[i].used) {
@@ -531,21 +531,21 @@ static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_pro
         activeEntryCnt = 0;
         proxyTabRspCmd.entriesLen = entryLen;
 
-        u8 entriesCnt = proxyTabRspCmd.entriesCnt;
+        uint8_t entriesCnt = proxyTabRspCmd.entriesCnt;
 
         if (entryLen) {
             proxyTabRspCmd.status = ZCL_STA_SUCCESS;
 
-            pBuf = (u8 *)ev_buf_allocate(entryLen);
+            pBuf = (uint8_t *)ev_buf_allocate(entryLen);
             if (!pBuf) {
                 return;
             }
 
             memset(pBuf, 0, entryLen);
 
-            u8 *ptr = pBuf;
+            uint8_t *ptr = pBuf;
 
-            for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+            for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
                 if (g_gpProxyTab.gpProxyTab[i].used) {
                     activeEntryCnt++;
 
@@ -571,7 +571,7 @@ static void gpProxyTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_pro
     }
 }
 
-status_t zcl_gpServerCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload)
+status_t zcl_gpServerCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload)
 {
     status_t status = ZCL_STA_SUCCESS;
 
@@ -597,10 +597,10 @@ status_t zcl_gpServerCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void
 }
 
 
-static u8 gpParseDataInd(gp_data_ind_t *pGpDataInd, zcl_gp_notificationCmd_t *pCmd)
+static uint8_t gpParseDataInd(gp_data_ind_t *pGpDataInd, zcl_gp_notificationCmd_t *pCmd)
 {
     gpdId_t gpdId;
-    TL_SETSTRUCTCONTENT(gpdId, 0);
+    ZB_SETSTRUCTCONTENT(gpdId, 0);
 
     if (pGpDataInd->appId == GP_APP_ID_SRC_ID) {
         gpdId.srcId = pGpDataInd->srcId;
@@ -678,14 +678,14 @@ static u8 gpParseDataInd(gp_data_ind_t *pGpDataInd, zcl_gp_notificationCmd_t *pC
     }
     pCmd->gppShortAddr = NWK_NIB().nwkAddr;
 
-    s8 RSSI = pGpDataInd->rssi;
+    int8_t RSSI = pGpDataInd->rssi;
     (RSSI > 8) ? RSSI = 8 : (RSSI < -109) ? RSSI = -109 : 0;
     RSSI += 110;
     RSSI /= 2;
 
     pCmd->gppGpdLink.bits.rssi = RSSI;
 
-    u8 LQI = pGpDataInd->lqi ? 2 : 0;
+    uint8_t LQI = pGpDataInd->lqi ? 2 : 0;
 
     pCmd->gppGpdLink.bits.lqi = LQI;
 
@@ -695,7 +695,7 @@ static u8 gpParseDataInd(gp_data_ind_t *pGpDataInd, zcl_gp_notificationCmd_t *pC
 static void gpNotificationCmdSend(gp_data_ind_t *pGpDataInd, zcl_gp_notificationCmd_t *pCmd)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     gpProxyTabEntry_t *pEntry = gp_getProxyTabByGpdId(pCmd->options.bits.appId, pCmd->gpdId);
     if (!pEntry) {
@@ -710,7 +710,7 @@ static void gpNotificationCmdSend(gp_data_ind_t *pGpDataInd, zcl_gp_notification
         dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEpInfo.useAlias = FALSE;
 
-        for (u8 i = 0; i < pEntry->lwSinkCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->lwSinkCnt; i++) {
             dstEpInfo.dstAddr.shortAddr = pEntry->lightweightSinkAddrList[i].sinkNwkAddr;
 
             zcl_gp_notificationCmdSend(GREEN_POWER_ENDPOINT, &dstEpInfo, TRUE, pCmd);
@@ -734,7 +734,7 @@ static void gpNotificationCmdSend(gp_data_ind_t *pGpDataInd, zcl_gp_notification
         dstEpInfo.useAlias = TRUE;
         dstEpInfo.aliasSeqNum = (pGpDataInd->seqNum - 9) % 256;
 
-        for (u8 i = 0; i < pEntry->sinkGroupCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupCnt; i++) {
             dstEpInfo.dstAddr.shortAddr = pEntry->sinkGroupList[i].groupId;
             dstEpInfo.aliasSrcAddr = (pEntry->sinkGroupList[i].alias != 0xffff) ? pEntry->sinkGroupList[i].alias
                                                                                                                                                     : gpAliasSrcAddrDerived(pEntry->options.bits.appId, pEntry->gpdId);
@@ -762,7 +762,7 @@ static void gppOperationalModeProcess(gp_data_ind_t *pGpDataInd)
     }
 
     zcl_gp_notificationCmd_t gpNotificationCmd;
-    TL_SETSTRUCTCONTENT(gpNotificationCmd, 0);
+    ZB_SETSTRUCTCONTENT(gpNotificationCmd, 0);
 
     if (gpParseDataInd(pGpDataInd, &gpNotificationCmd) == SUCCESS) {
         //update the proxy table
@@ -779,7 +779,7 @@ static void gppOperationalModeProcess(gp_data_ind_t *pGpDataInd)
     }
 }
 
-static u8 gpParseManteinanceInd(gp_data_ind_t *pGpDataInd, zcl_gp_commissioningNotificationCmd_t *pCmd)
+static uint8_t gpParseManteinanceInd(gp_data_ind_t *pGpDataInd, zcl_gp_commissioningNotificationCmd_t *pCmd)
 {
     if (pGpDataInd->gpdCmdId != GPDF_CMD_ID_CHANNEL_REQ) {
         if (pGpDataInd->appId == GP_APP_ID_SRC_ID) {
@@ -822,21 +822,21 @@ static u8 gpParseManteinanceInd(gp_data_ind_t *pGpDataInd, zcl_gp_commissioningN
     }
     pCmd->gppShortAddr = NWK_NIB().nwkAddr;
 
-    s8 RSSI = pGpDataInd->rssi;
+    int8_t RSSI = pGpDataInd->rssi;
     (RSSI > 8) ? RSSI = 8 : (RSSI < -109) ? RSSI = -109 : 0;
     RSSI += 110;
     RSSI /= 2;
 
     pCmd->gppGpdLink.bits.rssi = RSSI;
 
-    u8 LQI = pGpDataInd->lqi ? 2 : 0;
+    uint8_t LQI = pGpDataInd->lqi ? 2 : 0;
 
     pCmd->gppGpdLink.bits.lqi = LQI;
 
     return SUCCESS;
 }
 
-static s32 gpCommissioningNotificationCmdSend(void *arg)
+static int32_t gpCommissioningNotificationCmdSend(void *arg)
 {
     gp_noti_t *buf = (gp_noti_t *)arg;
 
@@ -848,7 +848,7 @@ static s32 gpCommissioningNotificationCmdSend(void *arg)
         gpCommissioningNotificationCmdFromLocalCb(&buf->gpCommissioningNotificationCmd);
     }
 
-    ev_buf_free((u8 *)buf);
+    ev_buf_free((uint8_t *)buf);
 
     return -1;
 }
@@ -888,7 +888,7 @@ static void gppCommissioningModeProcess(gp_data_ind_t *pGpDataInd)
     if (!buf) {
         return;
     }
-    memset((u8 *)buf, 0, sizeof(gp_noti_t));
+    memset((uint8_t *)buf, 0, sizeof(gp_noti_t));
 
     if (gpParseManteinanceInd(pGpDataInd, &buf->gpCommissioningNotificationCmd) == SUCCESS) {
         //printf("gpCommNotif: cmdId = %x\n", pGpDataInd->gpdCmdId);
@@ -908,13 +908,13 @@ static void gppCommissioningModeProcess(gp_data_ind_t *pGpDataInd)
             buf->dstEpInfo.useAlias = FALSE;
         }
 
-        u8 gppTunnelingDelay = gppTunnelingDelayGet(buf->gpCommissioningNotificationCmd.options.bits.rxAfterTx,
+        uint8_t gppTunnelingDelay = gppTunnelingDelayGet(buf->gpCommissioningNotificationCmd.options.bits.rxAfterTx,
                                                     buf->gpCommissioningNotificationCmd.gppGpdLink.bits.lqi,
                                                     g_gppCtx.firstToForward, FALSE);
         //printf("delay = %d\n", gppTunnelingDelay);
-        TL_ZB_TIMER_SCHEDULE(gpCommissioningNotificationCmdSend, buf, gppTunnelingDelay);
+        ZB_TIMER_SCHEDULE(gpCommissioningNotificationCmdSend, buf, gppTunnelingDelay);
     } else {
-        ev_buf_free((u8 *)buf);
+        ev_buf_free((uint8_t *)buf);
     }
 }
 

@@ -182,13 +182,13 @@ typedef enum {
 
 // Update Flags of the color loop set command
 typedef union {
-    u8 updateFlags;
+    uint8_t updateFlags;
     struct {
-        u8 action:1;
-        u8 direction:1;
-        u8 time:1;
-        u8 startHue:1;
-        u8 reserved:4;
+        uint8_t action:1;
+        uint8_t direction:1;
+        uint8_t time:1;
+        uint8_t startHue:1;
+        uint8_t reserved:4;
     } bits;
 } zcl_colorLoopSetUpdateFlags_t;
 
@@ -209,170 +209,170 @@ typedef enum {
  * TYPES
  */
 typedef struct {
-    u8 hue;
-    u8 direction;                       //!< zcl_colorCtrlDir_t
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t hue;
+    uint8_t direction;                       //!< zcl_colorCtrlDir_t
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveToHueCmd_t;
 
 typedef struct {
-    u8 moveMode;                        //!< zcl_colorCtrlMoveMode_t
-    u8 rate;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t moveMode;                        //!< zcl_colorCtrlMoveMode_t
+    uint8_t rate;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveHueCmd_t;
 
 typedef struct {
-    u8 stepMode;                        //!< zcl_colorCtrlStepMode_t
-    u8 stepSize;
-    u8 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t stepMode;                        //!< zcl_colorCtrlStepMode_t
+    uint8_t stepSize;
+    uint8_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlStepHueCmd_t;
 
 typedef struct {
-    u8 saturation;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t saturation;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveToSaturationCmd_t;
 
 typedef struct {
-    u8 moveMode;                        //!< zcl_colorCtrlMoveMode_t
-    u8 rate;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t moveMode;                        //!< zcl_colorCtrlMoveMode_t
+    uint8_t rate;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveSaturationCmd_t;
 
 typedef struct {
-    u8 stepMode;                        //!< zcl_colorCtrlStepMode_t
-    u8 stepSize;
-    u8 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t stepMode;                        //!< zcl_colorCtrlStepMode_t
+    uint8_t stepSize;
+    uint8_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlStepSaturationCmd_t;
 
 typedef struct {
-    u8 hue;
-    u8 saturation;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t hue;
+    uint8_t saturation;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveToHueAndSaturationCmd_t;
 
 typedef struct {
-    u16 colorX;
-    u16 colorY;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t colorX;
+    uint16_t colorY;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveToColorCmd_t;
 
 typedef struct {
-    s16 rateX;
-    s16 rateY;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    int16_t rateX;
+    int16_t rateY;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveColorCmd_t;
 
 typedef struct {
-    s16 stepX;
-    s16 stepY;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    int16_t stepX;
+    int16_t stepY;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlStepColorCmd_t;
 
 typedef struct {
-    u16 colorTemperature;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t colorTemperature;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveToColorTemperatureCmd_t;
 
 typedef struct {
-    u16 enhancedHue;
-    u16 transitionTime;
-    u8 direction;                       //!< zcl_colorCtrlDir_t
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t enhancedHue;
+    uint16_t transitionTime;
+    uint8_t direction;                       //!< zcl_colorCtrlDir_t
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlEnhancedMoveToHueCmd_t;
 
 typedef struct {
-    u8 moveMode;                        //!< zcl_colorCtrlMoveMode_t
-    u16	rate;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t moveMode;                        //!< zcl_colorCtrlMoveMode_t
+    uint16_t	rate;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlEnhancedMoveHueCmd_t;
 
 typedef struct {
-    u8 stepMode;                        //!< zcl_colorCtrlStepMode_t
-    u16 stepSize;
-    u16 transitionTime;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t stepMode;                        //!< zcl_colorCtrlStepMode_t
+    uint16_t stepSize;
+    uint16_t transitionTime;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlEnhancedStepHueCmd_t;
 
 typedef struct {
-    u16 enhancedHue;
-    u16 transitionTime;
-    u8 saturation;
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t enhancedHue;
+    uint16_t transitionTime;
+    uint8_t saturation;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlEnhancedMoveToHueAndSaturationCmd_t;
 
 typedef struct {
-    u16 time;
-    u16 startHue;
+    uint16_t time;
+    uint16_t startHue;
     zcl_colorLoopSetUpdateFlags_t updateFlags;
-    u8 action;                          //!< zcl_colorLoopSetAction_t
-    u8 direction;                       //!< zcl_colorLoopSetDir_t
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t action;                          //!< zcl_colorLoopSetAction_t
+    uint8_t direction;                       //!< zcl_colorLoopSetDir_t
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlColorLoopSetCmd_t;
 
 typedef struct {
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlStopMoveStepCmd_t;
 
 typedef struct {
-    u16 rate;
-    u16 colorTempMinMireds;
-    u16 colorTempMaxMireds;
-    u8 moveMode;                        //!< zcl_colorCtrlMoveMode_t
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t rate;
+    uint16_t colorTempMinMireds;
+    uint16_t colorTempMaxMireds;
+    uint8_t moveMode;                        //!< zcl_colorCtrlMoveMode_t
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlMoveColorTemperatureCmd_t;
 
 typedef struct {
-    u16 stepSize;
-    u16 transitionTime;
-    u16 colorTempMinMireds;
-    u16 colorTempMaxMireds;
-    u8 stepMode;                        //!< zcl_colorCtrlStepMode_t
-    u8 optPresent;                      //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint16_t stepSize;
+    uint16_t transitionTime;
+    uint16_t colorTempMinMireds;
+    uint16_t colorTempMaxMireds;
+    uint8_t stepMode;                        //!< zcl_colorCtrlStepMode_t
+    uint8_t optPresent;                      //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } zcl_colorCtrlStepColorTemperatureCmd_t;
 
 typedef union {
@@ -403,7 +403,7 @@ typedef union {
  */
 
 #if 0
-typedef void (*zcl_lightColorCtrlCb_t)(u8 cmdId, zcl_colorCtrl_cmdPayload_t *cmdPayload);
+typedef void (*zcl_lightColorCtrlCb_t)(uint8_t cmdId, zcl_colorCtrl_cmdPayload_t *cmdPayload);
 
 typedef struct {
     zcl_lightColorCtrlCb_t lightColorCtrlCbFunc;
@@ -412,229 +412,229 @@ typedef struct {
 
 typedef struct {
 #ifdef ZCL_ATTRID_CURRENT_HUE_ENABLE
-    u8 zcl_attr_currentHue;
+    uint8_t zcl_attr_currentHue;
 #endif
 #ifdef ZCL_ATTRID_CURRENT_SATURATION_ENABLE
-    u8 zcl_attr_currentSaturation;
+    uint8_t zcl_attr_currentSaturation;
 #endif
 #ifdef ZCL_ATTRID_COLOR_MODE_ENABLE
-    u8 zcl_attr_colorMode;
+    uint8_t zcl_attr_colorMode;
 #endif
 #ifdef ZCL_ATTRID_COLOR_OPTIONS_ENABLE
-    u8 zcl_attr_options;
+    uint8_t zcl_attr_options;
 #endif
 #ifdef ZCL_ATTRID_REMAINING_TIME_ENABLE
-    u16 zcl_attr_remainingTime;
+    uint16_t zcl_attr_remainingTime;
 #endif
 #ifdef ZCL_ATTRID_CURRENT_X_ENABLE
-    u16 zcl_attr_currX;
+    uint16_t zcl_attr_currX;
 #endif
 #ifdef ZCL_ATTRID_CURRENT_Y_ENABLE
-    u16 zcl_attr_currY;
+    uint16_t zcl_attr_currY;
 #endif
 #ifdef ZCL_ATTRID_DRIFT_COMPENSATION_ENABLE
-    u8 zcl_attr_driftComensation;
+    uint8_t zcl_attr_driftComensation;
 #endif
 #ifdef ZCL_ATTRID_COMPENSATION_TEXT_ENABLE
-    u8 *zcl_attr_compensationText;
+    uint8_t *zcl_attr_compensationText;
 #endif
 #ifdef ZCL_ATTRID_COLOR_TEMPERATURE_MIREDS_ENABLE
-    u16 zcl_attr_colorTemperatureMireds;
+    uint16_t zcl_attr_colorTemperatureMireds;
 #endif
 #ifdef ZCL_ATTRID_ENHANCED_CURRENT_HUE_ENABLE
-    u16 zcl_attr_enhancedCurrentHue;
+    uint16_t zcl_attr_enhancedCurrentHue;
 #endif
 #ifdef ZCL_ATTRID_ENHANCED_COLOR_MODE_ENABLE
-    u8 zcl_attr_enhancedColorMode;
+    uint8_t zcl_attr_enhancedColorMode;
 #endif
 #ifdef ZCL_ATTRID_COLOR_LOOP_ACTIVE_ENABLE
-    u8 zcl_attr_colorLoopActive;
+    uint8_t zcl_attr_colorLoopActive;
 #endif
 #ifdef ZCL_ATTRID_COLOR_LOOP_DIRECTION_ENABLE
-    u8 zcl_attr_colorLoopDirection;
+    uint8_t zcl_attr_colorLoopDirection;
 #endif
 #ifdef ZCL_ATTRID_COLOR_LOOP_TIME_ENABLE
-    u16	zcl_attr_colorLoopTime;
+    uint16_t	zcl_attr_colorLoopTime;
 #endif
 #ifdef ZCL_ATTRID_COLOR_LOOP_START_ENHANCED_HUE_ENABLE
-    u16	zcl_attr_colorLoopStartEnhancedHue;
+    uint16_t	zcl_attr_colorLoopStartEnhancedHue;
 #endif
 #ifdef ZCL_ATTRID_COLOR_LOOP_STORED_ENHANCED_HUE_ENABLE
-    u16	zcl_attr_colorLoopStoredEnhancedHue;
+    uint16_t	zcl_attr_colorLoopStoredEnhancedHue;
 #endif
 #ifdef ZCL_ATTRID_COLOR_CAPABILITIES_ENABLE
-    u16	zcl_attr_colorCapabilities;
+    uint16_t	zcl_attr_colorCapabilities;
 #endif
 #ifdef ZCL_ATTRID_COLOR_TEMP_PHYSICAL_MIN_MIREDS_ENABLE
-    u16	zcl_attr_colorTempPhysicalMinMireds;
+    uint16_t	zcl_attr_colorTempPhysicalMinMireds;
 #endif
 #ifdef ZCL_ATTRID_COLOR_TEMP_PHYSICAL_MAX_MIREDS_ENABLE
-    u16	zcl_attr_colorTempPhysicalMaxMireds;
+    uint16_t	zcl_attr_colorTempPhysicalMaxMireds;
 #endif
 #ifdef ZCL_ATTRID_COUPLE_COLOR_TEMP_TO_LEVEL_MIN_MIREDS_ENABLE
-    u16	zcl_attr_coupleColorTempToLevelMinMireds;
+    uint16_t	zcl_attr_coupleColorTempToLevelMinMireds;
 #endif
 #ifdef ZCL_ATTRID_START_UP_COLOR_TEMPERATURE_MIREDS_ENABLE
-    u16	zcl_attr_startUpColorTemperatureMireds;
+    uint16_t	zcl_attr_startUpColorTemperatureMireds;
 #endif
 #ifdef ZCL_ATTRID_NUMBER_OF_PRIMARIES_ENABLE
-    u8 zcl_attr_numOfprimaries;
+    uint8_t zcl_attr_numOfprimaries;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY1_X_ENABLE
-    u16 zcl_attr_primary1X;
+    uint16_t zcl_attr_primary1X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY1_Y_ENABLE
-    u16 zcl_attr_primary1Y;
+    uint16_t zcl_attr_primary1Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY1_INTENSITY_ENABLE
-    u8 zcl_attr_primary1Intensity;
+    uint8_t zcl_attr_primary1Intensity;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY2_X_ENABLE
-    u16 zcl_attr_primary2X;
+    uint16_t zcl_attr_primary2X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY2_Y_ENABLE
-    u16 zcl_attr_primary2Y;
+    uint16_t zcl_attr_primary2Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY2_INTENSITY_ENABLE
-    u8 zcl_attr_primary2Intensity;
+    uint8_t zcl_attr_primary2Intensity;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY3_X_ENABLE
-    u16 zcl_attr_primary3X;
+    uint16_t zcl_attr_primary3X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY3_Y_ENABLE
-    u16 zcl_attr_primary3Y;
+    uint16_t zcl_attr_primary3Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY3_INTENSITY_ENABLE
-    u8 zcl_attr_primary3Intensity;
+    uint8_t zcl_attr_primary3Intensity;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY4_X_ENABLE
-    u16 zcl_attr_primary4X;
+    uint16_t zcl_attr_primary4X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY4_Y_ENABLE
-    u16 zcl_attr_primary4Y;
+    uint16_t zcl_attr_primary4Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY4_INTENSITY_ENABLE
-    u8 zcl_attr_primary4Intensity;
+    uint8_t zcl_attr_primary4Intensity;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY5_X_ENABLE
-    u16 zcl_attr_primary5X;
+    uint16_t zcl_attr_primary5X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY5_Y_ENABLE
-    u16 zcl_attr_primary5Y;
+    uint16_t zcl_attr_primary5Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY5_INTENSITY_ENABLE
-    u8 zcl_attr_primary5Intensity;
+    uint8_t zcl_attr_primary5Intensity;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY6_X_ENABLE
-    u16 zcl_attr_primary6X;
+    uint16_t zcl_attr_primary6X;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY6_Y_ENABLE
-    u16 zcl_attr_primary6Y;
+    uint16_t zcl_attr_primary6Y;
 #endif
 #ifdef ZCL_ATTRID_PRIMARY6_INTENSITY_ENABLE
-    u8 zcl_attr_primary6Intensity;
+    uint8_t zcl_attr_primary6Intensity;
 #endif
 #ifdef ZCL_ATTRID_WHITE_POINT_X_ENABLE
-    u16 zcl_attr_whitePointX;
+    uint16_t zcl_attr_whitePointX;
 #endif
 #ifdef ZCL_ATTRID_WHITE_POINT_Y_ENABLE
-    u16 zcl_attr_whitePointY;
+    uint16_t zcl_attr_whitePointY;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_RX_ENABLE
-    u16 zcl_attr_colorPointRX;
+    uint16_t zcl_attr_colorPointRX;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_RY_ENABLE
-    u16 zcl_attr_colorPointRY;
+    uint16_t zcl_attr_colorPointRY;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_RINTENSITY_ENABLE
-    u8 zcl_attr_colorPointRIntensity;
+    uint8_t zcl_attr_colorPointRIntensity;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_GX_ENABLE
-    u16 zcl_attr_colorPointGX;
+    uint16_t zcl_attr_colorPointGX;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_GY_ENABLE
-    u16 zcl_attr_colorPointGY;
+    uint16_t zcl_attr_colorPointGY;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_GINTENSITY_ENABLE
-    u8 zcl_attr_colorPointGIntensity;
+    uint8_t zcl_attr_colorPointGIntensity;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_BX_ENABLE
-    u16 zcl_attr_colorPointBX;
+    uint16_t zcl_attr_colorPointBX;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_BY_ENABLE
-    u16 zcl_attr_colorPointBY;
+    uint16_t zcl_attr_colorPointBY;
 #endif
 #ifdef ZCL_ATTRID_COLOR_POINT_BINTENSITY_ENABLE
-    u8 zcl_attr_colorPointBIntensity;
+    uint8_t zcl_attr_colorPointBIntensity;
 #endif
 } zcl_lightColorCtrlAttr_t;
 
 // variable 
 extern zcl_lightColorCtrlAttr_t zcl_attr_lightColorCtrl;
 extern const zclAttrInfo_t lightColorCtrl_attrTbl[];
-extern const u8 zcl_lightColorCtrl_attrNum;
+extern const uint8_t zcl_lightColorCtrl_attrNum;
 
 #define zcl_colorAttrGet()      &zcl_attr_lightColorCtrl
 
 #endif
 
-status_t zcl_lightColorCtrl_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_lightColorCtrl_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_lightColorCtrl_move2hue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToHueCmd_t *pMove2Hue);
+status_t zcl_lightColorCtrl_move2hue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToHueCmd_t *pMove2Hue);
 #define zcl_lightColorCtrl_move2hueCmd(a,b,c,d)                 (zcl_lightColorCtrl_move2hue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_moveHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveHueCmd_t *pMoveHue);
+status_t zcl_lightColorCtrl_moveHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveHueCmd_t *pMoveHue);
 #define zcl_lightColorCtrl_moveHueCmd(a,b,c,d)                  (zcl_lightColorCtrl_moveHue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_stepHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepHueCmd_t *pStepHue);
+status_t zcl_lightColorCtrl_stepHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepHueCmd_t *pStepHue);
 #define zcl_lightColorCtrl_stepHueCmd(a,b,c,d)                  (zcl_lightColorCtrl_stepHue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_move2saturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToSaturationCmd_t *pMove2Sat);
+status_t zcl_lightColorCtrl_move2saturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToSaturationCmd_t *pMove2Sat);
 #define zcl_lightColorCtrl_move2saturationCmd(a,b,c,d)          (zcl_lightColorCtrl_move2saturation((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_moveSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveSaturationCmd_t *pMoveSat);
+status_t zcl_lightColorCtrl_moveSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveSaturationCmd_t *pMoveSat);
 #define zcl_lightColorCtrl_moveSaturationCmd(a,b,c,d)           (zcl_lightColorCtrl_moveSaturation((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_stepSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepSaturationCmd_t *pStepSat);
+status_t zcl_lightColorCtrl_stepSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepSaturationCmd_t *pStepSat);
 #define zcl_lightColorCtrl_stepSaturationCmd(a,b,c,d)           (zcl_lightColorCtrl_stepSaturation((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_move2hueAndSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToHueAndSaturationCmd_t *pMove2HueAndSat);
+status_t zcl_lightColorCtrl_move2hueAndSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToHueAndSaturationCmd_t *pMove2HueAndSat);
 #define zcl_lightColorCtrl_move2hueAndSaturationCmd(a,b,c,d)    (zcl_lightColorCtrl_move2hueAndSaturation((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_move2color(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToColorCmd_t *pMove2Color);
+status_t zcl_lightColorCtrl_move2color(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToColorCmd_t *pMove2Color);
 #define zcl_lightColorCtrl_move2colorCmd(a,b,c,d)               (zcl_lightColorCtrl_move2color((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_moveColor(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveColorCmd_t *pMoveColor);
+status_t zcl_lightColorCtrl_moveColor(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveColorCmd_t *pMoveColor);
 #define zcl_lightColorCtrl_moveColorCmd(a,b,c,d)                (zcl_lightColorCtrl_moveColor((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_stepColor(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepColorCmd_t *pStepColor);
+status_t zcl_lightColorCtrl_stepColor(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepColorCmd_t *pStepColor);
 #define zcl_lightColorCtrl_stepColorCmd(a,b,c,d)                (zcl_lightColorCtrl_stepColor((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_move2colorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToColorTemperatureCmd_t *pMove2ColorTemp);
+status_t zcl_lightColorCtrl_move2colorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToColorTemperatureCmd_t *pMove2ColorTemp);
 #define zcl_lightColorCtrl_move2colorTemperatureCmd(a,b,c,d)    (zcl_lightColorCtrl_move2colorTemperature((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_enhancedMove2Hue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveToHueCmd_t *pEnhancedMove2Hue);
+status_t zcl_lightColorCtrl_enhancedMove2Hue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveToHueCmd_t *pEnhancedMove2Hue);
 #define zcl_lightColorCtrl_enhancedMove2hueCmd(a,b,c,d)         (zcl_lightColorCtrl_enhancedMove2hue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_enhancedMoveHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveHueCmd_t *pEnhancedMoveHue);
+status_t zcl_lightColorCtrl_enhancedMoveHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveHueCmd_t *pEnhancedMoveHue);
 #define zcl_lightColorCtrl_enhancedMoveHueCmd(a,b,c,d)          (zcl_lightColorCtrl_enhancedMoveHue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_enhancedStepHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedStepHueCmd_t *pEnhancedStepHue);
+status_t zcl_lightColorCtrl_enhancedStepHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedStepHueCmd_t *pEnhancedStepHue);
 #define zcl_lightColorCtrl_enhancedStepHueCmd(a,b,c,d)          (zcl_lightColorCtrl_enhancedStepHue((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_enhancedMove2HueAndSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveToHueAndSaturationCmd_t *pEnhancedMove2HueAndSat);
+status_t zcl_lightColorCtrl_enhancedMove2HueAndSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveToHueAndSaturationCmd_t *pEnhancedMove2HueAndSat);
 #define zcl_lightColorCtrl_enhancedMove2HueAndSaturationCmd(a,b,c,d)    (zcl_lightColorCtrl_enhancedMove2HueAndSaturation((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_colorLoopSet(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlColorLoopSetCmd_t *pColorLoopSet);
+status_t zcl_lightColorCtrl_colorLoopSet(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlColorLoopSetCmd_t *pColorLoopSet);
 #define zcl_lightColorCtrl_colorLoopSetCmd(a,b,c,d)             (zcl_lightColorCtrl_colorLoopSet((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_stopMoveStep(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStopMoveStepCmd_t *pStopMoveStep);
+status_t zcl_lightColorCtrl_stopMoveStep(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStopMoveStepCmd_t *pStopMoveStep);
 #define zcl_lightColorCtrl_stopMoveStepCmd(a,b,c,d)             (zcl_lightColorCtrl_stopMoveStep((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_moveColorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveColorTemperatureCmd_t *pMoveColorTemp);
+status_t zcl_lightColorCtrl_moveColorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveColorTemperatureCmd_t *pMoveColorTemp);
 #define zcl_lightColorCtrl_moveColorTemperatureCmd(a,b,c,d)     (zcl_lightColorCtrl_moveColorTemperature((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_lightColorCtrl_stepColorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepColorTemperatureCmd_t *pStepColorTemp);
+status_t zcl_lightColorCtrl_stepColorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepColorTemperatureCmd_t *pStepColorTemp);
 #define zcl_lightColorCtrl_stepColorTemperatureCmd(a,b,c,d)     (zcl_lightColorCtrl_stepColorTemperature((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 

@@ -22,13 +22,13 @@
 #define LEVEL_STEP           50U
 #define LEVEL_TRANSITION_DS  10U
 
-static u16 out_clusters[] = {
+static uint16_t out_clusters[] = {
 	ZCL_CLUSTER_GEN_GROUPS,
 	ZCL_CLUSTER_GEN_ON_OFF,
 	ZCL_CLUSTER_GEN_LEVEL_CONTROL,
 };
 
-static u16 in_clusters[] = {
+static uint16_t in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
 };
@@ -59,7 +59,7 @@ static void dst_broadcast(epInfo_t *dst)
 
 static void button_cb(uint8_t idx, bool pressed)
 {
-	static u8 level;
+	static uint8_t level;
 	epInfo_t dst;
 
 	if (!pressed || !zb_isDeviceJoinedNwk()) {

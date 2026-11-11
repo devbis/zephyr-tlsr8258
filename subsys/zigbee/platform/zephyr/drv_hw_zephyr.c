@@ -55,16 +55,16 @@ static bool zb_vbat_read_mv(uint16_t *mv)
 #endif
 }
 
-u8 sys_exceptionPost(u16 line, u8 evt)
+uint8_t sys_exceptionPost(uint16_t line, uint8_t evt)
 {
 	LOG_WRN("Zigbee exception line=%u event=0x%02x", line, evt);
 	return 0U;
 }
 
-int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg)
+int drv_hwTmr_set(uint8_t tmrIdx, uint32_t t_us, timerCb_t func, void *arg)
 {
 	ev_timer_event_t *evt;
-	u32 timeout_ms;
+	uint32_t timeout_ms;
 
 	ARG_UNUSED(tmrIdx);
 	if (func == NULL) {
@@ -90,12 +90,12 @@ startup_state_e drv_platform_init(void)
 	return SYSTEM_BOOT;
 }
 
-u32 drv_disable_irq(void)
+uint32_t drv_disable_irq(void)
 {
 	return irq_lock();
 }
 
-u32 drv_restore_irq(u32 en)
+uint32_t drv_restore_irq(uint32_t en)
 {
 	irq_unlock(en);
 	return en;
@@ -105,7 +105,7 @@ void drv_irqMask_clear(void)
 {
 }
 
-void drv_wd_setInterval(u32 ms)
+void drv_wd_setInterval(uint32_t ms)
 {
 	ARG_UNUSED(ms);
 }
@@ -118,15 +118,15 @@ void drv_wd_clear(void)
 {
 }
 
-u32 drv_u32Rand(void)
+uint32_t drv_u32Rand(void)
 {
-	u32 val;
+	uint32_t val;
 
 	sys_rand_get(&val, sizeof(val));
 	return val;
 }
 
-void drv_generateRandomData(u8 *pData, u8 len)
+void drv_generateRandomData(uint8_t *pData, uint8_t len)
 {
 	sys_rand_get(pData, len);
 }
@@ -206,7 +206,7 @@ void drv_vbusWatchdogClose(void)
 {
 }
 
-bool drv_get_primary_ieee_addr(u8 *addr)
+bool drv_get_primary_ieee_addr(uint8_t *addr)
 {
 	int eui64_rc;
 	ssize_t id_len;
@@ -232,7 +232,7 @@ bool drv_get_primary_ieee_addr(u8 *addr)
 	return false;
 }
 
-u32 drv_pm_deepSleep_frameCnt_get(void)
+uint32_t drv_pm_deepSleep_frameCnt_get(void)
 {
 	/*
 	 * No retention register on this port: the security IB is reloaded from

@@ -48,7 +48,7 @@ static struct app_interview *app_interview_find(uint16_t nwk_addr)
 	return NULL;
 }
 
-static void app_interview_fail(uint16_t nwk_addr, const char *step, u8 status)
+static void app_interview_fail(uint16_t nwk_addr, const char *step, uint8_t status)
 {
 	struct app_interview *interview = app_interview_find(nwk_addr);
 
@@ -62,8 +62,8 @@ static void app_interview_read_model_id(uint16_t nwk_addr, uint8_t ep)
 {
 	epInfo_t ep_info;
 	struct {
-		u8 numAttr;
-		u16 attrID[1];
+		uint8_t numAttr;
+		uint16_t attrID[1];
 	} read_cmd = {1U, {ZCL_ATTRID_BASIC_MODEL_ID}};
 
 	memset(&ep_info, 0, sizeof(ep_info));
@@ -101,7 +101,7 @@ static void app_interview_active_ep_rsp(void *arg)
 	const zdo_zdpDataInd_t *ind = arg;
 	const zdo_active_ep_resp_t *rsp = (const zdo_active_ep_resp_t *)ind->zpdu;
 	zdo_simple_descriptor_req_t req;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if ((ind->status != ZDO_SUCCESS) || (rsp->active_ep_count == 0U)) {
 		app_interview_fail(ind->src_addr, "active endpoints", ind->status);
@@ -119,7 +119,7 @@ static void app_interview_node_desc_rsp(void *arg)
 {
 	const zdo_zdpDataInd_t *ind = arg;
 	zdo_active_ep_req_t req;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if (ind->status != ZDO_SUCCESS) {
 		app_interview_fail(ind->src_addr, "node descriptor", ind->status);
@@ -135,7 +135,7 @@ void zb_platform_app_device_announce(uint16_t nwk_addr, const uint8_t ieee_addr[
 {
 	struct app_interview *interview = NULL;
 	zdo_node_descriptor_req_t req;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	/* A device that announces again, possibly with a new network address,
 	 * restarts its interview in the slot it already has.
@@ -172,8 +172,8 @@ void app_interview_zcl_msg(zclIncoming_t *msg)
 	uint16_t nwk_addr = msg->msg->indInfo.src_short_addr;
 	struct app_interview *interview;
 	char model_id[APP_INTERVIEW_MODEL_MAX + 1];
-	const u8 *data;
-	u8 len;
+	const uint8_t *data;
+	uint8_t len;
 
 	if ((msg->hdr.cmd != ZCL_CMD_READ_RSP) ||
 	    (msg->msg->indInfo.cluster_id != ZCL_CLUSTER_GEN_BASIC)) {
@@ -185,7 +185,7 @@ void app_interview_zcl_msg(zclIncoming_t *msg)
 		return;
 	}
 
-	for (u8 i = 0U; i < rsp->numAttr; i++) {
+	for (uint8_t i = 0U; i < rsp->numAttr; i++) {
 		if ((rsp->attrList[i].attrID != ZCL_ATTRID_BASIC_MODEL_ID) ||
 		    (rsp->attrList[i].status != ZCL_STA_SUCCESS) ||
 		    (rsp->attrList[i].dataType != ZCL_DATA_TYPE_CHAR_STR)) {

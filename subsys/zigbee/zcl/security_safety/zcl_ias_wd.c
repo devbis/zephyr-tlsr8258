@@ -50,14 +50,14 @@
  */
 static status_t zcl_iasWd_cmdHandler(zclIncoming_t *pInMsg);
 
-_CODE_ZCL_ status_t zcl_iasWd_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_iasWd_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_SS_IAS_WD, manuCode, attrNum, attrTbl, zcl_iasWd_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_iasWd_startWarning(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, startWarning_t *pStartWarning)
+_CODE_ZCL_ status_t zcl_iasWd_startWarning(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, startWarning_t *pStartWarning)
 {
-    u8 buf[5];
+    uint8_t buf[5];
     
     buf[0] = pStartWarning->warning.byte;
     buf[1] = LO_UINT16(pStartWarning->warningDuration);
@@ -69,9 +69,9 @@ _CODE_ZCL_ status_t zcl_iasWd_startWarning(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 5, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasWd_squawk(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, squawk_t *pSquawk)
+_CODE_ZCL_ status_t zcl_iasWd_squawk(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, squawk_t *pSquawk)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = pSquawk->byte;
 	
@@ -81,8 +81,8 @@ _CODE_ZCL_ status_t zcl_iasWd_squawk(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableD
 
 _CODE_ZCL_ static status_t zcl_startWarningPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         startWarning_t startWarning;
@@ -102,7 +102,7 @@ _CODE_ZCL_ static status_t zcl_startWarningPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_squawkPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         squawk_t squawk;
@@ -118,7 +118,7 @@ _CODE_ZCL_ static status_t zcl_squawkPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasWd_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_START_WARNING:

@@ -8,7 +8,7 @@
 
 #include "zb_common.h"
 
-u8 *tl_zbMacHdrBuilder(u8 *buf, tl_zb_mac_mhr_t *mhr);
-u8 tl_zbMacHdrParse(tl_zb_mac_mhr_t *mhr, u8 *buf);
+uint8_t *zb_MacHdrBuilder(uint8_t *buf, zb_mac_mhr_t *mhr);
+uint8_t zb_MacHdrParse(zb_mac_mhr_t *mhr, uint8_t *buf);
 
 #endif

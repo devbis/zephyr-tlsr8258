@@ -25,9 +25,9 @@ STATIC_ASSERT(OFFSETOF(zb_info_t, bdbAttr.nodeIsOnANetwork) == 170);
 typedef struct _attribute_packed_ {
 	addrExt_t srcAddr;
 	addrExt_t devAddr;
-	u16 devShortAddr;
-	u8 useParent;
-	u8 rejoinNwk;
+	uint16_t devShortAddr;
+	uint8_t useParent;
+	uint8_t rejoinNwk;
 	bool secureRejoin;
 } ss_zdo_auth_req_t;
 
@@ -40,9 +40,9 @@ enum {
 STATIC_ASSERT(sizeof(ss_zdo_auth_req_t) == 21);
 STATIC_ASSERT(sizeof(zb_addrForNeighbor_t) == 12);
 
-static inline u8 ss_zdo_child_auth_status(const ss_zdo_auth_req_t *req)
+static inline uint8_t ss_zdo_child_auth_status(const ss_zdo_auth_req_t *req)
 {
-	u8 state = (u8)(((req->rejoinNwk != 0U) << 1) | (req->secureRejoin != 0U));
+	uint8_t state = (uint8_t)(((req->rejoinNwk != 0U) << 1) | (req->secureRejoin != 0U));
 
 	if (state == SS_ZDO_REJOIN_UNSECURED) {
 		return SS_STANDARD_DEV_UNSECURED_JOIN;
@@ -89,7 +89,7 @@ void ss_zdoInsecureRejoin(void *arg)
 	if (zdo_nwkRejoinStart(1UL << g_zbInfo.macPib.phyChannelCur,
 			       zdo_cfg_attributes.config_nwk_scan_duration) ==
 	    ZDO_INSUFFICIENT_SPACE) {
-		tl_zbTaskPost(ss_zdoInsecureRejoin, NULL);
+		zb_TaskPost(ss_zdoInsecureRejoin, NULL);
 	}
 }
 
@@ -101,7 +101,7 @@ bool ss_securityModeIsDistributed(void)
 #if defined(ZB_COORDINATOR_ROLE)
 static int zb_tcTransportKeyTimerCb(void *arg)
 {
-	tl_zbTaskPost(ss_apsmeTransportKeyReq, arg);
+	zb_TaskPost(ss_apsmeTransportKeyReq, arg);
 	return -1;
 }
 
@@ -112,12 +112,12 @@ static int tcSwitchKeyTimerCb(void *arg)
 	(void)arg;
 
 	ZB_IEEE_ADDR_INVALID(req.dstAddr);
-	req.keySeqNum = (u8)(ss_ib.activeKeySeqNum + 1U);
+	req.keySeqNum = (uint8_t)(ss_ib.activeKeySeqNum + 1U);
 
 	return (zb_apsmeSwitchKeyReq(&req) == RET_OK) ? -1 : 0;
 }
 
-u8 ss_zdoAcceptNewDevAllow(void)
+uint8_t ss_zdoAcceptNewDevAllow(void)
 {
 	return ss_ib.tcPolicy.allowJoins;
 }
@@ -141,7 +141,7 @@ void ss_tcSwitchKeyTimerStart(void)
 void ss_tcTransportKeyTimerStart(void *arg)
 {
 	ss_apsmeTransportKeyReq_t *req = (ss_apsmeTransportKeyReq_t *)arg;
-	u8 idx = (u8)((ss_ib_active_secure_material_index_get() + 1U) & 0x01U);
+	uint8_t idx = (uint8_t)((ss_ib_active_secure_material_index_get() + 1U) & 0x01U);
 
 	zdo_mgmt_nwk_flag |= 0x02U;
 	memcpy(ss_ib.nwkSecurMaterialSet[idx].key, req->key, SEC_KEY_LEN);
@@ -158,19 +158,19 @@ void ss_zdoTransportKeyIndHandle(void *arg)
 
 	if (ind->keyType == SS_STANDARD_NETWORK_KEY) {
 		if (ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address)) {
-			u16 shortAddr = 0;
+			uint16_t shortAddr = 0;
 			ZB_IEEE_ADDR_COPY(ss_ib.trust_center_address, ind->srcAddr);
-			(void)tl_zbNwkAddrMapAdd(0, ss_ib.trust_center_address, &shortAddr);
+			(void)zb_NwkAddrMapAdd(0, ss_ib.trust_center_address, &shortAddr);
 		}
 
 		if (ss_ib.preConfiguredKeyType != SS_PRECONFIGURED_NWKKEY &&
 		    !ZB_IS_16BYTE_SECURITY_KEY_ZERO(ind->key)) {
 			bool duplicate = FALSE;
-			u8 idx = (u8)((ss_ib_active_secure_material_index_get() + ind->keySeqNum -
+			uint8_t idx = (uint8_t)((ss_ib_active_secure_material_index_get() + ind->keySeqNum -
 				       ss_ib.activeKeySeqNum) &
 				      0x01U);
 
-			for (u8 i = 0; i < SECUR_N_SECUR_MATERIAL; i++) {
+			for (uint8_t i = 0; i < SECUR_N_SECUR_MATERIAL; i++) {
 				if (memcmp(ss_ib.nwkSecurMaterialSet[i].key, ind->key,
 					   SEC_KEY_LEN) == 0 &&
 				    ss_ib.nwkSecurMaterialSet[i].keySeqNum == ind->keySeqNum &&
@@ -219,7 +219,7 @@ void ss_zdoTransportKeyIndHandle(void *arg)
 
 		aps_ib.aps_authenticated = 1;
 		build_join_confirm(arg);
-		tl_zbTaskPost(zdo_nlme_join_confirm, arg);
+		zb_TaskPost(zdo_nlme_join_confirm, arg);
 		return;
 	}
 
@@ -246,7 +246,7 @@ void ss_zdoTransportKeyIndHandle(void *arg)
 	pendingKeyPair->keyPair.incomingFrameCounter = 0;
 	ss_ib.tcLinkKeyType = 0;
 
-	tl_zbTaskPost(ss_apsmeVerifyKeyReq, arg);
+	zb_TaskPost(ss_apsmeVerifyKeyReq, arg);
 	pendingKeyPair->pTimeoutEvt =
 		ev_timer_taskPost(ss_devKeyPairTimeoutCb, NULL, ss_ib.ssTimeoutPeriod);
 #else
@@ -258,7 +258,7 @@ void ss_zdoTransportKeyIndHandle(void *arg)
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 void ss_zdoChildTableStore(void *arg)
 {
-	tl_zb_normal_neighbor_entry_t *entry = (tl_zb_normal_neighbor_entry_t *)arg;
+	zb_normal_neighbor_entry_t *entry = (zb_normal_neighbor_entry_t *)arg;
 	zb_addrForNeighbor_t *info;
 
 	info = (zb_addrForNeighbor_t *)ev_buf_allocate(sizeof(zb_addrForNeighbor_t));
@@ -266,20 +266,20 @@ void ss_zdoChildTableStore(void *arg)
 		return;
 	}
 
-	info->shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
-	tl_zbExtAddrByIdx(entry->addrmapIdx, info->extAddr);
+	info->shortAddr = zb_shortAddrByIdx(entry->addrmapIdx);
+	zb_ExtAddrByIdx(entry->addrmapIdx, info->extAddr);
 	info->depth = entry->depth;
 	info->rxOnWhileIdle = entry->rxOnWhileIdle;
 	info->deviceType = entry->deviceType;
 	info->relationship = entry->relationship;
-	tl_zbTaskPost(nwk_nodeAddrInfoStore, info);
+	zb_TaskPost(nwk_nodeAddrInfoStore, info);
 }
 
 void ss_zdoChildAuthStart(void *arg)
 {
 	ss_zdo_auth_req_t req;
-	tl_zb_normal_neighbor_entry_t *entry;
-	u8 status;
+	zb_normal_neighbor_entry_t *entry;
+	uint8_t status;
 
 	memcpy(&req, arg, sizeof(req));
 	status = ss_zdo_child_auth_status(&req);
@@ -308,7 +308,7 @@ void ss_zdoChildAuthStart(void *arg)
 #if defined(ZB_COORDINATOR_ROLE)
 	if (g_zbNwkCtx.is_tc != 0U) {
 		ss_dev_pair_set_t keyPair;
-		u8 keyPairStatus;
+		uint8_t keyPairStatus;
 
 		if (status == SS_STANDARD_DEV_SECURED_REJOIN) {
 			zb_buf_free((zb_buf_t *)arg);
@@ -368,7 +368,7 @@ void ss_zdoChildAuthStart(void *arg)
 				}
 			}
 
-			tl_zbTaskPost(ss_apsmeTransportKeyReq, tx);
+			zb_TaskPost(ss_apsmeTransportKeyReq, tx);
 		}
 		return;
 	}
@@ -402,7 +402,7 @@ void ss_zdoChildAuthStart(void *arg)
 			}
 			tx->relayByParent = 0;
 			tx->nwkSecurity = 0;
-			tl_zbTaskPost(ss_apsmeTransportKeyReq, tx);
+			zb_TaskPost(ss_apsmeTransportKeyReq, tx);
 		}
 		return;
 	}
@@ -414,15 +414,15 @@ void ss_zdoChildAuthStart(void *arg)
 		ZB_IEEE_ADDR_COPY(update->devAddr, req.devAddr);
 		update->devShortAddr = req.devShortAddr;
 		update->status = status;
-		tl_zbTaskPost(ss_apsmeUpdateDevReq, update);
+		zb_TaskPost(ss_apsmeUpdateDevReq, update);
 	}
 }
 
 void ss_zdoUpdateDeviceIndHandle(void *arg)
 {
 	ss_apsmeUpdateDeviceInd_t *ind = (ss_apsmeUpdateDeviceInd_t *)arg;
-	u16 addrMapIdx = 0;
-	u8 status = ind->status;
+	uint16_t addrMapIdx = 0;
+	uint8_t status = ind->status;
 	addrExt_t resolvedExtAddr;
 
 #if !defined(ZB_COORDINATOR_ROLE)
@@ -438,8 +438,8 @@ void ss_zdoUpdateDeviceIndHandle(void *arg)
 #endif
 
 	if (status == SS_DEV_LEFT) {
-		if (tl_idxByExtAddr(&addrMapIdx, ind->devAddr) != RET_OK &&
-		    tl_idxByShortAddr(&addrMapIdx, ind->devShortAddr) != RET_OK) {
+		if (zb_idxByExtAddr(&addrMapIdx, ind->devAddr) != RET_OK &&
+		    zb_idxByShortAddr(&addrMapIdx, ind->devShortAddr) != RET_OK) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
@@ -448,19 +448,19 @@ void ss_zdoUpdateDeviceIndHandle(void *arg)
 			nlme_leave_ind_t leaveInd;
 
 			memset(&leaveInd, 0, sizeof(leaveInd));
-			tl_zbExtAddrByIdx(addrMapIdx, leaveInd.deviceAddr);
+			zb_ExtAddrByIdx(addrMapIdx, leaveInd.deviceAddr);
 			zdoAppIndCbLst->zdpLeaveIndCb(&leaveInd);
 		}
 
-		tl_zbExtAddrByIdx(addrMapIdx, resolvedExtAddr);
-		nwkRoutingTabEntryDstDel(tl_zbshortAddrByIdx(addrMapIdx));
+		zb_ExtAddrByIdx(addrMapIdx, resolvedExtAddr);
+		nwkRoutingTabEntryDstDel(zb_shortAddrByIdx(addrMapIdx));
 #if defined(ZB_COORDINATOR_ROLE)
-		nwkRouteRecTabEntryDstDel(tl_zbshortAddrByIdx(addrMapIdx));
+		nwkRouteRecTabEntryDstDel(zb_shortAddrByIdx(addrMapIdx));
 		(void)ss_devKeyPairDelete(resolvedExtAddr);
 #endif
 		aps_bindingTblEntryDelByDstExtAddr(resolvedExtAddr);
-		tl_nwkNeighborDeleteByAddrmapIdx(addrMapIdx);
-		tl_zbNwkAddrMapDelete(addrMapIdx);
+		zb_nwkNeighborDeleteByAddrmapIdx(addrMapIdx);
+		zb_NwkAddrMapDelete(addrMapIdx);
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -477,7 +477,7 @@ void ss_zdoUpdateDeviceIndHandle(void *arg)
 	}
 #endif
 
-	(void)tl_zbNwkAddrMapAdd(ind->devShortAddr, ind->devAddr, &addrMapIdx);
+	(void)zb_NwkAddrMapAdd(ind->devShortAddr, ind->devAddr, &addrMapIdx);
 
 	{
 		ss_zdo_auth_req_t *req = (ss_zdo_auth_req_t *)arg;
@@ -508,13 +508,13 @@ void ss_zdoRemoveDeviceIndHandle(void *arg)
 
 	req->removeChildren = 1;
 	req->rejoin = 0;
-	tl_zbNwkNlmeLeaveRequest(arg);
+	zb_NwkNlmeLeaveRequest(arg);
 }
 #endif
 
-void ss_zdoNwkKeySwitch(u8 keySeqNum)
+void ss_zdoNwkKeySwitch(uint8_t keySeqNum)
 {
-	u8 idx;
+	uint8_t idx;
 
 	if (ss_ib.nwkSecurMaterialSet[0].keySeqNum == keySeqNum) {
 		idx = 0;
@@ -535,24 +535,24 @@ void ss_zdoNwkKeySwitch(u8 keySeqNum)
 		ss_ib.outgoingFrameCounter = 0;
 	}
 
-	tl_neighborFrameCntReset();
+	zb_neighborFrameCntReset();
 	nv_nwkFrameCountSaveToFlash(ss_ib.outgoingFrameCounter);
 	zdo_ssInfoSaveToFlash();
 }
 
 #if defined(ZB_COORDINATOR_ROLE)
-void ss_tcSwitchKey(u8 keySeqNum)
+void ss_tcSwitchKey(uint8_t keySeqNum)
 {
 	ss_zdoNwkKeySwitch(keySeqNum);
 	if ((zdo_mgmt_nwk_flag & 0x02U) != 0U) {
-		zdo_mgmt_nwk_flag &= (u8)~0x02U;
+		zdo_mgmt_nwk_flag &= (uint8_t)~0x02U;
 	}
 }
 #endif
 
-void ss_zdoNwkKeyConfigure(u8 *key, u8 keySeqNum, bool active)
+void ss_zdoNwkKeyConfigure(uint8_t *key, uint8_t keySeqNum, bool active)
 {
-	u8 idx = keySeqNum;
+	uint8_t idx = keySeqNum;
 
 	if (idx > 1U) {
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_SS_KEY_INDEX);
@@ -564,7 +564,7 @@ void ss_zdoNwkKeyConfigure(u8 *key, u8 keySeqNum, bool active)
 	ss_ib.nwkSecurMaterialSet[idx].keyType = active ? 1U : 0U;
 }
 
-void ss_zdoLinkKeyConfigure(addrExt_t extAddr, u8 *key, u8 keyAttr, u8 apsLinkKeyType)
+void ss_zdoLinkKeyConfigure(addrExt_t extAddr, uint8_t *key, uint8_t keyAttr, uint8_t apsLinkKeyType)
 {
 	ss_dev_pair_set_t keyPair;
 
@@ -577,7 +577,7 @@ void ss_zdoLinkKeyConfigure(addrExt_t extAddr, u8 *key, u8 keyAttr, u8 apsLinkKe
 	ss_devKeyPairSave(&keyPair);
 }
 
-void ss_zdoUseKey(u8 keySeqNum)
+void ss_zdoUseKey(uint8_t keySeqNum)
 {
 	if (keySeqNum > 1U) {
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_SS_KEY_INDEX);
@@ -587,11 +587,11 @@ void ss_zdoUseKey(u8 keySeqNum)
 	ss_ib.activeKeySeqNum = keySeqNum;
 	ss_ib_active_secure_material_index_set(keySeqNum);
 }
-u8 ss_keyIsEmpty(const u8 *key)
+uint8_t ss_keyIsEmpty(const uint8_t *key)
 {
-	const u8 *ptr = key;
+	const uint8_t *ptr = key;
 
-	for (u8 i = 0; i < SEC_KEY_LEN; i++) {
+	for (uint8_t i = 0; i < SEC_KEY_LEN; i++) {
 		if (*ptr++ != 0U) {
 			return 0;
 		}
@@ -607,10 +607,10 @@ bool ss_keyPreconfigured(void)
 		       : TRUE;
 }
 
-void *ss_zdoGetNwkKeyBySeqNum(u8 seqNum)
+void *ss_zdoGetNwkKeyBySeqNum(uint8_t seqNum)
 {
-	for (u8 i = 0; i < SECUR_N_SECUR_MATERIAL; i++) {
-		u8 idx = (u8)((ss_ib_active_secure_material_index_get() + i) & 0x01U);
+	for (uint8_t i = 0; i < SECUR_N_SECUR_MATERIAL; i++) {
+		uint8_t idx = (uint8_t)((ss_ib_active_secure_material_index_get() + i) & 0x01U);
 
 		if (ss_ib.nwkSecurMaterialSet[idx].keySeqNum == seqNum) {
 			return ss_ib.nwkSecurMaterialSet[idx].key;
@@ -642,17 +642,17 @@ void zdo_ssInfoUpdate(void)
 
 void ss_zdoInit(bool enSecurity)
 {
-	u32 frameCounter = 0;
+	uint32_t frameCounter = 0;
 
 	if (!g_zbNwkCtx.is_factory_new && zdo_ssInfoInit() == 0U) {
 		aps_ib.aps_authenticated = 1;
-		tl_neighborFrameCntReset();
+		zb_neighborFrameCntReset();
 		ss_devKeyPairInfoGet();
 
 		if (!ZB_IEEE_ADDR_IS_ZERO(ss_ib.trust_center_address) &&
 		    !ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address)) {
-			u16 shortAddr = 0;
-			tl_zbNwkAddrMapAdd(0, ss_ib.trust_center_address, &shortAddr);
+			uint16_t shortAddr = 0;
+			zb_NwkAddrMapAdd(0, ss_ib.trust_center_address, &shortAddr);
 		}
 		return;
 	}
@@ -673,7 +673,7 @@ void ss_zdoInit(bool enSecurity)
 	 * secured trust center refusing every device that joins through a router.
 	 */
 	{
-		u8 stackRevision = af_nodeDescStackRevisionGet();
+		uint8_t stackRevision = af_nodeDescStackRevisionGet();
 
 		ss_ib.tcPolicy.allowRejoins = (stackRevision <= 20U);
 		ss_ib.tcPolicy.allowJoins = 1;

@@ -50,7 +50,7 @@ zcl_commissioning_AppCallbacks_t *zcl_commissioning_cb;
 /**********************************************************************
  * LOCAL FUNCTIONS
  */
-u8 zcl_commissioning_cmdHandler(zclIncoming_t *pInMsg);
+uint8_t zcl_commissioning_cmdHandler(zclIncoming_t *pInMsg);
 
 
 _CODE_ZCL_ static int zb_restart_device_func(void *arg)
@@ -62,10 +62,10 @@ _CODE_ZCL_ static int zb_restart_device_func(void *arg)
 }
 
 /************************Client Command*************************************/
-_CODE_ZCL_ void zcl_commissioning_restart_device(u8 srcEp, epInfo_t* pDstEpInfo, u8 disableDefaultRsp, u8 seqNo,
-                                                 u8 options, u8 delay, u8 jitter)
+_CODE_ZCL_ void zcl_commissioning_restart_device(uint8_t srcEp, epInfo_t* pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo,
+                                                 uint8_t options, uint8_t delay, uint8_t jitter)
 {
-    u8 buf[3];
+    uint8_t buf[3];
     buf[0] = options;
     buf[1] = delay;
     buf[2] = jitter;
@@ -75,15 +75,15 @@ _CODE_ZCL_ void zcl_commissioning_restart_device(u8 srcEp, epInfo_t* pDstEpInfo,
 }
 
 // Server side handler
-_CODE_ZCL_ u8 zcl_commissioning_clientCmdHandler(zclIncoming_t *pInMsg)
+_CODE_ZCL_ uint8_t zcl_commissioning_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 cmd = pInMsg->hdr.cmd;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t cmd = pInMsg->hdr.cmd;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    //u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    //uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -105,21 +105,21 @@ _CODE_ZCL_ u8 zcl_commissioning_clientCmdHandler(zclIncoming_t *pInMsg)
                     zb_restart_device_func(&immediate);
                 } else {
                     /* Restart device immediately after delay(s) + jitter(ms) */
-                    u16 jitter_in_milliseconds = restartDevice->jitter ? ZB_RANDOM_X(restartDevice->jitter * 80) : 0;
-                    u32 max_delay = (restartDevice->delay + (jitter_in_milliseconds / 1000)) * 1000;/* in microseconds */
+                    uint16_t jitter_in_milliseconds = restartDevice->jitter ? ZB_RANDOM_X(restartDevice->jitter * 80) : 0;
+                    uint32_t max_delay = (restartDevice->delay + (jitter_in_milliseconds / 1000)) * 1000;/* in microseconds */
 
                     immediate = true;
-                    TL_ZB_TIMER_SCHEDULE(zb_restart_device_func, (void *)TRUE, max_delay);
+                    ZB_TIMER_SCHEDULE(zb_restart_device_func, (void *)TRUE, max_delay);
                 }
             } else {
                 /* Restart device after (delay - jitter) + wait until pending frames have been transmitted */
-                u16 jitter_in_milliseconds = restartDevice->jitter ? ZB_RANDOM_X(restartDevice->jitter * 80) : 0;
-                u32 max_delay = 0;
+                uint16_t jitter_in_milliseconds = restartDevice->jitter ? ZB_RANDOM_X(restartDevice->jitter * 80) : 0;
+                uint32_t max_delay = 0;
                 max_delay = (restartDevice->delay + (jitter_in_milliseconds / 1000)) * 1000;/* in microseconds */
 
                 immediate = false;
                 if (max_delay) {
-                    TL_ZB_TIMER_SCHEDULE(zb_restart_device_func, (void *)TRUE, max_delay);
+                    ZB_TIMER_SCHEDULE(zb_restart_device_func, (void *)TRUE, max_delay);
                 } else {
                     zb_restart_device_func(&immediate);
                 }
@@ -147,10 +147,10 @@ _CODE_ZCL_ u8 zcl_commissioning_clientCmdHandler(zclIncoming_t *pInMsg)
 }
 
 // Client side handler
-_CODE_ZCL_ u8 zcl_commissioning_serverCmdHandler(zclIncoming_t *pInMsg)
+_CODE_ZCL_ uint8_t zcl_commissioning_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 cmd = pInMsg->hdr.cmd;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t cmd = pInMsg->hdr.cmd;
 
     switch (cmd) {
     case ZCL_CMD_RESTART_DEVICE_RSP:

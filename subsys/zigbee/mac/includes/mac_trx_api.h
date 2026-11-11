@@ -134,22 +134,22 @@ typedef enum {
  *  @brief Definition of MAC generic frame type, used in both TX and RX
  */
 typedef struct {
-    u8 fAck:4;          /*!< Used in TX  */
-    u8 fFramePending:4; /*!< Used in Poll  */
-    u8 psduLen;
-    u8 cnfStatus;
-    u8 seqNum;
-    u8 *buf;
-    u8 *txData;
+    uint8_t fAck:4;          /*!< Used in TX  */
+    uint8_t fFramePending:4; /*!< Used in Poll  */
+    uint8_t psduLen;
+    uint8_t cnfStatus;
+    uint8_t seqNum;
+    uint8_t *buf;
+    uint8_t *txData;
     void *pendingList;
 } mac_genFrame_t;
 
 typedef	mac_genFrame_t tx_data_queue;
 
 
-extern u8 MAC_TX_QUEUE_SIZE;
+extern uint8_t MAC_TX_QUEUE_SIZE;
 extern tx_data_queue g_txQueue[];
-extern volatile u8 rf_busyFlag;
+extern volatile uint8_t rf_busyFlag;
 
 
 /***********************************************************************//**
@@ -186,7 +186,7 @@ void mac_trigger_tx(void *arg);
  * @return      the address of the source address
  *
  **************************************************************************/
-u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt);
+uint8_t *zb_macDataFilter(uint8_t *macPld, uint8_t len, uint8_t *needDrop, uint8_t *ackPkt);
 
 /***********************************************************************//**
  * @brief       handle the received data
@@ -206,7 +206,7 @@ u8 *zb_macDataFilter(u8 *macPld, u8 len, u8 *needDrop, u8 *ackPkt);
  * @return      NONE
  *
  **************************************************************************/
-void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
+void zb_macDataRecvHandler(uint8_t *rxBuf, uint8_t *data, uint8_t len, uint8_t ackPkt, uint32_t timestamp, int8_t rssi);
 
 /***********************************************************************//**
  * @brief       tx done callback
@@ -218,8 +218,8 @@ void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp
  **************************************************************************/
 void zb_macDataSendHandler(void);
 
-u8 tl_zbMacHdrSize(u16 frameCtrl);
-u8 tl_zbMacStateBusy(void);
-u8 mac_getTrxState(void);
+uint8_t zb_MacHdrSize(uint16_t frameCtrl);
+uint8_t zb_MacStateBusy(void);
+uint8_t mac_getTrxState(void);
 
 #endif	/* MAC_TRX_API_H */

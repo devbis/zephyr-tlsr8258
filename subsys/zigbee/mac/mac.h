@@ -28,25 +28,25 @@ typedef enum {
  * or extended, according to srcAddrMode) and source address mode.
  */
 typedef struct {
-	u32 timestamp;
-	u8 *payload;
-	u16 srcPanId;
+	uint32_t timestamp;
+	uint8_t *payload;
+	uint16_t srcPanId;
 	addrExt_t srcAddr;
-	u8 srcAddrMode;
-	u8 payloadLen;
-	u8 linkQuality;
-	u8 curChannel;
+	uint8_t srcAddrMode;
+	uint8_t payloadLen;
+	uint8_t linkQuality;
+	uint8_t curChannel;
 } mac_phy_ind_meta_t;
 
 extern mac_appIndCb_t *macAppIndCb;
 
-void tl_zbPhyIndication(void *arg, u8 *raw, u8 len);
-void tl_zbMacChannelSet(u8 chan);
-void mac_pibNvInit(u8 coldReset);
-void tl_zbMacReset(void);
-void tl_zbMacInit(u8 coldReset);
-void tl_zbMaxTxConfirmCb(void *arg, u8 status);
-void tl_zbMacTaskProc(void);
+void zb_PhyIndication(void *arg, uint8_t *raw, uint8_t len);
+void zb_MacChannelSet(uint8_t chan);
+void mac_pibNvInit(uint8_t coldReset);
+void zb_MacReset(void);
+void zb_MacInit(uint8_t coldReset);
+void zb_MaxTxConfirmCb(void *arg, uint8_t status);
+void zb_MacTaskProc(void);
 void mac_appIndCbRegister(mac_appIndCb_t *cb);
 void generateIEEEAddr(void);
 zb_buf_t *zb_buf_allocate(void);

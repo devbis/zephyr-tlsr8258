@@ -6,6 +6,6 @@
 
 #include "zb_common.h"
 
-u16 tl_zbNwkStochasticAddrCal(void);
+uint16_t zb_NwkStochasticAddrCal(void);
 
 #endif

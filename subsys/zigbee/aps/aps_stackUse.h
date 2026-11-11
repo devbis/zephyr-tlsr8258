@@ -71,15 +71,15 @@ typedef enum {
  */
 typedef struct {
     aps_tx_cache_list_t *list[8];
-    u8 *req;
-    u8 *payload;
-    u16 payloadLen;
-    u8 totalBlockNum;
-    u8 curBlockNum;
-    u8 activeListNum;
-    u8 ackBit;
-    u8 reSend;
-    u8 used;
+    uint8_t *req;
+    uint8_t *payload;
+    uint16_t payloadLen;
+    uint8_t totalBlockNum;
+    uint8_t curBlockNum;
+    uint8_t activeListNum;
+    uint8_t ackBit;
+    uint8_t reSend;
+    uint8_t used;
 } apsDataFragmentTransWin_t;
 
 typedef enum {
@@ -90,43 +90,43 @@ typedef enum {
 
 typedef struct {
     void *buf[8];
-    u8 validBufNum;
-    u8 minBlockNum;
-    u8 ackBit;
-    u8 state:7; /* apsRcvingWinState_t */
-    u8 acked:1;
+    uint8_t validBufNum;
+    uint8_t minBlockNum;
+    uint8_t ackBit;
+    uint8_t state:7; /* apsRcvingWinState_t */
+    uint8_t acked:1;
 } aps_rcv_info_t;
 
 typedef struct {
     ev_timer_event_t *rcvWinTimeoutEvt;
-    u8 *evBuf;
+    uint8_t *evBuf;
 
     aps_rcv_info_t rcvInfo[2];
 
-    u16 rcvFragmentlen;
-    u16 srcAddr;
+    uint16_t rcvFragmentlen;
+    uint16_t srcAddr;
 
-    u8 apsCnt;
-    u8 totalBlockNum;
-    u8 blockNumProcessed;
-    u8 curRcvMinBlockNum;
+    uint8_t apsCnt;
+    uint8_t totalBlockNum;
+    uint8_t blockNumProcessed;
+    uint8_t curRcvMinBlockNum;
 
-    u8 waitCnt;
-    u8 used;
+    uint8_t waitCnt;
+    uint8_t used;
 } apsDataFragmentRcvWin_t;
 
 void aps_nwk_data_confirm_cb(void *p);
 void aps_nwk_data_indication_cb(void *p);
 void aps_interPanDataIndCb(void *p);
-bool aps_bindingTblMatched(u16 clusterID, u8 srcEp);
+bool aps_bindingTblMatched(uint16_t clusterID, uint8_t srcEp);
 void aps_data_request(void *p);
 aps_tx_cache_list_t *apsTxDataPost(bool ackNeed, bool addrReqNeed, bool interPAN,
-                                   u8 *pdu, apsdeDataConf_t *pCnf);
-void apsTxEventPost(aps_tx_cache_list_t *txCache, aps_tx_cache_evt_e evt, u8 status);
+                                   uint8_t *pdu, apsdeDataConf_t *pCnf);
+void apsTxEventPost(aps_tx_cache_list_t *txCache, aps_tx_cache_evt_e evt, uint8_t status);
 
-bool aps_zdDataFilterNormal(tl_zb_normal_neighbor_entry_t *pEntry, u8 *nsdupPtr,
-                            u8 nsduLen, bool toZvd);
-bool aps_zdDataAllowInEphe(tl_zb_normal_neighbor_entry_t *pEntry, u8 *nsdupPtr,
-                           u8 nsduLen, bool toZvd);
+bool aps_zdDataFilterNormal(zb_normal_neighbor_entry_t *pEntry, uint8_t *nsdupPtr,
+                            uint8_t nsduLen, bool toZvd);
+bool aps_zdDataAllowInEphe(zb_normal_neighbor_entry_t *pEntry, uint8_t *nsdupPtr,
+                           uint8_t nsduLen, bool toZvd);
 
 #endif /* APS_STACK_USE_H */

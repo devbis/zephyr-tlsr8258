@@ -8,8 +8,8 @@
 
 void nwkRouteDiscTabInit(void);
 int nwkRouteDiscPeriodic(void *arg);
-nwk_routeDiscEntry_t *nwkRouteDiscEntryDstFind(u16 dstAddr);
-u8 nwkTxDataRouteDiscStart(nwk_hdr_t *pNwkHdr);
-void nwkRouteRecordCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
+nwk_routeDiscEntry_t *nwkRouteDiscEntryDstFind(uint16_t dstAddr);
+uint8_t nwkTxDataRouteDiscStart(nwk_hdr_t *pNwkHdr);
+void nwkRouteRecordCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle);
 
 #endif

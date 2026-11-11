@@ -12,46 +12,46 @@
 #include "nwk_neighbor.h"
 
 typedef struct _attribute_packed_ {
-	u8 securityLevel: 3;
-	u8 keyIdentifer: 2;
-	u8 extendedNonce: 1;
-	u8 reserved: 2;
-	u32 frameCnt;
+	uint8_t securityLevel: 3;
+	uint8_t keyIdentifer: 2;
+	uint8_t extendedNonce: 1;
+	uint8_t reserved: 2;
+	uint32_t frameCnt;
 	addrExt_t srcAddr;
-	u8 keySeqNum;
+	uint8_t keySeqNum;
 } ss_apsNwkAuxFrameHdr_t;
 
 typedef struct _attribute_packed_ {
 	addrExt_t srcAddr;
-	u32 frameCnt;
-	u8 secureCtrl;
+	uint32_t frameCnt;
+	uint8_t secureCtrl;
 } ss_securityCcmNonce_t;
 
-#define SS_CLR_SECURITY_LEVEL(d) ((*(u8 *)(d)) &= 0xf8U)
+#define SS_CLR_SECURITY_LEVEL(d) ((*(uint8_t *)(d)) &= 0xf8U)
 #define SS_SET_SECURITY_LEVEL(d, t)                                                                \
 	do {                                                                                       \
-		(*(u8 *)(d)) = (u8)((*(u8 *)(d) & 0xf8U) | (t));                                   \
+		(*(uint8_t *)(d)) = (uint8_t)((*(uint8_t *)(d) & 0xf8U) | (t));                                   \
 	} while (0)
 #define NWK_STATIC_PATH_COST_LOCAL 7
 
-u8 T_DBG_decFrameCnt = 0;
+uint8_t T_DBG_decFrameCnt = 0;
 
-_CODE_SS_ static inline void ss_nwkSecureStatus(void *arg, u16 addrShort, u8 status)
+_CODE_SS_ static inline void ss_nwkSecureStatus(void *arg, uint16_t addrShort, uint8_t status)
 {
 	nlme_nwkStatus_ind_t *cmd = (nlme_nwkStatus_ind_t *)arg;
 
 	cmd->status = (nwk_statusCode_t)status;
 	cmd->nwkAddr = addrShort;
-	tl_zbTaskPost(zdo_nlme_status_indication, arg);
+	zb_TaskPost(zdo_nlme_status_indication, arg);
 }
 
-_CODE_SS_ u8 ss_nwkSecureFrame(zb_buf_t *src, u8 nwkHdrAuxLen)
+_CODE_SS_ uint8_t ss_nwkSecureFrame(zb_buf_t *src, uint8_t nwkHdrAuxLen)
 {
-	u8 ret = RET_OK;
+	uint8_t ret = RET_OK;
 	zb_mscp_data_req_t *req = (zb_mscp_data_req_t *)src;
 	ss_apsNwkAuxFrameHdr_t aux;
-	u8 auxLen = sizeof(ss_apsNwkAuxFrameHdr_t);
-	u8 nwkHdrLen = (u8)(nwkHdrAuxLen - auxLen);
+	uint8_t auxLen = sizeof(ss_apsNwkAuxFrameHdr_t);
+	uint8_t nwkHdrLen = (uint8_t)(nwkHdrAuxLen - auxLen);
 
 	memset(&aux, 0, sizeof(aux));
 
@@ -65,34 +65,34 @@ _CODE_SS_ u8 ss_nwkSecureFrame(zb_buf_t *src, u8 nwkHdrAuxLen)
 	memcpy(req->msdu + nwkHdrLen, &aux, auxLen);
 
 	{
-		u8 *key = ss_zdoGetNwkKeyBySeqNum(aux.keySeqNum);
+		uint8_t *key = ss_zdoGetNwkKeyBySeqNum(aux.keySeqNum);
 
 		if (key == NULL) {
 			ret = RET_ERROR;
 		} else {
 			ss_securityCcmNonce_t nonce;
-			u8 *srcMsg;
-			u8 srcMsgLen;
-			u8 len;
+			uint8_t *srcMsg;
+			uint8_t srcMsgLen;
+			uint8_t len;
 
 			ZB_IEEE_ADDR_COPY(nonce.srcAddr, aux.srcAddr);
 			nonce.frameCnt = aux.frameCnt;
-			nonce.secureCtrl = *(u8 *)&aux;
+			nonce.secureCtrl = *(uint8_t *)&aux;
 
 			srcMsg = req->msdu + nwkHdrAuxLen;
-			srcMsgLen = (u8)(req->msduLength - nwkHdrAuxLen);
-			len = ss_ccmEncryption(key, (u8 *)&nonce, nwkHdrAuxLen, req->msdu,
+			srcMsgLen = (uint8_t)(req->msduLength - nwkHdrAuxLen);
+			len = ss_ccmEncryption(key, (uint8_t *)&nonce, nwkHdrAuxLen, req->msdu,
 					       srcMsgLen, srcMsg);
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_ED_ROLE)
 			if (len == 0U) {
 				ret = RET_ERROR;
 			} else {
-				req->msduLength = (u8)(nwkHdrAuxLen + len);
+				req->msduLength = (uint8_t)(nwkHdrAuxLen + len);
 				SS_CLR_SECURITY_LEVEL(req->msdu + nwkHdrLen);
 			}
 #else
-			req->msduLength = (u8)(nwkHdrAuxLen + len);
+			req->msduLength = (uint8_t)(nwkHdrAuxLen + len);
 			SS_CLR_SECURITY_LEVEL(req->msdu + nwkHdrLen);
 #endif
 
@@ -109,29 +109,29 @@ _CODE_SS_ u8 ss_nwkSecureFrame(zb_buf_t *src, u8 nwkHdrAuxLen)
 	return ret;
 }
 
-_CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payloadAddr,
-				nwk_hdr_t *nwkHdr, u8 lqi)
+_CODE_SS_ uint8_t ss_nwkDecryptFrame(void *p, uint8_t nwkHdrSize, uint8_t payloadSize, uint8_t *payloadAddr,
+				nwk_hdr_t *nwkHdr, uint8_t lqi)
 {
 	zb_buf_t *nsdu = (zb_buf_t *)p;
 	zb_mscp_data_ind_t *pInd = (zb_mscp_data_ind_t *)p;
-	tl_zb_normal_neighbor_entry_t *nbe;
+	zb_normal_neighbor_entry_t *nbe;
 	ss_apsNwkAuxFrameHdr_t aux;
 	ss_securityCcmNonce_t nonce;
-	u8 auxLen = sizeof(ss_apsNwkAuxFrameHdr_t);
-	u8 headerLen;
-	u8 encryptedLen;
-	u8 ret;
-	u16 neighborAddr = pInd->srcAddr.addr.shortAddr;
-	u8 *key;
+	uint8_t auxLen = sizeof(ss_apsNwkAuxFrameHdr_t);
+	uint8_t headerLen;
+	uint8_t encryptedLen;
+	uint8_t ret;
+	uint16_t neighborAddr = pInd->srcAddr.addr.shortAddr;
+	uint8_t *key;
 
 	(void)nwkHdr;
 	(void)lqi;
 
-	headerLen = (u8)(nwkHdrSize - auxLen);
+	headerLen = (uint8_t)(nwkHdrSize - auxLen);
 	SS_SET_SECURITY_LEVEL(payloadAddr + headerLen, 5);
 	memcpy(&aux, payloadAddr + headerLen, auxLen);
 
-	encryptedLen = (u8)(payloadSize - headerLen - auxLen);
+	encryptedLen = (uint8_t)(payloadSize - headerLen - auxLen);
 	if (encryptedLen < ZB_CCM_M) {
 		g_sysDiags.nwkDecryptFailures++;
 		zb_buf_free(nsdu);
@@ -142,7 +142,7 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
 
 	if (aux.keySeqNum == ss_ib.activeKeySeqNum && nbe != NULL) {
 		nbe->receivedFrameCnt = aux.frameCnt;
-		if (nbe->incomingFrameCnt > aux.frameCnt || nbe->incomingFrameCnt == (u32)~0U) {
+		if (nbe->incomingFrameCnt > aux.frameCnt || nbe->incomingFrameCnt == (uint32_t)~0U) {
 			g_sysDiags.nwkFCFailure++;
 			nbe->frameCounterFailCnt++;
 			ss_nwkSecureStatus(nsdu, neighborAddr,
@@ -159,8 +159,8 @@ _CODE_SS_ u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payl
 
 	ZB_IEEE_ADDR_COPY(nonce.srcAddr, aux.srcAddr);
 	nonce.frameCnt = aux.frameCnt;
-	nonce.secureCtrl = *(u8 *)&aux;
-	ret = ss_ccmDecryption(key, (u8 *)&nonce, (u8)(headerLen + auxLen), payloadAddr,
+	nonce.secureCtrl = *(uint8_t *)&aux;
+	ret = ss_ccmDecryption(key, (uint8_t *)&nonce, (uint8_t)(headerLen + auxLen), payloadAddr,
 			       encryptedLen, payloadAddr + headerLen + auxLen);
 	if (ret != RET_OK) {
 		g_sysDiags.nwkDecryptFailures++;

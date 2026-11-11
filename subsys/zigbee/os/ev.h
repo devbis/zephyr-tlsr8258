@@ -75,7 +75,7 @@ typedef void (*sys_exception_cb_t)(void);
 
 void sys_exceptHandlerRegister(sys_exception_cb_t cb);
 
-u8 sys_exceptionPost(u16 line, u8 evt);
+uint8_t sys_exceptionPost(uint16_t line, uint8_t evt);
 #define ZB_EXCEPTION_POST(evt)  sys_exceptionPost(__LINE__, evt)
 
 //will be called in every main loop

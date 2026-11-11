@@ -11,37 +11,37 @@
 #include "zb_buffer.h"
 #include "zb_task_queue.h"
 
-static u8 aps_counter_value;
-static u8 aps_handle;
+static uint8_t aps_counter_value;
+static uint8_t aps_handle;
 aps_group_q_t aps_group_q;
 
-u8 aps_get_counter_value(void)
+uint8_t aps_get_counter_value(void)
 {
-	u8 value = aps_counter_value;
+	uint8_t value = aps_counter_value;
 	aps_counter_value = value + 1U;
 	return value;
 }
 
-u8 aps_get_current_counter_value(void)
+uint8_t aps_get_current_counter_value(void)
 {
-	return (u8)(aps_counter_value - 1U);
+	return (uint8_t)(aps_counter_value - 1U);
 }
 
-u8 aps_get_handle(void)
+uint8_t aps_get_handle(void)
 {
-	u8 value = aps_handle;
+	uint8_t value = aps_handle;
 	aps_handle = value + 1U;
 	return value & 0x3fU;
 }
 
 void aps_init(void)
 {
-	aps_counter_value = (u8)drv_u32Rand();
+	aps_counter_value = (uint8_t)drv_u32Rand();
 	aps_handle = 0;
 	aps_me_init();
 }
 
-aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, u8 size)
+aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, uint8_t size)
 {
 	zb_buf_t *allocated = zb_buf_allocate();
 
@@ -50,7 +50,7 @@ aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, u8 size)
 	}
 
 	*buf = allocated;
-	TL_BUF_INITIAL_ALLOC(allocated, size, *payload, void *);
+	ZB_BUF_INITIAL_ALLOC(allocated, size, *payload, void *);
 
 	return APS_STATUS_SUCCESS;
 }
@@ -60,12 +60,12 @@ aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, u8 size)
  * significant bit first:
  *
  *	typedef struct {
- *		u8 frameType : 2;    // 0 data, 1 command, 2 acknowledgement, 3 inter-PAN
- *		u8 deliveryMode : 2; // 0 unicast, 2 broadcast, 3 group addressing
- *		u8 ackFormat : 1;    // command-format acknowledgement
- *		u8 security : 1;
- *		u8 ackRequest : 1;
- *		u8 extendedHeader : 1;
+ *		uint8_t frameType : 2;    // 0 data, 1 command, 2 acknowledgement, 3 inter-PAN
+ *		uint8_t deliveryMode : 2; // 0 unicast, 2 broadcast, 3 group addressing
+ *		uint8_t ackFormat : 1;    // command-format acknowledgement
+ *		uint8_t security : 1;
+ *		uint8_t ackRequest : 1;
+ *		uint8_t extendedHeader : 1;
  *	} aps_frame_ctrl_t;
  *
  * The code below reads the same bits with masks.  Equivalent field reads:
@@ -74,13 +74,13 @@ aps_status_t aps_txBufInit(zb_buf_t **buf, void **payload, u8 size)
  *	ackFormat       = fc->ackFormat;                // data[0] & 0x10
  *	extendedHeader  = fc->extendedHeader;           // data[0] & 0x80
  */
-u8 aps_hdr_parse(u8 *data, aps_rx_hdr_t *hdr)
+uint8_t aps_hdr_parse(uint8_t *data, aps_rx_hdr_t *hdr)
 {
-	u8 frame_control = data[0];
+	uint8_t frame_control = data[0];
 	/* Frame type is bits 0..1 and delivery mode is bits 2..3 (aps_data.h). */
-	u8 frame_type = frame_control & APS_FRAME_CTRL_FRAME_TYPE_MASK;
-	u8 delivery_mode = frame_control & APS_FRAME_CTRL_DELIVERY_MODE_MASK;
-	u8 *cursor = data + 1;
+	uint8_t frame_type = frame_control & APS_FRAME_CTRL_FRAME_TYPE_MASK;
+	uint8_t delivery_mode = frame_control & APS_FRAME_CTRL_DELIVERY_MODE_MASK;
+	uint8_t *cursor = data + 1;
 
 	memset(hdr, 0, sizeof(*hdr));
 	hdr->frameCtrl = frame_control;
@@ -91,7 +91,7 @@ u8 aps_hdr_parse(u8 *data, aps_rx_hdr_t *hdr)
 		COPY_BUFFERTOU16(hdr->profileId, data + 3);
 
 		cursor = data + 5;
-		return (u8)(cursor - data);
+		return (uint8_t)(cursor - data);
 	}
 
 	if ((frame_control & APS_FRAME_CTRL_ACK_FORMAT) != 0U ||
@@ -100,17 +100,17 @@ u8 aps_hdr_parse(u8 *data, aps_rx_hdr_t *hdr)
 		 * after the frame control. */
 		hdr->apsCounter = data[1];
 		cursor = data + 2;
-		return (u8)(cursor - data);
+		return (uint8_t)(cursor - data);
 	}
 
 	if (delivery_mode != 0U && delivery_mode != APS_FRAME_CTRL_DELIVERY_MODE_BROADCAST) {
 		/* Other delivery modes put a 16-bit group address in place of the
 		 * destination endpoint. */
-		u16 value;
+		uint16_t value;
 
 		COPY_BUFFERTOU16(value, data + 1);
-		hdr->dstEp = (u8)value;
-		hdr->dstAddrHi = (u8)(value >> 8);
+		hdr->dstEp = (uint8_t)value;
+		hdr->dstAddrHi = (uint8_t)(value >> 8);
 
 		COPY_BUFFERTOU16(hdr->clusterId, data + 3);
 		COPY_BUFFERTOU16(hdr->profileId, data + 5);
@@ -141,7 +141,7 @@ u8 aps_hdr_parse(u8 *data, aps_rx_hdr_t *hdr)
 		}
 	}
 
-	return (u8)(cursor - data);
+	return (uint8_t)(cursor - data);
 }
 
 void aps_command_handle(void *arg)
@@ -149,9 +149,9 @@ void aps_command_handle(void *arg)
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	/* The guard discards a command whose source is this device's own short
 	 * address, i.e. one it sent itself, not one addressed to it. */
-	u16 src = ind->src_short_addr;
-	u16 local = g_zbInfo.macPib.shortAddress;
-	u8 cmdId = ind->asdu[0];
+	uint16_t src = ind->src_short_addr;
+	uint16_t local = g_zbInfo.macPib.shortAddress;
+	uint8_t cmdId = ind->asdu[0];
 
 	if (src == local) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -203,17 +203,17 @@ void aps_command_handle(void *arg)
 
 void aps_process_group_addressed_packet(zb_buf_t *buf)
 {
-	u8 pending = (u8)((aps_group_q.pending_wptr - aps_group_q.pending_rptr) & 0x03U);
+	uint8_t pending = (uint8_t)((aps_group_q.pending_wptr - aps_group_q.pending_rptr) & 0x03U);
 
 	if (pending == 3U) {
 		zb_buf_free(buf);
 		return;
 	}
 
-	aps_group_q.pending_refs[aps_group_q.pending_wptr & 0x03U] = (u8)ZB_REF_FROM_BUF(buf);
+	aps_group_q.pending_refs[aps_group_q.pending_wptr & 0x03U] = (uint8_t)ZB_REF_FROM_BUF(buf);
 	aps_group_q.pending_wptr++;
 	buf->hdr.handle = 0;
-	tl_zbTaskPost(aps_deliver_group_msg, NULL);
+	zb_TaskPost(aps_deliver_group_msg, NULL);
 }
 
 void aps_deliver_group_msg(void *arg)
@@ -224,7 +224,7 @@ void aps_deliver_group_msg(void *arg)
 
 	if (out == NULL) {
 		if (aps_group_q.pending_rptr != aps_group_q.pending_wptr) {
-			tl_zbTaskPost(aps_deliver_group_msg, NULL);
+			zb_TaskPost(aps_deliver_group_msg, NULL);
 		}
 		return;
 	}
@@ -236,14 +236,14 @@ void aps_deliver_group_msg(void *arg)
 		}
 
 		{
-			u8 ref = aps_group_q.pending_refs[aps_group_q.pending_rptr & 0x03U];
+			uint8_t ref = aps_group_q.pending_refs[aps_group_q.pending_rptr & 0x03U];
 
 			aps_group_q.pending_rptr++;
 			if (ref != 0xffU) {
-				u8 epNum = 0;
+				uint8_t epNum = 0;
 				zb_buf_t *src = ZB_BUF_FROM_REF(ref);
-				u16 groupAddr = (u16)src->buf[2] | ((u16)src->buf[3] << 8);
-				u8 *eps = aps_group_ep_info_get(groupAddr, &epNum);
+				uint16_t groupAddr = (uint16_t)src->buf[2] | ((uint16_t)src->buf[3] << 8);
+				uint8_t *eps = aps_group_ep_info_get(groupAddr, &epNum);
 
 				aps_group_q.active_buf = src;
 				aps_group_q.active_ep_count = epNum;
@@ -265,12 +265,12 @@ void aps_deliver_group_msg(void *arg)
 		zb_buf_free(out);
 
 		if (aps_group_q.pending_rptr != aps_group_q.pending_wptr) {
-			tl_zbTaskPost(aps_deliver_group_msg, NULL);
+			zb_TaskPost(aps_deliver_group_msg, NULL);
 		}
 		return;
 	}
 
-	TL_COPY_BUF(out, aps_group_q.active_buf);
+	ZB_COPY_BUF(out, aps_group_q.active_buf);
 	out->hdr.handle = 0;
 	{
 		aps_data_ind_t *srcInd = (aps_data_ind_t *)aps_group_q.active_buf;
@@ -286,7 +286,7 @@ void aps_deliver_group_msg(void *arg)
 	}
 	aps_group_q.active_buf->hdr.handle++;
 	if (out != NULL) {
-		tl_zbTaskPost(af_aps_data_entry, out);
+		zb_TaskPost(af_aps_data_entry, out);
 	}
 
 	if (aps_group_q.active_buf->hdr.handle >= aps_group_q.active_ep_count) {
@@ -298,6 +298,6 @@ void aps_deliver_group_msg(void *arg)
 
 	if (aps_group_q.active_buf != NULL ||
 	    aps_group_q.pending_rptr != aps_group_q.pending_wptr) {
-		tl_zbTaskPost(aps_deliver_group_msg, NULL);
+		zb_TaskPost(aps_deliver_group_msg, NULL);
 	}
 }

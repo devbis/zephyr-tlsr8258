@@ -7,13 +7,13 @@
 #include "gp_internal.h"
 
 #if defined(ZB_ROUTER_ROLE)
-u8 cgp_mcpsDataIndFilter(u8 *p)
+uint8_t cgp_mcpsDataIndFilter(uint8_t *p)
 {
-	u8 first = p[0];
-	u8 frameType = first & 0x03U;
-	u8 ret = 1;
-	u8 second;
-	u8 appId;
+	uint8_t first = p[0];
+	uint8_t frameType = first & 0x03U;
+	uint8_t ret = 1;
+	uint8_t second;
+	uint8_t appId;
 
 	if ((first & 0x3cU) != 0x0cU) {
 		return ret;
@@ -52,15 +52,15 @@ u8 cgp_mcpsDataIndFilter(u8 *p)
 
 void cGp_mcpsDataInd(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	uint8_t *buf = (uint8_t *)arg;
 	zb_mscp_data_ind_t saved;
 	dgp_data_ind_t *out = (dgp_data_ind_t *)arg;
-	u8 rssi;
+	uint8_t rssi;
 
 	rssi = ((zb_buf_t *)arg)->hdr.rssi;
 	memcpy(&saved, buf, sizeof(saved));
 
-	if (cgp_mcpsDataIndFilter((u8 *)saved.msdu) != 0U) {
+	if (cgp_mcpsDataIndFilter((uint8_t *)saved.msdu) != 0U) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -72,12 +72,12 @@ void cGp_mcpsDataInd(void *arg)
 	memcpy(&out->dstAddr, &saved.dstAddr.addr, sizeof(out->dstAddr));
 	out->srcAddrMode = saved.srcAddr.addrMode;
 	out->dstAddrMode = saved.dstAddr.addrMode;
-	out->rssi = (s8)rssi;
+	out->rssi = (int8_t)rssi;
 	out->lqi = saved.mpduLinkQuality;
 	out->seqNum = saved.dsn;
 	out->gpMpduLen = saved.msduLength;
 
-	tl_zbTaskPost(dGp_dataInd, arg);
+	zb_TaskPost(dGp_dataInd, arg);
 }
 
 void cGp_dataCnf(void *arg)
@@ -87,13 +87,13 @@ void cGp_dataCnf(void *arg)
 
 int cGp_dataReq(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	uint8_t *buf = (uint8_t *)arg;
 	cgp_data_req_t saved;
 	zb_mscp_data_req_t *out = (zb_mscp_data_req_t *)arg;
-	u8 txOptions;
+	uint8_t txOptions;
 
 	memcpy(&saved, buf, sizeof(saved));
-	txOptions = *((u8 *)&saved.txOptions);
+	txOptions = *((uint8_t *)&saved.txOptions);
 
 	memset(out, 0, sizeof(*out));
 	out->dstPanId = saved.dstPanId;
@@ -111,7 +111,7 @@ int cGp_dataReq(void *arg)
 		out->txOptions |= 0x08U;
 	}
 
-	tl_zbMacMcpsDataRequestProc(arg);
+	zb_MacMcpsDataRequestProc(arg);
 	return -1;
 }
 #else

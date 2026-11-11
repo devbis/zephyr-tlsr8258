@@ -37,7 +37,7 @@ const ev_timer_callback_t timeoutsCb[] = {
 };
 
 static ev_timer_event_t secondTimer;
-u32 g_secondCnt = 0;
+uint32_t g_secondCnt = 0;
 
 int secondClockPeriodic(void *arg)
 {
@@ -47,7 +47,7 @@ int secondClockPeriodic(void *arg)
 		g_secondCnt++;
 	}
 
-	for (u8 i = 0U; timeoutsCb[i] != NULL; i++) {
+	for (uint8_t i = 0U; timeoutsCb[i] != NULL; i++) {
 		timeoutsCb[i](NULL);
 	}
 

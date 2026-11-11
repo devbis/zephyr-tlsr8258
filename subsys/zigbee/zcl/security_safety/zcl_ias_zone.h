@@ -119,34 +119,34 @@
  *  @brief  Structure definition for zone enroll response command
  */
 typedef struct {
-    u8 code;
-    u8 zoneId;
+    uint8_t code;
+    uint8_t zoneId;
 } zoneEnrollRsp_t;
 
 /**
  *  @brief  Structure definition for initiate test mode command
  */
 typedef struct {
-    u8 testModeDuration;
-    u8 currZoneSensLevel;
+    uint8_t testModeDuration;
+    uint8_t currZoneSensLevel;
 } zoneInitTestMode_t;
 
 /**
  *  @brief  Structure definition for zone status change notification command
  */
 typedef struct {
-    u16 zoneStatus;
-    u8 extStatus;
-    u8 zoneId;
-    u16 delay;
+    uint16_t zoneStatus;
+    uint8_t extStatus;
+    uint8_t zoneId;
+    uint16_t delay;
 } zoneStatusChangeNoti_t;
 
 /**
  *  @brief  Structure definition for zone enroll request command
  */
 typedef struct {
-    u16 zoneType;
-    u16 manufacturerCode;
+    uint16_t zoneType;
+    uint16_t manufacturerCode;
 } zoneEnrollReq_t;
 
 
@@ -154,8 +154,8 @@ typedef struct {
  *  @brief  Definition for ZCL zone table entry
  */
 typedef struct _attribute_packed_ {
-    u8 zoneId;
-    u16 zoneType;
+    uint8_t zoneId;
+    uint16_t zoneType;
     addrExt_t zoneAddr;
 } zcl_zoneTabEntry_t;
 
@@ -163,8 +163,8 @@ typedef struct _attribute_packed_ {
  *  @brief  Definition for ZCL zone table information
  */
 typedef struct _attribute_packed_ {
-    u8 used;
-    u8 endpoint;
+    uint8_t used;
+    uint8_t endpoint;
     zcl_zoneTabEntry_t zone;
 } zcl_zoneTable_t;
 
@@ -193,37 +193,37 @@ typedef struct {
 /*********************************************************************
  *	External variables for zone attributes
  */
-extern u8  zcl_attr_zoneState;
-extern u16 zcl_attr_zoneType;
-extern u16 zcl_attr_zoneStatus;
-extern u8  zcl_attr_iasCieAddr[8];
-extern u8  zcl_attr_zoneID;
+extern uint8_t  zcl_attr_zoneState;
+extern uint16_t zcl_attr_zoneType;
+extern uint16_t zcl_attr_zoneStatus;
+extern uint8_t  zcl_attr_iasCieAddr[8];
+extern uint8_t  zcl_attr_zoneID;
 
 /**
  *  @brief  External variable for IAS ZONE Attribute info table
  */
 extern const zclAttrInfo_t iasZone_attrTbl[];
 
-extern const u8 zcl_iasZone_attrNum;
+extern const uint8_t zcl_iasZone_attrNum;
 #endif
 
 
-status_t zcl_iasZone_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_iasZone_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
-status_t zcl_iasZone_enrollReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneEnrollReq_t *pEnrollReq);
+status_t zcl_iasZone_enrollReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneEnrollReq_t *pEnrollReq);
 #define zcl_iasZone_enrollReqCmd(a,b,c,d)                       (zcl_iasZone_enrollReq((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_iasZone_initNormalOperationMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_iasZone_initNormalOperationMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_iasZone_initNormalOperationModeCmd(a,b,c)           (zcl_iasZone_initNormalOperationMode((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_iasZone_initTestMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneInitTestMode_t *pInitTestMode);
+status_t zcl_iasZone_initTestMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneInitTestMode_t *pInitTestMode);
 #define zcl_iasZone_initTestModeCmd(a,b,c,d)                    (zcl_iasZone_initTestMode((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_iasZone_statusChangeNotification(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneStatusChangeNoti_t *pStatusChangeNoti);
+status_t zcl_iasZone_statusChangeNotification(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneStatusChangeNoti_t *pStatusChangeNoti);
 #define zcl_iasZone_statusChangeNotificationCmd(a,b,c,d)        (zcl_iasZone_statusChangeNotification((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 
-extern zcl_zoneTable_t *zcl_findZoneEntry(u8 endpoint, u8 zoneId);
+extern zcl_zoneTable_t *zcl_findZoneEntry(uint8_t endpoint, uint8_t zoneId);
 
 #endif	/* ZCL_IAS_ZONE_H */

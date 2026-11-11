@@ -36,16 +36,16 @@ gp_proxyTab_t g_gpProxyTab;
 void gp_proxyTabSave2Flash(void *arg)
 {
 #if NV_ENABLE
-    nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_GP_PROXY_TABLE, sizeof(gp_proxyTab_t), (u8 *)&g_gpProxyTab);
+    nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_GP_PROXY_TABLE, sizeof(gp_proxyTab_t), (uint8_t *)&g_gpProxyTab);
 #endif
 }
 
 nv_sts_t gp_proxyTabRestoreFromFlash(void)
 {
-    u8 ret = NV_SUCC;
+    uint8_t ret = NV_SUCC;
 
 #if NV_ENABLE
-    ret = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_GP_PROXY_TABLE, sizeof(gp_proxyTab_t), (u8 *)&g_gpProxyTab);
+    ret = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_GP_PROXY_TABLE, sizeof(gp_proxyTab_t), (uint8_t *)&g_gpProxyTab);
 #endif
 
     return ret;
@@ -54,19 +54,19 @@ nv_sts_t gp_proxyTabRestoreFromFlash(void)
 void gp_proxyTabEntryClear(gpProxyTabEntry_t *pEntry)
 {
     if (pEntry->used) {
-        memset((u8 *)pEntry, 0, sizeof(*pEntry));
+        memset((uint8_t *)pEntry, 0, sizeof(*pEntry));
         g_gpProxyTab.gpProxyTabNum--;
     }
 }
 
-u8 gp_getProxyTabEntryTotalNum(void)
+uint8_t gp_getProxyTabEntryTotalNum(void)
 {
     return g_gpProxyTab.gpProxyTabNum;
 }
 
-u8 gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry)
+uint8_t gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry)
 {
-    u8 entryLen = 2;//options
+    uint8_t entryLen = 2;//options
 
     if (pEntry->options.bits.appId == GP_APP_ID_SRC_ID) {
         entryLen += 4;
@@ -76,16 +76,16 @@ u8 gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry)
     }
 
     if (pEntry->options.bits.assignedAlias) {
-        entryLen += sizeof(u16);
+        entryLen += sizeof(uint16_t);
     }
 
     if (pEntry->options.bits.secUse) {
-        entryLen += sizeof(u8);
+        entryLen += sizeof(uint8_t);
     }
 
     if ((pEntry->options.bits.secUse) ||
         (pEntry->options.bits.seqNumCap)) {
-        entryLen += sizeof(u32);
+        entryLen += sizeof(uint32_t);
     }
 
     if (pEntry->options.bits.secUse) {
@@ -94,31 +94,31 @@ u8 gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry)
 
     if (pEntry->options.bits.lightWeightUnicastGPS) {
         entryLen += (pEntry->lwSinkCnt) ? 1 : 0;
-        for (u8 i = 0; i < pEntry->lwSinkCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->lwSinkCnt; i++) {
             entryLen += 10;
         }
     }
 
     if (pEntry->options.bits.commGroupGPS) {
         entryLen += (pEntry->sinkGroupCnt) ? 1 : 0;
-        for (u8 i = 0; i < pEntry->sinkGroupCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupCnt; i++) {
             entryLen += 4;
         }
     }
 
-    entryLen += sizeof(u8);//Groupcast radius
+    entryLen += sizeof(uint8_t);//Groupcast radius
 
     if (!pEntry->options.bits.entryActive ||
         !pEntry->options.bits.entryValid) {
-        entryLen += sizeof(u8);
+        entryLen += sizeof(uint8_t);
     }
 
     return entryLen;
 }
 
-u8 gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, u8 *pBuf)
+uint8_t gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, uint8_t *pBuf)
 {
-    u8 *ptr = pBuf;
+    uint8_t *ptr = pBuf;
 
     //Options
     *ptr++ = LO_UINT16(pEntry->options.opts);
@@ -165,7 +165,7 @@ u8 gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, u8 *pBuf)
     //Lightweight sink address list
     if (pEntry->options.bits.lightWeightUnicastGPS) {
         *ptr++ = pEntry->lwSinkCnt;
-        for (u8 i = 0; i < pEntry->lwSinkCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->lwSinkCnt; i++) {
             ZB_64BIT_ADDR_COPY(ptr, pEntry->lightweightSinkAddrList[i].sinkIeeeAddr);
             ptr += EXT_ADDR_LEN;
             *ptr++ = LO_UINT16(pEntry->lightweightSinkAddrList[i].sinkNwkAddr);
@@ -176,7 +176,7 @@ u8 gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, u8 *pBuf)
     //Sink group list
     if (pEntry->options.bits.commGroupGPS) {
         *ptr++ = pEntry->sinkGroupCnt;
-        for (u8 i = 0; i < pEntry->sinkGroupCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupCnt; i++) {
             *ptr++ = LO_UINT16(pEntry->sinkGroupList[i].groupId);
             *ptr++ = HI_UINT16(pEntry->sinkGroupList[i].groupId);
             *ptr++ = LO_UINT16(pEntry->sinkGroupList[i].alias);
@@ -196,7 +196,7 @@ u8 gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, u8 *pBuf)
     return (ptr - pBuf);
 }
 
-gpProxyTabEntry_t *gp_getProxyTabByGpdId(u8 appId, gpdId_t gpdId)
+gpProxyTabEntry_t *gp_getProxyTabByGpdId(uint8_t appId, gpdId_t gpdId)
 {
     gpProxyTabEntry_t *pEntry = NULL;
 
@@ -204,13 +204,13 @@ gpProxyTabEntry_t *gp_getProxyTabByGpdId(u8 appId, gpdId_t gpdId)
         return NULL;
     }
 
-    for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+    for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
         pEntry = &g_gpProxyTab.gpProxyTab[i];
         if (pEntry->used) {
             if (pEntry->options.bits.appId == appId) {
-                if ((appId == GP_APP_ID_SRC_ID) && !memcmp((u8 *)&gpdId.srcId, (u8 *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
+                if ((appId == GP_APP_ID_SRC_ID) && !memcmp((uint8_t *)&gpdId.srcId, (uint8_t *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
                     return pEntry;
-                } else if ((appId == GP_APP_ID_GPD) && !memcmp((u8 *)&gpdId.gpdIeeeAddr, (u8 *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
+                } else if ((appId == GP_APP_ID_GPD) && !memcmp((uint8_t *)&gpdId.gpdIeeeAddr, (uint8_t *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
                     return pEntry;
                 }
             }
@@ -228,7 +228,7 @@ gpProxyTabEntry_t *gp_proxyTabEntryFreeGet(void)
         return NULL;
     }
 
-    for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+    for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
         pEntry = &g_gpProxyTab.gpProxyTab[i];
         if (!pEntry->used) {
             pEntry->gpdSecFrameCnt = 0xffffffff;
@@ -240,7 +240,7 @@ gpProxyTabEntry_t *gp_proxyTabEntryFreeGet(void)
     return NULL;
 }
 
-u8 lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sinkNwkAddr)
+uint8_t lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, uint16_t sinkNwkAddr)
 {
     if (pEntry->lwSinkCnt == 0) {
         //add new sink address list item
@@ -249,7 +249,7 @@ u8 lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sink
         pEntry->lwSinkCnt++;
         return SUCCESS;
     } else {
-        for (u8 i = 0; i < pEntry->lwSinkCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->lwSinkCnt; i++) {
             if (ZB_64BIT_ADDR_CMP(pEntry->lightweightSinkAddrList[i].sinkIeeeAddr, sinkIeeeAddr) &&
                (pEntry->lightweightSinkAddrList[i].sinkNwkAddr == sinkNwkAddr)) {
                 //find item
@@ -268,10 +268,10 @@ u8 lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sink
     return FAILURE;
 }
 
-u8 lwSinkAddrListRemove(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sinkNwkAddr)
+uint8_t lwSinkAddrListRemove(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, uint16_t sinkNwkAddr)
 {
     if (pEntry->lwSinkCnt) {
-        for (u8 i = 0; i < pEntry->lwSinkCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->lwSinkCnt; i++) {
             if (ZB_64BIT_ADDR_CMP(pEntry->lightweightSinkAddrList[i].sinkIeeeAddr, sinkIeeeAddr) &&
                (pEntry->lightweightSinkAddrList[i].sinkNwkAddr == sinkNwkAddr)) {
                 //find item
@@ -295,7 +295,7 @@ u8 lwSinkAddrListRemove(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 s
     return FAILURE;
 }
 
-u8 sinkGroupListAdd(gpProxyTabEntry_t *pEntry, u16 sinkGroupID, u16 alias)
+uint8_t sinkGroupListAdd(gpProxyTabEntry_t *pEntry, uint16_t sinkGroupID, uint16_t alias)
 {
     if (pEntry->sinkGroupCnt == 0) {
         //add new item
@@ -304,7 +304,7 @@ u8 sinkGroupListAdd(gpProxyTabEntry_t *pEntry, u16 sinkGroupID, u16 alias)
         pEntry->sinkGroupCnt++;
         return SUCCESS;
     } else {
-        for (u8 i = 0; i < pEntry->sinkGroupCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupCnt; i++) {
             if (pEntry->sinkGroupList[i].groupId == sinkGroupID) {
                 //find item
                 pEntry->sinkGroupList[i].alias = alias;
@@ -323,10 +323,10 @@ u8 sinkGroupListAdd(gpProxyTabEntry_t *pEntry, u16 sinkGroupID, u16 alias)
     return FAILURE;
 }
 
-u8 sinkGroupListRemove(gpProxyTabEntry_t *pEntry, u16 sinkGroupID)
+uint8_t sinkGroupListRemove(gpProxyTabEntry_t *pEntry, uint16_t sinkGroupID)
 {
     if (pEntry->sinkGroupCnt) {
-        for (u8 i = 0; i < pEntry->sinkGroupCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupCnt; i++) {
             if (pEntry->sinkGroupList[i].groupId == sinkGroupID) {
                 //find item
                 if (i == (pEntry->sinkGroupCnt - 1)) {
@@ -351,18 +351,18 @@ u8 sinkGroupListRemove(gpProxyTabEntry_t *pEntry, u16 sinkGroupID)
 
 static void zclGpProxyTabAttrUpdate(void)
 {
-    u8 *pBuf = zclGpAttr_proxyTabEntry;
+    uint8_t *pBuf = zclGpAttr_proxyTabEntry;
 
     if (g_gpProxyTab.gpProxyTabNum == 0) {
         //len = 0
         *pBuf++ = 0;
         *pBuf++ = 0;
     } else {
-        u8 entryLen = 0;
-        u8 maxEntryLen = 0;
-        u8 entryCnt = 0;
+        uint8_t entryLen = 0;
+        uint8_t maxEntryLen = 0;
+        uint8_t entryCnt = 0;
 
-        for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+        for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
             maxEntryLen = entryLen;
 
             if (g_gpProxyTab.gpProxyTab[i].used) {
@@ -381,7 +381,7 @@ static void zclGpProxyTabAttrUpdate(void)
         //*pBuf++ = HI_UINT16(entryLen);
         *pBuf++ = 0; //HI_UINT16(entryLen) always is 0
 
-        for (u8 i = 0; i < entryCnt; i++) {
+        for (uint8_t i = 0; i < entryCnt; i++) {
             if (g_gpProxyTab.gpProxyTab[i].used) {
                 pBuf += gp_buildProxyTabEntryFormat(&g_gpProxyTab.gpProxyTab[i], pBuf);
             }
@@ -394,7 +394,7 @@ void gpProxyTabUpdate(void)
     zclGpProxyTabAttrUpdate();
 
     //write to NV
-    TL_SCHEDULE_TASK(gp_proxyTabSave2Flash, NULL);
+    ZB_SCHEDULE_TASK(gp_proxyTabSave2Flash, NULL);
 }
 
 void gpProxyTabInit(void)
@@ -402,7 +402,7 @@ void gpProxyTabInit(void)
     if (gp_proxyTabRestoreFromFlash() == NV_SUCC) {
         zclGpProxyTabAttrUpdate();
     } else {
-        memset((u8 *)&g_gpProxyTab, 0, sizeof(gp_proxyTab_t));
+        memset((uint8_t *)&g_gpProxyTab, 0, sizeof(gp_proxyTab_t));
     }
 }
 

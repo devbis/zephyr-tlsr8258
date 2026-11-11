@@ -57,15 +57,15 @@ typedef enum {
 } user_state_t;
 
 typedef struct {
-    u16 nwkFwdDstAddr;
-    u16 nwkFwdSrcAddr;
-    u16 senderAddr;
-    u16 lastSendFailAddr;
+    uint16_t nwkFwdDstAddr;
+    uint16_t nwkFwdSrcAddr;
+    uint16_t senderAddr;
+    uint16_t lastSendFailAddr;
 } manyToOne_repair_t;
 
 typedef struct {
-    u16 nwkFwdDstAddr;
-    u16 nwkFwdSrcAddr;
+    uint16_t nwkFwdDstAddr;
+    uint16_t nwkFwdSrcAddr;
 } srcRoute_repair_t;
 
 /**
@@ -74,45 +74,45 @@ typedef struct {
 typedef struct {
     /* For coordinator to store formation information */
     struct {
-        u8 energy_detect[TL_ZB_MAC_CHANNEL_NUM];
-        u8 channel_pan_count[TL_ZB_MAC_CHANNEL_NUM];
+        uint8_t energy_detect[ZB_MAC_CHANNEL_NUM];
+        uint8_t channel_pan_count[ZB_MAC_CHANNEL_NUM];
     } formationInfo;
     /* End [32 bytes] */
 
     /* For router and end device  to store assocJoin/rejoin information */
     union {
-        tl_zb_addition_neighbor_entry_t *pAssocJoinParent;
-        tl_zb_addition_neighbor_entry_t *pRejoinParent;
+        zb_addition_neighbor_entry_t *pAssocJoinParent;
+        zb_addition_neighbor_entry_t *pRejoinParent;
     } join;
     /* End [4 bytes]*/
 
     /* For coordinator or router store current joining device info */
     ev_timer_event_t *curJoiningDevTimerEvt;//TODO: removed
 
-    u32	scanChannels;
+    uint32_t	scanChannels;
 
-    u8 scanDuration;
-    u8 is_factory_new:1;        /*!< Device is factory new */
-    u8 permit_join:1;           /*!< True if permit join is in progress */
-    u8 joined:1;                /*!< Non-zero if we are joined into the network */
-    u8 router_started:1;        /*!< not used */
-    u8 is_tc:1;                 /*!< True if we are Trust Center */
-    u8 joined_pro:1;
-    u8 panIdConflict:1;         /*!< if we find panID conflict */
-    u8 joinAccept:1;
-    u8 known_panids_cnt:4;
-    u8 discoverRoute:1;         /*!< Always TRUE for NLDE data request! see 2.2.4.1.1.3 */
-    u8 panidUpdateRecv:1;       /*!< receive network update for panid conflict*/
-    u8 resv:1;
-    u8 parentIsChanged:1;       /*!< A flag indicates that the device's parent is changed through rejoin */
-    u8 user_state:4;            /*!< Current network user_state_t */
-    u8 state:4;                 /*!< Current network subsystem state nlme_state_t */
+    uint8_t scanDuration;
+    uint8_t is_factory_new:1;        /*!< Device is factory new */
+    uint8_t permit_join:1;           /*!< True if permit join is in progress */
+    uint8_t joined:1;                /*!< Non-zero if we are joined into the network */
+    uint8_t router_started:1;        /*!< not used */
+    uint8_t is_tc:1;                 /*!< True if we are Trust Center */
+    uint8_t joined_pro:1;
+    uint8_t panIdConflict:1;         /*!< if we find panID conflict */
+    uint8_t joinAccept:1;
+    uint8_t known_panids_cnt:4;
+    uint8_t discoverRoute:1;         /*!< Always TRUE for NLDE data request! see 2.2.4.1.1.3 */
+    uint8_t panidUpdateRecv:1;       /*!< receive network update for panid conflict*/
+    uint8_t resv:1;
+    uint8_t parentIsChanged:1;       /*!< A flag indicates that the device's parent is changed through rejoin */
+    uint8_t user_state:4;            /*!< Current network user_state_t */
+    uint8_t state:4;                 /*!< Current network subsystem state nlme_state_t */
 
-    u8 leaveRejoin;             /*!< if we need rejoin after leave *///TODO: removed
-    u16 new_panid;
+    uint8_t leaveRejoin;             /*!< if we need rejoin after leave *///TODO: removed
+    uint16_t new_panid;
 
     /* For PANID conflict resolution */
-    u16 known_panids[PANID_TABLE_SIZE];
+    uint16_t known_panids[PANID_TABLE_SIZE];
 
     manyToOne_repair_t manyToOneRepair; /* saved for check nlde-data.confirm status when unicast data frame using many-to-one */
     srcRoute_repair_t srcRouteRepair;

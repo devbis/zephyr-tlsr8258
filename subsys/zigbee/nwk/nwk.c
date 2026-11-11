@@ -23,8 +23,8 @@
 nwk_ctx_t g_zbNwkCtx;
 
 #if defined(ZB_ROUTER_ROLE)
-u8 linkStExpiry = 0;
-u8 T_DBG_linkStatus = 0;
+uint8_t linkStExpiry = 0;
+uint8_t T_DBG_linkStatus = 0;
 ev_timer_event_t *linkStTimer = NULL;
 
 #endif
@@ -36,52 +36,52 @@ ev_timer_event_t *linkStTimer = NULL;
  * is the vendor's.
  */
 typedef struct {
-	u32 primitive;
-	tl_zb_callback_t handler;
+	uint32_t primitive;
+	zb_callback_t handler;
 } nwk_event_entry_t;
 
 const nwk_event_entry_t g_zbNwkEventFromMacTbl[] = {
 #if defined(ZB_ROUTER_ROLE)
-	{MAC_MLME_ASSOCIATE_IND, tl_zbMacMlmeAssociateIndicationHandler},
-	{MAC_MLME_COMM_STATUS_IND, tl_zbMacMlmeCommStatusIndicationHandler},
+	{MAC_MLME_ASSOCIATE_IND, zb_MacMlmeAssociateIndicationHandler},
+	{MAC_MLME_COMM_STATUS_IND, zb_MacMlmeCommStatusIndicationHandler},
 #else
-	{MAC_MLME_POLL_CNF, tl_zbMacMlmePollConfirmHandler},
+	{MAC_MLME_POLL_CNF, zb_MacMlmePollConfirmHandler},
 #endif
-	{MAC_MCPS_DATA_IND, tl_zbMacMcpsDataIndicationHandler},
-	{MAC_MCPS_DATA_CNF, tl_zbMacMcpsDataConfirmHandler},
-	{MAC_MLME_START_CNF, tl_zbMacMlmeStartConfirmHandler},
-	{MAC_MLME_BEACON_NOTIFY_IND, tl_zbMacMlmeBeaconNotifyIndicationHandler},
-	{MAC_MLME_ORPHAN_IND, tl_zbMacMlmeOrphanIndicationHandler},
-	{MAC_MLME_SCAN_CNF, tl_zbMacMlmeScanConfirmHandler},
-	{MAC_MLME_ASSOCIATE_CNF, tl_zbMacMlmeAssociateConfirmHandler},
-	{MAC_MLME_RESET_CNF, tl_zbMacMlmeResetConfirmHandler},
-	{MAC_MLME_SYNC_LOSS_IND, tl_zbMacMlmeSyncLossIndicationHandler},
-	{MAC_MLME_POLL_IND, tl_zbMacMlmePollIndicationHandler},
+	{MAC_MCPS_DATA_IND, zb_MacMcpsDataIndicationHandler},
+	{MAC_MCPS_DATA_CNF, zb_MacMcpsDataConfirmHandler},
+	{MAC_MLME_START_CNF, zb_MacMlmeStartConfirmHandler},
+	{MAC_MLME_BEACON_NOTIFY_IND, zb_MacMlmeBeaconNotifyIndicationHandler},
+	{MAC_MLME_ORPHAN_IND, zb_MacMlmeOrphanIndicationHandler},
+	{MAC_MLME_SCAN_CNF, zb_MacMlmeScanConfirmHandler},
+	{MAC_MLME_ASSOCIATE_CNF, zb_MacMlmeAssociateConfirmHandler},
+	{MAC_MLME_RESET_CNF, zb_MacMlmeResetConfirmHandler},
+	{MAC_MLME_SYNC_LOSS_IND, zb_MacMlmeSyncLossIndicationHandler},
+	{MAC_MLME_POLL_IND, zb_MacMlmePollIndicationHandler},
 };
 
 const nwk_event_entry_t g_zbNwkEventFromHighTbl[] = {
 #if defined(ZB_ROUTER_ROLE)
-	{NWK_NLME_NWK_FORMATION_REQ, tl_zbNwkNlmeNetworkFormationRequestHandler},
-	{NWK_NLME_ROUTE_DISCOVERY_REQ, tl_zbNwkNlmeRouteDiscRequestHandler},
-	{NWK_NLME_PERMIT_JOINING_REQ, tl_zbNwkNlmePermitJoiningRequestHandler},
-	{NWK_NLME_START_ROUTER_REQ, tl_zbNwkNlmeStartRouterRequestHandler},
-	{NWK_NLME_DIRECT_JOIN_REQ, tl_zbNwkNlmeDirectJoinRequestHandler},
+	{NWK_NLME_NWK_FORMATION_REQ, zb_NwkNlmeNetworkFormationRequestHandler},
+	{NWK_NLME_ROUTE_DISCOVERY_REQ, zb_NwkNlmeRouteDiscRequestHandler},
+	{NWK_NLME_PERMIT_JOINING_REQ, zb_NwkNlmePermitJoiningRequestHandler},
+	{NWK_NLME_START_ROUTER_REQ, zb_NwkNlmeStartRouterRequestHandler},
+	{NWK_NLME_DIRECT_JOIN_REQ, zb_NwkNlmeDirectJoinRequestHandler},
 #else
-	{NWK_NLME_SYNC_REQ, tl_zbNwkNlmeSyncRequestHandler},
+	{NWK_NLME_SYNC_REQ, zb_NwkNlmeSyncRequestHandler},
 #endif
-	{NWK_NLDE_DATA_REQ, tl_zbNwkNldeDataRequestHandler},
-	{NWK_NLME_NWK_DISCOVERY_REQ, tl_zbNwkNlmeNwkDiscRequestHandler},
-	{NWK_NLME_JOIN_REQ, tl_zbNwkNlmeJoinRequestHandler},
-	{NWK_NLME_ED_SCAN_REQ, tl_zbNwkNlmeEDScanRequestHandler},
-	{NWK_NLME_LEAVE_REQ, tl_zbNwkNlmeLeaveRequestHandler},
-	{NWK_NLME_RESET_REQ, tl_zbNwkNlmeResetRequestHandler},
+	{NWK_NLDE_DATA_REQ, zb_NwkNldeDataRequestHandler},
+	{NWK_NLME_NWK_DISCOVERY_REQ, zb_NwkNlmeNwkDiscRequestHandler},
+	{NWK_NLME_JOIN_REQ, zb_NwkNlmeJoinRequestHandler},
+	{NWK_NLME_ED_SCAN_REQ, zb_NwkNlmeEDScanRequestHandler},
+	{NWK_NLME_LEAVE_REQ, zb_NwkNlmeLeaveRequestHandler},
+	{NWK_NLME_RESET_REQ, zb_NwkNlmeResetRequestHandler},
 };
 
-static inline void nwk_task_dispatch(const nwk_event_entry_t *tbl, u8 count, void *data)
+static inline void nwk_task_dispatch(const nwk_event_entry_t *tbl, uint8_t count, void *data)
 {
-	u8 id = ((zb_buf_t *)data)->hdr.id;
+	uint8_t id = ((zb_buf_t *)data)->hdr.id;
 
-	for (u8 i = 0; i < count; i++) {
+	for (uint8_t i = 0; i < count; i++) {
 		if ((tbl[i].primitive == id) && (tbl[i].handler != NULL)) {
 			tbl[i].handler(data);
 			return;
@@ -89,7 +89,7 @@ static inline void nwk_task_dispatch(const nwk_event_entry_t *tbl, u8 count, voi
 	}
 }
 
-void tl_zbMacMlmeScanConfirmHandler(void *arg)
+void zb_MacMlmeScanConfirmHandler(void *arg)
 {
 	switch (g_zbNwkCtx.state) {
 #if defined(ZB_ROUTER_ROLE)
@@ -115,7 +115,7 @@ void tl_zbMacMlmeScanConfirmHandler(void *arg)
 	}
 }
 
-void tl_zbMacMlmeStartConfirmHandler(void *arg)
+void zb_MacMlmeStartConfirmHandler(void *arg)
 {
 #if defined(ZB_ROUTER_ROLE)
 	switch (g_zbNwkCtx.state) {
@@ -142,7 +142,7 @@ void tl_zbMacMlmeStartConfirmHandler(void *arg)
  * rebuild the NIB field by field from macros; the vendor just copies
  * nwkNibDefault over it and clears the extended PAN ID.
  */
-void tl_zbNwkNibInit(u8 coldReset)
+void zb_NwkNibInit(uint8_t coldReset)
 {
 	if (coldReset) {
 		memcpy(&g_zbNIB, &nwkNibDefault, sizeof(g_zbNIB));
@@ -160,17 +160,17 @@ void tl_zbNwkNibInit(u8 coldReset)
 	}
 }
 
-void tl_zbNwkInit(u8 coldReset)
+void zb_NwkInit(uint8_t coldReset)
 {
-	/* g_zbNwkCtx is cleared *before* tl_zbNwkNibInit runs - the reconstruction
+	/* g_zbNwkCtx is cleared *before* zb_NwkNibInit runs - the reconstruction
 	 * cleared it afterwards and so threw away the is_factory_new/is_tc flags
 	 * that call had just set. */
 	memset(&g_zbNwkCtx, 0, sizeof(g_zbNwkCtx));
 	g_zbNwkCtx.discoverRoute = 1;
 
-	tl_zbNwkAddrMapInit();
-	tl_zbNwkNibInit(coldReset);
-	tl_zbNeighborTableInit();
+	zb_NwkAddrMapInit();
+	zb_NwkNibInit(coldReset);
+	zb_NeighborTableInit();
 #if defined(ZB_ROUTER_ROLE)
 	nwkTxDataPendTabInit();
 	nwkBrcTransTabInit();
@@ -178,26 +178,26 @@ void tl_zbNwkInit(u8 coldReset)
 	nwkRoutingTabInit();
 #endif
 
-	g_zbNIB.seqNum = (u8)drv_u32Rand();
+	g_zbNIB.seqNum = (uint8_t)drv_u32Rand();
 #if defined(ZB_ROUTER_ROLE)
 	g_zbNIB.passiveAckTimeout = getPassiveAckTimeout();
 #endif
 }
 
-u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu)
+uint8_t nwkHdrParse(nwk_hdr_t *pNwkHdr, uint8_t *msdu)
 {
-	u8 *ptr;
+	uint8_t *ptr;
 
 	/* The two on-wire frame-control bytes are copied as they are, including
 	 * the reserved bits. */
-	memcpy((u8 *)pNwkHdr + 4, msdu, 2);
+	memcpy((uint8_t *)pNwkHdr + 4, msdu, 2);
 
 	if (pNwkHdr->frameControl.frameType == FRAME_TYPE_INTERPAN) {
 		return 2;
 	}
 
-	pNwkHdr->dstAddr = (u16)msdu[2] | ((u16)msdu[3] << 8);
-	pNwkHdr->srcAddr = (u16)msdu[4] | ((u16)msdu[5] << 8);
+	pNwkHdr->dstAddr = (uint16_t)msdu[2] | ((uint16_t)msdu[3] << 8);
+	pNwkHdr->srcAddr = (uint16_t)msdu[4] | ((uint16_t)msdu[5] << 8);
 	pNwkHdr->radius = msdu[6];
 	pNwkHdr->seqNum = msdu[7];
 	ptr = msdu + 8;
@@ -228,12 +228,12 @@ u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu)
 		ptr += 14;
 	}
 
-	return (u8)(ptr - msdu);
+	return (uint8_t)(ptr - msdu);
 }
 
-u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr)
+uint8_t getNwkHdrSize(nwk_hdr_t *pNwkHdr)
 {
-	u8 size = 8;
+	uint8_t size = 8;
 	if (pNwkHdr->frameControl.dstIEEEAddr) {
 		size += EXT_ADDR_LEN;
 	}
@@ -246,7 +246,7 @@ u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr)
 	/* The source-route subframe and the auxiliary security header are part
 	 * of the header too. */
 	if (pNwkHdr->frameControl.srcRoute) {
-		size += (u8)((pNwkHdr->srcRouteSubframe.relayCnt * 2U) + 2U);
+		size += (uint8_t)((pNwkHdr->srcRouteSubframe.relayCnt * 2U) + 2U);
 	}
 	if (pNwkHdr->frameControl.security) {
 		size += 14;
@@ -254,7 +254,7 @@ u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr)
 	return size;
 }
 
-u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr)
+uint8_t *nwkHdrBuilder(uint8_t *buf, nwk_hdr_t *pNwkHdr)
 {
 	memcpy(buf, &pNwkHdr->frameControl, sizeof(pNwkHdr->frameControl));
 	COPY_U16TOBUFFER(buf + 2, pNwkHdr->dstAddr);
@@ -262,7 +262,7 @@ u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr)
 	buf[6] = pNwkHdr->radius;
 	buf[7] = pNwkHdr->seqNum;
 
-	u8 *ptr = buf + 8;
+	uint8_t *ptr = buf + 8;
 
 	if (pNwkHdr->frameControl.dstIEEEAddr) {
 		ZB_IEEE_ADDR_COPY(ptr, pNwkHdr->dstIeeeAddr);
@@ -273,32 +273,32 @@ u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr)
 		ptr += EXT_ADDR_LEN;
 	}
 	if (pNwkHdr->frameControl.multicastFlg) {
-		*ptr++ = *(u8 *)&pNwkHdr->mcastControl;
+		*ptr++ = *(uint8_t *)&pNwkHdr->mcastControl;
 	}
 	if (pNwkHdr->frameControl.srcRoute) {
 		*ptr++ = pNwkHdr->srcRouteSubframe.relayCnt;
 		*ptr++ = pNwkHdr->srcRouteSubframe.relayIdx;
 		memcpy(ptr, pNwkHdr->srcRouteSubframe.relayList,
-		       (u16)pNwkHdr->srcRouteSubframe.relayCnt * sizeof(u16));
-		ptr += (u16)pNwkHdr->srcRouteSubframe.relayCnt * sizeof(u16);
+		       (uint16_t)pNwkHdr->srcRouteSubframe.relayCnt * sizeof(uint16_t));
+		ptr += (uint16_t)pNwkHdr->srcRouteSubframe.relayCnt * sizeof(uint16_t);
 	}
 
 	return ptr;
 }
 
 #if defined(ZB_ROUTER_ROLE)
-u32 getPassiveAckTimeout(void)
+uint32_t getPassiveAckTimeout(void)
 {
 	/* The NIB value is only the fallback; when a MAC backoff exponent is
 	 * configured the timeout is derived from it ("a:".."1a:"). */
 	if (g_zbMacPib.maxBe != 0U) {
-		return (u32)g_zbMacPib.maxCsmaBackoffs * ((320UL << g_zbMacPib.maxBe) - 320UL);
+		return (uint32_t)g_zbMacPib.maxCsmaBackoffs * ((320UL << g_zbMacPib.maxBe) - 320UL);
 	}
 
 	return g_zbNIB.passiveAckTimeout;
 }
 
-void tl_zbNwkLinkStatusStop(void)
+void zb_NwkLinkStatusStop(void)
 {
 	linkStExpiry = 0;
 	if (linkStTimer != NULL) {
@@ -306,12 +306,12 @@ void tl_zbNwkLinkStatusStop(void)
 	}
 }
 
-void tl_zbNwkNeighborTabAging(void)
+void zb_NwkNeighborTabAging(void)
 {
-	u8 neighborNum = tl_zbNeighborTableNumGet();
+	uint8_t neighborNum = zb_NeighborTableNumGet();
 
-	for (u8 i = 0; i < neighborNum; i++) {
-		tl_zb_normal_neighbor_entry_t *entry = tl_zbNeighborEntryGetFromIdx(i);
+	for (uint8_t i = 0; i < neighborNum; i++) {
+		zb_normal_neighbor_entry_t *entry = zb_NeighborEntryGetFromIdx(i);
 
 		if (entry == NULL || entry->deviceType == NWK_DEVICE_TYPE_ED ||
 		    g_zbNIB.addrAlloc == 0U) {
@@ -333,19 +333,19 @@ void tl_zbNwkNeighborTabAging(void)
 /* The vendor's builder includes coordinators and routers, while excluding
  * end-device entries; the router filter used to size the temporary buffer is
  * therefore broader than this device-type test. */
-u8 nwk_linkStEntryBuild(linkStatus_entry_t *list, u8 maxEntries)
+uint8_t nwk_linkStEntryBuild(linkStatus_entry_t *list, uint8_t maxEntries)
 {
-	u8 count = 0;
+	uint8_t count = 0;
 
-	for (u8 i = 0; i < tl_zbNeighborTableNumGet(); i++) {
-		tl_zb_normal_neighbor_entry_t *entry = tl_zbNeighborEntryGetFromIdx(i);
+	for (uint8_t i = 0; i < zb_NeighborTableNumGet(); i++) {
+		zb_normal_neighbor_entry_t *entry = zb_NeighborEntryGetFromIdx(i);
 
 		if ((entry == NULL) || (entry->lqi == 0U) ||
 		    (entry->deviceType == NWK_DEVICE_TYPE_ED)) {
 			continue;
 		}
 
-		list[count].neighborNwkAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
+		list[count].neighborNwkAddr = zb_shortAddrByIdx(entry->addrmapIdx);
 		list[count].linkStatus.incomingCost = rf_lqi2cost(entry->lqi) & 0x07U;
 		list[count].linkStatus.reservedL = 0;
 		list[count].linkStatus.outingCost = entry->outgoingCost & 0x07U;
@@ -357,10 +357,10 @@ u8 nwk_linkStEntryBuild(linkStatus_entry_t *list, u8 maxEntries)
 		}
 	}
 
-	for (u8 j = 0; (u8)(j + 1) < count; j++) {
-		u8 min = j;
+	for (uint8_t j = 0; (uint8_t)(j + 1) < count; j++) {
+		uint8_t min = j;
 
-		for (u8 k = j + 1; k < count; k++) {
+		for (uint8_t k = j + 1; k < count; k++) {
 			if (list[k].neighborNwkAddr < list[min].neighborNwkAddr) {
 				min = k;
 			}
@@ -377,14 +377,14 @@ u8 nwk_linkStEntryBuild(linkStatus_entry_t *list, u8 maxEntries)
 	return count;
 }
 
-void nwkLinkStatusCmdSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkLinkStatusCmdSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	u8 entryCnt = cmd->linkSt.options.entryCnt;
-	u8 payloadLen = (u8)(entryCnt * sizeof(linkStatus_entry_t) + 2U);
-	u8 *payload;
+	uint8_t entryCnt = cmd->linkSt.options.entryCnt;
+	uint8_t payloadLen = (uint8_t)(entryCnt * sizeof(linkStatus_entry_t) + 2U);
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, payloadLen, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, payloadLen, payload, uint8_t *);
 
 	payload[0] = cmd->cmdId;
 	memcpy(&payload[1], &cmd->linkSt.options, 1);
@@ -399,20 +399,20 @@ void nwkLinkStatusCmdSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handl
 	nwk_fwdPacket(buf, pNwkHdr, payload, payloadLen);
 }
 
-void tl_zbNwkSendLinkStatus(void)
+void zb_NwkSendLinkStatus(void)
 {
 	linkStatus_entry_t *entries = NULL;
-	u8 routerCnt = tl_zbNeighborTableRouterValidNumGet();
-	u8 entryCnt = 0;
-	u8 frameCnt = 1;
+	uint8_t routerCnt = zb_NeighborTableRouterValidNumGet();
+	uint8_t entryCnt = 0;
+	uint8_t frameCnt = 1;
 
 	if (routerCnt != 0U) {
-		u16 freeSize = ev_buf_getFreeMaxSize();
-		u16 allocSize = (u16)routerCnt * sizeof(linkStatus_entry_t);
+		uint16_t freeSize = ev_buf_getFreeMaxSize();
+		uint16_t allocSize = (uint16_t)routerCnt * sizeof(linkStatus_entry_t);
 
 		if (allocSize > freeSize) {
-			routerCnt = (u8)(freeSize / sizeof(linkStatus_entry_t));
-			allocSize = (u16)routerCnt * sizeof(linkStatus_entry_t);
+			routerCnt = (uint8_t)(freeSize / sizeof(linkStatus_entry_t));
+			allocSize = (uint16_t)routerCnt * sizeof(linkStatus_entry_t);
 		}
 
 		entries = (linkStatus_entry_t *)ev_buf_allocate(allocSize);
@@ -423,7 +423,7 @@ void tl_zbNwkSendLinkStatus(void)
 
 		entryCnt = nwk_linkStEntryBuild(entries, routerCnt);
 		if (entryCnt != 0U) {
-			frameCnt = (u8)(entryCnt / NWK_LINK_STATUS_ENTRY_MAX_PER_FRAME);
+			frameCnt = (uint8_t)(entryCnt / NWK_LINK_STATUS_ENTRY_MAX_PER_FRAME);
 			if ((entryCnt % NWK_LINK_STATUS_ENTRY_MAX_PER_FRAME) != 0U) {
 				frameCnt++;
 			}
@@ -432,13 +432,13 @@ void tl_zbNwkSendLinkStatus(void)
 
 	{
 		linkStatus_entry_t *cursor = entries;
-		u8 remaining = entryCnt;
+		uint8_t remaining = entryCnt;
 
-		for (u8 i = 0; i < frameCnt; i++) {
+		for (uint8_t i = 0; i < frameCnt; i++) {
 			zb_buf_t *buf = zb_buf_allocate();
 			nwk_hdr_t hdr;
 			nwkCmd_t cmd;
-			u8 frameEntryCnt;
+			uint8_t frameEntryCnt;
 
 			if (buf == NULL) {
 				break;
@@ -471,7 +471,7 @@ void tl_zbNwkSendLinkStatus(void)
 			cmd.cmdId = NWK_CMD_LINK_STATUS;
 			cmd.linkSt.options.entryCnt = frameEntryCnt & 0x1fU;
 			cmd.linkSt.options.firstFrame = (i == 0U);
-			cmd.linkSt.options.lastFrame = (i == (u8)(frameCnt - 1U));
+			cmd.linkSt.options.lastFrame = (i == (uint8_t)(frameCnt - 1U));
 			cmd.linkSt.linkStatusList = cursor;
 
 			if (cursor != NULL) {
@@ -480,31 +480,31 @@ void tl_zbNwkSendLinkStatus(void)
 
 			nwkLinkStatusCmdSend(buf, &hdr, &cmd, NWK_INTERNAL_LINK_STATUS_CMD_HANDLE);
 
-			remaining = (u8)(remaining - frameEntryCnt);
+			remaining = (uint8_t)(remaining - frameEntryCnt);
 		}
 	}
 
 	if (entries != NULL) {
-		ev_buf_free((u8 *)entries);
+		ev_buf_free((uint8_t *)entries);
 	}
 }
 
-void tl_zbNwkLinkStatusStart(void)
+void zb_NwkLinkStatusStart(void)
 {
-	tl_zbNwkSendLinkStatus();
+	zb_NwkSendLinkStatus();
 	if (g_zbNIB.linkStatusPeriod != 0U) {
 		linkStExpiry = g_zbNIB.linkStatusPeriod;
 	}
 }
 
-int tl_zbNwkLinkStatusTimerEvtCb(void *arg)
+int zb_NwkLinkStatusTimerEvtCb(void *arg)
 {
 	(void)arg;
 
 	if (g_zbNwkCtx.joined != 0U) {
 		T_DBG_linkStatus++;
-		tl_zbNwkNeighborTabAging();
-		tl_zbNwkLinkStatusStart();
+		zb_NwkNeighborTabAging();
+		zb_NwkLinkStatusStart();
 	}
 
 	linkStTimer = NULL;
@@ -522,38 +522,38 @@ int nwk_linkStPeriodic(void *arg)
 
 	linkStExpiry--;
 	if (linkStExpiry == 0U) {
-		u32 delay = (drv_u32Rand() & 0x7fU) + 5U;
-		linkStTimer = ev_timer_taskPost(tl_zbNwkLinkStatusTimerEvtCb, NULL, delay);
+		uint32_t delay = (drv_u32Rand() & 0x7fU) + 5U;
+		linkStTimer = ev_timer_taskPost(zb_NwkLinkStatusTimerEvtCb, NULL, delay);
 	}
 
 	return 0;
 }
 
-u8 tl_nwkGetAverageLqi(u8 oldLqi, u8 newLqi)
+uint8_t zb_nwkGetAverageLqi(uint8_t oldLqi, uint8_t newLqi)
 {
-	u16 avg = newLqi;
+	uint16_t avg = newLqi;
 
 	/* A 15/16 exponential average, not a plain mean.  Both arguments are
 	 * zero-extended, so an LQI above 127 stays positive. */
 	if (oldLqi != 0U) {
-		avg = (u16)((oldLqi * 15 + newLqi) / 16);
+		avg = (uint16_t)((oldLqi * 15 + newLqi) / 16);
 	}
 
-	return (u8)avg;
+	return (uint8_t)avg;
 }
 
-void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	zb_mscp_data_ind_t *ind = (zb_mscp_data_ind_t *)arg;
 	linkStatus_entry_t *list = cmd->linkSt.linkStatusList;
-	u8 entryCnt = cmd->linkSt.options.entryCnt;
-	u8 payloadLen = (u8)(ind->msduLength - pNwkHdr->frameHdrLen);
-	tl_zb_normal_neighbor_entry_t *neighbor;
-	u16 srcAddr = pNwkHdr->srcAddr;
-	u16 localAddr = g_zbNIB.nwkAddr;
-	u8 newNeighbor = 0;
+	uint8_t entryCnt = cmd->linkSt.options.entryCnt;
+	uint8_t payloadLen = (uint8_t)(ind->msduLength - pNwkHdr->frameHdrLen);
+	zb_normal_neighbor_entry_t *neighbor;
+	uint16_t srcAddr = pNwkHdr->srcAddr;
+	uint16_t localAddr = g_zbNIB.nwkAddr;
+	uint8_t newNeighbor = 0;
 
-	if (payloadLen != (u8)(entryCnt * sizeof(linkStatus_entry_t) + 2U)) {
+	if (payloadLen != (uint8_t)(entryCnt * sizeof(linkStatus_entry_t) + 2U)) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -561,19 +561,19 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	neighbor = nwk_neTblGetByShortAddr(srcAddr);
 
 	if (neighbor == NULL) {
-		tl_zb_normal_neighbor_entry_t candidate;
-		u16 addrmapIdx;
-		u8 deleteOld = 0;
+		zb_normal_neighbor_entry_t candidate;
+		uint16_t addrmapIdx;
+		uint8_t deleteOld = 0;
 
 		/* An end-device-initiator frame carries the authoritative source IEEE
 		 * address when the MAC indication also reports the same short address. */
 		if (pNwkHdr->frameControl.endDevInitiator != 0U &&
 		    ind->srcAddr.addrMode == ADDR_MODE_SHORT &&
 		    ind->srcAddr.addr.shortAddr == srcAddr) {
-			(void)tl_zbNwkAddrMapAdd(srcAddr, pNwkHdr->srcIeeeAddr, &addrmapIdx);
+			(void)zb_NwkAddrMapAdd(srcAddr, pNwkHdr->srcIeeeAddr, &addrmapIdx);
 		}
 
-		if (tl_idxByShortAddr(&addrmapIdx, srcAddr) != RET_OK) {
+		if (zb_idxByShortAddr(&addrmapIdx, srcAddr) != RET_OK) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
@@ -586,7 +586,7 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		candidate.lqi = ind->mpduLinkQuality;
 
 		if (srcAddr == 0U && entryCnt != 0U) {
-			for (u8 i = 0; i < entryCnt; i++) {
+			for (uint8_t i = 0; i < entryCnt; i++) {
 				if (list[i].neighborNwkAddr == localAddr) {
 					deleteOld = 1;
 					break;
@@ -594,7 +594,7 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 			}
 		}
 
-		neighbor = tl_zbNeighborTableUpdate(&candidate, deleteOld);
+		neighbor = zb_NeighborTableUpdate(&candidate, deleteOld);
 		if (neighbor == NULL) {
 			zb_buf_free((zb_buf_t *)arg);
 			return;
@@ -609,7 +609,7 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	/* A link-status record is relevant to this node only when it names our
 	 * own network address.  The vendor stores the record's low three bits,
 	 * i.e. incomingCost, in the neighbor outgoing-cost field. */
-	for (u8 i = 0; i < entryCnt; i++) {
+	for (uint8_t i = 0; i < entryCnt; i++) {
 		if (list[i].neighborNwkAddr == localAddr) {
 			neighbor->outgoingCost = list[i].linkStatus.incomingCost;
 			zb_buf_free((zb_buf_t *)arg);
@@ -625,7 +625,7 @@ void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	zb_buf_free((zb_buf_t *)arg);
 }
 
-void tl_zbNwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	/* Is this report addressed to this device? */
 	if (pNwkHdr->dstAddr != g_zbNIB.nwkAddr) {
@@ -642,18 +642,18 @@ void tl_zbNwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	nwkReportCmdHandler(arg, cmd);
 }
 
-void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, u8 handle)
+void zb_NwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, uint8_t handle)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	u8 *payload;
-	u16 nextHop;
+	uint8_t *payload;
+	uint16_t nextHop;
 
 	/* The ordinary case: the status command is relayed along the route the
 	 * incoming header already describes, and nwk_fwdPacket picks the next hop.
 	 * Only a many-to-one route failure takes the repair path below, because
 	 * that is the one status the concentrator's route can no longer carry. */
 	if (pNwkStatus->nwkStatus.statusCode == NWK_COMMAND_STATUS_MANY_TO_ONE_ROUTE_FAILURE) {
-		tl_zb_normal_neighbor_entry_t *neighbor;
+		zb_normal_neighbor_entry_t *neighbor;
 
 		/* Drop the routing entry that just failed, unless this device is the
 		 * originator - a status we generated ourselves says nothing about the
@@ -681,13 +681,13 @@ void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatu
 			 * already knows are no good - the sender of the failing frame and
 			 * the address the last repair attempt failed on. */
 			for (;;) {
-				neighbor = tl_zbNeighborTabSearchForRouter(neighbor);
+				neighbor = zb_NeighborTabSearchForRouter(neighbor);
 				if (neighbor == NULL) {
 					nextHop = pNwkHdr->dstAddr;
 					break;
 				}
 
-				nextHop = tl_zbshortAddrByIdx(neighbor->addrmapIdx);
+				nextHop = zb_shortAddrByIdx(neighbor->addrmapIdx);
 
 				if ((nextHop != g_zbNwkCtx.manyToOneRepair.senderAddr) &&
 				    (nextHop != g_zbNwkCtx.manyToOneRepair.lastSendFailAddr)) {
@@ -696,7 +696,7 @@ void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatu
 			}
 		}
 
-		TL_BUF_INITIAL_ALLOC(buf, 1 + sizeof(nwkCmd_nwkStatus_t), payload, u8 *);
+		ZB_BUF_INITIAL_ALLOC(buf, 1 + sizeof(nwkCmd_nwkStatus_t), payload, uint8_t *);
 		payload[0] = pNwkStatus->cmdId;
 		payload[1] = pNwkStatus->nwkStatus.statusCode;
 		memcpy(payload + 2, &pNwkStatus->nwkStatus.dstAddr, 2);
@@ -707,7 +707,7 @@ void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatu
 	}
 
 forward:
-	TL_BUF_INITIAL_ALLOC(buf, 1 + sizeof(nwkCmd_nwkStatus_t), payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, 1 + sizeof(nwkCmd_nwkStatus_t), payload, uint8_t *);
 	payload[0] = pNwkStatus->cmdId;
 	payload[1] = pNwkStatus->nwkStatus.statusCode;
 	memcpy(payload + 2, &pNwkStatus->nwkStatus.dstAddr, 2);
@@ -720,7 +720,7 @@ forward:
  * The application-facing network-status sender.  The vendor takes a single
  * pointer that is both the transmit buffer and - overlaid on its head - a
  * myNwkCmd_nwkStatus_t describing the frame to build, and it reads the
- * descriptor fields back after tl_bufInitalloc has carved the payload out of
+ * descriptor fields back after zb_bufInitalloc has carved the payload out of
  * the same buffer.  Reproduced as written: the payload is allocated at the
  * tail, so the descriptor at the head survives.
  */
@@ -729,10 +729,10 @@ void my_tl_zbNwkSendNwkStatusCmd(void *arg)
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	myNwkCmd_nwkStatus_t *req = (myNwkCmd_nwkStatus_t *)arg;
 	nwk_hdr_t hdr;
-	u8 len = req->payloadLen + 2;
-	u8 *payload;
+	uint8_t len = req->payloadLen + 2;
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, len, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, len, payload, uint8_t *);
 
 	payload[0] = req->cmdId;
 	payload[1] = req->statusCode;
@@ -774,9 +774,9 @@ void my_tl_zbNwkSendNwkStatusCmd(void *arg)
 /* The network status names a device: true when it is this device, or one of
  * this device's end-device children. */
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-static inline bool nwk_statusAddrIsLocal(u16 shortAddr)
+static inline bool nwk_statusAddrIsLocal(uint16_t shortAddr)
 {
-	tl_zb_normal_neighbor_entry_t *neighbor = nwk_neTblGetByShortAddr(shortAddr);
+	zb_normal_neighbor_entry_t *neighbor = nwk_neTblGetByShortAddr(shortAddr);
 
 	if (shortAddr == g_zbNIB.nwkAddr) {
 		return true;
@@ -786,7 +786,7 @@ static inline bool nwk_statusAddrIsLocal(u16 shortAddr)
 	       (neighbor->relationship == NEIGHBOR_IS_CHILD);
 }
 
-void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
@@ -806,7 +806,7 @@ void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		}
 	} else if (cmd->nwkStatus.statusCode == NWK_COMMAND_STATUS_MANY_TO_ONE_ROUTE_FAILURE) {
 		/* Remember who handed us the failing many-to-one frame, so that the
-		 * repair path in tl_zbNwkSendNwkStatusCmd does not hand it straight
+		 * repair path in zb_NwkSendNwkStatusCmd does not hand it straight
 		 * back.  Only for a frame that is still travelling onwards. */
 		if ((pNwkHdr->dstAddr != g_zbNIB.nwkAddr) && (pNwkHdr->radius != 0U)) {
 			g_zbNwkCtx.manyToOneRepair.senderAddr = macInd->srcAddr.addr.shortAddr;
@@ -816,7 +816,7 @@ void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	if (ZB_NWK_IS_ADDRESS_BROADCAST(pNwkHdr->dstAddr)) {
 		if (pNwkHdr->radius != 0U) {
 			if (nwkBrcTimerStart(buf, pNwkHdr, macInd->msdu + pNwkHdr->frameHdrLen,
-					     (u8)(macInd->msduLength - pNwkHdr->frameHdrLen)) !=
+					     (uint8_t)(macInd->msduLength - pNwkHdr->frameHdrLen)) !=
 			    NWK_STATUS_SUCCESS) {
 				/* Could not schedule the rebroadcast: undo the transaction
 				 * record so a later copy of the same frame is not dropped as a
@@ -838,11 +838,11 @@ void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 			return;
 		}
 
-		tl_zbNwkSendNwkStatusCmd(buf, pNwkHdr, cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
+		zb_NwkSendNwkStatusCmd(buf, pNwkHdr, cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
 		return;
 	}
 
-	tl_zbNwkNlmeNwkStatusInd(buf, cmd->nwkStatus.dstAddr, cmd->nwkStatus.statusCode);
+	zb_NwkNlmeNwkStatusInd(buf, cmd->nwkStatus.dstAddr, cmd->nwkStatus.statusCode);
 }
 #else
 /*
@@ -851,34 +851,34 @@ void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
  * handler out of that one tail call: it reads nwkStatus.dstAddr and
  * nwkStatus.statusCode from the command and passes the buffer on untouched.
  */
-void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	(void)pNwkHdr;
 
-	tl_zbNwkNlmeNwkStatusInd(arg, cmd->nwkStatus.dstAddr, cmd->nwkStatus.statusCode);
+	zb_NwkNlmeNwkStatusInd(arg, cmd->nwkStatus.dstAddr, cmd->nwkStatus.statusCode);
 }
 #endif
 
-void tl_zbNwkTaskProc(void)
+void zb_NwkTaskProc(void)
 {
-	tl_zb_task_t taskInfo;
+	zb_task_t taskInfo;
 
-	if ((tl_zbTaskQPop(TL_Q_HIGH2NWK, &taskInfo) != NULL) && (taskInfo.data != NULL)) {
+	if ((zb_TaskQPop(ZB_Q_HIGH2NWK, &taskInfo) != NULL) && (taskInfo.data != NULL)) {
 		nwk_task_dispatch(
 			g_zbNwkEventFromHighTbl,
-			(u8)(sizeof(g_zbNwkEventFromHighTbl) / sizeof(g_zbNwkEventFromHighTbl[0])),
+			(uint8_t)(sizeof(g_zbNwkEventFromHighTbl) / sizeof(g_zbNwkEventFromHighTbl[0])),
 			taskInfo.data);
 	}
 
-	if ((tl_zbTaskQPop(TL_Q_MAC2NWK, &taskInfo) != NULL) && (taskInfo.data != NULL)) {
+	if ((zb_TaskQPop(ZB_Q_MAC2NWK, &taskInfo) != NULL) && (taskInfo.data != NULL)) {
 		nwk_task_dispatch(
 			g_zbNwkEventFromMacTbl,
-			(u8)(sizeof(g_zbNwkEventFromMacTbl) / sizeof(g_zbNwkEventFromMacTbl[0])),
+			(uint8_t)(sizeof(g_zbNwkEventFromMacTbl) / sizeof(g_zbNwkEventFromMacTbl[0])),
 			taskInfo.data);
 	}
 }
 
-void tl_zbNwkNibSet(void *arg)
+void zb_NwkNibSet(void *arg)
 {
 	nlme_set_req_t *req = (nlme_set_req_t *)arg;
 
@@ -917,7 +917,7 @@ void tl_zbNwkNibSet(void *arg)
 	}
 }
 
-u8 is_device_factory_new(void)
+uint8_t is_device_factory_new(void)
 {
 	return g_zbNwkCtx.is_factory_new != 0U;
 }

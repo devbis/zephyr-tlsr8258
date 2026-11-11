@@ -8,8 +8,8 @@
 
 #include "zb_common.h"
 
-u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt);
-u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t extAddr);
-u8 ss_apsDecryptFrame(void *arg);
+uint8_t ss_apsEnAuxHdrFill(uint8_t *auxHdr, void *keyInfo, uint8_t extNonceOpt);
+uint8_t ss_apsSecureFrame(void *p, uint8_t apsHdrAuxLen, uint8_t apsHdrLen, addrExt_t extAddr);
+uint8_t ss_apsDecryptFrame(void *arg);
 
 #endif

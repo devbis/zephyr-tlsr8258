@@ -51,15 +51,15 @@
 static status_t zcl_metering_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_metering_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_metering_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_SE_METERING, manuCode, attrNum, attrTbl, zcl_metering_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_metering_getProfile(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_getProfileCmd_t *pReq)
+_CODE_ZCL_ status_t zcl_metering_getProfile(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_getProfileCmd_t *pReq)
 {
-    u8 buf[6];
-    u8 *pBuf = buf;
+    uint8_t buf[6];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->intervalChannel;
     *pBuf++ = U32_BYTE0(pReq->endTime);
@@ -69,55 +69,55 @@ _CODE_ZCL_ status_t zcl_metering_getProfile(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
     *pBuf++ = pReq->numberOfPeriods;
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_GET_PROFILE, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_metering_requestMirrorRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestMirrorRspCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_metering_requestMirrorRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestMirrorRspCmd_t *pRsp)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pRsp->endPointId);
     *pBuf++ = HI_UINT16(pRsp->endPointId);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_REQUEST_MIRROR_RESPONSE, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_metering_mirrorRemoved(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_mirrorRemovedCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_metering_mirrorRemoved(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_mirrorRemovedCmd_t *pRsp)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pRsp->removedEndPointId);
     *pBuf++ = HI_UINT16(pRsp->removedEndPointId);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_MIRROR_REMOVED, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_metering_requestFastPollMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestFastPollModeCmd_t *pReq)
+_CODE_ZCL_ status_t zcl_metering_requestFastPollMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestFastPollModeCmd_t *pReq)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->fastPollUpdatePeriod;
     *pBuf++ = pReq->duration;
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_REQUEST_FAST_POLL_MODE, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_metering_getProfileRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_getProfileRspCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_metering_getProfileRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_getProfileRspCmd_t *pRsp)
 {
-    u8 len = 4 + 1 + 1 + 1 + pRsp->numberOfPeriodsDelived * 3;
+    uint8_t len = 4 + 1 + 1 + 1 + pRsp->numberOfPeriodsDelived * 3;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = U32_BYTE0(pRsp->endTime);
     *pBuf++ = U32_BYTE1(pRsp->endTime);
@@ -130,29 +130,29 @@ _CODE_ZCL_ status_t zcl_metering_getProfileRsp(u8 srcEp, epInfo_t *pDstEpInfo, u
     pBuf += (pRsp->numberOfPeriodsDelived * 3);
 
     zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_GET_PROFILE_RESPONSE, TRUE,
-                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 
     ev_buf_free(buf);
 
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_metering_requestMirror(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_metering_requestMirror(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_REQUEST_MIRROR, TRUE,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_metering_removeMirror(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_metering_removeMirror(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_REMOVE_MIRROR, TRUE,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_metering_requestFastPollModeRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestFastPollModeRspCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_metering_requestFastPollModeRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestFastPollModeRspCmd_t *pRsp)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pRsp->appliedUpdatePeriod;
     *pBuf++ = U32_BYTE0(pRsp->fastPollModeEndTime);
@@ -161,14 +161,14 @@ _CODE_ZCL_ status_t zcl_metering_requestFastPollModeRsp(u8 srcEp, epInfo_t *pDst
     *pBuf++ = U32_BYTE3(pRsp->fastPollModeEndTime);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SE_METERING, ZCL_CMD_REQUEST_FAST_POLL_MODE_RESPONSE, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
 _CODE_ZCL_ static status_t zcl_metering_getProfilePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_getProfileCmd_t getProfileCmd;
@@ -187,9 +187,9 @@ _CODE_ZCL_ static status_t zcl_metering_getProfilePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_requestMirrorRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_requestMirrorRspCmd_t requestMirrorRspCmd;
@@ -205,9 +205,9 @@ _CODE_ZCL_ static status_t zcl_metering_requestMirrorRspPrc(zclIncoming_t *pInMs
 
 _CODE_ZCL_ static status_t zcl_metering_mirrorRemovedPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_mirrorRemovedCmd_t mirrorRemovedCmd;
@@ -223,9 +223,9 @@ _CODE_ZCL_ static status_t zcl_metering_mirrorRemovedPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_requestFastPollModePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_requestFastPollModeCmd_t requestFastPollModeCmd;
@@ -242,9 +242,9 @@ _CODE_ZCL_ static status_t zcl_metering_requestFastPollModePrc(zclIncoming_t *pI
 
 _CODE_ZCL_ static status_t zcl_metering_getProfileRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_getProfileRspCmd_t getProfileRspCmd;
@@ -265,9 +265,9 @@ _CODE_ZCL_ static status_t zcl_metering_getProfileRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_requestMirrorPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    //u8 *pData = pInMsg->pData; //this command has no payload.
+    //uint8_t *pData = pInMsg->pData; //this command has no payload.
 
     if (pInMsg->clusterAppCb) {
     	status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -280,9 +280,9 @@ _CODE_ZCL_ static status_t zcl_metering_requestMirrorPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_removeMirrorPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    //u8 *pData = pInMsg->pData; //this command has no payload.
+    //uint8_t *pData = pInMsg->pData; //this command has no payload.
 
     if (pInMsg->clusterAppCb) {
         status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -295,9 +295,9 @@ _CODE_ZCL_ static status_t zcl_metering_removeMirrorPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_requestFastPollModeRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_metering_requestFastPollModeRspCmd_t requestFastPollModeRspCmd;
@@ -314,7 +314,7 @@ _CODE_ZCL_ static status_t zcl_metering_requestFastPollModeRspPrc(zclIncoming_t 
 
 _CODE_ZCL_ static status_t zcl_metering_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GET_PROFILE:
@@ -339,7 +339,7 @@ _CODE_ZCL_ static status_t zcl_metering_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_metering_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GET_PROFILE_RESPONSE:

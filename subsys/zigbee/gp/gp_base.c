@@ -19,7 +19,7 @@ static int gpTransmitChannelTimeoutCb(void *arg)
 	(void)arg;
 
 	if (g_gpBaseCtx.gpOperationalChannel != rf_getChannel()) {
-		tl_zbMacChannelSet(g_gpBaseCtx.gpOperationalChannel);
+		zb_MacChannelSet(g_gpBaseCtx.gpOperationalChannel);
 	}
 
 	gpTxQueueMaintenceClear();
@@ -31,7 +31,7 @@ static int gpTransmitChannelTimeoutCb(void *arg)
 void gpTransmitChannelTimeoutStop(void)
 {
 	if (g_gpBaseCtx.gpOperationalChannel != rf_getChannel()) {
-		tl_zbMacChannelSet(g_gpBaseCtx.gpOperationalChannel);
+		zb_MacChannelSet(g_gpBaseCtx.gpOperationalChannel);
 	}
 
 	if (g_gpBaseCtx.transmitChannelTimeoutEvt != NULL) {
@@ -39,17 +39,17 @@ void gpTransmitChannelTimeoutStop(void)
 	}
 }
 
-void gpSwitchToTransmitChannel(u8 operationChannel, u8 tempMasterTxChannel)
+void gpSwitchToTransmitChannel(uint8_t operationChannel, uint8_t tempMasterTxChannel)
 {
-	u8 gpChannel = (u8)(operationChannel + 11U);
-	u8 txChannel = (u8)(tempMasterTxChannel + 11U);
+	uint8_t gpChannel = (uint8_t)(operationChannel + 11U);
+	uint8_t txChannel = (uint8_t)(tempMasterTxChannel + 11U);
 
 	if (g_gpBaseCtx.gpOperationalChannel != gpChannel) {
 		g_gpBaseCtx.gpOperationalChannel = gpChannel;
 	}
 
 	if (txChannel != rf_getChannel()) {
-		tl_zbMacChannelSet(txChannel);
+		zb_MacChannelSet(txChannel);
 	}
 
 	if (g_gpBaseCtx.transmitChannelTimeoutEvt != NULL) {
@@ -60,17 +60,17 @@ void gpSwitchToTransmitChannel(u8 operationChannel, u8 tempMasterTxChannel)
 		ev_timer_taskPost(gpTransmitChannelTimeoutCb, NULL, 5000);
 }
 
-u16 gpAliasSrcAddrDerived(u8 appId, gpdId_t gpdId)
+uint16_t gpAliasSrcAddrDerived(uint8_t appId, gpdId_t gpdId)
 {
-	u16 alias;
-	u16 folded;
+	uint16_t alias;
+	uint16_t folded;
 
 	if (appId != GP_APP_ID_SRC_ID && appId != GP_APP_ID_GPD) {
 		return 7;
 	}
 
-	alias = (u16)gpdId.srcId;
-	folded = (u16)(gpdId.srcId >> 16);
+	alias = (uint16_t)gpdId.srcId;
+	folded = (uint16_t)(gpdId.srcId >> 16);
 	if (alias != 0U && alias <= 0xfff6U) {
 		return alias;
 	}
@@ -80,20 +80,20 @@ u16 gpAliasSrcAddrDerived(u8 appId, gpdId_t gpdId)
 		return folded;
 	}
 
-	return alias != 0U ? (u16)(alias - 8U) : 7U;
+	return alias != 0U ? (uint16_t)(alias - 8U) : 7U;
 }
 
-u8 gppTunnelingDelayGet(bool rxAfterTx, u8 lqi, bool firstToForward, bool noRoute)
+uint8_t gppTunnelingDelayGet(bool rxAfterTx, uint8_t lqi, bool firstToForward, bool noRoute)
 {
-	u8 delay = rxAfterTx ? 32U : 5U;
-	u8 extra = lqi ? 32U : 96U;
+	uint8_t delay = rxAfterTx ? 32U : 5U;
+	uint8_t extra = lqi ? 32U : 96U;
 
 	if (noRoute) {
-		return (u8)(delay + 100U);
+		return (uint8_t)(delay + 100U);
 	}
 
 	if (!firstToForward) {
-		delay = (u8)(delay + extra);
+		delay = (uint8_t)(delay + extra);
 	}
 
 	return delay;
@@ -119,22 +119,22 @@ void gpTranimitGPDF(gp_data_req_t *pGpDataReq)
 	saved->gpdAsdu = NULL;
 
 	if (saved->gpdAsduLen != 0U) {
-		u8 *payload;
+		uint8_t *payload;
 
-		TL_BUF_INITIAL_ALLOC(buf, saved->gpdAsduLen, payload, u8 *);
+		ZB_BUF_INITIAL_ALLOC(buf, saved->gpdAsduLen, payload, uint8_t *);
 
 		saved->gpdAsdu = payload;
 		memcpy(payload, pGpDataReq->gpdAsdu, saved->gpdAsduLen);
 	}
 
-	tl_zbTaskPost(gpDataReq, buf);
+	zb_TaskPost(gpDataReq, buf);
 }
 
 int gpDataIndDuplicatePeriodic(void *arg)
 {
 	(void)arg;
 
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		gp_data_ind_entry_t *entry = &g_gpDataIndSecReqTab[i];
 
 		if (!entry->used || entry->timeout == 0xffU) {
@@ -151,9 +151,9 @@ int gpDataIndDuplicatePeriodic(void *arg)
 	return 0;
 }
 
-bool gpDataIndDuplicateFind(u8 appId, gpdId_t gpdId, u32 secFrameCounter, u8 handle)
+bool gpDataIndDuplicateFind(uint8_t appId, gpdId_t gpdId, uint32_t secFrameCounter, uint8_t handle)
 {
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		gp_data_ind_entry_t *entry = &g_gpDataIndSecReqTab[i];
 
 		if (!entry->used || entry->appId != (appId & 0x07U)) {
@@ -173,7 +173,7 @@ bool gpDataIndDuplicateFind(u8 appId, gpdId_t gpdId, u32 secFrameCounter, u8 han
 	return FALSE;
 }
 
-bool gpDataTunneledDuplicateCheck(u8 appId, gpdId_t gpdId, u32 secFrameCounter)
+bool gpDataTunneledDuplicateCheck(uint8_t appId, gpdId_t gpdId, uint32_t secFrameCounter)
 {
 	gp_data_ind_entry_t *entry;
 
@@ -186,7 +186,7 @@ bool gpDataTunneledDuplicateCheck(u8 appId, gpdId_t gpdId, u32 secFrameCounter)
 		return TRUE;
 	}
 
-	entry->appId = (u8)(appId & 0x07U);
+	entry->appId = (uint8_t)(appId & 0x07U);
 	memcpy(&entry->gpdId, &gpdId, sizeof(gpdId_t));
 	entry->frameCounter = secFrameCounter;
 	entry->dGpStubHandle = GP_HANDLE_TUNNELED_GPD_CMD;
@@ -195,7 +195,7 @@ bool gpDataTunneledDuplicateCheck(u8 appId, gpdId_t gpdId, u32 secFrameCounter)
 	return FALSE;
 }
 
-bool gpSecKeyTypeMappingChk(u8 secKeyTypeInProxy, u8 secKeyTypeFromGPDF)
+bool gpSecKeyTypeMappingChk(uint8_t secKeyTypeInProxy, uint8_t secKeyTypeFromGPDF)
 {
 	if (secKeyTypeFromGPDF == 1U) {
 		if (secKeyTypeInProxy <= 3U) {
@@ -208,11 +208,11 @@ bool gpSecKeyTypeMappingChk(u8 secKeyTypeInProxy, u8 secKeyTypeFromGPDF)
 		}
 	}
 
-	return (u8)(secKeyTypeInProxy - 5U) <= 1U;
+	return (uint8_t)(secKeyTypeInProxy - 5U) <= 1U;
 }
 
-gpSecRsp_status_t gpKeyRecovery(u8 gpdfKeyType, u8 entryKeyType, u8 *entryKey,
-				gpSecRsp_status_t status, u8 *pKeyType, u8 *pKey)
+gpSecRsp_status_t gpKeyRecovery(uint8_t gpdfKeyType, uint8_t entryKeyType, uint8_t *entryKey,
+				gpSecRsp_status_t status, uint8_t *pKeyType, uint8_t *pKey)
 {
 	if (gpdfKeyType != 0U) {
 		if ((entryKeyType != GP_SEC_KEY_TYPE_OUT_OF_THE_BOX_GPD_KEY) &&
@@ -266,7 +266,7 @@ gpSecRsp_status_t gpKeyRecovery(u8 gpdfKeyType, u8 entryKeyType, u8 *entryKey,
 	}
 }
 
-void gpDevAnnceAliasSend(u16 aliasNwkAddr)
+void gpDevAnnceAliasSend(uint16_t aliasNwkAddr)
 {
 	addrExt_t ieeeAddr;
 

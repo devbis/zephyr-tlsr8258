@@ -13,13 +13,13 @@
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 
-u8 NWKC_TRANSFAILURE_CNT_THRESHOLD = TRANSFAILURE_CNT_MAX;
-u8 NWKC_INITIAL_RREQ_RETRIES = NWK_INITIAL_RREQ_RETRIES;
-u8 NWKC_RREQ_RETRIES = NWK_RREQ_RETRIES;
-u16 ROUTING_TABLE_SIZE = ROUTING_TABLE_NUM;
+uint8_t NWKC_TRANSFAILURE_CNT_THRESHOLD = TRANSFAILURE_CNT_MAX;
+uint8_t NWKC_INITIAL_RREQ_RETRIES = NWK_INITIAL_RREQ_RETRIES;
+uint8_t NWKC_RREQ_RETRIES = NWK_RREQ_RETRIES;
+uint16_t ROUTING_TABLE_SIZE = ROUTING_TABLE_NUM;
 nwk_routingTabEntry_t g_routingTab[ROUTING_TABLE_NUM];
 #if defined(ZB_COORDINATOR_ROLE)
-u16 NWK_ROUTE_RECORD_TABLE_SIZE = NWK_ROUTE_RECORD_TABLE_NUM;
+uint16_t NWK_ROUTE_RECORD_TABLE_SIZE = NWK_ROUTE_RECORD_TABLE_NUM;
 nwk_routeRecordTabEntry_t g_routeRecTab[NWK_ROUTE_RECORD_TABLE_NUM];
 
 void nwkRouteRecTabEntryClear(nwk_routeRecordTabEntry_t *entry);
@@ -47,12 +47,12 @@ void nwkRoutingTabEntryClear(nwk_routingTabEntry_t *entry)
 
 void nwkRoutingTabInit(void)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		nwkRoutingTabEntryClear(&g_routingTab[i]);
 	}
 
 #if defined(ZB_COORDINATOR_ROLE)
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		nwkRouteRecTabEntryClear(&g_routeRecTab[i]);
 	}
 #endif
@@ -63,11 +63,11 @@ void nwkRoutingTabRst(void)
 	nwkRoutingTabInit();
 }
 
-u8 nwkRoutingTabActiveNumGet(void)
+uint8_t nwkRoutingTabActiveNumGet(void)
 {
-	u8 count = 0;
+	uint8_t count = 0;
 
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if (nwk_routing_entry_active(&g_routingTab[i])) {
 			count++;
 		}
@@ -76,9 +76,9 @@ u8 nwkRoutingTabActiveNumGet(void)
 	return count;
 }
 
-nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(u16 dstAddr)
+nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		nwk_routingTabEntry_t *entry = &g_routingTab[i];
 
 		if (entry->status == NWK_ROUTE_STATE_ACTIVE && entry->dstAddr == dstAddr) {
@@ -89,9 +89,9 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(u16 dstAddr)
 	return NULL;
 }
 
-nwk_routingTabEntry_t *nwkRoutingTabEntryNextHopActiveGet(u16 nextHop)
+nwk_routingTabEntry_t *nwkRoutingTabEntryNextHopActiveGet(uint16_t nextHop)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		nwk_routingTabEntry_t *entry = &g_routingTab[i];
 
 		if (entry->status == NWK_ROUTE_STATE_ACTIVE && entry->nextHopAddr == nextHop) {
@@ -102,9 +102,9 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryNextHopActiveGet(u16 nextHop)
 	return NULL;
 }
 
-nwk_routingTabEntry_t *nwkRoutingTabEntryFind(u16 dstAddr)
+nwk_routingTabEntry_t *nwkRoutingTabEntryFind(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		nwk_routingTabEntry_t *entry = &g_routingTab[i];
 
 		if (nwk_routing_entry_active(entry) && entry->dstAddr == dstAddr) {
@@ -115,9 +115,9 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryFind(u16 dstAddr)
 	return NULL;
 }
 
-nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(u16 dstAddr)
+nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if (g_routingTab[i].dstAddr == dstAddr) {
 			return &g_routingTab[i];
 		}
@@ -126,7 +126,7 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(u16 dstAddr)
 	return NULL;
 }
 
-nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr)
+nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(uint16_t dstAddr)
 {
 	nwk_routingTabEntry_t *candidate = NULL;
 
@@ -137,7 +137,7 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr)
 		return NULL;
 	}
 
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if ((g_routingTab[i].status == NWK_ROUTE_STATE_DISCOVERY_FAILED) ||
 		    (g_routingTab[i].status == NWK_ROUTE_STATE_DISCOVERY_INACTIVE)) {
 			candidate = &g_routingTab[i];
@@ -149,8 +149,8 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr)
 		/* Prefer evicting a route whose destination is a good one-hop
 		 * neighbor.  The strict comparison is the vendor's
 		 * NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD > outgoingCost test. */
-		for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
-			tl_zb_normal_neighbor_entry_t *neighbor =
+		for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
+			zb_normal_neighbor_entry_t *neighbor =
 				nwk_neTblGetByShortAddr(g_routingTab[i].dstAddr);
 
 			if ((neighbor != NULL) && (neighbor->outgoingCost != 0U) &&
@@ -166,7 +166,7 @@ nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr)
 		 * greatest forget counter (keeping the first entry on ties). */
 		candidate = &g_routingTab[0];
 
-		for (u16 i = 1; i < ROUTING_TABLE_SIZE; i++) {
+		for (uint16_t i = 1; i < ROUTING_TABLE_SIZE; i++) {
 			if (g_routingTab[i].forgetCnt > candidate->forgetCnt) {
 				candidate = &g_routingTab[i];
 			}
@@ -184,7 +184,7 @@ nwk_routingTabEntry_t *nwkRoutingTabGetNextHop(nwk_hdr_t *pNwkHdr)
 	nwk_routingTabEntry_t *entry;
 
 	entry = NULL;
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if (g_routingTab[i].dstAddr == pNwkHdr->dstAddr) {
 			entry = &g_routingTab[i];
 			break;
@@ -210,9 +210,9 @@ nwk_routingTabEntry_t *nwkRoutingTabGetNextHop(nwk_hdr_t *pNwkHdr)
 	return NULL;
 }
 
-void nwkRoutingTabEntryDstDel(u16 dstAddr)
+void nwkRoutingTabEntryDstDel(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if (g_routingTab[i].dstAddr == dstAddr) {
 			nwkRoutingTabEntryClear(&g_routingTab[i]);
 		}
@@ -224,11 +224,11 @@ void nwkRoutingTabEntryDstDel(u16 dstAddr)
  * _router/nwk_routing.s:.text.nwkRouteRepair - it builds its own NWK header
  * rather than reusing the one that failed.
  */
-void nwkRouteRepair(zb_buf_t *buf, u16 dstAddr, u16 statusDstAddr, u8 statusCode)
+void nwkRouteRepair(zb_buf_t *buf, uint16_t dstAddr, uint16_t statusDstAddr, uint8_t statusCode)
 {
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u8 security = 0;
+	uint8_t security = 0;
 
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&cmd, 0, sizeof(cmd));
@@ -250,22 +250,22 @@ void nwkRouteRepair(zb_buf_t *buf, u16 dstAddr, u16 statusDstAddr, u8 statusCode
 	ZB_IEEE_ADDR_COPY(hdr.srcIeeeAddr, g_zbInfo.macPib.extAddress);
 	hdr.dstAddr = dstAddr;
 	hdr.srcAddr = g_zbNIB.nwkAddr;
-	hdr.radius = (u8)(g_zbNIB.maxDepth << 1);
+	hdr.radius = (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr.seqNum = g_zbNIB.seqNum++;
 	hdr.frameHdrLen = getNwkHdrSize(&hdr);
 
-	tl_zbNwkSendNwkStatusCmd(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
+	zb_NwkSendNwkStatusCmd(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
 }
 
 /*
- * Called from tl_zbMacMcpsDataConfirmHandler when a forwarded frame could not
+ * Called from zb_MacMcpsDataConfirmHandler when a forwarded frame could not
  * be delivered.  Reconstructed from _router/nwk_routing.s:.text.nwkRouteMaintenance.
  */
-void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, u16 macDstAddr)
+void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, uint16_t macDstAddr)
 {
-	u16 repairDst;
-	u16 statusDst;
-	u8 statusCode;
+	uint16_t repairDst;
+	uint16_t statusDst;
+	uint8_t statusCode;
 	zb_buf_t *buf;
 
 	if (pNwkHdr->frameControl.srcRoute) {
@@ -280,7 +280,7 @@ void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, u16 macDstAddr)
 
 		/* Only ACTIVE entries for this destination; the scan walks the table
 		 * directly rather than going through nwkRoutingTabEntryFind. */
-		for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+		for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 			if (g_routingTab[i].status != NWK_ROUTE_STATE_ACTIVE) {
 				continue;
 			}
@@ -319,9 +319,9 @@ void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, u16 macDstAddr)
 	}
 }
 
-void nwkSrcRouteRequiredClear(u16 dstAddr)
+void nwkSrcRouteRequiredClear(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		nwk_routingTabEntry_t *entry = &g_routingTab[i];
 
 		if (entry->dstAddr != dstAddr) {
@@ -337,16 +337,16 @@ void nwkSrcRouteRequiredClear(u16 dstAddr)
 	}
 }
 
-static u16 nwk_src_route_relay_addr(const nwk_hdr_t *pNwkHdr, u8 relayIdx)
+static uint16_t nwk_src_route_relay_addr(const nwk_hdr_t *pNwkHdr, uint8_t relayIdx)
 {
-	const u8 *relay = pNwkHdr->srcRouteSubframe.relayList + ((u16)relayIdx * 2U);
+	const uint8_t *relay = pNwkHdr->srcRouteSubframe.relayList + ((uint16_t)relayIdx * 2U);
 
-	return (u16)relay[0] | ((u16)relay[1] << 8);
+	return (uint16_t)relay[0] | ((uint16_t)relay[1] << 8);
 }
 
-u16 nwkSrcRouteReplayNextHop(nwk_hdr_t *pNwkHdr)
+uint16_t nwkSrcRouteReplayNextHop(nwk_hdr_t *pNwkHdr)
 {
-	tl_zb_normal_neighbor_entry_t *neighbor;
+	zb_normal_neighbor_entry_t *neighbor;
 
 	if (pNwkHdr == NULL || pNwkHdr->srcAddr == g_zbInfo.nwkNib.nwkAddr ||
 	    pNwkHdr->frameControl.srcRoute == 0U || pNwkHdr->srcRouteSubframe.relayList == NULL) {
@@ -369,11 +369,11 @@ u16 nwkSrcRouteReplayNextHop(nwk_hdr_t *pNwkHdr)
 	return nwk_src_route_relay_addr(pNwkHdr, pNwkHdr->srcRouteSubframe.relayIdx);
 }
 
-u8 nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr)
+uint8_t nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr)
 {
-	u16 localAddr;
-	u16 relayAddr;
-	u16 distance;
+	uint16_t localAddr;
+	uint16_t relayAddr;
+	uint16_t distance;
 
 	localAddr = g_zbInfo.nwkNib.nwkAddr;
 	if (pNwkHdr->srcAddr == localAddr) {
@@ -387,7 +387,7 @@ u8 nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr)
 
 	relayAddr = nwk_src_route_relay_addr(pNwkHdr, pNwkHdr->srcRouteSubframe.relayIdx);
 	distance = (localAddr >= relayAddr) ? (localAddr - relayAddr) : (relayAddr - localAddr);
-	return (u8)(0xc1U & distance);
+	return (uint8_t)(0xc1U & distance);
 }
 
 #if defined(ZB_COORDINATOR_ROLE)
@@ -404,7 +404,7 @@ void nwkRouteRecTabEntryClear(nwk_routeRecordTabEntry_t *entry)
 	}
 
 	entry->nwkAddr = NWK_BROADCAST_RESERVED;
-	for (u8 i = 0; i < g_zbInfo.nwkNib.maxSourceRoute; i++) {
+	for (uint8_t i = 0; i < g_zbInfo.nwkNib.maxSourceRoute; i++) {
 		entry->path[i] = NWK_BROADCAST_RESERVED;
 	}
 	entry->relayCnt = 0;
@@ -412,11 +412,11 @@ void nwkRouteRecTabEntryClear(nwk_routeRecordTabEntry_t *entry)
 	entry->forgetCnt = 0;
 }
 
-u8 nwkRouteRecTabActiveNumGet(void)
+uint8_t nwkRouteRecTabActiveNumGet(void)
 {
-	u8 count = 0;
+	uint8_t count = 0;
 
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		if (nwk_route_rec_used(&g_routeRecTab[i])) {
 			count++;
 		}
@@ -427,7 +427,7 @@ u8 nwkRouteRecTabActiveNumGet(void)
 
 nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFreeGet(void)
 {
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		if (!nwk_route_rec_used(&g_routeRecTab[i])) {
 			return &g_routeRecTab[i];
 		}
@@ -436,9 +436,9 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFreeGet(void)
 	return NULL;
 }
 
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFind(u16 nwkAddr)
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFind(uint16_t nwkAddr)
 {
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		nwk_routeRecordTabEntry_t *entry = &g_routeRecTab[i];
 
 		if (nwk_route_rec_used(entry) && entry->nwkAddr == nwkAddr) {
@@ -449,7 +449,7 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFind(u16 nwkAddr)
 	return NULL;
 }
 
-bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, u16 nwkAddr)
+bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, uint16_t nwkAddr)
 {
 	if (!nwk_route_rec_used(entry)) {
 		return FALSE;
@@ -459,7 +459,7 @@ bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, u16 nwkAddr)
 		return TRUE;
 	}
 
-	for (u8 i = 0; i < entry->relayCnt && i < g_zbInfo.nwkNib.maxSourceRoute; i++) {
+	for (uint8_t i = 0; i < entry->relayCnt && i < g_zbInfo.nwkNib.maxSourceRoute; i++) {
 		if (entry->path[i] == nwkAddr) {
 			return TRUE;
 		}
@@ -468,10 +468,10 @@ bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, u16 nwkAddr)
 	return FALSE;
 }
 
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(u16 nwkAddr, nwkCmd_t *cmd)
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(uint16_t nwkAddr, nwkCmd_t *cmd)
 {
 	nwk_routeRecordTabEntry_t *entry = nwkRouteRecTabEntryFreeGet();
-	u8 relayCnt;
+	uint8_t relayCnt;
 
 	if (entry == NULL || cmd == NULL) {
 		return NULL;
@@ -482,7 +482,7 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(u16 nwkAddr, nwkCmd_t *cmd)
 	entry->relayCnt = relayCnt;
 
 	if (relayCnt != 0U && cmd->rrec.relayList != NULL) {
-		memcpy(entry->path, cmd->rrec.relayList, (size_t)relayCnt * sizeof(u16));
+		memcpy(entry->path, cmd->rrec.relayList, (size_t)relayCnt * sizeof(uint16_t));
 	}
 
 	entry->used = 1;
@@ -490,7 +490,7 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(u16 nwkAddr, nwkCmd_t *cmd)
 	return entry;
 }
 
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(u16 nwkAddr, nwkCmd_t *cmd)
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(uint16_t nwkAddr, nwkCmd_t *cmd)
 {
 	nwk_routeRecordTabEntry_t *entry;
 
@@ -504,7 +504,7 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(u16 nwkAddr, nwkCmd_t *cmd)
 		if (entry == NULL && NWK_ROUTE_RECORD_TABLE_SIZE != 0U) {
 			entry = &g_routeRecTab[0];
 
-			for (u16 i = 1; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+			for (uint16_t i = 1; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 				if (g_routeRecTab[i].forgetCnt > entry->forgetCnt) {
 					entry = &g_routeRecTab[i];
 				}
@@ -517,7 +517,7 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(u16 nwkAddr, nwkCmd_t *cmd)
 
 			if (entry->relayCnt != 0U && cmd->rrec.relayList != NULL) {
 				memcpy(entry->path, cmd->rrec.relayList,
-				       (size_t)entry->relayCnt * sizeof(u16));
+				       (size_t)entry->relayCnt * sizeof(uint16_t));
 			}
 		}
 
@@ -527,15 +527,15 @@ nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(u16 nwkAddr, nwkCmd_t *cmd)
 	entry->relayCnt = cmd->rrec.relayCnt;
 	entry->forgetCnt = 0;
 	if (entry->relayCnt != 0U && cmd->rrec.relayList != NULL) {
-		memcpy(entry->path, cmd->rrec.relayList, (size_t)entry->relayCnt * sizeof(u16));
+		memcpy(entry->path, cmd->rrec.relayList, (size_t)entry->relayCnt * sizeof(uint16_t));
 	}
 
 	return entry;
 }
 
-void nwkRouteRecTabEntryDstDel(u16 dstAddr)
+void nwkRouteRecTabEntryDstDel(uint16_t dstAddr)
 {
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		nwk_routeRecordTabEntry_t *entry = &g_routeRecTab[i];
 
 		if (nwkRouteRecTabPathMatch(entry, dstAddr)) {
@@ -548,16 +548,16 @@ void nwkRouteRecTabEntryDstDel(u16 dstAddr)
 
 int nwkRoutingTabPeriodic(void *arg)
 {
-	u16 activeNum = 0;
+	uint16_t activeNum = 0;
 #if defined(ZB_COORDINATOR_ROLE)
-	u16 routeRecordActiveNum = 0;
+	uint16_t routeRecordActiveNum = 0;
 #endif
 
 	(void)arg;
 
 	/* The vendor library counts the ACTIVE entries first and returns without
 	 * touching anything when there are none. */
-	for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 		if (g_routingTab[i].status == NWK_ROUTE_STATE_ACTIVE) {
 			activeNum++;
 		}
@@ -566,9 +566,9 @@ int nwkRoutingTabPeriodic(void *arg)
 	/* The ageing body is inlined in the vendor object and only bumps the
 	 * routing-entry forget counter; it does not call nwkRouteMaintenance
 	 * (which is a two-argument route-repair helper there, invoked from
-	 * tl_zbMacMcpsDataConfirmHandler). */
+	 * zb_MacMcpsDataConfirmHandler). */
 	if (activeNum != 0U) {
-		for (u16 i = 0; i < ROUTING_TABLE_SIZE; i++) {
+		for (uint16_t i = 0; i < ROUTING_TABLE_SIZE; i++) {
 			nwk_routingTabEntry_t *entry = &g_routingTab[i];
 
 			if (entry->status != NWK_ROUTE_STATE_ACTIVE) {
@@ -588,14 +588,14 @@ int nwkRoutingTabPeriodic(void *arg)
 	}
 
 #if defined(ZB_COORDINATOR_ROLE)
-	for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+	for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 		if (g_routeRecTab[i].used) {
 			routeRecordActiveNum++;
 		}
 	}
 
 	if (routeRecordActiveNum != 0U) {
-		for (u16 i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
+		for (uint16_t i = 0; i < NWK_ROUTE_RECORD_TABLE_SIZE; i++) {
 			nwk_routeRecordTabEntry_t *entry = &g_routeRecTab[i];
 
 			if (entry->used && entry->forgetCnt != UINT8_MAX) {

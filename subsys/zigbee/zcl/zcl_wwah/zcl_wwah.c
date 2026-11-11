@@ -61,7 +61,7 @@ static nv_sts_t zcl_wwah_useTCForClusterInfoRestore(void);
 static status_t zcl_wwah_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_wwah_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_wwah_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     if (zcl_wwah_apsLinkKeyAuthInfoRestore() != NV_SUCC) {
     	zcl_wwah_apsLinkKeyAuthInfoClear();
@@ -80,7 +80,7 @@ _CODE_ZCL_ static void zcl_wwah_apsLinkKeyAuthInfoClear(void)
 {
     g_zcl_apsLinkKeyAuthInfo.status = APS_LINK_KEY_AUTH_DISABLE;
     g_zcl_apsLinkKeyAuthInfo.num = 0;
-    memset((u8 *)g_zcl_apsLinkKeyAuthInfo.clusterID, 0, sizeof(u16) * CLUSTER_ID_MAX_NUM);
+    memset((uint8_t *)g_zcl_apsLinkKeyAuthInfo.clusterID, 0, sizeof(uint16_t) * CLUSTER_ID_MAX_NUM);
 }
 
 _CODE_ZCL_ static nv_sts_t zcl_wwah_apsLinkKeyAuthInfoRestore(void)
@@ -96,7 +96,7 @@ _CODE_ZCL_ static void zcl_wwah_apsLinkKeyAuthInfoSave(void *arg)
 _CODE_ZCL_ static void zcl_wwah_apsAcksRequireInfoClear(void)
 {
     g_zcl_apsAcksRequireInfo.num = 0;
-    memset((u8 *)g_zcl_apsAcksRequireInfo.clusterID, 0, sizeof(u16) * CLUSTER_ID_MAX_NUM);
+    memset((uint8_t *)g_zcl_apsAcksRequireInfo.clusterID, 0, sizeof(uint16_t) * CLUSTER_ID_MAX_NUM);
 }
 
 _CODE_ZCL_ static nv_sts_t zcl_wwah_apsAcksRequireInfoRestore(void)
@@ -112,7 +112,7 @@ _CODE_ZCL_ static void zcl_wwah_apsAcksRequireInfoSave(void *arg)
 _CODE_ZCL_ static void zcl_wwah_useTCForClusterInfoClear(void)
 {
     g_zcl_useTCForClusterInfo.num = 0;
-    memset((u8 *)g_zcl_useTCForClusterInfo.clusterID, 0, sizeof(u16) * CLUSTER_ID_MAX_NUM);
+    memset((uint8_t *)g_zcl_useTCForClusterInfo.clusterID, 0, sizeof(uint16_t) * CLUSTER_ID_MAX_NUM);
 }
 
 _CODE_ZCL_ static nv_sts_t zcl_wwah_useTCForClusterInfoRestore(void)
@@ -125,10 +125,10 @@ _CODE_ZCL_ static void zcl_wwah_useTCForClusterInfoSave(void *arg)
     zcl_useTCForClusterInfo_save();
 }
 
-_CODE_ZCL_ static apsLinkKeyAuthStatus_t zcl_wwah_apsLinkKeyAuthSearch(u16 clusterID)
+_CODE_ZCL_ static apsLinkKeyAuthStatus_t zcl_wwah_apsLinkKeyAuthSearch(uint16_t clusterID)
 {
-    u8 find = 0;
-    for (u8 i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
+    uint8_t find = 0;
+    for (uint8_t i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
         if (g_zcl_apsLinkKeyAuthInfo.clusterID[i] == clusterID) {
             find = 1;
             break;
@@ -138,14 +138,14 @@ _CODE_ZCL_ static apsLinkKeyAuthStatus_t zcl_wwah_apsLinkKeyAuthSearch(u16 clust
     return (find ? (!g_zcl_apsLinkKeyAuthInfo.status) : g_zcl_apsLinkKeyAuthInfo.status);
 }
 
-_CODE_ZCL_ static bool zcl_wwah_apsLinkKeyAuthCheck(u16 clusterID, bool apsUseSec)
+_CODE_ZCL_ static bool zcl_wwah_apsLinkKeyAuthCheck(uint16_t clusterID, bool apsUseSec)
 {
     bool accept;
 
     if (g_zcl_apsLinkKeyAuthInfo.status == APS_LINK_KEY_AUTH_DISABLE) {
         accept = TRUE;
 
-        for (u8 i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
+        for (uint8_t i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
             if ((g_zcl_apsLinkKeyAuthInfo.clusterID[i] == clusterID) && !apsUseSec) {
                 accept = FALSE;
                 break;
@@ -158,7 +158,7 @@ _CODE_ZCL_ static bool zcl_wwah_apsLinkKeyAuthCheck(u16 clusterID, bool apsUseSe
 
         accept = FALSE;
 
-        for (u8 i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
+        for (uint8_t i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
             if (g_zcl_apsLinkKeyAuthInfo.clusterID[i] == clusterID) {
                 accept = TRUE;
                 break;
@@ -169,12 +169,12 @@ _CODE_ZCL_ static bool zcl_wwah_apsLinkKeyAuthCheck(u16 clusterID, bool apsUseSe
     return accept;
 }
 
-_CODE_ZCL_ static bool zcl_wwah_touchlinkEnabled(u8 ep)
+_CODE_ZCL_ static bool zcl_wwah_touchlinkEnabled(uint8_t ep)
 {
     bool enable = TRUE;
-    u16 len;
+    uint16_t len;
 
-    if (zcl_getAttrVal(ep, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_TOUCHLINK_INTERPAN_ENABLED, &len, (u8 *)&enable) == ZCL_STA_SUCCESS) {
+    if (zcl_getAttrVal(ep, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_TOUCHLINK_INTERPAN_ENABLED, &len, (uint8_t *)&enable) == ZCL_STA_SUCCESS) {
         return enable;
     }
     return TRUE;
@@ -219,20 +219,20 @@ _CODE_ZCL_ status_t zcl_wwah_acceptCheck(zclIncoming_t *pInMsg)
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_enableApsLinkKeyAuthCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClustersToExempt * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClustersToExempt * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClustersToExempt;
-    for (u8 i = 0; i < pCmd->numOfClustersToExempt; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClustersToExempt; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -245,20 +245,20 @@ _CODE_ZCL_ status_t zcl_wwah_enableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEpI
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_disableApsLinkKeyAuthCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClustersToExempt * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClustersToExempt * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClustersToExempt;
-    for (u8 i = 0; i < pCmd->numOfClustersToExempt; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClustersToExempt; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -271,10 +271,10 @@ _CODE_ZCL_ status_t zcl_wwah_disableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEp
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_apsLinkKeyAuthQueryCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_apsLinkKeyAuthQueryCmd_t *pCmd)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pCmd->clusterID);
     *pBuf++ = HI_UINT16(pCmd->clusterID);
@@ -283,16 +283,16 @@ _CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryCmd(u8 srcEp, epInfo_t *pDstEpIn
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_requestNewApsLinkKeyCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_requestNewApsLinkKeyCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_REQUEST_NEW_APS_LINK_KEY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableAppEvtRetryAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enableAppEvtRetryAlgorithmCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_enableAppEvtRetryAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enableAppEvtRetryAlgorithmCmd_t *pCmd)
 {
-    u8 buf[7];
-    u8 *pBuf = buf;
+    uint8_t buf[7];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->firstBackoffTimeInSeconds;
     *pBuf++ = pCmd->backoffSequenceCommonRatio;
@@ -306,22 +306,22 @@ _CODE_ZCL_ status_t zcl_wwah_enableAppEvtRetryAlgorithmCmd(u8 srcEp, epInfo_t *p
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 7, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableAppEvtRetryAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableAppEvtRetryAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_APP_EVT_RETRY_ALGORITHM, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_requestTimeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_requestTimeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_REQUEST_TIME, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableRejoinAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enableRejoinAlgorithmCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_enableRejoinAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enableRejoinAlgorithmCmd_t *pCmd)
 {
-    u8 buf[10];
-    u8 *pBuf = buf;
+    uint8_t buf[10];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pCmd->fastRejoinTimeoutInSeconds);
     *pBuf++ = HI_UINT16(pCmd->fastRejoinTimeoutInSeconds);
@@ -338,32 +338,32 @@ _CODE_ZCL_ status_t zcl_wwah_enableRejoinAlgorithmCmd(u8 srcEp, epInfo_t *pDstEp
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 10, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableRejoinAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableRejoinAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_REJOIN_ALGORITHM, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_setIasZoneEnrollmentMethodCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setIasZoneEnrollmentMethodCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_setIasZoneEnrollmentMethodCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setIasZoneEnrollmentMethodCmd_t *pCmd)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
-    buf[0] = (u8)pCmd->enrollmentMode;
+    buf[0] = (uint8_t)pCmd->enrollmentMode;
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_SET_IAS_ZONE_ENROLLMENT_METHOD, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_clearBindingTableCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_clearBindingTableCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_CLEAR_BINDING_TABLE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enablePeriodicRouterCheckInsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_enablePeriodicRouterCheckInsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCmd)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pCmd->checkInInterval);
     *pBuf++ = HI_UINT16(pCmd->checkInInterval);
@@ -372,15 +372,15 @@ _CODE_ZCL_ status_t zcl_wwah_enablePeriodicRouterCheckInsCmd(u8 srcEp, epInfo_t 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disablePeriodicRouterCheckInsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disablePeriodicRouterCheckInsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_PERIODIC_ROUTER_CHECK_INS, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_setMacPollFailureWaitTimeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setMacPollFailureWaitTimeCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_setMacPollFailureWaitTimeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setMacPollFailureWaitTimeCmd_t *pCmd)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = pCmd->waitTime;
 
@@ -388,10 +388,10 @@ _CODE_ZCL_ status_t zcl_wwah_setMacPollFailureWaitTimeCmd(u8 srcEp, epInfo_t *pD
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_setPendingNwkUpdateCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setPendingNwkUpdateCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_setPendingNwkUpdateCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setPendingNwkUpdateCmd_t *pCmd)
 {
-    u8 buf[3];
-    u8 *pBuf = buf;
+    uint8_t buf[3];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->channel;
     *pBuf++ = LO_UINT16(pCmd->panID);
@@ -401,20 +401,20 @@ _CODE_ZCL_ status_t zcl_wwah_setPendingNwkUpdateCmd(u8 srcEp, epInfo_t *pDstEpIn
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_requireApsAcksOnUnicastsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_requireApsAcksOnUnicastsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClustersToExempt * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClustersToExempt * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClustersToExempt;
-    for (u8 i = 0; i < pCmd->numOfClustersToExempt; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClustersToExempt; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -427,21 +427,21 @@ _CODE_ZCL_ status_t zcl_wwah_requireApsAcksOnUnicastsCmd(u8 srcEp, epInfo_t *pDs
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_removeApsAcksOnUnicastsRequirementCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_removeApsAcksOnUnicastsRequirementCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_REMOVE_APS_ACKS_ON_UNICASTS_REQUIREMENT, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_apsAckRequirementQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_apsAckRequirementQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_APS_ACK_REQUIREMENT_QUERY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_debugReportQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_debugReportQueryCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_debugReportQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_debugReportQueryCmd_t *pCmd)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = pCmd->debugReportID;
 
@@ -449,9 +449,9 @@ _CODE_ZCL_ status_t zcl_wwah_debugReportQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_surveyBeaconsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_surveyBeaconsCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_surveyBeaconsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_surveyBeaconsCmd_t *pCmd)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = pCmd->standardBeacons;
 
@@ -459,80 +459,80 @@ _CODE_ZCL_ status_t zcl_wwah_surveyBeaconsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableOtaDowngradesCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableOtaDowngradesCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_OTA_DOWNGRADES, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableMgmtLeaveWithoutRejoinCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableMgmtLeaveWithoutRejoinCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_MGMT_LEAVE_WITHOUT_REJOIN, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableTouchlinkInterpanMsgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableTouchlinkInterpanMsgCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_TOUCHLINK_INTERPAN_MSG_SUPPORT, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableParentClassificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_enableParentClassificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_ENABLE_PARENT_CLASSIFICATION, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableParentClassificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableParentClassificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_PARENT_CLASSIFICATION, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableTcSecurityOnNwkKeyRotationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_enableTcSecurityOnNwkKeyRotationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_ENABLE_TC_SECURITY_ON_NWK_KEY_ROTATION, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableBadParentRecoveryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_enableBadParentRecoveryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_ENABLE_BAD_PARENT_RECOVERY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableBadParentRecoveryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableBadParentRecoveryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_BAD_PARENT_RECOVERY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_enableConfigurationModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_enableConfigurationModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_ENABLE_CONFIGURATION_MODE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_disableConfigurationModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_disableConfigurationModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_DISABLE_CONFIGURATION_MODE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_useTrustCenterForClusterCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_useTrustCenterForClusterCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_useTrustCenterForClusterCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_useTrustCenterForClusterCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClusters * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClusters * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClusters;
-    for (u8 i = 0; i < pCmd->numOfClusters; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClusters; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -545,16 +545,16 @@ _CODE_ZCL_ status_t zcl_wwah_useTrustCenterForClusterCmd(u8 srcEp, epInfo_t *pDs
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_trustCenterForClusterServerQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_wwah_trustCenterForClusterServerQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_WWAH, ZCL_CMD_WWAH_TRUST_CENTER_FOR_CLUSTER_SERVER_QUERY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 manuCode, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_apsLinkKeyAuthQueryRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_apsLinkKeyAuthQueryRspCmd_t *pCmd)
 {
-    u8 buf[3];
-    u8 *pBuf = buf;
+    uint8_t buf[3];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pCmd->clusterID);
     *pBuf++ = HI_UINT16(pCmd->clusterID);
@@ -564,19 +564,19 @@ _CODE_ZCL_ status_t zcl_wwah_apsLinkKeyAuthQueryRspCmd(u8 srcEp, epInfo_t *pDstE
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, manuCode, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_poweringOffNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_poweringOffNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 4 + pCmd->manuPowerNotiReasonLen;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 4 + pCmd->manuPowerNotiReasonLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    *pBuf++ = (u8)pCmd->powerNotiReason;
+    *pBuf++ = (uint8_t)pCmd->powerNotiReason;
     *pBuf++ = LO_UINT16(pCmd->manuID);
     *pBuf++ = HI_UINT16(pCmd->manuID);
     *pBuf++ = pCmd->manuPowerNotiReasonLen;
@@ -593,19 +593,19 @@ _CODE_ZCL_ status_t zcl_wwah_poweringOffNotificationCmd(u8 srcEp, epInfo_t *pDst
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_poweringOnNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_poweringOnNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 4 + pCmd->manuPowerNotiReasonLen;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 4 + pCmd->manuPowerNotiReasonLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    *pBuf++ = (u8)pCmd->powerNotiReason;
+    *pBuf++ = (uint8_t)pCmd->powerNotiReason;
     *pBuf++ = LO_UINT16(pCmd->manuID);
     *pBuf++ = HI_UINT16(pCmd->manuID);
     *pBuf++ = pCmd->manuPowerNotiReasonLen;
@@ -622,10 +622,10 @@ _CODE_ZCL_ status_t zcl_wwah_poweringOnNotificationCmd(u8 srcEp, epInfo_t *pDstE
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_shortAddrChangeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_shortAddrChangeCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_shortAddrChangeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_shortAddrChangeCmd_t *pCmd)
 {
-    u8 buf[10];
-    u8 *pBuf = buf;
+    uint8_t buf[10];
+    uint8_t *pBuf = buf;
 
     ZB_64BIT_ADDR_COPY(pBuf, pCmd->deviceEUI64);
     pBuf += EXT_ADDR_LEN;
@@ -636,20 +636,20 @@ _CODE_ZCL_ status_t zcl_wwah_shortAddrChangeCmd(u8 srcEp, epInfo_t *pDstEpInfo, 
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 10, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_apsAckRequirementQueryRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 manuCode, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_apsAckRequirementQueryRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClustersToExempt * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClustersToExempt * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClustersToExempt;
-    for (u8 i = 0; i < pCmd->numOfClustersToExempt; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClustersToExempt; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -662,10 +662,10 @@ _CODE_ZCL_ status_t zcl_wwah_apsAckRequirementQueryRspCmd(u8 srcEp, epInfo_t *pD
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_powerDescriptorChangeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_powerDescChangeCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_powerDescriptorChangeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_powerDescChangeCmd_t *pCmd)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = (pCmd->currentPowerMode << 4) + pCmd->availablePowerSrcs;
     *pBuf++ = (pCmd->currentPowerSrc << 4) + pCmd->currentPowerSrcLevel;
@@ -674,10 +674,10 @@ _CODE_ZCL_ status_t zcl_wwah_powerDescriptorChangeCmd(u8 srcEp, epInfo_t *pDstEp
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_newDebugReportNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_newDbgReportNotiCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_newDebugReportNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_newDbgReportNotiCmd_t *pCmd)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->dbgReportID;
     *pBuf++ = U32_BYTE0(pCmd->sizeOfReport);
@@ -689,17 +689,17 @@ _CODE_ZCL_ status_t zcl_wwah_newDebugReportNotificationCmd(u8 srcEp, epInfo_t *p
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 5, buf);
 }
 
-_CODE_ZCL_ status_t zcl_wwah_debugReportQueryRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 manuCode, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_dbgReportQueryRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_debugReportQueryRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_dbgReportQueryRspCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->reportDataLen;//reportID + dataLen
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->reportDataLen;//reportID + dataLen
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->dbgReportID;
     if (pCmd->reportDataLen) {
@@ -715,20 +715,20 @@ _CODE_ZCL_ status_t zcl_wwah_debugReportQueryRspCmd(u8 srcEp, epInfo_t *pDstEpIn
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_trustCenterForClusterServerQueryRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 manufCode, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_tcForClusterServerQueryRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_trustCenterForClusterServerQueryRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t manufCode, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_tcForClusterServerQueryRspCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfClusters * sizeof(u16);
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfClusters * sizeof(uint16_t);
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfClusters;
-    for (u8 i = 0; i < pCmd->numOfClusters; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfClusters; i++) {
         *pBuf++ = LO_UINT16(pCmd->pClusterID[i]);
         *pBuf++ = HI_UINT16(pCmd->pClusterID[i]);
     }
@@ -741,20 +741,20 @@ _CODE_ZCL_ status_t zcl_wwah_trustCenterForClusterServerQueryRspCmd(u8 srcEp, ep
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_wwah_surveyBeaconsRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_surveyBeaconsRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_wwah_surveyBeaconsRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_surveyBeaconsRspCmd_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 len = 1 + pCmd->numOfBeacons * 4;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t len = 1 + pCmd->numOfBeacons * 4;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->numOfBeacons;
-    for (u8 i = 0; i < pCmd->numOfBeacons; i++) {
+    for (uint8_t i = 0; i < pCmd->numOfBeacons; i++) {
         *pBuf++ = LO_UINT16(pCmd->pBeacon[i].deviceShort);
         *pBuf++ = HI_UINT16(pCmd->pBeacon[i].deviceShort);
         *pBuf++ = pCmd->pBeacon[i].rssi;
@@ -769,10 +769,10 @@ _CODE_ZCL_ status_t zcl_wwah_surveyBeaconsRspCmd(u8 srcEp, epInfo_t *pDstEpInfo,
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_clustersToExemptPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_clustersToExemptPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if ((pInMsg->hdr.cmd == ZCL_CMD_WWAH_ENABLE_APS_LINK_KEY_AUTH) ||
         (pInMsg->hdr.cmd == ZCL_CMD_WWAH_DISABLE_APS_LINK_KEY_AUTH)) {
@@ -788,32 +788,32 @@ _CODE_ZCL_ static u8 zcl_wwah_clustersToExemptPrc(zclIncoming_t *pInMsg)
         g_zcl_apsLinkKeyAuthInfo.num = *pData++;
         g_zcl_apsLinkKeyAuthInfo.num = (g_zcl_apsLinkKeyAuthInfo.num > CLUSTER_ID_MAX_NUM) ? CLUSTER_ID_MAX_NUM
                                                                                            : g_zcl_apsLinkKeyAuthInfo.num;
-        for (u8 i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
+        for (uint8_t i = 0; i < g_zcl_apsLinkKeyAuthInfo.num; i++) {
             g_zcl_apsLinkKeyAuthInfo.clusterID[i] = BUILD_U16(pData[0], pData[1]);
             pData += 2;
         }
 
-        TL_SCHEDULE_TASK(zcl_wwah_apsLinkKeyAuthInfoSave, NULL);
+        ZB_SCHEDULE_TASK(zcl_wwah_apsLinkKeyAuthInfoSave, NULL);
     } else if (pInMsg->hdr.cmd == ZCL_CMD_WWAH_REQUIRE_APS_ACKS_ON_UNICASTS) {
         g_zcl_apsAcksRequireInfo.num = *pData++;
         g_zcl_apsAcksRequireInfo.num = (g_zcl_apsAcksRequireInfo.num > CLUSTER_ID_MAX_NUM) ? CLUSTER_ID_MAX_NUM
                                                                                            : g_zcl_apsAcksRequireInfo.num;
-        for (u8 i = 0; i < g_zcl_apsAcksRequireInfo.num; i++) {
+        for (uint8_t i = 0; i < g_zcl_apsAcksRequireInfo.num; i++) {
             g_zcl_apsAcksRequireInfo.clusterID[i] = BUILD_U16(pData[0], pData[1]);
             pData += 2;
         }
 
-        TL_SCHEDULE_TASK(zcl_wwah_apsAcksRequireInfoSave, NULL);
+        ZB_SCHEDULE_TASK(zcl_wwah_apsAcksRequireInfoSave, NULL);
     }
 
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_apsLinkKeyAuthQueryPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_apsLinkKeyAuthQueryPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (UNICAST_MSG(pApsdeInd)) {
         zcl_wwah_apsLinkKeyAuthQueryRspCmd_t queryRsp;
@@ -822,7 +822,7 @@ _CODE_ZCL_ static u8 zcl_wwah_apsLinkKeyAuthQueryPrc(zclIncoming_t *pInMsg)
         queryRsp.status = (bool)zcl_wwah_apsLinkKeyAuthSearch(queryRsp.clusterID);
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -843,7 +843,7 @@ _CODE_ZCL_ static u8 zcl_wwah_apsLinkKeyAuthQueryPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_cmdNoPayloadPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_cmdNoPayloadPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
@@ -868,14 +868,14 @@ _CODE_ZCL_ static u8 zcl_cmdNoPayloadPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_enableAppEvtRetryAlgorithmPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_enableAppEvtRetryAlgorithmPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_enableAppEvtRetryAlgorithmCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.firstBackoffTimeInSeconds = *pData++;
         cmd.backoffSequenceCommonRatio = *pData++;
@@ -891,14 +891,14 @@ _CODE_ZCL_ static u8 zcl_wwah_enableAppEvtRetryAlgorithmPrc(zclIncoming_t *pInMs
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_enableRejoinAlgorithmPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_enableRejoinAlgorithmPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_enableRejoinAlgorithmCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.fastRejoinTimeoutInSeconds = BUILD_U16(pData[0], pData[1]);
         pData += 2;
@@ -919,14 +919,14 @@ _CODE_ZCL_ static u8 zcl_wwah_enableRejoinAlgorithmPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_setIasZoneEnrollmentMethodPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_setIasZoneEnrollmentMethodPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_setIasZoneEnrollmentMethodCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.enrollmentMode = *pData++;
 
@@ -938,7 +938,7 @@ _CODE_ZCL_ static u8 zcl_wwah_setIasZoneEnrollmentMethodPrc(zclIncoming_t *pInMs
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_clearBindingTablePrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_clearBindingTablePrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
@@ -955,11 +955,11 @@ _CODE_ZCL_ static u8 zcl_wwah_clearBindingTablePrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_enablePeriodicRouterCheckInsPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_enablePeriodicRouterCheckInsPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (!(pInMsg->msg->indInfo.security_status & SECURITY_IN_APSLAYER)) {
         return ZCL_STA_NOT_AUTHORIZED;
@@ -980,14 +980,14 @@ _CODE_ZCL_ static u8 zcl_wwah_enablePeriodicRouterCheckInsPrc(zclIncoming_t *pIn
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_setMacPollFailureWaitTimePrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_setMacPollFailureWaitTimePrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_setMacPollFailureWaitTimeCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.waitTime = *pData++;
 
@@ -999,11 +999,11 @@ _CODE_ZCL_ static u8 zcl_wwah_setMacPollFailureWaitTimePrc(zclIncoming_t *pInMsg
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_setPendingNwkUpdatePrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_setPendingNwkUpdatePrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (!(pInMsg->msg->indInfo.security_status & SECURITY_IN_APSLAYER)) {
         return ZCL_STA_NOT_AUTHORIZED;
@@ -1012,7 +1012,7 @@ _CODE_ZCL_ static u8 zcl_wwah_setPendingNwkUpdatePrc(zclIncoming_t *pInMsg)
     if (UNICAST_MSG(pApsdeInd)) {
         if (pInMsg->clusterAppCb) {
             zcl_wwah_setPendingNwkUpdateCmd_t cmd;
-            TL_SETSTRUCTCONTENT(cmd, 0);
+            ZB_SETSTRUCTCONTENT(cmd, 0);
 
             cmd.channel = *pData++;
             cmd.panID = BUILD_U16(pData[0], pData[1]);
@@ -1026,33 +1026,33 @@ _CODE_ZCL_ static u8 zcl_wwah_setPendingNwkUpdatePrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_removeApsAcksOnUnicastsRequirementPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_removeApsAcksOnUnicastsRequirementPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
 
     if (UNICAST_MSG(pApsdeInd)) {
         zcl_wwah_apsAcksRequireInfoClear();
-        TL_SCHEDULE_TASK(zcl_wwah_apsAcksRequireInfoSave, NULL);
+        ZB_SCHEDULE_TASK(zcl_wwah_apsAcksRequireInfoSave, NULL);
     }
 
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_apsAckRequirementQueryPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_apsAckRequirementQueryPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
 
     if (UNICAST_MSG(pApsdeInd)) {
     	clustersToExempt_t clustersToExempt;
-    	TL_SETSTRUCTCONTENT(clustersToExempt, 0);
+    	ZB_SETSTRUCTCONTENT(clustersToExempt, 0);
 
     	clustersToExempt.numOfClustersToExempt = g_zcl_apsAcksRequireInfo.num;
     	clustersToExempt.pClusterID = g_zcl_apsAcksRequireInfo.clusterID;
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -1073,36 +1073,36 @@ _CODE_ZCL_ static u8 zcl_wwah_apsAckRequirementQueryPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_debugReportQueryPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_debugReportQueryPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (UNICAST_MSG(pApsdeInd)) {
-    	u8 curDbgReportID;
-    	u16 len;
+    	uint8_t curDbgReportID;
+    	uint16_t len;
 
-    	if (zcl_getAttrVal(pApsdeInd->indInfo.dst_ep, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_CURRENT_DEBUG_REPORT_ID, &len, (u8 *)&curDbgReportID) != ZCL_STA_SUCCESS) {
+    	if (zcl_getAttrVal(pApsdeInd->indInfo.dst_ep, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_CURRENT_DEBUG_REPORT_ID, &len, (uint8_t *)&curDbgReportID) != ZCL_STA_SUCCESS) {
             return ZCL_STA_NOT_FOUND;
     	}
 
-    	u8 debugReportID = *pData++;
+    	uint8_t debugReportID = *pData++;
 
     	if (debugReportID != curDbgReportID) {
             return ZCL_STA_NOT_FOUND;
     	}
 
-    	u8 reportBuf[] = "TEST\0";
+    	uint8_t reportBuf[] = "TEST\0";
         zcl_wwah_dbgReportQueryRspCmd_t dbgReportQueryRspCmd;
-        TL_SETSTRUCTCONTENT(dbgReportQueryRspCmd, 0);
+        ZB_SETSTRUCTCONTENT(dbgReportQueryRspCmd, 0);
 
         dbgReportQueryRspCmd.dbgReportID = debugReportID;
         dbgReportQueryRspCmd.reportDataLen = sizeof(reportBuf);
         dbgReportQueryRspCmd.pReportData = reportBuf;
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -1123,14 +1123,14 @@ _CODE_ZCL_ static u8 zcl_wwah_debugReportQueryPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_surveyBeaconsPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_surveyBeaconsPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_surveyBeaconsCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.standardBeacons = *pData++;
 
@@ -1143,7 +1143,7 @@ _CODE_ZCL_ static u8 zcl_wwah_surveyBeaconsPrc(zclIncoming_t *pInMsg)
 }
 
 #if 0
-_CODE_ZCL_ static u8 zcl_wwah_disableMgmtLeaveWithoutRejoinPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_disableMgmtLeaveWithoutRejoinPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
@@ -1166,21 +1166,21 @@ _CODE_ZCL_ static u8 zcl_wwah_disableMgmtLeaveWithoutRejoinPrc(zclIncoming_t *pI
 }
 #endif
 
-_CODE_ZCL_ static u8 zcl_wwah_useTrustCenterForClusterPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_useTrustCenterForClusterPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (UNICAST_MSG(pApsdeInd)) {
         wwah_useTCForClusterInfo_t useTCForClusterInfo;
-        TL_SETSTRUCTCONTENT(useTCForClusterInfo, 0);
+        ZB_SETSTRUCTCONTENT(useTCForClusterInfo, 0);
 
-        u8 numOfCluster = *pData++;
+        uint8_t numOfCluster = *pData++;
         numOfCluster = (numOfCluster > CLUSTER_ID_MAX_NUM) ? CLUSTER_ID_MAX_NUM : numOfCluster;
 
         clusterInfo_t *pCluster = NULL;
-        for (u8 i = 0; i < numOfCluster; i++) {
+        for (uint8_t i = 0; i < numOfCluster; i++) {
             pCluster = zcl_findCluster(pApsdeInd->indInfo.dst_ep, BUILD_U16(pData[0], pData[1]));
             if (pCluster) {
                 useTCForClusterInfo.clusterID[useTCForClusterInfo.num++] = BUILD_U16(pData[0], pData[1]);
@@ -1189,11 +1189,11 @@ _CODE_ZCL_ static u8 zcl_wwah_useTrustCenterForClusterPrc(zclIncoming_t *pInMsg)
         }
 
         g_zcl_useTCForClusterInfo.num = useTCForClusterInfo.num;
-        for (u8 i = 0; i < useTCForClusterInfo.num; i++) {
+        for (uint8_t i = 0; i < useTCForClusterInfo.num; i++) {
             g_zcl_useTCForClusterInfo.clusterID[i] = useTCForClusterInfo.clusterID[i];
         }
 
-        TL_SCHEDULE_TASK(zcl_wwah_useTCForClusterInfoSave, NULL);
+        ZB_SCHEDULE_TASK(zcl_wwah_useTCForClusterInfoSave, NULL);
 
         if (pInMsg->clusterAppCb && useTCForClusterInfo.num) {
             status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &g_zcl_useTCForClusterInfo);
@@ -1203,20 +1203,20 @@ _CODE_ZCL_ static u8 zcl_wwah_useTrustCenterForClusterPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_trustCenterForClusterServerQueryPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_trustCenterForClusterServerQueryPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
 
     if (UNICAST_MSG(pApsdeInd)) {
         zcl_wwah_tcForClusterServerQueryRspCmd_t tcForClusterServerQueryRspCmd;
-        TL_SETSTRUCTCONTENT(tcForClusterServerQueryRspCmd, 0);
+        ZB_SETSTRUCTCONTENT(tcForClusterServerQueryRspCmd, 0);
 
         tcForClusterServerQueryRspCmd.numOfClusters = g_zcl_useTCForClusterInfo.num;
         tcForClusterServerQueryRspCmd.pClusterID = g_zcl_useTCForClusterInfo.clusterID;
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -1237,14 +1237,14 @@ _CODE_ZCL_ static u8 zcl_wwah_trustCenterForClusterServerQueryPrc(zclIncoming_t 
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_apsLinkKeyAuthQueryRspPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_apsLinkKeyAuthQueryRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_apsLinkKeyAuthQueryRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.clusterID = BUILD_U16(pData[0], pData[1]);
         pData += 2;
@@ -1258,14 +1258,14 @@ _CODE_ZCL_ static u8 zcl_wwah_apsLinkKeyAuthQueryRspPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_poweringNotificationPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_poweringNotificationPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_poweringNotificationCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.powerNotiReason = *pData++;
         cmd.manuID = BUILD_U16(pData[0], pData[1]);
@@ -1281,14 +1281,14 @@ _CODE_ZCL_ static u8 zcl_wwah_poweringNotificationPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_shortAddressChangePrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_shortAddressChangePrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_shortAddrChangeCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         ZB_64BIT_ADDR_COPY(cmd.deviceEUI64, pData);
         pData += EXT_ADDR_LEN;
@@ -1303,17 +1303,17 @@ _CODE_ZCL_ static u8 zcl_wwah_shortAddressChangePrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_apsAckRequirementQueryRspPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_apsAckRequirementQueryRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         clustersToExempt_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.numOfClustersToExempt = *pData++;
-        cmd.pClusterID = cmd.numOfClustersToExempt ? (u16 *)pData : NULL;
+        cmd.pClusterID = cmd.numOfClustersToExempt ? (uint16_t *)pData : NULL;
 
         status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &cmd);
     } else {
@@ -1323,14 +1323,14 @@ _CODE_ZCL_ static u8 zcl_wwah_apsAckRequirementQueryRspPrc(zclIncoming_t *pInMsg
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_powerDescriptorChangePrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_powerDescriptorChangePrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_powerDescChangeCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.currentPowerMode = (pData[0] & 0xf0) >> 4;
         cmd.availablePowerSrcs = pData[0] & 0x0f;
@@ -1345,14 +1345,14 @@ _CODE_ZCL_ static u8 zcl_wwah_powerDescriptorChangePrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_newDebugReportNotificationPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_newDebugReportNotificationPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_newDbgReportNotiCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.dbgReportID = *pData++;
         cmd.sizeOfReport = BUILD_U32(pData[0], pData[1], pData[2], pData[3]);
@@ -1366,14 +1366,14 @@ _CODE_ZCL_ static u8 zcl_wwah_newDebugReportNotificationPrc(zclIncoming_t *pInMs
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_debugReportQueryRspPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_debugReportQueryRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_dbgReportQueryRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.dbgReportID = *pData++;
         cmd.reportDataLen = *pData++;
@@ -1387,17 +1387,17 @@ _CODE_ZCL_ static u8 zcl_wwah_debugReportQueryRspPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_trustCenterForClusterServerQueryRspPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_trustCenterForClusterServerQueryRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_tcForClusterServerQueryRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.numOfClusters = *pData++;
-        cmd.pClusterID = cmd.numOfClusters ? (u16 *)pData : NULL;
+        cmd.pClusterID = cmd.numOfClusters ? (uint16_t *)pData : NULL;
 
         status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &cmd);
     } else {
@@ -1407,14 +1407,14 @@ _CODE_ZCL_ static u8 zcl_wwah_trustCenterForClusterServerQueryRspPrc(zclIncoming
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_surveyBeaconsRspPrc(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_surveyBeaconsRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_wwah_surveyBeaconsRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.numOfBeacons = *pData++;
         cmd.pBeacon = cmd.numOfBeacons ? (beaconSurvey_t *)pData : NULL;
@@ -1427,9 +1427,9 @@ _CODE_ZCL_ static u8 zcl_wwah_surveyBeaconsRspPrc(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_clientCmdHandler(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_WWAH_ENABLE_APS_LINK_KEY_AUTH:
@@ -1514,9 +1514,9 @@ _CODE_ZCL_ static u8 zcl_wwah_clientCmdHandler(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ static u8 zcl_wwah_serverCmdHandler(zclIncoming_t *pInMsg)
+_CODE_ZCL_ static uint8_t zcl_wwah_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_WWAH_APS_LINK_KEY_AUTH_QUERY_RSP:

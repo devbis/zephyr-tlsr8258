@@ -52,7 +52,7 @@ static uint8_t zdo_send(uint16_t dst, uint16_t cluster, const uint8_t *payload, 
 {
 	uint8_t frame[ZB_BUF_SIZE];
 	epInfo_t ep;
-	u8 aps_cnt = 0U;
+	uint8_t aps_cnt = 0U;
 
 	if (len + 1U > sizeof(frame)) {
 		return ZNP_STATUS_INVALID_PARAMETER;
@@ -69,7 +69,7 @@ static uint8_t zdo_send(uint16_t dst, uint16_t cluster, const uint8_t *payload, 
 	ep.txOptions = APS_TX_OPT_ACK_TX;
 	ep.radius = 30U;
 
-	return (af_dataSend(ZDO_EP, &ep, cluster, (u16)(len + 1U), frame, &aps_cnt) ==
+	return (af_dataSend(ZDO_EP, &ep, cluster, (uint16_t)(len + 1U), frame, &aps_cnt) ==
 		APS_STATUS_SUCCESS)
 		       ? ZNP_STATUS_SUCCESS
 		       : ZNP_STATUS_FAILURE;
@@ -258,7 +258,7 @@ static void zdo_mgmt_permit_join_req(const uint8_t *d, uint8_t len)
 {
 	uint16_t dst;
 	bool local;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 	zdo_status_t status;
 
 	if (len < 5U) {
@@ -333,7 +333,7 @@ static uint8_t route_discovery(uint16_t dst, bool many_to_one, bool no_cache, ui
 	req->noRouteCache = no_cache;
 	buf->hdr.used = 1U;
 
-	if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, buf) != RET_OK) {
+	if (zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, buf) != RET_OK) {
 		zb_buf_free(buf);
 		return ZNP_ROUTING_FAIL;
 	}
@@ -422,11 +422,11 @@ static int channel_change_apply(void *arg)
 {
 	ARG_UNUSED(arg);
 
-	tl_zbMacChannelSet(pending_channel);
+	zb_MacChannelSet(pending_channel);
 	g_zbMacPib.phyChannelCur = pending_channel;
 	g_zbNIB.updateId = pending_update_id;
 	zdo_nlmeChannelShift(pending_channel);
-	tl_zbNwkBeaconPayloadUpdate();
+	zb_NwkBeaconPayloadUpdate();
 
 	/* The host reads the new channel back from the NIB. */
 	LOG_INF("znp: network moved to channel %u", pending_channel);
@@ -437,7 +437,7 @@ static void zdo_mgmt_nwk_update_req(const uint8_t *d, uint8_t len)
 {
 	zdo_mgmt_nwk_update_req_t req;
 	uint32_t channels;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if (len < 11U) {
 		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x37U, ZNP_STATUS_INVALID_PARAMETER);
@@ -712,7 +712,7 @@ void zb_platform_app_device_joined(uint16_t nwk_addr, const uint8_t ieee_addr[8]
 	/* A device that joined through the trust center itself has no other parent. */
 	zb_getLocalExtAddr(local);
 	if (memcmp(parent_ieee_addr, local, 8U) == 0 || ZB_IEEE_ADDR_IS_ZERO(parent_ieee_addr) ||
-	    zb_getNwkAddrByExtAddr((u8 *)parent_ieee_addr, &parent) != 0U) {
+	    zb_getNwkAddrByExtAddr((uint8_t *)parent_ieee_addr, &parent) != 0U) {
 		parent = zb_getLocalShortAddr();
 	}
 
@@ -727,7 +727,7 @@ void zb_platform_app_device_left(const uint8_t ieee_addr[8], bool rejoin)
 	uint8_t d[2 + 8 + 3];
 	uint16_t src = NWK_ADDR_UNKNOWN;
 
-	(void)zb_getNwkAddrByExtAddr((u8 *)ieee_addr, &src);
+	(void)zb_getNwkAddrByExtAddr((uint8_t *)ieee_addr, &src);
 
 	(void)znp_put_u16(d, src);
 	memcpy(&d[2], ieee_addr, 8U);

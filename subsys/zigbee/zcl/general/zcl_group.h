@@ -75,16 +75,16 @@
  *  @brief  Definition format for add group command
  */
 typedef struct {
-    u16 groupId;
-    u8 *pGroupName;
+    uint16_t groupId;
+    uint8_t *pGroupName;
 } zcl_addGroup_t;
 
 /**
  *  @brief  Definition format for add group response command
  */
 typedef struct {
-    u8 status;
-    u16 groupId;
+    uint8_t status;
+    uint16_t groupId;
 } zcl_addGroupRsp_t;
 
 /**
@@ -96,18 +96,18 @@ typedef zcl_addGroupRsp_t zcl_removeGroupRsp_t;
  *  @brief  Definition format for view group response command
  */
 typedef struct {
-    u8 status;
-    u16 groupId;
-    u8 *pGroupName;
+    uint8_t status;
+    uint16_t groupId;
+    uint8_t *pGroupName;
 } zcl_viewGroupRsp_t;
 
 /**
  *  @brief  Definition format for get group membership response command
  */
 typedef struct {
-    u8 capacity;
-    u8 groupCnt;
-    u8 *pGroupList;
+    uint8_t capacity;
+    uint8_t groupCnt;
+    uint8_t *pGroupList;
 } zcl_getGroupMembershipRsp_t;
 
 #if 0
@@ -143,13 +143,13 @@ typedef struct {
 /**
  *  @brief  External variable for groupNameSupport Attribute
  */
-extern u8 zcl_attr_group_nameSupport;
+extern uint8_t zcl_attr_group_nameSupport;
 /**
  *  @brief  External variable for group Attribute table
  */
 extern const zclAttrInfo_t group_attrTbl[];
 
-extern const u8 zcl_group_attrNum;
+extern const uint8_t zcl_group_attrNum;
 
 /** @} end of group ZCL_GROUP_Variables */
 #endif
@@ -166,7 +166,7 @@ extern const u8 zcl_group_attrNum;
  *
  * @return      Status
  */
-status_t zcl_group_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 /**
  * @brief       API to send Add command in Group cluster
@@ -180,7 +180,7 @@ status_t zcl_group_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      None
  */
-status_t zcl_group_add(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 *groupName);
+status_t zcl_group_add(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t *groupName);
 #define zcl_group_addCmd(a,b,c,d,e)     (zcl_group_add((a), (b), (c), ZCL_SEQ_NUM, (d), (e)))
 
 /**
@@ -194,7 +194,7 @@ status_t zcl_group_add(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 
  *
  * @return      None
  */
-status_t zcl_group_view(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId);
+status_t zcl_group_view(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId);
 #define zcl_group_viewCmd(a,b,c,d)      (zcl_group_view((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -208,7 +208,7 @@ status_t zcl_group_view(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8
  *
  * @return      None
  */
-status_t zcl_group_remove(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId);
+status_t zcl_group_remove(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId);
 #define zcl_group_removeCmd(a,b,c,d)    (zcl_group_remove((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -221,7 +221,7 @@ status_t zcl_group_remove(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, 
  *
  * @return      None
  */
-status_t zcl_group_removeAll(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_group_removeAll(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_group_removeAllCmd(a,b,c)   (zcl_group_removeAll((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -236,7 +236,7 @@ status_t zcl_group_removeAll(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRs
  *
  * @return      None
  */
-status_t zcl_group_getMembership(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 groupCnt, u16 *groupList);
+status_t zcl_group_getMembership(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t groupCnt, uint16_t *groupList);
 #define zcl_group_getMembershipCmd(a,b,c,d,e)   (zcl_group_getMembership((a), (b), (c), ZCL_SEQ_NUM, (d), (e)))
 
 /**
@@ -250,7 +250,7 @@ status_t zcl_group_getMembership(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefau
  *
  * @return      None
  */
-status_t zcl_group_addIfIdentify(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 *groupName);
+status_t zcl_group_addIfIdentify(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t *groupName);
 #define zcl_group_addIfIdentifyCmd(a,b,c,d,e)   (zcl_group_addIfIdentify((a), (b), (c), ZCL_SEQ_NUM, (d), (e)))
 
 /** @} end of group ZCL_GROUP_Fountions */

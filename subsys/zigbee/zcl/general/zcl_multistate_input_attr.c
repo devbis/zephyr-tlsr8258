@@ -46,60 +46,60 @@
 #ifdef ZCL_MULTISTATE_INPUT
 
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATE_TEXT_ENABLE
-u8 zcl_attr_mulInput_stateText[ZCL_MULTISTATE_INPUT_MAX_LENGTH] = {0};
+uint8_t zcl_attr_mulInput_stateText[ZCL_MULTISTATE_INPUT_MAX_LENGTH] = {0};
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_DESCRIPTION_ENABLE
-u8 zcl_attr_mulInput_description[ZCL_MULTISTATE_INPUT_MAX_LENGTH] = {0};
+uint8_t zcl_attr_mulInput_description[ZCL_MULTISTATE_INPUT_MAX_LENGTH] = {0};
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_NUM_OF_STATES_ENABLE
-u16 zcl_attr_mulInput_numOfStates = 0;
+uint16_t zcl_attr_mulInput_numOfStates = 0;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_OUT_OF_SERVICE_ENABLE
 bool zcl_attr_mulInput_outOfService = FALSE;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_PRESENT_VALUE_ENABLE
-u16 zcl_attr_mulInput_presentValue = 0;
+uint16_t zcl_attr_mulInput_presentValue = 0;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_RELIABLILITY_ENABLE
-u8 zcl_attr_mulInput_reliability = 0x00;
+uint8_t zcl_attr_mulInput_reliability = 0x00;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATUS_FLAGS_ENABLE
-u8 zcl_attr_mulInput_statusFlags = 0;
+uint8_t zcl_attr_mulInput_statusFlags = 0;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_APP_TYPE_ENABLE
-u32 zcl_attr_mulInput_appType = 0;
+uint32_t zcl_attr_mulInput_appType = 0;
 #endif
 
 
 const zclAttrInfo_t multistate_input_attrTbl[] = {
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATE_TEXT_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_STATE_TEXT,     ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)zcl_attr_mulInput_stateText},
+    { ZCL_MULTISTATE_INPUT_ATTRID_STATE_TEXT,     ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)zcl_attr_mulInput_stateText},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_DESCRIPTION_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_DESCRIPTION,    ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)zcl_attr_mulInput_description},
+    { ZCL_MULTISTATE_INPUT_ATTRID_DESCRIPTION,    ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)zcl_attr_mulInput_description},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_NUM_OF_STATES_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_NUM_OF_STATES,  ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&zcl_attr_mulInput_numOfStates},
+    { ZCL_MULTISTATE_INPUT_ATTRID_NUM_OF_STATES,  ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&zcl_attr_mulInput_numOfStates},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_OUT_OF_SERVICE_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_OUT_OF_SERVICE, ZCL_DATA_TYPE_BOOLEAN,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&zcl_attr_mulInput_outOfService},
+    { ZCL_MULTISTATE_INPUT_ATTRID_OUT_OF_SERVICE, ZCL_DATA_TYPE_BOOLEAN,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&zcl_attr_mulInput_outOfService},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_PRESENT_VALUE_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_PRESENT_VALUE,  ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&zcl_attr_mulInput_presentValue},
+    { ZCL_MULTISTATE_INPUT_ATTRID_PRESENT_VALUE,  ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&zcl_attr_mulInput_presentValue},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_RELIABLILITY_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_RELIABLILITY,   ZCL_DATA_TYPE_ENUM8,    ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&zcl_attr_mulInput_reliability},
+    { ZCL_MULTISTATE_INPUT_ATTRID_RELIABLILITY,   ZCL_DATA_TYPE_ENUM8,    ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&zcl_attr_mulInput_reliability},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATUS_FLAGS_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_STATUS_FLAGS,   ZCL_DATA_TYPE_BITMAP8,  ACCESS_CONTROL_READ,                        (u8*)&zcl_attr_mulInput_statusFlags},
+    { ZCL_MULTISTATE_INPUT_ATTRID_STATUS_FLAGS,   ZCL_DATA_TYPE_BITMAP8,  ACCESS_CONTROL_READ,                        (uint8_t*)&zcl_attr_mulInput_statusFlags},
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_APP_TYPE_ENABLE
-    { ZCL_MULTISTATE_INPUT_ATTRID_APP_TYPE,       ZCL_DATA_TYPE_UINT32,   ACCESS_CONTROL_READ,                        (u8*)&zcl_attr_mulInput_appType},
+    { ZCL_MULTISTATE_INPUT_ATTRID_APP_TYPE,       ZCL_DATA_TYPE_UINT32,   ACCESS_CONTROL_READ,                        (uint8_t*)&zcl_attr_mulInput_appType},
 #endif
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,         ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ,                        (u8*)&zcl_attr_global_clusterRevision},
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,         ZCL_DATA_TYPE_UINT16,   ACCESS_CONTROL_READ,                        (uint8_t*)&zcl_attr_global_clusterRevision},
 };
 
-const u8 zcl_multistate_input_attrNum = (sizeof(multistate_input_attrTbl) / sizeof(zclAttrInfo_t));
+const uint8_t zcl_multistate_input_attrNum = (sizeof(multistate_input_attrTbl) / sizeof(zclAttrInfo_t));
 
 #endif	/* ZCL_MULTISTATE_INPUT */
 

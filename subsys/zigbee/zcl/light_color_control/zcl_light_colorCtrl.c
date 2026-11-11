@@ -48,13 +48,13 @@
 /**********************************************************************
  * LOCAL FUNCTIONS
  */
-static void zcl_lightColorCtrl_startUpColorTempMireds(u8 endpoint);
+static void zcl_lightColorCtrl_startUpColorTempMireds(uint8_t endpoint);
 static status_t zcl_lightColorCtrl_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     status = zcl_registerCluster(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, manuCode, attrNum, attrTbl, zcl_lightColorCtrl_cmdHandler, cb);
 
@@ -65,15 +65,15 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_register(u8 endpoint, u16 manuCode, u8 at
     return status;
 }
 
-_CODE_ZCL_ static void zcl_lightColorCtrl_startUpColorTempMireds(u8 endpoint)
+_CODE_ZCL_ static void zcl_lightColorCtrl_startUpColorTempMireds(uint8_t endpoint)
 {
-    u16 startUpColorTempMireds = 0;
-    u16 preColorTempMireds = 0;
-    u16 attrLen = 0;
+    uint16_t startUpColorTempMireds = 0;
+    uint16_t preColorTempMireds = 0;
+    uint16_t attrLen = 0;
 
-    if ((zcl_getAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_START_UP_COLOR_TEMPERATURE_MIREDS, &attrLen, (u8 *)&startUpColorTempMireds) == ZCL_STA_SUCCESS) &&
-        (zcl_getAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_TEMPERATURE_MIREDS, &attrLen, (u8 *)&preColorTempMireds) == ZCL_STA_SUCCESS)) {
-        u16 dstColorTempMireds = 0;
+    if ((zcl_getAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_START_UP_COLOR_TEMPERATURE_MIREDS, &attrLen, (uint8_t *)&startUpColorTempMireds) == ZCL_STA_SUCCESS) &&
+        (zcl_getAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_TEMPERATURE_MIREDS, &attrLen, (uint8_t *)&preColorTempMireds) == ZCL_STA_SUCCESS)) {
+        uint16_t dstColorTempMireds = 0;
 
         if (startUpColorTempMireds == ZCL_START_UP_COLOR_TEMPERATURE_MIREDS_TO_PREVIOUS) {
             dstColorTempMireds = preColorTempMireds;
@@ -82,15 +82,15 @@ _CODE_ZCL_ static void zcl_lightColorCtrl_startUpColorTempMireds(u8 endpoint)
         }
 
         if (dstColorTempMireds != preColorTempMireds) {
-            zcl_setAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_TEMPERATURE_MIREDS, (u8 *)&dstColorTempMireds);
+            zcl_setAttrVal(endpoint, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_TEMPERATURE_MIREDS, (uint8_t *)&dstColorTempMireds);
         }
     }
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_move2hue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToHueCmd_t *pMove2Hue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_move2hue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToHueCmd_t *pMove2Hue)
 {
-    u8 buf[6];
-    u8 *pBuf = buf;
+    uint8_t buf[6];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMove2Hue->hue;
     *pBuf++ = pMove2Hue->direction;
@@ -105,10 +105,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_move2hue(u8 srcEp, epInfo_t *pDstEpInfo, 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_moveHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveHueCmd_t *pMoveHue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_moveHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveHueCmd_t *pMoveHue)
 {
-    u8 buf[4];
-    u8 *pBuf = buf;
+    uint8_t buf[4];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMoveHue->moveMode;
     *pBuf++ = pMoveHue->rate;
@@ -121,10 +121,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_moveHue(u8 srcEp, epInfo_t *pDstEpInfo, u
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_stepHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepHueCmd_t *pStepHue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_stepHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepHueCmd_t *pStepHue)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pStepHue->stepMode;
     *pBuf++ = pStepHue->stepSize;
@@ -138,10 +138,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_stepHue(u8 srcEp, epInfo_t *pDstEpInfo, u
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_move2saturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToSaturationCmd_t *pMove2Sat)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_move2saturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToSaturationCmd_t *pMove2Sat)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMove2Sat->saturation;
     *pBuf++ = LO_UINT16(pMove2Sat->transitionTime);
@@ -155,10 +155,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_move2saturation(u8 srcEp, epInfo_t *pDstE
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_moveSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveSaturationCmd_t *pMoveSat)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_moveSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveSaturationCmd_t *pMoveSat)
 {
-    u8 buf[4];
-    u8 *pBuf = buf;
+    uint8_t buf[4];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMoveSat->moveMode;
     *pBuf++ = pMoveSat->rate;
@@ -171,10 +171,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_moveSaturation(u8 srcEp, epInfo_t *pDstEp
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_stepSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepSaturationCmd_t *pStepSat)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_stepSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepSaturationCmd_t *pStepSat)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pStepSat->stepMode;
     *pBuf++ = pStepSat->stepSize;
@@ -188,10 +188,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_stepSaturation(u8 srcEp, epInfo_t *pDstEp
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_move2hueAndSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToHueAndSaturationCmd_t *pMove2HueAndSat)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_move2hueAndSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToHueAndSaturationCmd_t *pMove2HueAndSat)
 {
-    u8 buf[6];
-    u8 *pBuf = buf;
+    uint8_t buf[6];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMove2HueAndSat->hue;
     *pBuf++ = pMove2HueAndSat->saturation;
@@ -205,10 +205,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_move2hueAndSaturation(u8 srcEp, epInfo_t 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_CMD_LIGHT_COLOR_CONTROL_MOVE_TO_HUE_AND_SATURATION, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
-_CODE_ZCL_ status_t zcl_lightColorCtrl_move2color(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToColorCmd_t *pMove2Color)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_move2color(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToColorCmd_t *pMove2Color)
 {
-    u8 buf[8];
-    u8 *pBuf = buf;
+    uint8_t buf[8];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pMove2Color->colorX);
     *pBuf++ = HI_UINT16(pMove2Color->colorX);
@@ -225,10 +225,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_move2color(u8 srcEp, epInfo_t *pDstEpInfo
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_moveColor(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveColorCmd_t *pMoveColor)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_moveColor(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveColorCmd_t *pMoveColor)
 {
-    u8 buf[6];
-    u8 *pBuf = buf;
+    uint8_t buf[6];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pMoveColor->rateX);
     *pBuf++ = HI_UINT16(pMoveColor->rateX);
@@ -243,10 +243,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_moveColor(u8 srcEp, epInfo_t *pDstEpInfo,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_stepColor(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepColorCmd_t *pStepColor)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_stepColor(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepColorCmd_t *pStepColor)
 {
-    u8 buf[8];
-    u8 *pBuf = buf;
+    uint8_t buf[8];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pStepColor->stepX);
     *pBuf++ = HI_UINT16(pStepColor->stepX);
@@ -263,10 +263,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_stepColor(u8 srcEp, epInfo_t *pDstEpInfo,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_move2colorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveToColorTemperatureCmd_t *pMove2ColorTemp)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_move2colorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveToColorTemperatureCmd_t *pMove2ColorTemp)
 {
-    u8 buf[6];
-    u8 *pBuf = buf;
+    uint8_t buf[6];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pMove2ColorTemp->colorTemperature);
     *pBuf++ = HI_UINT16(pMove2ColorTemp->colorTemperature);
@@ -281,10 +281,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_move2colorTemperature(u8 srcEp, epInfo_t 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2Hue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveToHueCmd_t *pEnhancedMove2Hue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2Hue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveToHueCmd_t *pEnhancedMove2Hue)
 {
-    u8 buf[7];
-    u8 *pBuf = buf;
+    uint8_t buf[7];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pEnhancedMove2Hue->enhancedHue);
     *pBuf++ = HI_UINT16(pEnhancedMove2Hue->enhancedHue);
@@ -300,10 +300,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2Hue(u8 srcEp, epInfo_t *pDst
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMoveHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveHueCmd_t *pEnhancedMoveHue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMoveHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveHueCmd_t *pEnhancedMoveHue)
 {
-    u8 buf[5];
-    u8 *pBuf = buf;
+    uint8_t buf[5];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pEnhancedMoveHue->moveMode;
     *pBuf++ = LO_UINT16(pEnhancedMoveHue->rate);
@@ -317,10 +317,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMoveHue(u8 srcEp, epInfo_t *pDstE
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedStepHue(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedStepHueCmd_t *pEnhancedStepHue)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedStepHue(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedStepHueCmd_t *pEnhancedStepHue)
 {
-    u8 buf[7];
-    u8 *pBuf = buf;
+    uint8_t buf[7];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pEnhancedStepHue->stepMode;
     *pBuf++ = LO_UINT16(pEnhancedStepHue->stepSize);
@@ -336,10 +336,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedStepHue(u8 srcEp, epInfo_t *pDstE
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2HueAndSaturation(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlEnhancedMoveToHueAndSaturationCmd_t *pEnhancedMove2HueAndSat)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2HueAndSaturation(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlEnhancedMoveToHueAndSaturationCmd_t *pEnhancedMove2HueAndSat)
 {
-    u8 buf[7];
-    u8 *pBuf = buf;
+    uint8_t buf[7];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pEnhancedMove2HueAndSat->enhancedHue);
     *pBuf++ = HI_UINT16(pEnhancedMove2HueAndSat->enhancedHue);
@@ -355,10 +355,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_enhancedMove2HueAndSaturation(u8 srcEp, e
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_colorLoopSet(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlColorLoopSetCmd_t *pColorLoopSet)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_colorLoopSet(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlColorLoopSetCmd_t *pColorLoopSet)
 {
-    u8 buf[9];
-    u8 *pBuf = buf;
+    uint8_t buf[9];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pColorLoopSet->updateFlags.updateFlags;
     *pBuf++ = pColorLoopSet->action;
@@ -376,10 +376,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_colorLoopSet(u8 srcEp, epInfo_t *pDstEpIn
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_stopMoveStep(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStopMoveStepCmd_t *pStopMoveStep)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_stopMoveStep(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStopMoveStepCmd_t *pStopMoveStep)
 {
-    u8 buf[2];
-    u8 *pBuf = buf;
+    uint8_t buf[2];
+    uint8_t *pBuf = buf;
 
     if (pStopMoveStep->optPresent) {
         *pBuf++ = pStopMoveStep->optionsMask;
@@ -390,10 +390,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_stopMoveStep(u8 srcEp, epInfo_t *pDstEpIn
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_moveColorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlMoveColorTemperatureCmd_t *pMoveColorTemp)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_moveColorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlMoveColorTemperatureCmd_t *pMoveColorTemp)
 {
-    u8 buf[9];
-    u8 *pBuf = buf;
+    uint8_t buf[9];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pMoveColorTemp->moveMode;
     *pBuf++ = LO_UINT16(pMoveColorTemp->rate);
@@ -411,10 +411,10 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_moveColorTemperature(u8 srcEp, epInfo_t *
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_lightColorCtrl_stepColorTemperature(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_colorCtrlStepColorTemperatureCmd_t *pStepColorTemp)
+_CODE_ZCL_ status_t zcl_lightColorCtrl_stepColorTemperature(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_colorCtrlStepColorTemperatureCmd_t *pStepColorTemp)
 {
-    u8 buf[11];
-    u8 *pBuf = buf;
+    uint8_t buf[11];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pStepColorTemp->stepMode;
     *pBuf++ = LO_UINT16(pStepColorTemp->stepSize);
@@ -436,14 +436,14 @@ _CODE_ZCL_ status_t zcl_lightColorCtrl_stepColorTemperature(u8 srcEp, epInfo_t *
 
 _CODE_ZCL_ static status_t zcl_lightColorCtrl_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
-    u8 optionsMask = 0;
-    u8 optionsOverride = 0;
+    uint8_t optionsMask = 0;
+    uint8_t optionsOverride = 0;
 
     zcl_colorCtrl_cmdPayload_t cmdPayload;
-    memset((u8 *)&cmdPayload, 0, sizeof(zcl_colorCtrl_cmdPayload_t));
+    memset((uint8_t *)&cmdPayload, 0, sizeof(zcl_colorCtrl_cmdPayload_t));
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_LIGHT_COLOR_CONTROL_MOVE_TO_HUE:
@@ -725,13 +725,13 @@ _CODE_ZCL_ static status_t zcl_lightColorCtrl_clientCmdHandler(zclIncoming_t *pI
 
     if (status == ZCL_STA_SUCCESS) {
     	bool execute = FALSE;
-    	u16 attrLen = 0;
+    	uint16_t attrLen = 0;
 
     	bool onOff = FALSE;
-    	zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, &attrLen, (u8 *)&onOff);
+    	zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, &attrLen, (uint8_t *)&onOff);
 
-    	u8 options = 0;
-    	zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_OPTIONS, &attrLen, (u8 *)&options);
+    	uint8_t options = 0;
+    	zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_LIGHTING_COLOR_CONTROL, ZCL_ATTRID_COLOR_OPTIONS, &attrLen, (uint8_t *)&options);
 
     	if (onOff) {
             execute = TRUE;
@@ -749,11 +749,11 @@ _CODE_ZCL_ static status_t zcl_lightColorCtrl_clientCmdHandler(zclIncoming_t *pI
     	    status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &cmdPayload);
 
 #ifdef ZCL_SCENE
-            u16 sceneAttrLen = 0;
-            u8 sceneValid = 0;
-            if (zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &sceneAttrLen, (u8 *)&sceneValid) == ZCL_STA_SUCCESS) {
+            uint16_t sceneAttrLen = 0;
+            uint8_t sceneValid = 0;
+            if (zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &sceneAttrLen, (uint8_t *)&sceneValid) == ZCL_STA_SUCCESS) {
                 sceneValid = 0;
-                zcl_setAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (u8 *)&sceneValid);
+                zcl_setAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (uint8_t *)&sceneValid);
             }
 #endif
     	}

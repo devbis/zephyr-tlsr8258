@@ -31,12 +31,12 @@
 #include "ss_security_flags.h"
 
 /* ZDP endpoint metadata and response handoff from libzigbee/src/zdp.c. */
-static const u16 zdo_in_clusters[] = {
+static const uint16_t zdo_in_clusters[] = {
 	NWK_ADDR_RSP_CLID,    IEEE_ADDR_RSP_CLID, NODE_DESC_RSP_CLID,  POWER_DESC_RSP_CLID,
 	SIMPLE_DESC_RSP_CLID, ACTIVE_EP_RSP_CLID, MATCH_DESC_RSP_CLID,
 };
 
-static const u16 zdo_out_clusters[] = {
+static const uint16_t zdo_out_clusters[] = {
 	NWK_ADDR_REQ_CLID,    IEEE_ADDR_REQ_CLID, NODE_DESC_REQ_CLID,  POWER_DESC_REQ_CLID,
 	SIMPLE_DESC_REQ_CLID, ACTIVE_EP_REQ_CLID, MATCH_DESC_REQ_CLID, DEVICE_ANNCE_CLID,
 };
@@ -49,14 +49,14 @@ static const af_simple_descriptor_t zdo_simple_desc = {
 	.reserved = 0U,
 	.app_in_cluster_count = ARRAY_SIZE(zdo_in_clusters),
 	.app_out_cluster_count = ARRAY_SIZE(zdo_out_clusters),
-	.app_in_cluster_lst = (u16 *)zdo_in_clusters,
-	.app_out_cluster_lst = (u16 *)zdo_out_clusters,
+	.app_in_cluster_lst = (uint16_t *)zdo_in_clusters,
+	.app_out_cluster_lst = (uint16_t *)zdo_out_clusters,
 };
 
 typedef void (*zdp_func_cb_t)(void *ind);
 
 typedef struct {
-	u16 cluster_id;
+	uint16_t cluster_id;
 	bool restricted;
 	zdp_func_cb_t func;
 } zdp_func_entry_t;
@@ -155,19 +155,19 @@ static void zdp_client_cmd_handler(void *arg)
 	}
 
 	zdo_zdp_req_t response;
-	u8 *payload;
+	uint8_t *payload;
 
-	TL_SETSTRUCTCONTENT(response, 0);
-	payload = (u8 *)tl_bufInitalloc((zb_buf_t *)arg, 2U);
+	ZB_SETSTRUCTCONTENT(response, 0);
+	payload = (uint8_t *)zb_bufInitalloc((zb_buf_t *)arg, 2U);
 	if (payload == NULL) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 	payload[0] = ind->asdu[0];
-	payload[1] = (u8)status;
+	payload[1] = (uint8_t)status;
 	response.zdu = payload;
 	response.zduLen = 2U;
-	response.cluster_id = (u16)(ind->cluster_id | 0x8000U);
+	response.cluster_id = (uint16_t)(ind->cluster_id | 0x8000U);
 	response.buff_addr = arg;
 	response.dst_addr_mode = SHORT_ADDR_MODE;
 	response.dst_nwk_addr = ind->src_short_addr;
@@ -216,7 +216,7 @@ void zdp_init(void)
 /* Outside the APS data (0x00..0x3f) and command (0x40..) handle ranges. */
 #define AF_DATA_SEND_NSDU_HANDLE 0xBFU
 
-static u8 zdo_announce_seq;
+static uint8_t zdo_announce_seq;
 
 /*
  * The full ZDO service calls this API after a normal join, but a restored
@@ -230,14 +230,14 @@ static u8 zdo_announce_seq;
  * A frame addressed to this node does not go over the air: it is delivered to
  * the local endpoint as if it had been received.
  */
-static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len, const u8 *pld,
-			  u8 *apsCnt)
+static uint8_t af_dataLoopback(uint8_t srcEp, const epInfo_t *dst, uint16_t clusterId, uint16_t len, const uint8_t *pld,
+			  uint8_t *apsCnt)
 {
-	const u16 pldOff = (u16)((sizeof(aps_data_ind_t) + 3U) & ~3U);
+	const uint16_t pldOff = (uint16_t)((sizeof(aps_data_ind_t) + 3U) & ~3U);
 	aps_data_ind_t *ind;
 	zb_buf_t *buf;
 
-	if ((u16)(pldOff + len) > ZB_BUF_SIZE) {
+	if ((uint16_t)(pldOff + len) > ZB_BUF_SIZE) {
 		return APS_STATUS_ASDU_TOO_LONG;
 	}
 
@@ -249,7 +249,7 @@ static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len,
 	ind = (aps_data_ind_t *)buf;
 	memset(ind, 0, sizeof(*ind));
 	if (len != 0U) {
-		memcpy((u8 *)buf + pldOff, pld, len);
+		memcpy((uint8_t *)buf + pldOff, pld, len);
 	}
 
 	ind->dst_addr_mode = APS_SHORT_DSTADDR_WITHEP;
@@ -260,7 +260,7 @@ static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len,
 	ind->profile_id = dst->profileId;
 	ind->cluster_id = clusterId;
 	ind->asduLength = len;
-	ind->asdu = (u8 *)buf + pldOff;
+	ind->asdu = (uint8_t *)buf + pldOff;
 	ind->src_short_addr = g_zbNIB.nwkAddr;
 	ind->srcMacAddr = g_zbNIB.nwkAddr;
 	ind->lqi = 0xFFU;
@@ -270,7 +270,7 @@ static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len,
 	}
 
 	buf->hdr.used = 1U;
-	if (tl_zbTaskPost(af_aps_data_entry, buf) != RET_OK) {
+	if (zb_TaskPost(af_aps_data_entry, buf) != RET_OK) {
 		zb_buf_free(buf);
 		return APS_STATUS_INTERNAL_BUF_FULL;
 	}
@@ -278,14 +278,14 @@ static u8 af_dataLoopback(u8 srcEp, const epInfo_t *dst, u16 clusterId, u16 len,
 	return APS_STATUS_SUCCESS;
 }
 
-u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt)
+uint8_t af_dataSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t cmdPldLen, uint8_t *cmdPld, uint8_t *apsCnt)
 {
 	zb_buf_t *buf;
 	nlde_data_req_t *req;
-	u8 *aps;
-	u16 dstShort;
+	uint8_t *aps;
+	uint16_t dstShort;
 	bool broadcast;
-	u8 apsCounter;
+	uint8_t apsCounter;
 
 	if (pDstEpInfo == NULL || (cmdPld == NULL && cmdPldLen != 0U)) {
 		return APS_STATUS_INVALID_PARAMETER;
@@ -297,17 +297,17 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 		 * A binding to a group is not served by this build.
 		 */
 		aps_binding_entry_t *table = bindTblEntryGet();
-		u8 sent = 0U;
+		uint8_t sent = 0U;
 
-		for (u8 i = 0U; i < APS_BINDING_TABLE_SIZE; i++) {
+		for (uint8_t i = 0U; i < APS_BINDING_TABLE_SIZE; i++) {
 			epInfo_t dst = *pDstEpInfo;
-			u16 shortAddr;
-			u16 idx;
+			uint16_t shortAddr;
+			uint16_t idx;
 
 			if (table[i].used != 1U || table[i].clusterId != clusterId ||
 			    table[i].srcEp != srcEp ||
 			    table[i].dstAddrMode != APS_LONG_DSTADDR_WITHEP ||
-			    tl_zbShortAddrByExtAddr(&shortAddr, table[i].dstExtAddrInfo.extAddr, &idx) !=
+			    zb_ShortAddrByExtAddr(&shortAddr, table[i].dstExtAddrInfo.extAddr, &idx) !=
 				    RET_OK) {
 				continue;
 			}
@@ -327,7 +327,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 		/* Group/IEEE-addressed sends are not used by this build's ZDO. */
 		return APS_STATUS_NOT_SUPPORTED;
 	}
-	if ((u16)(AF_APS_DATA_HDR_LEN + cmdPldLen) > ZB_BUF_SIZE) {
+	if ((uint16_t)(AF_APS_DATA_HDR_LEN + cmdPldLen) > ZB_BUF_SIZE) {
 		return APS_STATUS_ASDU_TOO_LONG;
 	}
 
@@ -343,9 +343,9 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 
 	/*
 	 * Reserve the APS frame at the buffer tail; nwk_tx/MAC prepend their
-	 * headers in the space ahead of it (see tl_bufInitalloc).
+	 * headers in the space ahead of it (see zb_bufInitalloc).
 	 */
-	aps = (u8 *)tl_bufInitalloc(buf, (u8)(AF_APS_DATA_HDR_LEN + cmdPldLen));
+	aps = (uint8_t *)zb_bufInitalloc(buf, (uint8_t)(AF_APS_DATA_HDR_LEN + cmdPldLen));
 	if (aps == NULL) {
 		zb_buf_free(buf);
 		return APS_STATUS_ASDU_TOO_LONG;
@@ -356,7 +356,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 	apsCounter = aps_get_counter_value();
 
 	/* APS data-frame header follows the libzigbee APS data request layout. */
-	aps[0] = (u8)((broadcast ? 0x02U : 0x00U) << 2);
+	aps[0] = (uint8_t)((broadcast ? 0x02U : 0x00U) << 2);
 	if (!broadcast && (pDstEpInfo->txOptions & APS_TX_OPT_ACK_TX) != 0U) {
 		aps[0] |= BIT(6);
 	}
@@ -392,7 +392,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 	req->ndsuHandle = (clusterId == MGMT_LEAVE_RSP_CLID) ? NWK_INTERNAL_MGMT_LEAVE_RSP_HANDLE
 							     : AF_DATA_SEND_NSDU_HANDLE;
 	req->nsdu = aps;
-	req->nsduLen = (u8)(AF_APS_DATA_HDR_LEN + cmdPldLen);
+	req->nsduLen = (uint8_t)(AF_APS_DATA_HDR_LEN + cmdPldLen);
 	req->useAlias = pDstEpInfo->useAlias;
 	req->aliasSrcAddr = pDstEpInfo->aliasSrcAddr;
 	req->aliasSeqNum = pDstEpInfo->aliasSeqNum;
@@ -415,7 +415,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 		*apsCnt = apsCounter;
 	}
 
-	if (tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, buf) != RET_OK) {
+	if (zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, buf) != RET_OK) {
 		zb_buf_free(buf);
 		return APS_STATUS_INTERNAL_BUF_FULL;
 	}

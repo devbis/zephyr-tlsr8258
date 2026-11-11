@@ -9,12 +9,12 @@
 #include "zb_common.h"
 
 typedef struct {
-	u8 *txData;
-	u8 psduLen;
+	uint8_t *txData;
+	uint8_t psduLen;
 } mac_pending_tx_ctx_t;
 
-void tl_zbMacMcpsDataRequestProc(void *arg);
-void tl_zbPhyMldeIndication(zb_buf_t *buf, u8 *raw, u8 len);
-void tl_zbMacMcpsDataRequestSendConfirm(zb_buf_t *buf, u8 status);
+void zb_MacMcpsDataRequestProc(void *arg);
+void zb_PhyMldeIndication(zb_buf_t *buf, uint8_t *raw, uint8_t len);
+void zb_MacMcpsDataRequestSendConfirm(zb_buf_t *buf, uint8_t status);
 
 #endif

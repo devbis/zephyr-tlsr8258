@@ -45,7 +45,7 @@ ev_queue_sts_t ev_queue_rawPush(ev_queue_t *q, queue_item_t *newElement)
         return QUEUE_INVALID_PARAMETER;
     }
 
-    u32 r = drv_disable_irq();
+    uint32_t r = drv_disable_irq();
 
     /* if the Q was empty, then update the head */
     if (NULL == q->head) {
@@ -104,7 +104,7 @@ queue_item_t *ev_queue_rawPop(ev_queue_t *q)
 {
     queue_item_t* oldHead;
 
-    u32 r = drv_disable_irq();
+    uint32_t r = drv_disable_irq();
 
     oldHead = q->head;
     if (NULL != oldHead) {
@@ -142,7 +142,7 @@ ev_queue_sts_t ev_queue_rawDelete(ev_queue_t *q, queue_item_t *delElement)
         return QUEUE_INVALID_PARAMETER;
     }
 
-    u32 r = drv_disable_irq();
+    uint32_t r = drv_disable_irq();
 
     if (NULL == q->head) { /* invalid q or newElement */
     	drv_restore_irq(r);
@@ -203,7 +203,7 @@ ev_queue_sts_t ev_queue_init(ev_queue_t *q, ev_priFunc_t priFunc)
         return QUEUE_INVALID_PARAMETER;
     }
 
-    memset((u8 *)q, 0 , sizeof(ev_queue_t));
+    memset((uint8_t *)q, 0 , sizeof(ev_queue_t));
     q->priFunc = priFunc;
     return QUEUE_SUCC;
 }
@@ -218,7 +218,7 @@ ev_queue_sts_t ev_queue_init(ev_queue_t *q, ev_priFunc_t priFunc)
  *
  * @return  Status
  */
-ev_queue_sts_t ev_queue_push(ev_queue_t *q, u8 *payload)
+ev_queue_sts_t ev_queue_push(ev_queue_t *q, uint8_t *payload)
 {
     queue_item_t *newElement;
     newElement = (queue_item_t *)ev_buf_getHead(payload);
@@ -235,7 +235,7 @@ ev_queue_sts_t ev_queue_push(ev_queue_t *q, u8 *payload)
  *
  * @return  Pointer to data part of the @ev_bufItem_t
  */
-u8 *ev_queue_pop(ev_queue_t *q)
+uint8_t *ev_queue_pop(ev_queue_t *q)
 {
     queue_item_t *oneItem = ev_queue_rawPop(q);
 
@@ -256,7 +256,7 @@ u8 *ev_queue_pop(ev_queue_t *q)
  *
  * @return  Status
  */
-ev_queue_sts_t ev_queue_delete(ev_queue_t *q, u8 *payload)
+ev_queue_sts_t ev_queue_delete(ev_queue_t *q, uint8_t *payload)
 {
     queue_item_t *delElement = (queue_item_t *)ev_buf_getHead(payload);
     return ev_queue_rawDelete(q, delElement);
@@ -273,7 +273,7 @@ ev_queue_sts_t ev_queue_delete(ev_queue_t *q, u8 *payload)
  */
 ev_queue_sts_t ev_queue_freeQ(ev_queue_t *q)
 {
-    u8 *buffer_ptr;
+    uint8_t *buffer_ptr;
     if (NULL == q) { /* invalid q or newElement */
         return QUEUE_INVALID_PARAMETER;
     }

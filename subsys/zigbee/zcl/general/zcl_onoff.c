@@ -48,12 +48,12 @@
 /**********************************************************************
  * LOCAL FUNCTIONS
  */
-static void zcl_onOff_startUpOnOff(u8 endpoint);
+static void zcl_onOff_startUpOnOff(uint8_t endpoint);
 static status_t zcl_onOff_cmdHandler(zclIncoming_t *pInMsg);
 
-_CODE_ZCL_ status_t zcl_onOff_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_onOff_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     status = zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_ON_OFF, manuCode, attrNum, attrTbl, zcl_onOff_cmdHandler, cb);
 
@@ -64,14 +64,14 @@ _CODE_ZCL_ status_t zcl_onOff_register(u8 endpoint, u16 manuCode, u8 attrNum, co
     return status;
 }
 
-_CODE_ZCL_ static void zcl_onOff_startUpOnOff(u8 endpoint)
+_CODE_ZCL_ static void zcl_onOff_startUpOnOff(uint8_t endpoint)
 {
-    u8 startUpOnOff = 0;
+    uint8_t startUpOnOff = 0;
     bool preOnOff = 0;
-    u16 attrLen = 0;
+    uint16_t attrLen = 0;
 
-    if ((zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_START_UP_ONOFF, &attrLen, (u8 *)&startUpOnOff) == ZCL_STA_SUCCESS) &&
-        (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, &attrLen, (u8 *)&preOnOff) == ZCL_STA_SUCCESS)) {
+    if ((zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_START_UP_ONOFF, &attrLen, (uint8_t *)&startUpOnOff) == ZCL_STA_SUCCESS) &&
+        (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, &attrLen, (uint8_t *)&preOnOff) == ZCL_STA_SUCCESS)) {
         bool dstOnOff = 0;
 
         if (startUpOnOff == ZCL_START_UP_ONOFF_SET_ONOFF_TO_OFF) {
@@ -85,32 +85,32 @@ _CODE_ZCL_ static void zcl_onOff_startUpOnOff(u8 endpoint)
         }
 
         if (dstOnOff != preOnOff) {
-            zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, (u8 *)&dstOnOff);
+            zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, (uint8_t *)&dstOnOff);
         }
     }
 }
 
-_CODE_ZCL_ status_t zcl_onOff_on(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_onOff_on(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ON_OFF, ZCL_CMD_ONOFF_ON, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_onOff_off(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_onOff_off(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ON_OFF, ZCL_CMD_ONOFF_OFF, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_onOff_toggle(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_onOff_toggle(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ON_OFF, ZCL_CMD_ONOFF_TOGGLE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_onOff_offWithEffect(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_onoff_offWithEffectCmd_t *pOffWithEffect)
+_CODE_ZCL_ status_t zcl_onOff_offWithEffect(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_onoff_offWithEffectCmd_t *pOffWithEffect)
 {
-    u8 buf[2];
+    uint8_t buf[2];
 
     buf[0] = pOffWithEffect->effectId;
     buf[1] = pOffWithEffect->effectVariant;
@@ -119,15 +119,15 @@ _CODE_ZCL_ status_t zcl_onOff_offWithEffect(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_onOff_onWithRecallGlobalScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_onOff_onWithRecallGlobalScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ON_OFF, ZCL_CMD_ON_WITH_RECALL_GLOBAL_SCENE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_onOff_onWithTimedOff(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_onoff_onWithTimeOffCmd_t *pOnWithTimedOff)
+_CODE_ZCL_ status_t zcl_onOff_onWithTimedOff(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_onoff_onWithTimeOffCmd_t *pOnWithTimedOff)
 {
-    u8 buf[5];
+    uint8_t buf[5];
 
     buf[0] = pOnWithTimedOff->onOffCtrl.onOffCtrl;
     buf[1] = LO_UINT16(pOnWithTimedOff->onTime);
@@ -141,11 +141,11 @@ _CODE_ZCL_ status_t zcl_onOff_onWithTimedOff(u8 srcEp, epInfo_t *pDstEpInfo, u8 
 
 _CODE_ZCL_ static status_t zcl_onOff_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     zcl_onoff_cmdPayload_t cmdPayload;
-    memset((u8 *)&cmdPayload, 0, sizeof(zcl_onoff_cmdPayload_t));
+    memset((uint8_t *)&cmdPayload, 0, sizeof(zcl_onoff_cmdPayload_t));
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ONOFF_OFF:
@@ -174,11 +174,11 @@ _CODE_ZCL_ static status_t zcl_onOff_clientCmdHandler(zclIncoming_t *pInMsg)
             pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &cmdPayload);
 
 #ifdef ZCL_SCENE
-            u16 attrLen = 0;
-            u8 sceneValid = 0;
-            if (zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (u8 *)&sceneValid) == ZCL_STA_SUCCESS) {
+            uint16_t attrLen = 0;
+            uint8_t sceneValid = 0;
+            if (zcl_getAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (uint8_t *)&sceneValid) == ZCL_STA_SUCCESS) {
                 sceneValid = 0;
-                zcl_setAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (u8 *)&sceneValid);
+                zcl_setAttrVal(pInMsg->msg->indInfo.dst_ep, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (uint8_t *)&sceneValid);
             }
 #endif
         }

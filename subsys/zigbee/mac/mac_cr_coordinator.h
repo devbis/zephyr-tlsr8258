@@ -9,14 +9,14 @@
 #include "zb_common.h"
 
 #if defined(ZB_ROUTER_ROLE)
-u8 tl_zbMacMlmeBeaconCmdSend(tl_zbBeaconFrame_t *beacon);
-u8 tl_zbMacMlmeCoordRealignmentCmdSend(u8 rxOnWhenIdle, const u8 *orphanAddr, u16 shortAddr,
+uint8_t zb_MacMlmeBeaconCmdSend(zb_BeaconFrame_t *beacon);
+uint8_t zb_MacMlmeCoordRealignmentCmdSend(uint8_t rxOnWhenIdle, const uint8_t *orphanAddr, uint16_t shortAddr,
 				       void *arg);
-void tl_zbMacBeaconRequestCb(void);
-void tl_zbMacMlmeBeaconSendConfirm(void *arg, u8 status);
-void tl_zbMacOrphanResponseHandler(void *arg);
-void tl_zbMacOrphanResponseStatusCheck(void *arg, u8 status);
-int tl_zbMacPacketDelaySend(void *arg);
+void zb_MacBeaconRequestCb(void);
+void zb_MacMlmeBeaconSendConfirm(void *arg, uint8_t status);
+void zb_MacOrphanResponseHandler(void *arg);
+void zb_MacOrphanResponseStatusCheck(void *arg, uint8_t status);
+int zb_MacPacketDelaySend(void *arg);
 #endif
 
 #endif

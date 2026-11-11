@@ -49,14 +49,14 @@
  */
 static status_t zcl_iasAce_cmdHandler(zclIncoming_t *pInMsg);
 
-_CODE_ZCL_ status_t zcl_iasAce_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_iasAce_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_SS_IAS_ACE, manuCode, attrNum, attrTbl, zcl_iasAce_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_armRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 armNotification)
+_CODE_ZCL_ status_t zcl_iasAce_armRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t armNotification)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = armNotification;
 
@@ -64,25 +64,25 @@ _CODE_ZCL_ status_t zcl_iasAce_armRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disable
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneIdMapRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 *pZoneIdMapSection)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneIdMapRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t *pZoneIdMapSection)
 {
-    u8 buf[32];
-    u8 *pBuf = buf;
+    uint8_t buf[32];
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < 16; i++) {
+    for (uint8_t i = 0; i < 16; i++) {
     	*pBuf++ = pZoneIdMapSection[1];
     	*pBuf++ = pZoneIdMapSection[0];
     	pZoneIdMapSection += 2;
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_GET_ZONE_ID_MAP_RESPONSE, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 32, (u8*)buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 32, (uint8_t*)buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneInfoRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getZoneInfoRsp_t *pGetZoneInfoRsp)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneInfoRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getZoneInfoRsp_t *pGetZoneInfoRsp)
 {
-    u8 buf[36];
-    u8 *pBuf = buf;
+    uint8_t buf[36];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pGetZoneInfoRsp->zoneId;
     *pBuf++ = LO_UINT16(pGetZoneInfoRsp->zoneType);
@@ -99,10 +99,10 @@ _CODE_ZCL_ status_t zcl_iasAce_getZoneInfoRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_zoneStatusChanged(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneStatusChanged_t *pZoneStatusChanged)
+_CODE_ZCL_ status_t zcl_iasAce_zoneStatusChanged(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneStatusChanged_t *pZoneStatusChanged)
 {
-    u8 buf[29];
-    u8 *pBuf = buf;
+    uint8_t buf[29];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pZoneStatusChanged->zoneId;
     *pBuf++ = LO_UINT16(pZoneStatusChanged->zoneStatus);
@@ -118,9 +118,9 @@ _CODE_ZCL_ status_t zcl_iasAce_zoneStatusChanged(u8 srcEp, epInfo_t *pDstEpInfo,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_panelStatusChanged(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, panelStatusChanged_t *pPanelStatusChanged)
+_CODE_ZCL_ status_t zcl_iasAce_panelStatusChanged(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, panelStatusChanged_t *pPanelStatusChanged)
 {
-    u8 buf[4];
+    uint8_t buf[4];
 
     buf[0] = pPanelStatusChanged->panelStatus;
     buf[1] = pPanelStatusChanged->secondsRemaining;
@@ -131,9 +131,9 @@ _CODE_ZCL_ status_t zcl_iasAce_panelStatusChanged(u8 srcEp, epInfo_t *pDstEpInfo
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 4, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getPanelStatusRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getPanelStatusRsp_t *pGetPanelStatusRsp)
+_CODE_ZCL_ status_t zcl_iasAce_getPanelStatusRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getPanelStatusRsp_t *pGetPanelStatusRsp)
 {
-    u8 buf[4];
+    uint8_t buf[4];
 
     buf[0] = pGetPanelStatusRsp->panelStatus;
     buf[1] = pGetPanelStatusRsp->secondsRemaining;
@@ -144,20 +144,20 @@ _CODE_ZCL_ status_t zcl_iasAce_getPanelStatusRsp(u8 srcEp, epInfo_t *pDstEpInfo,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 4, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_setBypassedZoneList(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, setBypassedZoneList_t *pSetBypassedZoneList)
+_CODE_ZCL_ status_t zcl_iasAce_setBypassedZoneList(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, setBypassedZoneList_t *pSetBypassedZoneList)
 {
-    u8 len = 1;
+    uint8_t len = 1;
 
     if (pSetBypassedZoneList->numOfZones) {
         len += pSetBypassedZoneList->numOfZones;
     }
 
-    u8 *buf = ev_buf_allocate(len);
+    uint8_t *buf = ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pSetBypassedZoneList->numOfZones;
     if (pSetBypassedZoneList->numOfZones) {
@@ -173,20 +173,20 @@ _CODE_ZCL_ status_t zcl_iasAce_setBypassedZoneList(u8 srcEp, epInfo_t *pDstEpInf
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_bypassResp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, bypassRsp_t *pBypassRsp)
+_CODE_ZCL_ status_t zcl_iasAce_bypassResp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, bypassRsp_t *pBypassRsp)
 {
-    u8 len = 1;
+    uint8_t len = 1;
 
     if (pBypassRsp->numOfZones) {
         len += pBypassRsp->numOfZones;
     }
 
-    u8 *buf = ev_buf_allocate(len);
+    uint8_t *buf = ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pBypassRsp->numOfZones;
     if (pBypassRsp->numOfZones) {
@@ -202,25 +202,25 @@ _CODE_ZCL_ status_t zcl_iasAce_bypassResp(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneStatusResp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getZoneStatusRsp_t *pGetZoneStatusRsp)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneStatusResp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getZoneStatusRsp_t *pGetZoneStatusRsp)
 {
-    u8 len = 2;
+    uint8_t len = 2;
 
     if (pGetZoneStatusRsp->numOfZones) {
         len += (pGetZoneStatusRsp->numOfZones * 3);
     }
 
-    u8 *buf = ev_buf_allocate(len);
+    uint8_t *buf = ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pGetZoneStatusRsp->zoneStatusComplete;
     *pBuf++ = pGetZoneStatusRsp->numOfZones;
     if (pGetZoneStatusRsp->numOfZones) {
-        for (u8 i = 0; i < pGetZoneStatusRsp->numOfZones; i++) {
+        for (uint8_t i = 0; i < pGetZoneStatusRsp->numOfZones; i++) {
             memcpy(pBuf, &pGetZoneStatusRsp->zoneStatusInfo[i], 3);
             pBuf += 3;
         }
@@ -234,10 +234,10 @@ _CODE_ZCL_ status_t zcl_iasAce_getZoneStatusResp(u8 srcEp, epInfo_t *pDstEpInfo,
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_arm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, arm_t *pArm)
+_CODE_ZCL_ status_t zcl_iasAce_arm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, arm_t *pArm)
 {
-    u8 buf[11];
-    u8 *pBuf = buf;
+    uint8_t buf[11];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pArm->armMode;
     *pBuf++ = pArm->code.strLen;
@@ -251,20 +251,20 @@ _CODE_ZCL_ status_t zcl_iasAce_arm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDef
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_bypass(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, bypass_t *pBypass)
+_CODE_ZCL_ status_t zcl_iasAce_bypass(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, bypass_t *pBypass)
 {
-    u8 len = 10;
+    uint8_t len = 10;
 
     if (pBypass->numOfZones) {
         len += pBypass->numOfZones;
     }
 
-    u8 *buf = ev_buf_allocate(len);
+    uint8_t *buf = ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pBypass->numOfZones;
     if (pBypass->numOfZones) {
@@ -285,33 +285,33 @@ _CODE_ZCL_ status_t zcl_iasAce_bypass(u8 srcEp, epInfo_t *pDstEpInfo, u8 disable
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_emergency(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_emergency(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_EMERGENCY, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_fire(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_fire(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_FIRE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_panic(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_panic(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_PANIC, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneIdMap(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneIdMap(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_GET_ZONE_ID_MAP, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneInfo(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 ZoneId)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneInfo(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t ZoneId)
 {
-    u8 buf[1];
+    uint8_t buf[1];
 
     buf[0] = ZoneId;
 
@@ -319,21 +319,21 @@ _CODE_ZCL_ status_t zcl_iasAce_getZoneInfo(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getPanelStatus(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_getPanelStatus(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_GET_PANEL_STATUS, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getBypassedZoneList(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasAce_getBypassedZoneList(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ACE, ZCL_CMD_GET_BYPASSED_ZONE_LIST, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasAce_getZoneStatus(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getZoneStatus_t *pGetZoneStatus)
+_CODE_ZCL_ status_t zcl_iasAce_getZoneStatus(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getZoneStatus_t *pGetZoneStatus)
 {
-    u8 buf[5];
+    uint8_t buf[5];
 
     buf[0] = pGetZoneStatus->startingZoneId;
     buf[1] = pGetZoneStatus->maxNumOfZoneIds;
@@ -345,9 +345,9 @@ _CODE_ZCL_ status_t zcl_iasAce_getZoneStatus(u8 srcEp, epInfo_t *pDstEpInfo, u8 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 5, buf);
 }
 
-_CODE_ZCL_ static u8 zcl_parseUTF8String(u8 *pData, UTF8String_t *pString, u8 maxLen)
+_CODE_ZCL_ static uint8_t zcl_parseUTF8String(uint8_t *pData, UTF8String_t *pString, uint8_t maxLen)
 {
-    u8 len = 0;
+    uint8_t len = 0;
     pString->strLen = *pData++;
 
     if (pString->strLen == 0xFF) {
@@ -366,17 +366,17 @@ _CODE_ZCL_ static u8 zcl_parseUTF8String(u8 *pData, UTF8String_t *pString, u8 ma
     return (len + 1);
 }
 
-_CODE_ZCL_ static void zcl_armParse(u8 *pData, arm_t *pCmd)
+_CODE_ZCL_ static void zcl_armParse(uint8_t *pData, arm_t *pCmd)
 {
     pCmd->armMode = *pData++;
 
-    u8 len = zcl_parseUTF8String(pData, &pCmd->code, 8);
+    uint8_t len = zcl_parseUTF8String(pData, &pCmd->code, 8);
     pData += len;
 
     pCmd->zoneId = *pData++;
 }
 
-_CODE_ZCL_ static void zcl_getZoneInfoRspParse(u8 *pData, getZoneInfoRsp_t *pCmd)
+_CODE_ZCL_ static void zcl_getZoneInfoRspParse(uint8_t *pData, getZoneInfoRsp_t *pCmd)
 {
     pCmd->zoneId = *pData++;
     pCmd->zoneType = BUILD_U16(pData[0], pData[1]);
@@ -386,7 +386,7 @@ _CODE_ZCL_ static void zcl_getZoneInfoRspParse(u8 *pData, getZoneInfoRsp_t *pCmd
     zcl_parseUTF8String(pData, &pCmd->zoneLabel, 24);
 }
 
-_CODE_ZCL_ static void zcl_zoneStatusChangedParse(u8 *pData, zoneStatusChanged_t *pCmd)
+_CODE_ZCL_ static void zcl_zoneStatusChangedParse(uint8_t *pData, zoneStatusChanged_t *pCmd)
 {
     pCmd->zoneId = *pData++;
     pCmd->zoneStatus = BUILD_U16(pData[0], pData[1]);
@@ -395,7 +395,7 @@ _CODE_ZCL_ static void zcl_zoneStatusChangedParse(u8 *pData, zoneStatusChanged_t
     zcl_parseUTF8String(pData, &pCmd->zoneLabel, 24);
 }
 
-_CODE_ZCL_ static void zcl_bypassParse(u8 *pData, bypass_t *pCmd)
+_CODE_ZCL_ static void zcl_bypassParse(uint8_t *pData, bypass_t *pCmd)
 {
     pCmd->numOfZones = *pData++;
     pCmd->zoneIds = pData;
@@ -406,15 +406,15 @@ _CODE_ZCL_ static void zcl_bypassParse(u8 *pData, bypass_t *pCmd)
 
 _CODE_ZCL_ static status_t zcl_iasAce_armPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (pInMsg->clusterAppCb) {
-        u8 armNotification = 0xff;
+        uint8_t armNotification = 0xff;
 
         arm_t arm;
-        TL_SETSTRUCTCONTENT(arm, 0);
+        ZB_SETSTRUCTCONTENT(arm, 0);
 
         zcl_armParse(pInMsg->pData, &arm);
 
@@ -422,7 +422,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_armPrc(zclIncoming_t *pInMsg)
 
         if (armNotification != 0xff) {
             epInfo_t dstEp;
-            TL_SETSTRUCTCONTENT(dstEp, 0);
+            ZB_SETSTRUCTCONTENT(dstEp, 0);
 
             dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
             dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -444,11 +444,11 @@ _CODE_ZCL_ static status_t zcl_iasAce_armPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_bypassPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         bypass_t bypass;
-        TL_SETSTRUCTCONTENT(bypass, 0);
+        ZB_SETSTRUCTCONTENT(bypass, 0);
 
         zcl_bypassParse(pInMsg->pData, &bypass);
 
@@ -462,7 +462,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_bypassPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_emergencyPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -475,7 +475,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_emergencyPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_firePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -488,7 +488,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_firePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_panicPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -501,19 +501,19 @@ _CODE_ZCL_ static status_t zcl_iasAce_panicPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneIdMapPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (pInMsg->clusterAppCb) {
-        u16 zoneIdMapSection[16];
-        u16 section = 0;
+        uint16_t zoneIdMapSection[16];
+        uint16_t section = 0;
 
-        for (u8 i = 0; i < 16; i++) {
+        for (uint8_t i = 0; i < 16; i++) {
             section = 0;
 
-            for (u8 j = 0; j < 16; j++) {
-                u8 zoneId = 16 * i + j;
+            for (uint8_t j = 0; j < 16; j++) {
+                uint8_t zoneId = 16 * i + j;
 
                 if (zcl_findZoneEntry(endpoint, zoneId)) {
                     section |= (0x01 << j);
@@ -526,14 +526,14 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneIdMapPrc(zclIncoming_t *pInMsg)
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
         dstEp.dstEp = pApsdeInd->indInfo.src_ep;
         dstEp.profileId = pApsdeInd->indInfo.profile_id;
 
-        zcl_iasAce_getZoneIdMapRsp(endpoint, &dstEp, TRUE, pInMsg->hdr.seqNum, (u8 *)zoneIdMapSection);
+        zcl_iasAce_getZoneIdMapRsp(endpoint, &dstEp, TRUE, pInMsg->hdr.seqNum, (uint8_t *)zoneIdMapSection);
 
         status = ZCL_STA_CMD_HAS_RESP;
     } else {
@@ -545,19 +545,19 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneIdMapPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneInformationPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (pInMsg->clusterAppCb) {
-        u8 zoneId = pInMsg->pData[0];
+        uint8_t zoneId = pInMsg->pData[0];
 
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &zoneId);
 
         zcl_zoneTable_t *pZoneEntry = zcl_findZoneEntry(endpoint, zoneId);
         if (pZoneEntry) {
             epInfo_t dstEp;
-            TL_SETSTRUCTCONTENT(dstEp, 0);
+            ZB_SETSTRUCTCONTENT(dstEp, 0);
 
             dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
             dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -565,7 +565,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneInformationPrc(zclIncoming_t *pInMs
             dstEp.profileId = pApsdeInd->indInfo.profile_id;
 
             getZoneInfoRsp_t getZoneInfoRsp;
-            TL_SETSTRUCTCONTENT(dstEp, 0);
+            ZB_SETSTRUCTCONTENT(dstEp, 0);
 
             getZoneInfoRsp.zoneId = pZoneEntry->zone.zoneId;
             getZoneInfoRsp.zoneType = pZoneEntry->zone.zoneType;
@@ -587,7 +587,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneInformationPrc(zclIncoming_t *pInMs
 
 _CODE_ZCL_ static status_t zcl_iasAce_getPanelStatusPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -600,7 +600,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_getPanelStatusPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getBypassedZoneListPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -613,8 +613,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_getBypassedZoneListPrc(zclIncoming_t *pInM
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneStatusPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         getZoneStatus_t getZoneStatus;
@@ -633,10 +633,10 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneStatusPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_armRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
-        u8 armNotification = pInMsg->pData[0];
+        uint8_t armNotification = pInMsg->pData[0];
 
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &armNotification);
     } else {
@@ -648,7 +648,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_armRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneIdMapRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, pInMsg->pData);
@@ -661,11 +661,11 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneIdMapRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneInfoRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         getZoneInfoRsp_t getZoneInfoRsp;
-        TL_SETSTRUCTCONTENT(getZoneInfoRsp, 0);
+        ZB_SETSTRUCTCONTENT(getZoneInfoRsp, 0);
 
         zcl_getZoneInfoRspParse(pInMsg->pData, &getZoneInfoRsp);
 
@@ -679,11 +679,11 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneInfoRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_zoneStatusChangedPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         zoneStatusChanged_t zoneStatusChanged;
-        TL_SETSTRUCTCONTENT(zoneStatusChanged, 0);
+        ZB_SETSTRUCTCONTENT(zoneStatusChanged, 0);
 
         zcl_zoneStatusChangedParse(pInMsg->pData, &zoneStatusChanged);
 
@@ -697,8 +697,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_zoneStatusChangedPrc(zclIncoming_t *pInMsg
 
 _CODE_ZCL_ static status_t zcl_iasAce_panelStatusChangedPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         panelStatusChanged_t panelStatusChanged;
@@ -717,8 +717,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_panelStatusChangedPrc(zclIncoming_t *pInMs
 
 _CODE_ZCL_ static status_t zcl_iasAce_getPanelStatusRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         getPanelStatusRsp_t getPanelStatusRsp;
@@ -737,8 +737,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_getPanelStatusRspPrc(zclIncoming_t *pInMsg
 
 _CODE_ZCL_ static status_t zcl_iasAce_setBypassedZoneListPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         setBypassedZoneList_t setBypassedZoneList;
@@ -755,8 +755,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_setBypassedZoneListPrc(zclIncoming_t *pInM
 
 _CODE_ZCL_ static status_t zcl_iasAce_bypassRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         bypassRsp_t bypassRsp;
@@ -773,8 +773,8 @@ _CODE_ZCL_ static status_t zcl_iasAce_bypassRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_getZoneStatusRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         getZoneStatusRsp_t getZoneStatusRsp;
@@ -792,7 +792,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_getZoneStatusRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ARM:
@@ -835,7 +835,7 @@ _CODE_ZCL_ static status_t zcl_iasAce_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasAce_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ARM_RESPONSE:

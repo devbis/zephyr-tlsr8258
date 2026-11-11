@@ -32,17 +32,17 @@
 #define LOGICCHANNEL_TO_PHYSICAL(p)   (((p) - 10) * 5)
 
 /* clock_time() — returns the vendor-style monotonic timer cycles timeline. */
-static inline u32 clock_time(void)
+static inline uint32_t clock_time(void)
 {
 	return zb_radio_port_clock_time_us();
 }
 
-static inline bool clock_time_exceed(u32 ref, u32 span_us)
+static inline bool clock_time_exceed(uint32_t ref, uint32_t span_us)
 {
 	return zb_radio_port_clock_time_exceed(ref, span_us);
 }
 
-static inline u32 clock_cycles_to_us(u32 cycles)
+static inline uint32_t clock_cycles_to_us(uint32_t cycles)
 {
 	return zb_radio_port_clock_delta_to_us(cycles);
 }
@@ -52,21 +52,21 @@ void zb_radio_init(void);
 bool zb_radio_is_ready(void);
 void zb_radio_reset(void);
 void zb_radio_filter_sync(void);
-void zb_radio_trx_switch(u8 mode, u8 phy_chn);
+void zb_radio_trx_switch(uint8_t mode, uint8_t phy_chn);
 void zb_radio_trx_off_auto_mode(void);
-void zb_radio_tx_power_set(u8 level);
+void zb_radio_tx_power_set(uint8_t level);
 /* Set the transmit power in dBm; 0 on success, a negative errno otherwise. */
 int zb_radio_tx_power_dbm_set(int16_t dbm);
-s8 zb_radio_rssi_get(void);
-void zb_radio_tx_start(u8 *tx_buf);
-u8 zb_radio_tx_done_get(void);
+int8_t zb_radio_rssi_get(void);
+void zb_radio_tx_start(uint8_t *tx_buf);
+uint8_t zb_radio_tx_done_get(void);
 void zb_radio_tx_done_clear(void);
-u8 zb_radio_rx_done_get(void);
+uint8_t zb_radio_rx_done_get(void);
 void zb_radio_rx_done_clear(void);
-u8 zb_radio_trx_state_get(void);
-void zb_radio_rx_buf_set(u8 *addr);
-u8 *zb_radio_next_rx_buf_get(void);
-u8 zb_radio_pkt_rssi_get(const u8 *p);
+uint8_t zb_radio_trx_state_get(void);
+void zb_radio_rx_buf_set(uint8_t *addr);
+uint8_t *zb_radio_next_rx_buf_get(void);
+uint8_t zb_radio_pkt_rssi_get(const uint8_t *p);
 
 #define ZB_RADIO_INIT()                       zb_radio_init()
 #define ZB_RADIO_RESET()                      zb_radio_reset()
@@ -81,7 +81,7 @@ u8 zb_radio_pkt_rssi_get(const u8 *p);
 #define ZB_RADIO_RX_DONE_CLR                  zb_radio_rx_done_clear()
 #define ZB_RADIO_TRX_STA_GET()                zb_radio_trx_state_get()
 #define ZB_RADIO_RX_BUF_SET(addr)             zb_radio_rx_buf_set(addr)
-static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
+static inline uint8_t *zb_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
 
 /* Legacy MAC hooks owned by the Zephyr radio adapter.  The normal Zephyr
  * sink path performs these operations in the IEEE 802.15.4 driver before it
@@ -111,8 +111,8 @@ static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
 } while (0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len) do { \
-	u8 *_p = (u8 *)(pBuf); \
-	_p[0] = (u8)((len) + 1); \
+	uint8_t *_p = (uint8_t *)(pBuf); \
+	_p[0] = (uint8_t)((len) + 1); \
 	_p[1] = 0; \
 	_p[2] = 0; \
 	_p[3] = 0; \
@@ -121,7 +121,7 @@ static inline u8 *tl_getRxBuf(void) { return zb_radio_next_rx_buf_get(); }
 /* Translate the vendor RF_STATE_* numbering (TX=0, RX=1, ED=2, OFF=3)
  * without exposing the vendor RF entry points to functional MAC sources. */
 static inline enum zb_radio_port_trx_state
-zb_radio_port_legacy_state(u8 state)
+zb_radio_port_legacy_state(uint8_t state)
 {
 	switch (state) {
 	case 0U:
@@ -135,7 +135,7 @@ zb_radio_port_legacy_state(u8 state)
 	}
 }
 
-static inline void zb_radio_port_set_legacy_state(u8 state, u8 channel)
+static inline void zb_radio_port_set_legacy_state(uint8_t state, uint8_t channel)
 {
 	(void)zb_radio_port_set_trx_state(zb_radio_port_legacy_state(state), channel);
 }
@@ -144,7 +144,7 @@ static inline void zb_radio_port_set_legacy_state(u8 state, u8 channel)
 
 /* Board-specific PA GPIOs are absent unless a board adapter supplies them. */
 #define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
-static inline void WaitUs(u32 us) { k_busy_wait(us); }
+static inline void WaitUs(uint32_t us) { k_busy_wait(us); }
 
 /* Packet field accessors for the vendor RF DMA layout.  CRC validation is
  * performed by the Zephyr IEEE 802.15.4 driver before the sink callback. */
@@ -157,11 +157,11 @@ static inline void WaitUs(u32 us) { k_busy_wait(us); }
 /* RSSI → LQI conversion (same formula as SDK for 8258) */
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi) do { \
 	(void)(mode); \
-	s16 _r = (s16)(rssi); \
-	s16 _min = -99, _max = -15; \
+	int16_t _r = (int16_t)(rssi); \
+	int16_t _min = -99, _max = -15; \
 	if (_r > _max) { _r = _max; } \
 	if (_r < _min) { _r = _min; } \
-	(lqi) = (u8)(255 * (_r - _min) / (_max - _min)); \
+	(lqi) = (uint8_t)(255 * (_r - _min) / (_max - _min)); \
 } while (0)
 
 #define ZB_LQI_TO_PATH_COST(lqi, path_cost) do { \
@@ -172,4 +172,4 @@ static inline void WaitUs(u32 us) { k_busy_wait(us); }
 	else                  { (path_cost) = 7; } \
 } while (0)
 
-void zb_radio_note_tx_frame(const u8 *frame);
+void zb_radio_note_tx_frame(const uint8_t *frame);

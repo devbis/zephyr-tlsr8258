@@ -36,22 +36,22 @@ gp_sinkTab_t g_gpSinkTab;
 void gp_sinkTabSave2Flash(void *arg)
 {
 #if NV_ENABLE
-    nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_GP_SINK_TABLE, sizeof(gp_sinkTab_t), (u8 *)&g_gpSinkTab);
+    nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_GP_SINK_TABLE, sizeof(gp_sinkTab_t), (uint8_t *)&g_gpSinkTab);
 #endif
 }
 
 nv_sts_t gp_sinkTabRestoreFromFlash(void)
 {
-    u8 ret = NV_SUCC;
+    uint8_t ret = NV_SUCC;
 
 #if NV_ENABLE
-    ret = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_GP_SINK_TABLE, sizeof(gp_sinkTab_t), (u8 *)&g_gpSinkTab);
+    ret = nv_flashReadNew(1, NV_MODULE_ZCL,  NV_ITEM_ZCL_GP_SINK_TABLE, sizeof(gp_sinkTab_t), (uint8_t *)&g_gpSinkTab);
 #endif
 
     return ret;
 }
 
-u8 gp_getSinkTabEntryTotalNum(void)
+uint8_t gp_getSinkTabEntryTotalNum(void)
 {
     return g_gpSinkTab.gpSinkTabNum;
 }
@@ -64,13 +64,13 @@ gpSinkTabEntry_t *gp_sinkTabEntryFreeGet(void)
         return NULL;
     }
 
-    for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+    for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
         pEntry = &g_gpSinkTab.gpSinkTab[i];
         if (!pEntry->used) {
             pEntry->gpdSecFrameCnt = 0xffffffff;
             pEntry->groupcastRadius = 0xff;
             pEntry->gpdAssignedAlias = 0xffff;
-            memset((u8 *)pEntry->groupList, 0xff, sizeof(gpSinkGroupListItem_t) * SINK_GROUP_LIST_NUM);
+            memset((uint8_t *)pEntry->groupList, 0xff, sizeof(gpSinkGroupListItem_t) * SINK_GROUP_LIST_NUM);
 
             return pEntry;
         }
@@ -79,7 +79,7 @@ gpSinkTabEntry_t *gp_sinkTabEntryFreeGet(void)
     return NULL;
 }
 
-void gp_sinkRemoveEntries(u8 appId, gpdId_t gpdId, u8 endpoint)
+void gp_sinkRemoveEntries(uint8_t appId, gpdId_t gpdId, uint8_t endpoint)
 {
     gpSinkTabEntry_t *pEntry = NULL;
 
@@ -90,14 +90,14 @@ void gp_sinkRemoveEntries(u8 appId, gpdId_t gpdId, u8 endpoint)
         return;
     }
 
-    u8 findEntry = 0;
-    u8 findEntryTotal = 0;
-    for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+    uint8_t findEntry = 0;
+    uint8_t findEntryTotal = 0;
+    for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
         pEntry = &g_gpSinkTab.gpSinkTab[i];
         if ((pEntry->used) && (pEntry->options.bits.appId == appId)) {
-            if ((appId == GP_APP_ID_SRC_ID) && !memcmp((u8 *)&gpdId.srcId, (u8 *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
+            if ((appId == GP_APP_ID_SRC_ID) && !memcmp((uint8_t *)&gpdId.srcId, (uint8_t *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
                 findEntry++;
-            } else if ((appId == GP_APP_ID_GPD) && !memcmp((u8 *)&gpdId.gpdIeeeAddr, (u8 *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
+            } else if ((appId == GP_APP_ID_GPD) && !memcmp((uint8_t *)&gpdId.gpdIeeeAddr, (uint8_t *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
                 if ((endpoint == pEntry->endpoint) || (pEntry->endpoint == 0) || (pEntry->endpoint == 0xff) || (endpoint == 0xff)) {
                     findEntry++;
                 }
@@ -106,9 +106,9 @@ void gp_sinkRemoveEntries(u8 appId, gpdId_t gpdId, u8 endpoint)
                 findEntry = 0;
                 findEntryTotal++;
                 aps_delete_group_req_t req;
-                TL_SETSTRUCTCONTENT(req, 0);
+                ZB_SETSTRUCTCONTENT(req, 0);
 
-                for (u8 i = 0; i < pEntry->sinkGroupListCnt; i++) {
+                for (uint8_t i = 0; i < pEntry->sinkGroupListCnt; i++) {
                     req.group_addr = pEntry->groupList[i].groupId;
                     req.ep = GREEN_POWER_ENDPOINT;
                     aps_me_group_delete_req(&req);
@@ -121,7 +121,7 @@ void gp_sinkRemoveEntries(u8 appId, gpdId_t gpdId, u8 endpoint)
 
                     aps_me_group_delete_req(&req);
                 }
-                memset((u8 *)pEntry, 0, sizeof(gpSinkTabEntry_t));
+                memset((uint8_t *)pEntry, 0, sizeof(gpSinkTabEntry_t));
                 g_gpSinkTab.gpSinkTabNum--;
             }
         }
@@ -132,7 +132,7 @@ void gp_sinkRemoveEntries(u8 appId, gpdId_t gpdId, u8 endpoint)
     }
 }
 
-gpSinkTabEntry_t *gp_getSinkTabByGpdId(u8 appId, gpdId_t gpdId)
+gpSinkTabEntry_t *gp_getSinkTabByGpdId(uint8_t appId, gpdId_t gpdId)
 {
     gpSinkTabEntry_t *pEntry = NULL;
 
@@ -140,13 +140,13 @@ gpSinkTabEntry_t *gp_getSinkTabByGpdId(u8 appId, gpdId_t gpdId)
         return NULL;
     }
 
-    for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+    for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
         pEntry = &g_gpSinkTab.gpSinkTab[i];
         if (pEntry->used) {
             if (pEntry->options.bits.appId == appId) {
-                if ((appId == GP_APP_ID_SRC_ID) && !memcmp((u8 *)&gpdId.srcId, (u8 *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
+                if ((appId == GP_APP_ID_SRC_ID) && !memcmp((uint8_t *)&gpdId.srcId, (uint8_t *)&pEntry->gpdId.srcId, SRC_ID_LEN)) {
                     return pEntry;
-                } else if ((appId == GP_APP_ID_GPD) && !memcmp((u8 *)&gpdId.gpdIeeeAddr, (u8 *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
+                } else if ((appId == GP_APP_ID_GPD) && !memcmp((uint8_t *)&gpdId.gpdIeeeAddr, (uint8_t *)&pEntry->gpdId.gpdIeeeAddr, EXT_ADDR_LEN)) {
                     return pEntry;
                 }
             }
@@ -156,19 +156,19 @@ gpSinkTabEntry_t *gp_getSinkTabByGpdId(u8 appId, gpdId_t gpdId)
     return NULL;
 }
 
-void gp_sinkGroupListAdd(gpSinkTabEntry_t *pEntry, u8 endpoint)
+void gp_sinkGroupListAdd(gpSinkTabEntry_t *pEntry, uint8_t endpoint)
 {
     if (pEntry->sinkGroupListCnt >= SINK_GROUP_LIST_NUM) {
         return;
     }
 
-    for (u8 i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
+    for (uint8_t i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
         aps_group_tbl_ent_t *pGroupEntry = &aps_group_tbl[i];
 
         if (pGroupEntry->group_addr != 0xffff) {
-            for (u8 epNum = 0; epNum < pGroupEntry->n_endpoints; epNum++) {
+            for (uint8_t epNum = 0; epNum < pGroupEntry->n_endpoints; epNum++) {
                 if (pGroupEntry->endpoints[epNum] == endpoint) {
-                    for (u8 j = 0; j < pEntry->sinkGroupListCnt; j++) {
+                    for (uint8_t j = 0; j < pEntry->sinkGroupListCnt; j++) {
                         if (pEntry->groupList[j].groupId == pGroupEntry->group_addr) {
                             return;
                         }
@@ -189,9 +189,9 @@ void gp_sinkGroupListAdd(gpSinkTabEntry_t *pEntry, u8 endpoint)
     }
 }
 
-u8 gp_getSinkTabEntryLen(gpSinkTabEntry_t *pEntry)
+uint8_t gp_getSinkTabEntryLen(gpSinkTabEntry_t *pEntry)
 {
-    u8 entryLen = 2;//options
+    uint8_t entryLen = 2;//options
 
     if (pEntry->options.bits.appId == GP_APP_ID_SRC_ID) {
         entryLen += 4;
@@ -200,7 +200,7 @@ u8 gp_getSinkTabEntryLen(gpSinkTabEntry_t *pEntry)
         entryLen += 1;//endpoint
     }
 
-    entryLen += sizeof(u8);//DeviceID
+    entryLen += sizeof(uint8_t);//DeviceID
 
     if (pEntry->options.bits.communicationMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
         entryLen += 1;
@@ -210,17 +210,17 @@ u8 gp_getSinkTabEntryLen(gpSinkTabEntry_t *pEntry)
     }
 
     if (pEntry->options.bits.assignedAlias) {
-        entryLen += sizeof(u16);
+        entryLen += sizeof(uint16_t);
     }
 
-    entryLen += sizeof(u8);//groupcast radius
+    entryLen += sizeof(uint8_t);//groupcast radius
 
     if (pEntry->options.bits.securityUse) {
-        entryLen += sizeof(u8);
+        entryLen += sizeof(uint8_t);
     }
 
     if ((pEntry->options.bits.securityUse) || (pEntry->options.bits.seqNumCapabilities)) {
-        entryLen += sizeof(u32);
+        entryLen += sizeof(uint32_t);
     }
 
     if (!ZB_SEC_KEY_IS_NULL(pEntry->gpdKey)) {
@@ -230,9 +230,9 @@ u8 gp_getSinkTabEntryLen(gpSinkTabEntry_t *pEntry)
     return entryLen;
 }
 
-u8 gp_buildSinkTabEntryFormat(gpSinkTabEntry_t *pEntry, u8 *pBuf)
+uint8_t gp_buildSinkTabEntryFormat(gpSinkTabEntry_t *pEntry, uint8_t *pBuf)
 {
-    u8 *ptr = pBuf;
+    uint8_t *ptr = pBuf;
 
     //Options
     *ptr++ = LO_UINT16(pEntry->options.opts);
@@ -254,7 +254,7 @@ u8 gp_buildSinkTabEntryFormat(gpSinkTabEntry_t *pEntry, u8 *pBuf)
 
     if (pEntry->options.bits.communicationMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
         *ptr++ = pEntry->sinkGroupListCnt;
-        for (u8 i = 0; i < pEntry->sinkGroupListCnt; i++) {
+        for (uint8_t i = 0; i < pEntry->sinkGroupListCnt; i++) {
             *ptr++ = LO_UINT16(pEntry->groupList[i].groupId);
             *ptr++ = HI_UINT16(pEntry->groupList[i].groupId);
             *ptr++ = LO_UINT16(pEntry->groupList[i].alias);
@@ -294,18 +294,18 @@ u8 gp_buildSinkTabEntryFormat(gpSinkTabEntry_t *pEntry, u8 *pBuf)
 
 static void zclGpSinkTabAttrUpdate(void)
 {
-    u8 *pBuf = zclGpAttr_sinkTabEntry;
+    uint8_t *pBuf = zclGpAttr_sinkTabEntry;
 
     if (g_gpSinkTab.gpSinkTabNum == 0) {
         //len = 0
         *pBuf++ = 0;
         *pBuf++ = 0;
     } else {
-        u8 entryLen = 0;
-        u8 maxEntryLen = 0;
-        u8 entryCnt = 0;
+        uint8_t entryLen = 0;
+        uint8_t maxEntryLen = 0;
+        uint8_t entryCnt = 0;
 
-        for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+        for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
             maxEntryLen = entryLen;
 
             if (g_gpSinkTab.gpSinkTab[i].used) {
@@ -322,7 +322,7 @@ static void zclGpSinkTabAttrUpdate(void)
         *pBuf++ = LO_UINT16(entryLen);
         *pBuf++ = 0; //HI_UINT16(entryLen) always is 0
 
-        for (u8 i = 0; i < entryCnt; i++) {
+        for (uint8_t i = 0; i < entryCnt; i++) {
             if (g_gpSinkTab.gpSinkTab[i].used) {
                 pBuf += gp_buildSinkTabEntryFormat(&g_gpSinkTab.gpSinkTab[i], pBuf);
             }
@@ -335,7 +335,7 @@ void gpSinkTabUpdate(void)
     zclGpSinkTabAttrUpdate();
 
     //write to NV
-    TL_SCHEDULE_TASK(gp_sinkTabSave2Flash, NULL);
+    ZB_SCHEDULE_TASK(gp_sinkTabSave2Flash, NULL);
 }
 
 void gpSinkTabInit(void)
@@ -343,7 +343,7 @@ void gpSinkTabInit(void)
     if (gp_sinkTabRestoreFromFlash() == NV_SUCC) {
         zclGpSinkTabAttrUpdate();
     } else {
-        memset((u8 *)&g_gpSinkTab, 0, sizeof(gp_sinkTab_t));
+        memset((uint8_t *)&g_gpSinkTab, 0, sizeof(gp_sinkTab_t));
     }
 }
 

@@ -22,22 +22,22 @@ LOG_MODULE_REGISTER(zigbee_mac_associate, CONFIG_ZIGBEE_LOG_LEVEL);
 static ev_timer_event_t *assocRspTimeoutEvt;
 void *associationReqOrigBuffer = NULL;
 
-static inline void mac_associate_confirm_post(void *arg, u8 status)
+static inline void mac_associate_confirm_post(void *arg, uint8_t status)
 {
 	zb_mlme_associate_conf_t *cnf = (zb_mlme_associate_conf_t *)arg;
 
 	memset(cnf, 0, sizeof(*cnf));
 	cnf->status = status;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
 }
 
-static inline u32 assoc_timeout_ms(void)
+static inline uint32_t assoc_timeout_ms(void)
 {
-	u32 base = g_zbInfo.macPib.respWaitTime;
+	uint32_t base = g_zbInfo.macPib.respWaitTime;
 	return ((((base << 4) - base) << 10) / 1000U);
 }
 
-static int tl_zbWaitForAssociationRespTimeout(void *arg)
+static int zb_WaitForAssociationRespTimeout(void *arg)
 {
 	LOG_WRN("no association response from the parent");
 	mac_associate_confirm_post(arg, MAC_STA_NO_DATA);
@@ -49,7 +49,7 @@ static int tl_zbWaitForAssociationRespTimeout(void *arg)
 	return -1;
 }
 
-static int tl_zbReadyToPullParentForAssoRsp(void *arg)
+static int zb_ReadyToPullParentForAssoRsp(void *arg)
 {
 	(void)arg;
 
@@ -79,16 +79,16 @@ static int tl_zbReadyToPullParentForAssoRsp(void *arg)
 			ZB_IEEE_ADDR_COPY(&dataReq.dstAddr, assocReq->coordAddress.addr.extAddr);
 			dataReq.cbType = 0;
 
-			tl_zbMacMlmeDataRequestCmdSend(&dataReq, buf, MAC_STA_NO_ACK);
+			zb_MacMlmeDataRequestCmdSend(&dataReq, buf, MAC_STA_NO_ACK);
 		}
 	}
 
 	return -1;
 }
 
-void tl_zbMacAssocPollConfirm(u8 status)
+void zb_MacAssocPollConfirm(uint8_t status)
 {
-	u8 *req = (u8 *)associationReqOrigBuffer;
+	uint8_t *req = (uint8_t *)associationReqOrigBuffer;
 
 	if (req == NULL) {
 		return;
@@ -97,7 +97,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
 	if (status == MAC_STA_FRAME_PENDING) {
 		g_zbMacCtx.status = ZB_MAC_STATE_INDIRECT_DATA;
 		if (assocRspTimeoutEvt == NULL) {
-			assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout,
+			assocRspTimeoutEvt = ev_timer_taskPost(zb_WaitForAssociationRespTimeout,
 							       req, assoc_timeout_ms());
 		}
 		return;
@@ -105,7 +105,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
 
 	if (status == MAC_SUCCESS) {
 		if (assocRspTimeoutEvt == NULL) {
-			assocRspTimeoutEvt = ev_timer_taskPost(tl_zbWaitForAssociationRespTimeout,
+			assocRspTimeoutEvt = ev_timer_taskPost(zb_WaitForAssociationRespTimeout,
 							       req, assoc_timeout_ms());
 		}
 		return;
@@ -117,7 +117,7 @@ void tl_zbMacAssocPollConfirm(u8 status)
 	g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
 }
 
-void tl_zbMacAssociateRespReceived(void)
+void zb_MacAssociateRespReceived(void)
 {
 	LOG_DBG("association response received");
 	mac_pendingWaitTimerCancel();
@@ -129,7 +129,7 @@ void tl_zbMacAssociateRespReceived(void)
 	g_zbMacCtx.status = ZB_MAC_STATE_NORMAL;
 }
 
-void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
+void zb_MacAssociateRequestStatusCheck(void *arg, uint8_t status)
 {
 	(void)arg;
 
@@ -144,12 +144,12 @@ void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status)
 		return;
 	}
 
-	ev_timer_taskPost(tl_zbReadyToPullParentForAssoRsp, NULL, assoc_timeout_ms());
+	ev_timer_taskPost(zb_ReadyToPullParentForAssoRsp, NULL, assoc_timeout_ms());
 }
 
-void tl_zbMacAssociateRequestHandler(void *arg)
+void zb_MacAssociateRequestHandler(void *arg)
 {
-	u8 *req = (u8 *)arg;
+	uint8_t *req = (uint8_t *)arg;
 	zb_mlme_associate_req_t *assocReq = (zb_mlme_associate_req_t *)arg;
 	zb_buf_t *txBuf = (zb_buf_t *)g_zbMacCtx.txRawDataBuf;
 
@@ -166,11 +166,11 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 	rf_setChannel(req[0]);
 
 	{
-		tl_zb_mac_mhr_t mhr;
-		u8 *payload;
-		u8 *frameStart;
-		u8 hdrSize;
-		u8 txStatus;
+		zb_mac_mhr_t mhr;
+		uint8_t *payload;
+		uint8_t *frameStart;
+		uint8_t hdrSize;
+		uint8_t txStatus;
 
 		memset(&mhr, 0, sizeof(mhr));
 		mhr.dstPanId = assocReq->coordPanId;
@@ -183,19 +183,19 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 		}
 		ZB_IEEE_ADDR_COPY(&mhr.srcAddr, g_zbInfo.macPib.extAddress);
 		mhr.frameCtrl = MAC_FRAME_TYPE_COMMAND | MAC_FCF_ACK_REQUEST_MASK |
-				((u16)mhr.dstAddrMode << MAC_FCF_DST_ADDR_MODE_POS) |
-				((u16)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
+				((uint16_t)mhr.dstAddrMode << MAC_FCF_DST_ADDR_MODE_POS) |
+				((uint16_t)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
 
-		hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 2U);
-		TL_BUF_INITIAL_ALLOC(txBuf, hdrSize, payload, u8 *);
+		hdrSize = (uint8_t)(zb_MacHdrSize(mhr.frameCtrl) + 2U);
+		ZB_BUF_INITIAL_ALLOC(txBuf, hdrSize, payload, uint8_t *);
 		txBuf->hdr.handle = MAC_INTERNAL_ASSOCIATE_REQUEST_HANDLE;
-		/* tl_zbMacTx() takes the frame start, not the builder's return. */
+		/* zb_MacTx() takes the frame start, not the builder's return. */
 		frameStart = payload;
-		payload = tl_zbMacHdrBuilder(payload, &mhr);
+		payload = zb_MacHdrBuilder(payload, &mhr);
 		payload[0] = MAC_CMD_ASSOCIATION_REQUEST;
-		payload[1] = *(u8 *)&assocReq->capbilityInfo;
+		payload[1] = *(uint8_t *)&assocReq->capbilityInfo;
 
-		txStatus = tl_zbMacTx(txBuf, frameStart, hdrSize, 1, NULL);
+		txStatus = zb_MacTx(txBuf, frameStart, hdrSize, 1, NULL);
 		if (txStatus != MAC_SUCCESS) {
 			mac_associate_confirm_post(arg, MAC_STA_TX_ACTIVE);
 			associationReqOrigBuffer = NULL;
@@ -204,18 +204,18 @@ void tl_zbMacAssociateRequestHandler(void *arg)
 }
 
 #if defined(ZB_ROUTER_ROLE)
-void tl_zbMacAssociateResponseHandler(void *arg)
+void zb_MacAssociateResponseHandler(void *arg)
 {
-	u8 *req = (u8 *)arg;
-	tl_zb_mac_mhr_t mhr;
-	u8 pendingAddr[9]; /* address mode, then the extended address */
-	u32 pendingAddrLow;
-	u32 pendingAddrHigh;
+	uint8_t *req = (uint8_t *)arg;
+	zb_mac_mhr_t mhr;
+	uint8_t pendingAddr[9]; /* address mode, then the extended address */
+	uint32_t pendingAddrLow;
+	uint32_t pendingAddrHigh;
 	mac_pending_tx_ctx_t *pendingCtx;
-	u8 *frameStart;
-	u8 *payload;
-	u8 hdrSize;
-	u8 status;
+	uint8_t *frameStart;
+	uint8_t *payload;
+	uint8_t hdrSize;
+	uint8_t status;
 
 	if (g_zbNwkCtx.joined_pro) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -224,8 +224,8 @@ void tl_zbMacAssociateResponseHandler(void *arg)
 
 	memset(&mhr, 0, sizeof(mhr));
 	mhr.frameCtrl = MAC_FRAME_TYPE_COMMAND | MAC_FCF_ACK_REQUEST_MASK | MAC_FCF_INTRA_PAN_MASK |
-			((u16)ADDR_MODE_EXT << MAC_FCF_DST_ADDR_MODE_POS) |
-			((u16)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
+			((uint16_t)ADDR_MODE_EXT << MAC_FCF_DST_ADDR_MODE_POS) |
+			((uint16_t)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
 	mhr.dstPanId = g_zbInfo.macPib.panId;
 	mhr.srcPanId = g_zbInfo.macPib.panId;
 	mhr.dstAddrMode = ADDR_MODE_EXT;
@@ -233,13 +233,13 @@ void tl_zbMacAssociateResponseHandler(void *arg)
 	ZB_IEEE_ADDR_COPY(mhr.dstAddr.extAddr, req + 2);
 	ZB_IEEE_ADDR_COPY(mhr.srcAddr.extAddr, g_zbInfo.macPib.extAddress);
 
-	hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 4U);
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, hdrSize, payload, u8 *);
+	hdrSize = (uint8_t)(zb_MacHdrSize(mhr.frameCtrl) + 4U);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, hdrSize, payload, uint8_t *);
 	/* Keep the start of the allocation: the pending context holds the
 	 * complete frame, whose frame control byte the pending-state update
 	 * later rewrites. */
 	frameStart = payload;
-	payload = tl_zbMacHdrBuilder(payload, &mhr);
+	payload = zb_MacHdrBuilder(payload, &mhr);
 	payload[0] = MAC_CMD_ASSOCIATION_RESPONSE;
 	memcpy(payload + 1, req, 2);
 	payload[3] = req[10];
@@ -256,31 +256,31 @@ void tl_zbMacAssociateResponseHandler(void *arg)
 	memcpy(&pendingAddrHigh, pendingAddr + 5, sizeof(pendingAddrHigh));
 	status = macDataPending(arg, pendingAddrLow, pendingAddrHigh, pendingAddr[0]);
 	if (status != MAC_SUCCESS) {
-		tl_zbMacCommStatusSend(arg, status);
+		zb_MacCommStatusSend(arg, status);
 	}
 }
 #endif
 
-void tl_zbMacDisassociateNotifyCmdConfirm(void *arg, u8 status)
+void zb_MacDisassociateNotifyCmdConfirm(void *arg, uint8_t status)
 {
 	zb_mlme_disassociate_conf_t *cnf = (zb_mlme_disassociate_conf_t *)arg;
 
 	cnf->status = status;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 }
 
-u8 tl_macMlmeDisassociateNotifyCmdSend(void *arg, u8 txIndirect)
+uint8_t zb_macMlmeDisassociateNotifyCmdSend(void *arg, uint8_t txIndirect)
 {
 	zb_mlme_disassociate_req_t *req = (zb_mlme_disassociate_req_t *)arg;
-	tl_zb_mac_mhr_t mhr;
+	zb_mac_mhr_t mhr;
 	zb_buf_t *txBuf = (zb_buf_t *)arg;
-	u8 *payload;
-	u8 *frameStart;
-	u8 hdrSize;
-	u8 status;
+	uint8_t *payload;
+	uint8_t *frameStart;
+	uint8_t hdrSize;
+	uint8_t status;
 #if defined(ZB_COORDINATOR_ROLE)
-	u8 pendingAddrMode;
-	u32 pendingAddr[2];
+	uint8_t pendingAddrMode;
+	uint32_t pendingAddr[2];
 #endif
 
 	memset(&mhr, 0, sizeof(mhr));
@@ -301,13 +301,13 @@ u8 tl_macMlmeDisassociateNotifyCmdSend(void *arg, u8 txIndirect)
 
 	ZB_IEEE_ADDR_COPY(&mhr.srcAddr, g_zbInfo.macPib.extAddress);
 	mhr.frameCtrl = MAC_FRAME_TYPE_COMMAND | MAC_FCF_ACK_REQUEST_MASK | MAC_FCF_INTRA_PAN_MASK |
-			((u16)req->devAddr.addrMode << MAC_FCF_DST_ADDR_MODE_POS) |
-			((u16)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
+			((uint16_t)req->devAddr.addrMode << MAC_FCF_DST_ADDR_MODE_POS) |
+			((uint16_t)ADDR_MODE_EXT << MAC_FCF_SRC_ADDR_MODE_POS);
 
-	hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 2U);
-	TL_BUF_INITIAL_ALLOC(txBuf, hdrSize, payload, u8 *);
+	hdrSize = (uint8_t)(zb_MacHdrSize(mhr.frameCtrl) + 2U);
+	ZB_BUF_INITIAL_ALLOC(txBuf, hdrSize, payload, uint8_t *);
 	frameStart = payload;
-	payload = tl_zbMacHdrBuilder(payload, &mhr);
+	payload = zb_MacHdrBuilder(payload, &mhr);
 	txBuf->hdr.handle = MAC_INTERNAL_DISASSOCIATE_NOTIFICATION_HANDLE;
 	payload[0] = MAC_CMD_DISASSOCIATION_NOTIFICATION;
 	payload[1] = req->disassociateReason;
@@ -320,7 +320,7 @@ u8 tl_macMlmeDisassociateNotifyCmdSend(void *arg, u8 txIndirect)
 	} else
 #endif
 	{
-		status = tl_zbMacTx(txBuf, frameStart, hdrSize, 1, NULL);
+		status = zb_MacTx(txBuf, frameStart, hdrSize, 1, NULL);
 	}
 	if (status != MAC_SUCCESS) {
 		return MAC_STA_CHANNEL_ACCESS_FAILURE;
@@ -329,65 +329,65 @@ u8 tl_macMlmeDisassociateNotifyCmdSend(void *arg, u8 txIndirect)
 	return MAC_SUCCESS;
 }
 
-void tl_zbMacDisassociateRequestHandler(void *arg)
+void zb_MacDisassociateRequestHandler(void *arg)
 {
 	zb_mlme_disassociate_req_t *req = (zb_mlme_disassociate_req_t *)arg;
 	zb_mlme_disassociate_conf_t *cnf = (zb_mlme_disassociate_conf_t *)arg;
-	u16 localPanId = g_zbInfo.macPib.panId;
+	uint16_t localPanId = g_zbInfo.macPib.panId;
 
 	if (req->devPanId != localPanId) {
 		cnf->status = MAC_STA_INVALID_PARAMETER;
-		tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 		return;
 	}
 
 #if !defined(ZB_COORDINATOR_ROLE)
 	if (req->devAddr.addrMode == ZB_ADDR_16BIT_DEV_OR_BROADCAST) {
-		u16 parentShort = g_zbInfo.macPib.coordShortAddress;
+		uint16_t parentShort = g_zbInfo.macPib.coordShortAddress;
 
 		if (req->devAddr.addr.shortAddr != parentShort) {
 			cnf->status = MAC_STA_INVALID_PARAMETER;
-			tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+			zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 			return;
 		}
 	} else if (req->devAddr.addrMode == ZB_ADDR_64BIT_DEV) {
 		if (!ZB_IEEE_ADDR_CMP(req->devAddr.addr.extAddr, g_zbInfo.macPib.coordExtAddress)) {
 			cnf->status = MAC_STA_INVALID_PARAMETER;
-			tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+			zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 			return;
 		}
 	} else {
 		cnf->status = MAC_STA_INVALID_PARAMETER;
-		tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 		return;
 	}
 #endif
 
 	{
-		u8 status;
+		uint8_t status;
 
 #if defined(ZB_COORDINATOR_ROLE)
-		status = tl_macMlmeDisassociateNotifyCmdSend(arg, req->txIndirect);
+		status = zb_macMlmeDisassociateNotifyCmdSend(arg, req->txIndirect);
 #else
-		status = tl_macMlmeDisassociateNotifyCmdSend(arg, 0);
+		status = zb_macMlmeDisassociateNotifyCmdSend(arg, 0);
 #endif
 
 		if (status != MAC_SUCCESS) {
 			cnf->status = MAC_STA_INVALID_PARAMETER;
-			tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
+			zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_CNF, arg);
 		}
 	}
 }
 
-void tl_zbMlmeCmdDisassociateNotifyRecvd(void *arg, void *raw)
+void zb_MlmeCmdDisassociateNotifyRecvd(void *arg, void *raw)
 {
 	zb_mlme_disassociate_ind_t *ind = (zb_mlme_disassociate_ind_t *)arg;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
 	mac_phy_ind_meta_t *meta = (mac_phy_ind_meta_t *)arg;
-	u8 *reasonSrc = meta->payload;
+	uint8_t *reasonSrc = meta->payload;
 
 	ZB_IEEE_ADDR_COPY(ind->devAddress, mhr->srcAddr.extAddr);
 	ind->disassociateReason = reasonSrc[1];
 
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_IND, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_DISASSOCIATE_IND, arg);
 }

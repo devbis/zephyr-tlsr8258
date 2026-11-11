@@ -59,9 +59,9 @@ static void znp_persist_retry_later(void)
 
 static bool znp_persist_manifest_read(uint8_t bank, uint32_t *sequence, uint8_t *count)
 {
-	u16 len = 0U;
+	uint16_t len = 0U;
 	size_t expected_len;
-	u8 item = bank_manifest(bank);
+	uint8_t item = bank_manifest(bank);
 
 	if (nv_flashSingleItemSizeGet(NV_MODULE_APP, item, &len) != NV_SUCC ||
 	    len < ZNP_PERSIST_HEADER_SIZE + ZNP_PERSIST_CRC_SIZE ||
@@ -100,7 +100,7 @@ static bool znp_persist_bank_load(uint8_t bank, uint32_t expected_sequence)
 		uint16_t len = znp_get_u16(&manifest[offset + 2U]);
 		uint32_t expected_crc = znp_get_u32(&manifest[offset + 4U]);
 		uint8_t item = (uint8_t)(bank_base(bank) + i);
-		u16 stored_len = 0U;
+		uint16_t stored_len = 0U;
 		uint8_t *data;
 
 		offset += ZNP_PERSIST_ENTRY_SIZE;
@@ -227,7 +227,7 @@ void znp_persist_flush(void)
 	manifest_len = offset + ZNP_PERSIST_CRC_SIZE;
 	(void)znp_put_u32(&manifest[offset],
 			   crc32_ieee(manifest, manifest_len - ZNP_PERSIST_CRC_SIZE));
-	st = nv_flashWriteNew(1U, NV_MODULE_APP, bank_manifest(bank), (u16)manifest_len, manifest);
+	st = nv_flashWriteNew(1U, NV_MODULE_APP, bank_manifest(bank), (uint16_t)manifest_len, manifest);
 	if (st != NV_SUCC) {
 		LOG_WRN("znp: saving the NV manifest failed (%d)", st);
 		znp_persist_retry_later();

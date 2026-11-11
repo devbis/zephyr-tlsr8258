@@ -201,19 +201,19 @@
  *  @brief	Format of the Get Profile Info command
  */
 typedef struct {
-    u16 attrID;
+    uint16_t attrID;
     UTCTime startTime;
-    u8 numberOfIntervals;
+    uint8_t numberOfIntervals;
 } zcl_electricalMeasure_getMeasurementProfileCmd_t;
 
 /**
  *  @brief	Format of the Get Profile Info Response command
  */
 typedef struct {
-    u8 profileCnt;
-    u8 profileIntervalPeriod;
-    u8 maxNumberOfIntervals;
-    u8 *listOfAttributes;
+    uint8_t profileCnt;
+    uint8_t profileIntervalPeriod;
+    uint8_t maxNumberOfIntervals;
+    uint8_t *listOfAttributes;
 } zcl_electricalMeasure_getProfileInfoRspCmd_t;
 
 /**
@@ -221,11 +221,11 @@ typedef struct {
  */
 typedef struct {
     UTCTime startTime;
-    u8 status;
-    u8 profileIntervalPeriod;
-    u8 numberOfIntervals;
-    u8 attributeId;
-    u8 *intervals;
+    uint8_t status;
+    uint8_t profileIntervalPeriod;
+    uint8_t numberOfIntervals;
+    uint8_t attributeId;
+    uint8_t *intervals;
 } zcl_electricalMeasure_getMeasurementProfileRspCmd_t;
 
 
@@ -247,22 +247,22 @@ typedef struct {
 
 
 extern const zclAttrInfo_t electricalMeasure_attrTbl[];
-extern const u8 zcl_electricalMeasure_attrNum;
+extern const uint8_t zcl_electricalMeasure_attrNum;
 #endif
 
 
-status_t zcl_electricalMeasure_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_electricalMeasure_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_electricalMeasure_getProfileInfo(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_electricalMeasure_getProfileInfo(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_electricalMeasure_getProfileInfoCmd(a,b,c)                  (zcl_electricalMeasure_getProfileInfo((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_electricalMeasure_getMeasurementProfile(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getMeasurementProfileCmd_t *pReq);
+status_t zcl_electricalMeasure_getMeasurementProfile(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getMeasurementProfileCmd_t *pReq);
 #define zcl_electricalMeasure_getMeasurementProfileCmd(a,b,c,d)         (zcl_electricalMeasure_getMeasurementProfile((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_electricalMeasure_getProfileInfoRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getProfileInfoRspCmd_t *pRsp);
+status_t zcl_electricalMeasure_getProfileInfoRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getProfileInfoRspCmd_t *pRsp);
 #define zcl_electricalMeasure_getProfileInfoRspCmd(a,b,c,d,e)           (zcl_electricalMeasure_getProfileInfoRsp((a), (b), (c), (d), (e)))
 
-status_t zcl_electricalMeasure_getMeasurementProfileRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getMeasurementProfileRspCmd_t *pRsp);
+status_t zcl_electricalMeasure_getMeasurementProfileRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getMeasurementProfileRspCmd_t *pRsp);
 #define zcl_electricalMeasure_getMeasurementProfileRspCmd(a,b,c,d,e)    (zcl_electricalMeasure_getMeasurementProfileRsp((a), (b), (c), (d), (e)))
 
 #endif	/* ZCL_ELECTRICAL_MEASUREMENT_H */
