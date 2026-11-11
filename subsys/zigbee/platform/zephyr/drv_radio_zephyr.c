@@ -448,7 +448,7 @@ static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 }
 
 /*
- * The vendor MAC receive entry takes the frame in the TLSR8258 RF DMA layout:
+ * The vendor MAC receive entry takes the frame in the vendor RF DMA layout:
  * a 5-byte header whose last byte is the PHY length (PSDU plus FCS), the PSDU,
  * and a 2-byte status trailer. The radio ports hand over the bare PSDU, so
  * build that layout here, the only place that needs it.
