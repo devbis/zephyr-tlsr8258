@@ -39,6 +39,22 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_PHY6252 ieee802154_phy6252.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_RF2XX ieee802154_rf2xx.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_RF2XX ieee802154_rf2xx_iface.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_SILABS_EFR32 ieee802154_silabs_efr32.c)
+zephyr_library_sources_ifdef(CONFIG_IEEE802154_STM32WB ieee802154_stm32wb.c)
+if(CONFIG_IEEE802154_STM32WB)
+  # The IPCC mailbox transport from the HAL (it is only built for the Bluetooth driver otherwise)
+  set(STM32WB_WPAN ${ZEPHYR_HAL_STM32_MODULE_DIR}/lib/stm32wb/hci)
+  zephyr_library_include_directories(${STM32WB_WPAN})
+  zephyr_library_sources(
+    ${STM32WB_WPAN}/hw_ipcc.c
+    ${STM32WB_WPAN}/shci.c
+    ${STM32WB_WPAN}/shci_tl.c
+    ${STM32WB_WPAN}/shci_tl_if.c
+    ${STM32WB_WPAN}/stm_list.c
+    ${STM32WB_WPAN}/tl_mbox.c
+  )
+  zephyr_library_compile_definitions(THREAD_WB)
+  zephyr_linker_sources(SECTIONS ${ZEPHYR_BASE}/soc/st/stm32/stm32wbx/ipm.ld)
+endif()
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_STM32WBA ieee802154_stm32wba.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_B91 ieee802154_b91.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8269 ieee802154_tlsr8269.c)
