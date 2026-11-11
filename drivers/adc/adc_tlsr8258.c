@@ -31,6 +31,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/adc/adc_tlsr8258.h>
+#include <zephyr/drivers/flash.h>
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
@@ -407,6 +408,51 @@ int adc_tlsr8258_set_calibration(const struct device *dev, uint16_t vref_mv, int
 	return 0;
 }
 
+/*
+ * Factory calibration block, by flash size: the vendor FACTORY_CFG_BASE_ADD
+ * of its flash map (512 KB, 1 MB and 2 MB or larger).
+ */
+#if DT_REG_SIZE(DT_CHOSEN(zephyr_flash)) >= (2UL * 1024UL * 1024UL)
+#define TLSR8258_FACTORY_CFG_BASE 0x1fe000u
+#elif DT_REG_SIZE(DT_CHOSEN(zephyr_flash)) >= (1024UL * 1024UL)
+#define TLSR8258_FACTORY_CFG_BASE 0x0fe000u
+#else
+#define TLSR8258_FACTORY_CFG_BASE 0x077000u
+#endif
+#define TLSR8258_CFG_ADC_CALIBRATION (TLSR8258_FACTORY_CFG_BASE + 0xc0u)
+
+/*
+ * Vendor adc_vref calibration (drv_calibration.c, TLSR8258 branch): the
+ * two-point values first, then the one-point value. Unprogrammed bytes
+ * (0xff) fail the range checks, which keeps the defaults.
+ */
+static void adc_tlsr8258_load_factory_calibration(const struct device *dev)
+{
+	const struct device *flash = DEVICE_DT_GET(DT_CHOSEN(zephyr_flash));
+	uint8_t cal[7];
+	uint16_t vref;
+	int8_t offset;
+
+	if (!device_is_ready(flash) ||
+	    flash_read(flash, TLSR8258_CFG_ADC_CALIBRATION, cal, sizeof(cal)) != 0) {
+		return;
+	}
+
+	if ((cal[4] <= 127u) && (((cal[6] << 8) + cal[5]) >= 47u) &&
+	    (((cal[6] << 8) + cal[5]) <= 300u)) {
+		vref = (uint16_t)((cal[6] << 8) + cal[5] + 1000u);
+		offset = (int8_t)(cal[4] - 20);
+	} else {
+		vref = (uint16_t)(920u + cal[0] + cal[1]);
+		if ((vref < 1047u) || (vref > 1302u)) {
+			return;
+		}
+		offset = 0;
+	}
+
+	(void)adc_tlsr8258_set_calibration(dev, vref, offset);
+}
+
 static int adc_tlsr8258_init(const struct device *dev)
 {
 	struct adc_tlsr8258_data *data = dev->data;
@@ -416,6 +462,8 @@ static int adc_tlsr8258_init(const struct device *dev)
 	data->vref_offset_mv = 0;
 	data->pre_scale = 1u;
 	data->configured = false;
+
+	adc_tlsr8258_load_factory_calibration(dev);
 
 	return 0;
 }
