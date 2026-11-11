@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STM32WB IEEE 802.15.4 radio. The CPU2 runs ST's OpenThread RCP firmware
+  (stm32wb5x_Thread_RCP_fw.bin); the driver talks Spinel to it over the IPCC.
+
+compatible: "st,stm32wb-ieee802154"
+
+include: base.yaml
+
+properties:
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+    # Rely on interrupt-names for the consistency.
+
+  interrupt-names:
+    required: true
+    enum: ["rx", "tx"]
+    min-len: 2
+    max-len: 2
