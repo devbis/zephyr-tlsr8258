@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Minimal ZBHCI (Zigbee Host Command Interface) client for the
 native_sim_socket_coordinator sample's UART transport
-(subsys/zigbee/platform/zephyr/zb_zbhci_uart.c / zb_zbhci_cmd.c).
+(subsys/zigbee/ncp/zbhci/zb_zbhci_uart.c / zb_zbhci_cmd.c).
 
 Framing: 0x55 <type:u16 BE> <len:u16 BE> <crc8> <payload> 0xAA
 No third-party dependencies: uses tty/termios directly instead of pyserial,
