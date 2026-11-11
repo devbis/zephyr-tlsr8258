@@ -94,6 +94,40 @@ config ZIGBEE_BUF_POOL_NUM
 	  Blocks in the Zigbee buffer pool. 0 selects the number the role and the
 	  radio port were sized for.
 
+config ZIGBEE_TIMER_EVENT_NUM
+	int "Number of software timer events"
+	default 24
+	range 8 64
+	help
+	  Software timers the Zigbee stack can have armed at once. A SoC with
+	  little RAM sets a lower default.
+
+config ZIGBEE_L2_RX_DEPTH
+	int "Depth of the receive frame queue"
+	default 16
+	range 1 64
+	help
+	  Frames the receive path of the custom L2 queues for the Zigbee thread.
+	  A radio driver hands a whole burst over in one pass, and a burst
+	  carries the association response and the transport key, so keep it at
+	  least as deep as the burst of the driver. Each entry costs about 127
+	  bytes of RAM.
+
+config ZIGBEE_RADIO_ACK_FP_UNKNOWN
+	bool
+	help
+	  The radio driver does not pass the Frame Pending bit of a received ACK
+	  to ieee802154_handle_ack(), so the MAC cannot tell from it whether the
+	  parent holds data. Selected by the drivers concerned.
+
+config ZIGBEE_RADIO_PORT_RX_POLLED
+	bool
+	help
+	  The radio driver has no receive thread: the Zigbee thread drains it
+	  through zb_radio_port_rx_service() and the driver wakes it through the
+	  function given to zb_radio_port_rx_notify_set(). Selected by the
+	  drivers concerned, which provide both functions.
+
 config ZIGBEE_RX_SNAPSHOTS
 	int "Receive frame snapshots shared by the Zigbee buffers"
 	default 0

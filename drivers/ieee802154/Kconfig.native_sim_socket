@@ -6,6 +6,7 @@ menuconfig IEEE802154_NATIVE_SIM_SOCKET
 	depends on BOARD_NATIVE_SIM_NATIVE_64
 	depends on DT_HAS_ZEPHYR_NATIVE_SIM_SOCKET_IEEE802154_ENABLED
 	select NET_PKT_TIMESTAMP if !IEEE802154_RAW_MODE
+	select ZIGBEE_RADIO_ACK_FP_UNKNOWN if ZIGBEE
 	help
 	  Experimental IEEE 802.15.4 driver for native_sim/native/64 that
 	  exchanges PSDUs with a host-side medium process over a UDP socket.

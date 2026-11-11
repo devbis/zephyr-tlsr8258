@@ -70,4 +70,23 @@ bool zb_radio_l2_ack_frame_pending_take(void);
  */
 uint32_t zb_radio_l2_rx_drop_count(void);
 
+/**
+ * @brief Set the function the radio driver calls for every queued frame.
+ *
+ * Provided by a radio driver that selects CONFIG_ZIGBEE_RADIO_PORT_RX_POLLED.
+ * The function runs in interrupt context and must only wake the thread that
+ * calls zb_radio_port_rx_service().
+ *
+ * @param notify Function to call, or NULL for none.
+ */
+void zb_radio_port_rx_notify_set(void (*notify)(void));
+
+/**
+ * @brief Hand the frames the radio driver queued to the network stack.
+ *
+ * Provided by a radio driver that selects CONFIG_ZIGBEE_RADIO_PORT_RX_POLLED.
+ * Call it from a single thread; it does not block.
+ */
+void zb_radio_port_rx_service(void);
+
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_INCLUDE_ZEPHYR_ZIGBEE_ZB_RADIO_PORT_H_ */
