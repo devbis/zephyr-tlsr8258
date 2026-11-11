@@ -5,4 +5,12 @@ if SOC_FAMILY_TELINK_TLSR
 
 rsource "*/Kconfig.defconfig"
 
+# Telink's Zigbee manufacturer code.
+config ZIGBEE_MANUFACTURER_CODE
+	default 0x1141
+
+# The 100 Hz kernel tick is too coarse for the MAC deadlines.
+config ZIGBEE_MAC_CLOCK_HW_CYCLES
+	default y
+
 endif # SOC_FAMILY_TELINK_TLSR
