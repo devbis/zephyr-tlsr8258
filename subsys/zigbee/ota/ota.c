@@ -37,11 +37,10 @@
 /* 4 + 8 + 8N + 69 + 9 + 8 + (20 + 8)N = 4096; N = 110*/
 #define FLASH_WRITE_COUNT_GET(size)     ((size / (110 * OTA_IMAGE_MAX_DATA_SIZE)) + 1)
 /* The image is stored in MCUboot's secondary slot and activated by MCUboot. */
-#define OTA_SLOT_ADDR                   FIXED_PARTITION_OFFSET(slot1_partition)
+#define OTA_SLOT_ID                     FIXED_PARTITION_ID(slot1_partition)
 #define OTA_SLOT_SIZE                   FIXED_PARTITION_SIZE(slot1_partition)
 /* Sectors at the end of the slot that MCUboot keeps for its swap trailer. */
 #define OTA_SLOT_TRAILER_SECTORS        2
-#define OTA_IMAGE_MAX_SIZE              (OTA_SLOT_SIZE - OTA_SLOT_TRAILER_SECTORS * FLASH_SECTOR_SIZE)
 #define OTA_MCUBOOT_IMAGE_MAGIC         0x96f3b83dU
 
 /**********************************************************************
@@ -127,33 +126,95 @@ void ota_upgradeEndReqSend(ota_upgradeEndReq_t *req);
 void ota_upgradeWait(u32 seconds);
 void ota_upgradeComplete(u8 status);
 
+static const struct flash_area *ota_slotArea(void)
+{
+    static const struct flash_area *fa;
+
+    if (fa == NULL && flash_area_open(OTA_SLOT_ID, &fa) != 0) {
+        fa = NULL;
+    }
+
+    return fa;
+}
+
+/* Erase size of the first sector of the slot, 0 if it cannot be determined. */
+static u32 ota_slotSectorSize(void)
+{
+    const struct flash_area *fa = ota_slotArea();
+    struct flash_sector sector;
+    uint32_t count = 1;
+    int rc;
+
+    if (fa == NULL) {
+        return 0;
+    }
+
+    /* A slot has many sectors; -ENOMEM only says the one entry is not all of them. */
+    rc = flash_area_sectors(fa, &count, &sector);
+    if ((rc != 0 && rc != -ENOMEM) || count == 0) {
+        return 0;
+    }
+
+    return sector.fs_size;
+}
+
+/* Largest image the slot takes, 0 if the flash geometry is unknown. */
+static u32 ota_slotImageMaxSize(void)
+{
+    u32 sectorSize = ota_slotSectorSize();
+
+    if (sectorSize == 0) {
+        return 0;
+    }
+
+    return OTA_SLOT_SIZE - OTA_SLOT_TRAILER_SECTORS * sectorSize;
+}
+
+/* Reads the slot; an unreadable range reads as erased flash. */
+static void ota_slotRead(u32 pos, u32 len, u8 *buf)
+{
+    const struct flash_area *fa = ota_slotArea();
+
+    if (fa == NULL || flash_area_read(fa, pos, buf, len) != 0) {
+        memset(buf, 0xff, len);
+    }
+}
+
 static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
 {
+    const struct flash_area *fa = ota_slotArea();
+    u32 sectorSize = ota_slotSectorSize();
     u8 check[32];
     u32 end = pos + len;
 
-    if (end > OTA_IMAGE_MAX_SIZE) {
+    if (fa == NULL || sectorSize == 0 || end > ota_slotImageMaxSize() || !zb_flash_vdd_ok()) {
         return FALSE;
     }
 
     if (pos == 0) {
         /* leave the swap trailer area of the slot erased for MCUboot */
         for (u32 i = OTA_SLOT_TRAILER_SECTORS; i > 0; i--) {
-            flash_erase(OTA_SLOT_ADDR + OTA_SLOT_SIZE - i * FLASH_SECTOR_SIZE);
+            if (flash_area_erase(fa, OTA_SLOT_SIZE - i * sectorSize, sectorSize) != 0) {
+                return FALSE;
+            }
         }
     }
 
     /* erase each sector right before the first byte lands in it */
-    for (u32 sector = ROUND_UP(pos, FLASH_SECTOR_SIZE); sector < end; sector += FLASH_SECTOR_SIZE) {
-        flash_erase(OTA_SLOT_ADDR + sector);
+    for (u32 sector = ROUND_UP(pos, sectorSize); sector < end; sector += sectorSize) {
+        if (flash_area_erase(fa, sector, sectorSize) != 0) {
+            return FALSE;
+        }
     }
 
-    flash_write(OTA_SLOT_ADDR + pos, len, (u8 *)data);
+    if (flash_area_write(fa, pos, data, len) != 0) {
+        return FALSE;
+    }
 
     for (u32 off = 0; off < len; off += sizeof(check)) {
         u32 n = MIN(len - off, sizeof(check));
 
-        flash_read(OTA_SLOT_ADDR + pos + off, n, check);
+        ota_slotRead(pos + off, n, check);
         if (memcmp(check, data + off, n) != 0) {
             return FALSE;
         }
@@ -167,13 +228,13 @@ static bool ota_slotImageValid(void)
 {
     u32 hdr[4];
 
-    flash_read(OTA_SLOT_ADDR, sizeof(hdr), (u8 *)hdr);
+    ota_slotRead(0, sizeof(hdr), (u8 *)hdr);
     if (hdr[0] != OTA_MCUBOOT_IMAGE_MAGIC) {
         return FALSE;
     }
 
     /* hdr[2] holds ih_hdr_size (low 16 bits) and ih_protect_tlv_size (high 16 bits) */
-    return ((hdr[2] & 0xffff) + hdr[3]) <= OTA_IMAGE_MAX_SIZE;
+    return ((hdr[2] & 0xffff) + hdr[3]) <= ota_slotImageMaxSize();
 }
 
 /* Ask MCUboot to test the downloaded image on the next boot, then restart. */
@@ -219,7 +280,7 @@ u8 ota_loadImageInfo(ota_hdrFields_t *oh)
     ota_hdrFields_t hdr;
     if (!lh) {
         lh = &hdr;
-        flash_read(OTA_SLOT_ADDR, sizeof(hdr), (u8 *)&hdr);
+        ota_slotRead(0, sizeof(hdr), (u8 *)&hdr);
     }
     if (lh->otaUpgradeFileID == OTA_UPGRADE_FILE_ID) {
         otaServerBinInfo.fileVer = lh->fileVer;
@@ -1181,7 +1242,7 @@ static status_t ota_imageBlockReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
             rsp.rsp.wait.reqTime = 0;
             rsp.rsp.wait.blockReqDelay = zcl_attr_minBlockPeriod;
         } else {
-            flash_read(OTA_SLOT_ADDR + pImageBlockReq->fileOffset, len, buf);
+            ota_slotRead(pImageBlockReq->fileOffset, len, buf);
             rsp.st = ZCL_STA_SUCCESS;
             rsp.rsp.success.manuCode = pImageBlockReq->manuCode;
             rsp.rsp.success.imageType = pImageBlockReq->imageType;
@@ -1331,7 +1392,7 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
             return ZCL_STA_SUCCESS;
         }
 
-        if (pQueryNextImageRsp->imageSize > OTA_IMAGE_MAX_SIZE) {
+        if (pQueryNextImageRsp->imageSize > ota_slotImageMaxSize()) {
             return ZCL_STA_INSUFFICIENT_SPACE;
         }
 

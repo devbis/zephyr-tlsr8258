@@ -111,8 +111,6 @@ typedef enum {
 } nv_sts_t;
 
 
-#define FLASH_SECTOR_SIZE               4096
-
 #define ITEM_FIELD_IDLE                 0xFF
 
 nv_sts_t nv_resetAll(void);
