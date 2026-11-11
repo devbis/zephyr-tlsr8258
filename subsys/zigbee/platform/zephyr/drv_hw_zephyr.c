@@ -8,7 +8,6 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/random/random.h>
 #include <zephyr/drivers/hwinfo.h>
-#include <zephyr/drivers/flash.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_types.h>
 #include "zb_common.h"
@@ -20,18 +19,9 @@
 #include "mac/mac_trx.h"
 #include "mac/mac_data.h"
 
-#if defined(CONFIG_SOC_TLSR8258)
-#include "clock_cal.h"
-#endif
-
-#if defined(CONFIG_ADC_TLSR8258)
-#include <zephyr/drivers/adc.h>
-#include <zephyr/drivers/adc/adc_tlsr8258.h>
-#endif
-
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
 
-#if defined(CONFIG_ADC_TLSR8258)
+#if defined(CONFIG_ADC)
 #if DT_NODE_EXISTS(DT_PATH(zephyr_user))
 #if DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
 /* Battery-voltage channel: zephyr,user io-channels = <&adc0 N>. */
@@ -39,18 +29,6 @@ LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
 static const struct adc_dt_spec zb_vbat_adc = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 #endif
 #endif
-#endif
-
-#if defined(CONFIG_SOC_TLSR8258)
-/* Factory calibration sector: FACTORY_CFG_BASE_ADD + 0xC0, by flash size (drv_nv.h). */
-#if DT_REG_SIZE(DT_CHOSEN(zephyr_flash)) >= (2UL * 1024UL * 1024UL)
-#define ZB_FACTORY_CFG_BASE 0x1FE000u
-#elif DT_REG_SIZE(DT_CHOSEN(zephyr_flash)) >= (1024UL * 1024UL)
-#define ZB_FACTORY_CFG_BASE 0x0FE000u
-#else
-#define ZB_FACTORY_CFG_BASE 0x077000u
-#endif
-#define ZB_CFG_ADC_CALIBRATION (ZB_FACTORY_CFG_BASE + 0xC0u)
 #endif
 
 /* Voltage read in millivolts. Returns false if no reading could be taken. */
@@ -107,53 +85,8 @@ int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg)
 	return (evt != NULL) ? 0 : -ENOMEM;
 }
 
-/*
- * Vendor adc_vref calibration (drv_calibration.c, TLSR8258 branch): two-point
- * values first, then the one-point value. Unprogrammed bytes (0xff) fail the
- * range checks, which keeps the driver defaults.
- */
-#ifdef ZB_VBAT_ADC_SPEC
-static void zb_calibrate_adc_vref(void)
-{
-	uint8_t cal[7] = {0};
-	uint16_t vref;
-	int8_t offset;
-
-	if (flash_read(DEVICE_DT_GET(DT_CHOSEN(zephyr_flash)), ZB_CFG_ADC_CALIBRATION, cal,
-		       sizeof(cal)) != 0) {
-		return;
-	}
-
-	if ((cal[4] <= 127u) && (((cal[6] << 8) + cal[5]) >= 47u) &&
-	    (((cal[6] << 8) + cal[5]) <= 300u)) {
-		vref = (uint16_t)((cal[6] << 8) + cal[5] + 1000u);
-		offset = (int8_t)(cal[4] - 20);
-	} else {
-		vref = (uint16_t)(920u + cal[0] + cal[1]);
-		if ((vref < 1047u) || (vref > 1302u)) {
-			return;
-		}
-		offset = 0;
-	}
-
-	(void)adc_tlsr8258_set_calibration(zb_vbat_adc.dev, vref, offset);
-}
-#endif
-
 startup_state_e drv_platform_init(void)
 {
-#if defined(CONFIG_SOC_TLSR8258)
-	/* Vendor clock_init(): 24 MHz RC trim, on by default. */
-	tlsr8258_rc_24m_cal();
-	/* Vendor PM_CLOCK_INIT(): internal 32 kHz RC, trimmed. */
-	tlsr8258_clock_32k_rc_init();
-	tlsr8258_rc_32k_cal();
-#ifdef ZB_VBAT_ADC_SPEC
-	/* Vendor drv_calibration(): ADC reference. */
-	zb_calibrate_adc_vref();
-#endif
-#endif
-
 	return SYSTEM_BOOT;
 }
 
