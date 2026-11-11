@@ -70,9 +70,6 @@ typedef struct zb_buf_s {
  */
 #if CONFIG_ZIGBEE_BUF_POOL_NUM > 0
 #define ZB_BUF_POOL_NUM CONFIG_ZIGBEE_BUF_POOL_NUM
-#elif defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
-/* 32 KB SRAM part: the ED pool is trimmed to fit the RAM budget. */
-#define ZB_BUF_POOL_NUM 14
 #elif defined(ZB_ROUTER_ROLE) || defined(CONFIG_ZIGBEE_ROUTER)
 #define ZB_BUF_POOL_NUM 33
 #else
