@@ -99,6 +99,8 @@ endforeach()
 # Library-private include dirs — not visible to the rest of the build
 zephyr_library_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
+  ${CMAKE_CURRENT_SOURCE_DIR}/pm
+  ${CMAKE_CURRENT_SOURCE_DIR}/ncp/zstack
   ${CMAKE_CURRENT_SOURCE_DIR}/os
   ${CMAKE_CURRENT_SOURCE_DIR}/common
   ${CMAKE_CURRENT_SOURCE_DIR}/common/includes
@@ -235,20 +237,20 @@ endif()
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB bdb/bdb.c bdb/bdb_base.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_BDB platform/zephyr/zb_bdb_bootstrap.c)
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZBHCI_UART
-  platform/zephyr/zb_zbhci_uart.c
-  platform/zephyr/zb_zbhci_cmd.c
+  ncp/zbhci/zb_zbhci_uart.c
+  ncp/zbhci/zb_zbhci_cmd.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZSTACK_NCP
-  platform/zephyr/zb_znp_uart.c
-  platform/zephyr/zb_znp_frame.c
-  platform/zephyr/zb_znp_nv.c
-  platform/zephyr/zb_znp_net.c
-  platform/zephyr/zb_znp_tables.c
-  platform/zephyr/zb_znp_keys.c
-  platform/zephyr/zb_znp_persist.c
-  platform/zephyr/zb_znp_sys.c
-  platform/zephyr/zb_znp_zdo.c
-  platform/zephyr/zb_znp_af.c
+  ncp/zstack/zb_znp_uart.c
+  ncp/zstack/zb_znp_frame.c
+  ncp/zstack/zb_znp_nv.c
+  ncp/zstack/zb_znp_net.c
+  ncp/zstack/zb_znp_tables.c
+  ncp/zstack/zb_znp_keys.c
+  ncp/zstack/zb_znp_persist.c
+  ncp/zstack/zb_znp_sys.c
+  ncp/zstack/zb_znp_zdo.c
+  ncp/zstack/zb_znp_af.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 # The imported MAC hands Green Power confirms to cGp_dataCnf on every router
@@ -277,10 +279,10 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
   nwk/nwk_ed_libzigbee.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ED
-  platform/zephyr/zb_ed_poll.c
+  pm/zb_ed_poll.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_SLEEPY_DEEP
-  platform/zephyr/zb_ed_sleep.c
+  pm/zb_ed_sleep.c
 )
 
 # FFD Zephyr-port bootstrap glue (formation/parenting bring-up).
