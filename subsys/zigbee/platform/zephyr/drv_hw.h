@@ -59,8 +59,10 @@ void drv_vbusWatchdogClose(void);
 
 void flash_read(uint32_t addr, uint32_t len, uint8_t *buf);
 void flash_write(uint32_t addr, uint32_t len, uint8_t *buf);
-void flash_erase(uint32_t addr);
 bool drv_get_primary_ieee_addr(uint8_t *addr);
+
+/* True when VDD is high enough for a flash write or erase. */
+bool zb_flash_vdd_ok(void);
 
 /*
  * Hardware timer hook used by the MAC. The vendor SDK declares this in its
