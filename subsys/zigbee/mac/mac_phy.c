@@ -583,11 +583,7 @@ _attribute_ram_code_ bool isWLANActive(void)
  *
  * @return  none
  */
-#if defined(MCU_CORE_826x) || defined(MCU_CORE_8258) || defined(MCU_CORE_8278)
 _attribute_ram_code_ __attribute__((optimize("-Os")))
-#else
-_attribute_ram_code_
-#endif
 void rf_rx_irq_handler(void)
 {
     u8 *p = rf_rxBuf;
@@ -743,11 +739,7 @@ void rf_rx_irq_handler(void)
  *
  * @return  none
  */
-#if defined(MCU_CORE_826x) || defined(MCU_CORE_8258) || defined(MCU_CORE_8278)
 _attribute_ram_code_ __attribute__((optimize("-Os")))
-#else
-_attribute_ram_code_
-#endif
 void rf_tx_irq_handler(void)
 {
     rf_busyFlag &= ~TX_BUSY;//Clear TX busy flag after receive TX done signal
