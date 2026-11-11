@@ -42,6 +42,9 @@ zephyr_library_sources_ifdef(CONFIG_IEEE802154_SILABS_EFR32 ieee802154_silabs_ef
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_STM32WBA ieee802154_stm32wba.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_B91 ieee802154_b91.c)
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8269 ieee802154_tlsr8269.c)
+if(CONFIG_IEEE802154_TELINK_TLSR8269 AND CONFIG_ZIGBEE_RADIO_PORT_RX_POLLED)
+  zephyr_library_sources(ieee802154_tlsr8269_zigbee.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_IEEE802154_TELINK_TLSR8258
   ieee802154_tlsr8258.c
   ieee802154_tlsr8258_radio_op.c
