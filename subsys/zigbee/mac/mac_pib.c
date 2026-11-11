@@ -25,6 +25,7 @@
 #include "tl_platform.h"
 #include "zb_common.h"
 #include <zephyr/kernel.h>
+#include <zephyr/zigbee/zb_bootstrap.h>
 
 
 /* PIB access and min/max table type */
@@ -34,9 +35,6 @@ typedef struct {
     u8 min;
     u8 max;
 } mac_pibTbl_t;
-
-//Telink ieee address range
-const u8 startIEEEAddr[] = {0x38, 0xc1, 0xa4};
 
 const mac_pibTbl_t g_zbMacPibTbl[] = {
     {OFFSETOF(tl_zb_mac_pib_t, ackWaitDuration),        sizeof(u8), 54, 54},            /* MAC_ACK_WAIT_DURATION */
@@ -140,60 +138,23 @@ _CODE_MAC_ u8 tl_zbMacAttrGet(u8 attribute, u8 *value, u8 *len)
     return MAC_SUCCESS;
 }
 
+/*
+ * The radio and the SoC identity provide the device's own address; a node
+ * that has neither gets a random locally administered one. The stack
+ * overwrites the PIB address from the radio after a reset
+ * (zb_platform_apply_runtime_ieee_addr()), so this is the starting value.
+ */
 _CODE_MAC_ void generateIEEEAddr(void)
 {
     u8 addr[8];
+    const u8 *radioAddr = zb_platform_runtime_ieee_addr_get();
 
-    flash_read(CFG_MAC_ADDRESS, 8, addr);
-
-    if (ZB_IEEE_ADDR_IS_INVALID(addr)) {
-        if (!drv_get_primary_ieee_addr(addr)) {
-            /* The vendor implementation spun on clock_time_exceed
-             * for a random jitter to randomize provisioning. That
-             * spin freezes native_sim because the simulated clock
-             * only advances when threads block; both the original
-             * busy-wait and k_busy_wait deadlock here. The jitter
-             * isn't load-bearing on Zephyr — we just need a random
-             * MAC — so skip it and seed the address directly.
-             */
-            drv_generateRandomData(addr, 5);
-            memcpy(addr + 5, startIEEEAddr, 3);
-        }
-
-        u8 flash_addr[8];
-
-        memcpy(flash_addr, addr + 2, 6);
-        memcpy(flash_addr + 6, addr, 2);
-        flash_write(CFG_MAC_ADDRESS, sizeof(flash_addr), flash_addr);
-
-        u8 buf[8];
-        flash_read(CFG_MAC_ADDRESS, 8, buf);
-
-        if (ZB_IS_64BIT_ADDR_INVALID(buf)) {
-            ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_PARAM_ERROR);
-        }
-    } else {
-        /* MAC address format in TLSR serial chips:
-         * xx xx xx 38 C1 A4 xx xx
-         * xx xx xx D1 19 C4 xx xx
-         * xx xx xx CB 0B D8 xx xx
-         * xx xx xx 77 5F D8 xx xx
-         * xx xx xx B4 CF 3C xx xx
-         * xx xx xx C7 A3 C0 xx xx
-         * xx xx xx 28 22 38 xx xx
-         *
-         * so, it need to do shift
-         */
-        if ((addr[3] == 0x38 && addr[4] == 0xC1 && addr[5] == 0xA4) || \
-            (addr[3] == 0xD1 && addr[4] == 0x19 && addr[5] == 0xC4) || \
-            (addr[3] == 0xCB && addr[4] == 0x0B && addr[5] == 0xD8) || \
-            (addr[3] == 0x77 && addr[4] == 0x5F && addr[5] == 0xD8) || \
-            (addr[3] == 0xB4 && addr[4] == 0xCF && addr[5] == 0x3C) || \
-            (addr[3] == 0xC7 && addr[4] == 0xA3 && addr[5] == 0xC0) || \
-            (addr[3] == 0x28 && addr[4] == 0x22 && addr[5] == 0x38)) {
-            flash_read(CFG_MAC_ADDRESS, 6, addr + 2);
-            flash_read(CFG_MAC_ADDRESS + 6, 2, addr);
-        }
+    if (radioAddr != NULL) {
+        memcpy(addr, radioAddr, sizeof(addr));
+    } else if (!drv_get_primary_ieee_addr(addr)) {
+        drv_generateRandomData(addr, sizeof(addr));
+        /* the address is little endian: the most significant octet is last */
+        addr[7] = (addr[7] & 0xfc) | 0x02;
     }
 
     ZB_IEEE_ADDR_COPY(ZB_PIB_EXTENDED_ADDRESS(), addr);
