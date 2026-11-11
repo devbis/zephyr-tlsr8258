@@ -4,11 +4,12 @@
 /*
  * AES-128 block cipher for the Zigbee security service.
  *
- * Boards whose SoC carries an AES engine reach it through the Zephyr crypto
- * API; everything else, native_sim included, uses the software cipher in
- * zb_aes_sw.c. Supported engines: Telink TLSR8258, Espressif and Nordic nRF
- * ECB. The nRF ECB peripheral only encrypts, so its decrypt direction (used
- * by OTA and touchlink only) runs in software.
+ * A board whose SoC carries an AES engine names it in the zigbee,aes chosen
+ * node, and the port reaches it through the Zephyr crypto API; everything
+ * else, native_sim included, uses the software cipher in zb_aes_sw.c. An
+ * engine that only encrypts, such as the nRF ECB peripheral, leaves
+ * CONFIG_ZIGBEE_AES_HW_DECRYPT unset, so its decrypt direction (used by OTA
+ * and touchlink only) runs in software.
  */
 
 #include <string.h>
@@ -17,14 +18,8 @@
 
 #include "zb_aes.h"
 
-#if defined(CONFIG_CRYPTO_TLSR8258)
-#define ZB_AES_DEVICE()      DEVICE_DT_GET_ONE(telink_tlsr8258_aes)
-#define ZB_AES_HW_DECRYPT    1
-#elif defined(CONFIG_CRYPTO_ESP32_AES)
-#define ZB_AES_DEVICE()      DEVICE_DT_GET_ONE(espressif_esp32_aes)
-#define ZB_AES_HW_DECRYPT    1
-#elif defined(CONFIG_CRYPTO_NRF_ECB)
-#define ZB_AES_DEVICE()      DEVICE_DT_GET_ONE(nordic_nrf_ecb)
+#if defined(CONFIG_ZIGBEE_AES_ENGINE)
+#define ZB_AES_DEVICE()      DEVICE_DT_GET(DT_CHOSEN(zigbee_aes))
 #endif
 
 #if defined(ZB_AES_DEVICE)
@@ -54,7 +49,7 @@ struct zb_aes_session {
 };
 
 static struct zb_aes_session zb_aes_enc;
-#if defined(ZB_AES_HW_DECRYPT)
+#if defined(CONFIG_ZIGBEE_AES_HW_DECRYPT)
 static struct zb_aes_session zb_aes_dec;
 #endif
 
@@ -134,7 +129,7 @@ void zb_aes_encrypt(u8 *key, u8 *plain, u8 *result)
 
 void zb_aes_decrypt(u8 *key, u8 *cipher, u8 *result)
 {
-#if defined(ZB_AES_HW_DECRYPT)
+#if defined(CONFIG_ZIGBEE_AES_HW_DECRYPT)
 	zb_aes_run(&zb_aes_dec, CRYPTO_CIPHER_OP_DECRYPT, key, cipher, result);
 #else
 	zb_aes_sw_decrypt(key, cipher, result);
