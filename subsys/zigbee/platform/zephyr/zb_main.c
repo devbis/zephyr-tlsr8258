@@ -301,8 +301,8 @@ static void zb_core_bootstrap_once(void)
 	zb_waiting_for_ieee_addr_log = false;
 
 	/*
-	 * TLSR MCU reboot/external reset may retain SRAM, including these static
-	 * guards.  If the compatibility PIB was not rebuilt for this image, do
+	 * A reboot or external reset may retain SRAM (the TLSR825x does),
+	 * including these static guards.  If the compatibility PIB was not rebuilt for this image, do
 	 * not let retained flags bypass the complete stack bootstrap.
 	 */
 	if ((zb_core_init_done || zb_bootstrap_done) &&
@@ -319,7 +319,7 @@ static void zb_core_bootstrap_once(void)
 		u8 cold_reset = TRUE;
 
 		/*
-		 * The TLSR soft-reset entry can retain transient C state.  Reset the
+		 * A soft reset can retain transient C state.  Reset the
 		 * bootstrap owners before rebuilding the vendor runtime so stale
 		 * timer pointers and one-shot guards cannot suppress initialisation.
 		 */
@@ -329,8 +329,8 @@ static void zb_core_bootstrap_once(void)
 		zb_parenting_enabled = false;
 
 		/*
-		 * The TLSR soft reboot path does not clear SRAM before jumping back
-		 * through the application reset entry.  g_zbInfo is the compatibility
+		 * A soft reboot that does not clear SRAM before jumping back
+		 * through the application reset entry keeps it.  g_zbInfo is the compatibility
 		 * snapshot used by the ported libzigbee code, so leaving it intact here
 		 * resurrects the old PAN/short address after a successful local leave,
 		 * even when the NVS item was deleted.  Start from the same zeroed BSS
@@ -382,7 +382,7 @@ static void zb_core_bootstrap_once(void)
 		/*
 		 * A failed/aborted join can leave a valid MAC PAN/short address in
 		 * the blob while the NWK context says factory-new. Treating that
-		 * split state as joined programs the TLSR address filter with an
+		 * split state as joined programs the radio address filter with an
 		 * address the coordinator no longer uses; the router then ACKs no
 		 * interview frames after reboot. Force a clean commissioning start
 		 * and let the next successful join persist the complete tuple.
@@ -419,7 +419,7 @@ static void zb_core_bootstrap_once(void)
 			(unsigned int)g_zbNIB.nwkAddr);
 		zb_platform_apply_runtime_ieee_addr();
 		/*
-		 * Push the runtime IEEE address into the TLSR8258 radio's HW
+		 * Push the runtime IEEE address into the radio's HW
 		 * filter immediately. Otherwise filter_ieee_addr stays all-
 		 * zero until either the factory-reset path or the join-success
 		 * path runs zb_radio_port_update_filters, and the radio's
@@ -429,9 +429,8 @@ static void zb_core_bootstrap_once(void)
 		 * and we miss the short address allocation. A persisted joined
 		 * device, however, must restore its PAN/short filter here instead
 		 * of reverting to the fresh-join wildcard filter.
-		 * tlsr8258_iface_init() does this too via net_if_set_link_addr,
-		 * but our shell sample doesn't bring up a Zephyr net iface, so
-		 * iface_init never runs.
+		 * A radio driver may do this too via net_if_set_link_addr, but a
+		 * sample that does not bring up a Zephyr net iface never runs it.
 		 */
 		if (g_zbNwkCtx.joined && g_zbMacPib.panId != MAC_INVALID_PANID &&
 		    g_zbMacPib.shortAddress < ZB_MAC_SHORT_ADDR_NOT_ALLOCATED) {
@@ -460,7 +459,7 @@ static void zb_core_bootstrap_once(void)
 	}
 
 	/*
-	 * The TLSR driver can already be initialized when a soft reboot enters
+	 * The radio driver can already be initialized when a soft reboot enters
 	 * this path, so the pre-init shadow update above is not sufficient: the
 	 * live radio_data filter may still contain the previous PAN/short tuple.
 	 * Re-apply the authoritative PIB after radio init for both joined and
@@ -561,7 +560,7 @@ static void zb_core_bootstrap_once(void)
 
 	/*
 	 * DISABLED: three attempts at arming this hardware watchdog (timer2-
-	 * based, see ieee802154_tlsr8258.c) each produced a WORSE, faster,
+	 * based, in the radio driver) each produced a WORSE, faster,
 	 * unrecoverable early-boot crash loop on real hardware than not having
 	 * a watchdog at all -- every variant tried (arm-once-at-boot,
 	 * disable-then-arm-at-boot-entry, disable-then-arm-here-in-bootstrap,
@@ -788,7 +787,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	ARG_UNUSED(c);
 
 	/*
-	 * TLSR MCU reboot preserves parts of SRAM, including these C statics.
+	 * A reboot that preserves parts of SRAM keeps these C statics.
 	 * A restarted Zigbee thread must therefore not inherit the previous
 	 * bootstrap-complete state: doing so skips g_zbInfo sanitisation and lets
 	 * a removed PAN/short tuple become live again.  Reset all thread-owned
@@ -813,7 +812,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 	zb_parenting_enabled = false;
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 	/*
-	 * SRAM survives the TLSR soft reset; a fresh boot must not inherit a
+	 * SRAM can survive a soft reset; a fresh boot must not inherit a
 	 * pre-reset latch. A valid persisted join is re-latched after restore.
 	 */
 	zdo_router_join_latch_clear();

@@ -2,7 +2,7 @@
 /*
  * Zigbee radio abstraction for Zephyr.
  * Staged adapter integration: Task 1 keeps compile-safe shims while
- * incrementally wiring runtime behavior to the ieee802154 TLSR8258 driver.
+ * incrementally wiring runtime behavior to the ieee802154 radio drivers.
  *
  * Follows the 8258 section of tl_zigbee_sdk/proj/drivers/drv_radio.h.
  */
@@ -17,7 +17,7 @@
 #define RF_MODE_AUTO   2
 #define RF_MODE_OFF    3
 
-/* TX/RX packet buffer layout (5-byte DMA header for TLSR8258) */
+/* TX/RX packet buffer layout (5-byte RF DMA header of the vendor MAC) */
 #define ZB_RADIO_TX_HDR_LEN    5
 #define ZB_RADIO_RX_HDR_LEN    5
 
@@ -146,7 +146,7 @@ static inline void zb_radio_port_set_legacy_state(u8 state, u8 channel)
 #define drv_gpio_write(pin, val)  do { (void)(pin); (void)(val); } while (0)
 static inline void WaitUs(u32 us) { k_busy_wait(us); }
 
-/* Packet field accessors for the TLSR8258 DMA layout.  CRC validation is
+/* Packet field accessors for the vendor RF DMA layout.  CRC validation is
  * performed by the Zephyr IEEE 802.15.4 driver before the sink callback. */
 #define ZB_RADIO_ACTUAL_PAYLOAD_LEN(p)  ((p)[4])
 #define ZB_RADIO_CRC_OK(p)              (1)
