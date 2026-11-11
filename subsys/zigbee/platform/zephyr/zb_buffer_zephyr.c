@@ -20,7 +20,7 @@
 #include "zb_common.h"
 
 /*
- * 127-byte PSDU + 5-byte TLSR DMA header is the complete 802.15.4 frame.
+ * 127-byte PSDU + 5-byte RF DMA header is the complete 802.15.4 frame.
  * Keep a little alignment/headroom without spending 200 bytes in every one
  * of the 36 router buffers.
  */

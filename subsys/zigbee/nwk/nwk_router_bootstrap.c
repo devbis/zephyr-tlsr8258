@@ -75,7 +75,7 @@ void zb_router_schedule_persistence_save(void)
 	}
 
 	/*
-	 * Flash writes mask RF interrupts on TLSR8258. Wait until the
+	 * Flash writes can mask RF interrupts. Wait until the
 	 * association/interview traffic has drained before saving the joined
 	 * PIB, but make sure the learned short address survives reboot.
 	 */

@@ -41,7 +41,7 @@
 #define APS_BINDING_TABLE_NUM           8
 #endif
 
-/* NWK routing capacity from the TLSR8258 libzigbee profile. */
+/* NWK routing capacity of the vendor libzigbee profile. */
 #ifndef NWK_ROUTE_RECORD_TABLE_NUM
 #if defined(ZB_COORDINATOR_ROLE) && ZB_COORDINATOR_ROLE
 #define NWK_ROUTE_RECORD_TABLE_NUM      127

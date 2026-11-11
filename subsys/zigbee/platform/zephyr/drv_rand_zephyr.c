@@ -4,7 +4,7 @@
  */
 /*
  * Minimal sys_rand_get() backend for the radios that have no Zephyr entropy
- * driver, the TLSR8269 at present.
+ * driver.
  *
  * Without an entropy driver no CONFIG_*_RANDOM_GENERATOR is available. The ZCL
  * layer calls sys_rand_get() (via zb_random()) for ZCL sequence numbers and
