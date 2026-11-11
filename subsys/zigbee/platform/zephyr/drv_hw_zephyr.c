@@ -242,7 +242,7 @@ void voltage_detect(bool powerOn)
 }
 
 /* Flash writes and erases need VDD above BATTERY_SAFETY_THRESHOLD (vendor flash_safe_voltage_set). */
-static bool zb_flash_vdd_ok(void)
+bool zb_flash_vdd_ok(void)
 {
 #ifdef ZB_VBAT_ADC_SPEC
 	uint16_t voltage;
@@ -416,44 +416,6 @@ void flash_write(u32 addr, u32 len, u8 *buf)
 		cur_addr += (u32)chunk;
 		remaining -= (u32)chunk;
 		src += chunk;
-	}
-}
-
-void flash_erase(u32 addr)
-{
-	u32 cur_addr = addr;
-	u32 remaining = FLASH_SECTOR_SIZE;
-
-	if (!zb_flash_vdd_ok()) {
-		LOG_ERR("%s: VDD below %u mV, erase refused", __func__, BATTERY_SAFETY_THRESHOLD);
-		return;
-	}
-
-	while (remaining > 0U) {
-		const struct flash_area *fa;
-		off_t off;
-		size_t max_len;
-		size_t chunk;
-
-		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
-			LOG_ERR("%s: invalid addr 0x%08x len=%u", __func__, cur_addr, remaining);
-			return;
-		}
-		if (!flash_area_write_allowed(fa)) {
-			LOG_ERR("%s: denied partition id=%u addr=0x%08x", __func__, fa->fa_id,
-				cur_addr);
-			return;
-		}
-
-		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
-		if (flash_area_erase(fa, off, chunk) < 0) {
-			LOG_ERR("%s: backend failed addr=0x%08x len=%u", __func__, cur_addr,
-				(u32)chunk);
-			return;
-		}
-
-		cur_addr += (u32)chunk;
-		remaining -= (u32)chunk;
 	}
 }
 
