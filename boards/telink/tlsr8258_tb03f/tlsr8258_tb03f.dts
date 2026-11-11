@@ -28,6 +28,7 @@
 		zephyr,code-partition = &app_partition;
 		zephyr,ieee802154 = &zb;
 		zigbee,retained-mem = &retained_analog;
+		zigbee,aes = &aes;
 	};
 
 	leds {

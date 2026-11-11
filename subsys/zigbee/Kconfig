@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 DT_CHOSEN_ZIGBEE_RETAINED_MEM := zigbee,retained-mem
+DT_CHOSEN_ZIGBEE_AES := zigbee,aes
 
 menuconfig ZIGBEE
 	bool "Zigbee protocol support"
@@ -14,8 +15,8 @@ menuconfig ZIGBEE
 	select HWINFO
 	help
 	  Enable Zigbee subsystem.
-	  AES-128 is provided by the TLSR8258 hardware accelerator.
-	  Other targets use the software implementation.
+	  AES-128 uses the hardware engine named by the zigbee,aes chosen node,
+	  or the software implementation when there is none.
 
 	  Zigbee runs its own MAC on top of the IEEE 802.15.4 radio driver and
 	  receives through a custom L2, so it is only available with
@@ -613,21 +614,26 @@ config ZIGBEE_RADIO_PORT_TLSR8269
 config ZIGBEE_AES_ENGINE
 	bool
 	depends on ZIGBEE
-	default y if DT_HAS_ESPRESSIF_ESP32_AES_ENABLED || \
-		     (DT_HAS_NORDIC_NRF_ECB_ENABLED && !HAS_BT_CTLR)
+	default y if $(dt_chosen_enabled,$(DT_CHOSEN_ZIGBEE_AES))
 	select CRYPTO
 	help
-	  The SoC has an AES engine that the crypto API drives for the Zigbee
-	  security service. The engine driver itself is enabled by default once
-	  CRYPTO is.
+	  The board names an AES engine in the zigbee,aes chosen node, which the
+	  crypto API drives for the Zigbee security service. The engine driver
+	  itself is enabled by default once CRYPTO is.
+
+config ZIGBEE_AES_HW_DECRYPT
+	bool
+	help
+	  The AES engine also decrypts, so the software cipher is not needed.
+	  Selected by the engine drivers that run both directions.
 
 config ZIGBEE_AES_SOFTWARE
 	bool
-	default y if !(CRYPTO_TLSR8258 || CRYPTO_ESP32_AES)
+	default y if !(ZIGBEE_AES_ENGINE && ZIGBEE_AES_HW_DECRYPT)
 	help
 	  Build the software AES-128 cipher. It is the whole implementation
-	  when no engine is available, and the decrypt direction on the nRF
-	  ECB peripheral, which only encrypts.
+	  when no engine is available, and the decrypt direction of an engine
+	  that only encrypts, such as the nRF ECB peripheral.
 
 config ZIGBEE_RADIO_PORT_GENERIC
 	bool
