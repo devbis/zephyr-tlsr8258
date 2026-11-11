@@ -33,7 +33,7 @@
 LOG_MODULE_REGISTER(zigbee_ed_sleep, CONFIG_ZIGBEE_LOG_LEVEL);
 
 /*
- * A deep-sleep interval shorter than this cannot repay the TLSR wake and RF
+ * A deep-sleep interval shorter than this cannot repay the wake and RF
  * bootstrap latency and would create a reset loop instead of a useful poll.
  */
 #define ZB_ED_SLEEP_MIN_INTERVAL_MS 20U

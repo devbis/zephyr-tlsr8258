@@ -64,7 +64,7 @@ typedef struct zb_buf_s {
  * interview-request burst, dropping frames at the driver->stack boundary and
  * contributing to interview flakiness. The rx_worker strip freed ~2.2 KB RAM, so
  * Keep the router pool at 33: the vendor value is 36, but the Zephyr buffer
- * carries a 128-byte RX snapshot in each block and the 48 KiB TLSR RAM cannot
+ * carries a 128-byte RX snapshot in each block and the 48 KiB of RAM of the smallest router target cannot
  * fit all 36 blocks together with the router runtime. 33 retains the burst
  * headroom while fitting the actual Zephyr layout.
  */
