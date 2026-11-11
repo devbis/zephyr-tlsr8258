@@ -221,6 +221,12 @@ void __weak zb_platform_app_bootstrap_ready(void)
 {
 }
 
+bool __weak zb_platform_app_install_code_get(uint8_t code[16])
+{
+	ARG_UNUSED(code);
+	return false;
+}
+
 bool __weak zb_platform_app_enable_radio_smoke_probe(void)
 {
 	return false;
