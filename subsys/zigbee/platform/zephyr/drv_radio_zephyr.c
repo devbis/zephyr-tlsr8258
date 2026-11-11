@@ -211,13 +211,8 @@ void zb_radio_note_tx_frame(const u8 *frame)
  */
 #define ZB_RADIO_TX_DONE_NO_ACK ((void *)1)
 
-/*
- * The TLSR8269 driver and the native_sim socket medium do not pass the Frame
- * Pending bit of a received ACK to ieee802154_handle_ack().
- */
-#define ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN                                                         \
-	(IS_ENABLED(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) ||                                          \
-	 IS_ENABLED(CONFIG_IEEE802154_NATIVE_SIM_SOCKET))
+/* See CONFIG_ZIGBEE_RADIO_ACK_FP_UNKNOWN. */
+#define ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN IS_ENABLED(CONFIG_ZIGBEE_RADIO_ACK_FP_UNKNOWN)
 
 static bool zb_radio_psdu_is_data_request(const u8 *psdu, u8 psdu_len)
 {

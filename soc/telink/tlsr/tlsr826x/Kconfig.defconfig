@@ -40,4 +40,15 @@ config IDLE_STACK_SIZE
 config TEST_EXTRA_STACK_SIZE
 	default 1024
 
+# 32 KB of SRAM: trim the Zigbee stack to fit.
+config ZIGBEE_BUF_POOL_NUM
+	default 14
+
+config ZIGBEE_TIMER_EVENT_NUM
+	default 16
+
+# The radio driver queues 4 frames, so 4 here cannot truncate a burst.
+config ZIGBEE_L2_RX_DEPTH
+	default 4
+
 endif # SOC_SERIES_TLSR826X
