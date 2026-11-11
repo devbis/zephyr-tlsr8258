@@ -1,0 +1,76 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+		zephyr,uart-mcumgr = &cdc_acm_uart1;
+		zephyr,ieee802154 = &ieee802154;
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+
+	cdc_acm_uart1: cdc_acm_uart1 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/* The radio is the IEEE 802.15.4 driver; ble_rf drives the same IPCC */
+&ble_rf {
+	status = "disabled";
+};
+
+&ieee802154 {
+	status = "okay";
+};
+
+/*
+ * Flash map of the M4: MCUboot (80 KiB), one 360 KiB image slot, the 32 KiB of non-volatile
+ * storage and the second slot MCUboot is built with.
+ *
+ * The wireless stack of CPU2 sits at the top of the flash and the M4 faults on every read or
+ * erase there: with the Thread RCP firmware (installed at 0x080DF000) the protected area starts
+ * at 0x080F4000, with the BLE stack that ships on the board already at 0x080CE000. Keep every M4
+ * partition below 0x080CE000. MCUboot is built with the same map: the trailer of its second slot
+ * is at the end of that slot, so the storage may use the start of the area.
+ */
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &scratch_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		boot_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(80)>;
+		};
+
+		slot0_partition: partition@14000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-0";
+			reg = <0x00014000 DT_SIZE_K(360)>;
+		};
+
+		storage_partition: partition@6e000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x0006e000 DT_SIZE_K(32)>;
+		};
+
+		slot1_partition: partition@76000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-1";
+			reg = <0x00076000 DT_SIZE_K(328)>;
+		};
+	};
+};
