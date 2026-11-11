@@ -3,8 +3,8 @@
 Zigbee
 ######
 
-Zephyr runs the Telink Zigbee stack on top of an IEEE 802.15.4 radio driver.
-The stack provides the MAC, network, APS, security, ZDO and BDB layers and the
+Zephyr runs a Zigbee stack derived from Telink's open ``libzigbee`` on top of
+an IEEE 802.15.4 radio driver. The stack provides the MAC, network, APS, security, ZDO and BDB layers and the
 Zigbee Cluster Library; the port adds a platform layer that maps the stack's
 timers, task queues, buffers, non-volatile storage and radio access onto
 Zephyr.
@@ -103,7 +103,8 @@ Imported sources
 
 The port replaces the vendor buffer pool, task queues, timers and NV driver
 with its own implementations under ``platform/zephyr`` and adapts the SDK
-sources in a single commit. The following changes to the reconstructed layers
+sources in a single commit. The host interfaces live in ``ncp/`` and the end
+device power policy in ``pm/``. The following changes to the reconstructed layers
 are deliberate departures from the vendor behavior:
 
 .. list-table::
