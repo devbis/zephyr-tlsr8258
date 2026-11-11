@@ -1,0 +1,13 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* The first USB CDC port carries the Z-Stack host protocol of coordinator_znp.conf: the board
+ * is a USB coordinator. The second one stays the mcumgr port.
+ */
+/ {
+	chosen {
+		zigbee,ncp-uart = &cdc_acm_uart0;
+	};
+};
