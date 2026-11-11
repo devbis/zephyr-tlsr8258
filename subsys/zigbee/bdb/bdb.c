@@ -2077,9 +2077,8 @@ _CODE_BDB_ uint8_t bdb_preInstallCodeLoad(uint8_t *keyType, uint8_t derivedKey[]
     };
     uint8_t installCode[SEC_KEY_LEN];
 
-    flash_read(CFG_PRE_INSTALL_CODE, SEC_KEY_LEN, (uint8_t *)installCode);
-
-    if (!memcmp((uint8_t *)installCode, (uint8_t *)invalidInstallCode, SEC_KEY_LEN)) {
+    if (!zb_platform_app_install_code_get(installCode) ||
+        !memcmp((uint8_t *)installCode, (uint8_t *)invalidInstallCode, SEC_KEY_LEN)) {
         return RET_NOT_FOUND;
     }
 

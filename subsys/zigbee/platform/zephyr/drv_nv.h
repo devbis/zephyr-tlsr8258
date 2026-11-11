@@ -26,17 +26,6 @@
 
 #include <zephyr/zigbee/zb_types.h>
 
-/*
- * Flash addresses the vendor stack reads factory and user data from. The
- * NV store itself is NVS on a fixed partition; only these two reads remain.
- */
-extern uint32_t g_u32MacFlashAddr;
-extern uint32_t g_u32CfgFlashAddr;
-
-#define MAC_BASE_ADD                    (g_u32MacFlashAddr)
-#define CFG_MAC_ADDRESS                 (MAC_BASE_ADD)
-#define CFG_PRE_INSTALL_CODE            (0x78000)
-
 typedef struct _attribute_packed_ {
     uint16_t opIndex;
     uint8_t 	opSect;
