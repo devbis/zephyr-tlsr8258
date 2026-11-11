@@ -13,30 +13,17 @@
 #include <zephyr/net/net_l2.h>
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/sys/atomic.h>
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269) && !defined(CONFIG_IEEE802154_TLSR8269_RX_THREAD)
-#include <zephyr/drivers/ieee802154/ieee802154_tlsr8269.h>
-#define ZB_L2_RX_FROM_ZB_THREAD 1
-#endif
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_radio_port.h>
 
 LOG_MODULE_REGISTER(zigbee_radio_l2, CONFIG_ZIGBEE_LOG_LEVEL);
 
 /*
- * The radio drivers hand a whole burst over in one drain pass (the TLSR8258
- * rx_queue holds 16 frames), so a shallower queue here silently truncates the
- * burst that carries AssocResp/Transport-Key.  Keep it at least as deep as the
- * deepest driver-side queue.
+ * The radio drivers hand a whole burst over in one drain pass, so a shallower
+ * queue here silently truncates the burst that carries AssocResp/Transport-Key.
+ * See CONFIG_ZIGBEE_L2_RX_DEPTH.
  */
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
-/*
- * 32 KB SRAM part: each queued frame costs ~127 bytes of RAM. The driver
- * queue is 4 deep, so 4 here cannot truncate a burst it delivers.
- */
-#define ZB_L2_RX_DEPTH 4
-#else
-#define ZB_L2_RX_DEPTH 16
-#endif
+#define ZB_L2_RX_DEPTH CONFIG_ZIGBEE_L2_RX_DEPTH
 /* The L2 hands over the PSDU without its FCS. */
 #define ZB_L2_PSDU_MAX (IEEE802154_MAX_PHY_PACKET_SIZE - IEEE802154_FCS_LENGTH)
 
@@ -60,9 +47,9 @@ uint32_t zb_radio_l2_rx_drop_count(void)
 void zb_radio_l2_register_rx_sink(zb_radio_port_rx_sink_t sink)
 {
 	rx_sink = sink;
-#ifdef ZB_L2_RX_FROM_ZB_THREAD
+#ifdef CONFIG_ZIGBEE_RADIO_PORT_RX_POLLED
 	/* The Zigbee thread drains the driver, so the interrupt only wakes it. */
-	tlsr8269_rx_set_notify(zb_platform_wake);
+	zb_radio_port_rx_notify_set(zb_platform_wake);
 #endif
 }
 
@@ -77,8 +64,8 @@ void zb_radio_l2_rx_poll(void)
 		return;
 	}
 
-#ifdef ZB_L2_RX_FROM_ZB_THREAD
-	tlsr8269_rx_service();
+#ifdef CONFIG_ZIGBEE_RADIO_PORT_RX_POLLED
+	zb_radio_port_rx_service();
 #endif
 	while (k_msgq_get(&zb_l2_rx_queue, &frame, K_NO_WAIT) == 0) {
 		view.len = frame.len;
