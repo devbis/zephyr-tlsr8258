@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_STM32WB
+	bool "STM32WB IEEE 802.15.4 driver (Thread RCP firmware on CPU2)"
+	default y
+	depends on DT_HAS_ST_STM32WB_IEEE802154_ENABLED
+	select USE_STM32_HAL_CORTEX
+	help
+	  Radio driver for the STM32WB5x. CPU2 must run ST's OpenThread RCP firmware
+	  (stm32wb5x_Thread_RCP_fw.bin); the driver exchanges HDLC framed Spinel with it over
+	  the IPCC Thread channels. It cannot be used together with the Bluetooth driver.
+
+if IEEE802154_STM32WB
+
+config IEEE802154_STM32WB_INIT_PRIO
+	int "STM32WB IEEE 802.15.4 initialization priority"
+	default 80
+	help
+	  Initialization priority of the driver, after the kernel and the clock control.
+
+config IEEE802154_STM32WB_RX_STACK_SIZE
+	int "Stack size of the RX work queue"
+	default 1536
+
+config IEEE802154_STM32WB_RX_PRIORITY
+	int "Priority of the RX work queue thread"
+	default 2
+	help
+	  Cooperative priority of the thread that processes what the RCP sends.
+
+config IEEE802154_STM32WB_REQUEST_TIMEOUT_MS
+	int "Timeout of a Spinel property request"
+	default 100
+
+config IEEE802154_STM32WB_TX_TIMEOUT_MS
+	int "Timeout of a frame transmission (CSMA, retries and ACK wait included)"
+	default 300
+
+config IEEE802154_STM32WB_MAX_CSMA_BACKOFFS
+	int "Maximum number of CSMA-CA backoffs for IEEE802154_TX_MODE_CSMA_CA"
+	default 4
+
+endif # IEEE802154_STM32WB
