@@ -11,5 +11,6 @@
 / {
 	chosen {
 		zigbee,ncp-uart = &usb_serial;
+		zigbee,aes = &aes;
 	};
 };

@@ -5,6 +5,7 @@ config CRYPTO_TLSR8258
 	bool "Telink TLSR8258 AES accelerator"
 	default y
 	depends on DT_HAS_TELINK_TLSR8258_AES_ENABLED
+	select ZIGBEE_AES_HW_DECRYPT if ZIGBEE
 	help
 	  Enable the driver for the AES-128 block engine of the Telink
 	  TLSR8258. The engine performs a single ECB block per run in both
