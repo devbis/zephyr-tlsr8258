@@ -246,9 +246,9 @@ static bool zb_platform_bdb_restore_joined_target(void)
 
 	/*
 	 * Skip the synchronous zb_info_save() that the vendor pattern would do
-	 * here. On TLSR8258 + Zephyr NVS, calling zb_info_save during the rejoin
-	 * start hot path crashes the chip (RF IRQs race against the flash
-	 * arch_irq_lock window; RTT log captures end with "rejoin request sent
+	 * here. On a SoC whose flash writes mask the RF interrupts (seen on the
+	 * TLSR8258), calling zb_info_save during the rejoin start hot path
+	 * crashes the chip (RF IRQs race against the flash arch_irq_lock window; RTT log captures end with "rejoin request sent
 	 * ..." and the chip resets ~1-3 s later). The Zephyr-side join chain
 	 * already defers persistence via the 15 s timer scheduled from
 	 * the ED join completion hook on a real interview completion, which
@@ -543,8 +543,8 @@ int zb_platform_bdb_init_default(void)
 
 	if (zb_bdb_bootstrap_ready && g_bdbCtx.simpleDesc == NULL) {
 		/*
-		 * g_zbInfo is rebuilt on a TLSR reboot, while this file's static
-		 * guard can remain in retained SRAM.  Do not skip BDB init with an
+		 * g_zbInfo is rebuilt on a reboot, while this file's static
+		 * guard can remain in SRAM that the reset keeps.  Do not skip BDB init with an
 		 * empty runtime context.
 		 */
 		zb_bdb_bootstrap_ready = false;
@@ -650,7 +650,7 @@ int zb_platform_bdb_init_default(void)
 	 * TC interview never completes. Set securityLevel=5 here so the
 	 * auth-wait branch fires. Avoid calling full ss_zdoInit(TRUE)
 	 * because its other side-effects (tl_neighborFrameCntReset +
-	 * ss_devKeyPairInfoGet) wedge MAC RX on TLSR8258.
+	 * ss_devKeyPairInfoGet) wedge MAC RX (seen on the TLSR8258).
 	 */
 	ss_ib_security_level_set(5U);
 	ss_ib_secure_all_fresh_set(TRUE);
