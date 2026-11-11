@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/irq.h>
 #include <zephyr/sys/util.h>
@@ -223,3 +224,18 @@ void tlsr8258_doubler_calibration(void)
 			      tlsr8258_analog_read(TLSR8258_ANA_DUTY_CAL) & 0xfdu);
 	tlsr8258_analog_write(TLSR8258_ANA_DUTY_EN, 0xfbu);
 }
+
+#ifdef CONFIG_TLSR825X_RC_CALIBRATION
+/* Vendor clock_init() and PM_CLOCK_INIT(): trim the 24 MHz and 32 kHz RC oscillators. */
+static int tlsr825x_rc_calibrate(void)
+{
+	tlsr8258_rc_24m_cal();
+	tlsr8258_clock_32k_rc_init();
+	tlsr8258_rc_32k_cal();
+
+	return 0;
+}
+
+/* First of the application level, after every driver and the system tick are up. */
+SYS_INIT(tlsr825x_rc_calibrate, APPLICATION, 0);
+#endif
