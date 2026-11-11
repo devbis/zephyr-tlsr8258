@@ -11,7 +11,7 @@
 extern struct k_sem zb_ev_sem;
 
 struct zb_task_item {
-	tl_zb_callback_t fn;
+	zb_callback_t fn;
 	void *arg;
 };
 
@@ -39,20 +39,20 @@ struct zb_task_item {
  * Public vendor ABI used by mac_trx.c for queue back-pressure. The Zephyr
  * callback lane has the same fixed capacity as the vendor user-task queue.
  */
-u8 ZB_TASKQ_USERUSE_SIZE = ZB_TASK_POST_QUEUE_DEPTH;
+uint8_t ZB_TASKQ_USERUSE_SIZE = ZB_TASK_POST_QUEUE_DEPTH;
 
 static struct zb_task_item task_queue[ZB_TASK_POST_QUEUE_DEPTH];
-static u8 task_wptr;
-static u8 task_rptr;
-static u8 task_count;
+static uint8_t task_wptr;
+static uint8_t task_rptr;
+static uint8_t task_count;
 static struct zb_task_item rx_task_queue[ZB_TASK_RX_QUEUE_DEPTH];
-static u8 rx_task_wptr;
-static u8 rx_task_rptr;
-static u8 rx_task_count;
+static uint8_t rx_task_wptr;
+static uint8_t rx_task_rptr;
+static uint8_t rx_task_count;
 static struct zb_task_item tx_task_queue[ZB_TASK_TX_QUEUE_DEPTH];
-static u8 tx_task_wptr;
-static u8 tx_task_rptr;
-static u8 tx_task_count;
+static uint8_t tx_task_wptr;
+static uint8_t tx_task_rptr;
+static uint8_t tx_task_count;
 static struct k_spinlock task_lock;
 
 static bool zb_taskq_pop(struct zb_task_item *item)
@@ -65,7 +65,7 @@ static bool zb_taskq_pop(struct zb_task_item *item)
 	 */
 	if (tx_task_count != 0U) {
 		*item = tx_task_queue[tx_task_rptr];
-		tx_task_rptr = (u8)((tx_task_rptr + 1U) % ARRAY_SIZE(tx_task_queue));
+		tx_task_rptr = (uint8_t)((tx_task_rptr + 1U) % ARRAY_SIZE(tx_task_queue));
 		tx_task_count--;
 		k_spin_unlock(&task_lock, key);
 		return true;
@@ -77,7 +77,7 @@ static bool zb_taskq_pop(struct zb_task_item *item)
 	 */
 	if (rx_task_count != 0U) {
 		*item = rx_task_queue[rx_task_rptr];
-		rx_task_rptr = (u8)((rx_task_rptr + 1U) % ARRAY_SIZE(rx_task_queue));
+		rx_task_rptr = (uint8_t)((rx_task_rptr + 1U) % ARRAY_SIZE(rx_task_queue));
 		rx_task_count--;
 		k_spin_unlock(&task_lock, key);
 		return true;
@@ -89,7 +89,7 @@ static bool zb_taskq_pop(struct zb_task_item *item)
 	}
 
 	*item = task_queue[task_rptr];
-	task_rptr = (u8)((task_rptr + 1U) % ARRAY_SIZE(task_queue));
+	task_rptr = (uint8_t)((task_rptr + 1U) % ARRAY_SIZE(task_queue));
 	task_count--;
 	k_spin_unlock(&task_lock, key);
 	return true;
@@ -98,7 +98,7 @@ static bool zb_taskq_pop(struct zb_task_item *item)
 static void zb_taskq_drain(void)
 {
 	struct zb_task_item item;
-	u8 budget = ZB_TASK_DRAIN_BUDGET;
+	uint8_t budget = ZB_TASK_DRAIN_BUDGET;
 
 	while (budget-- != 0U && zb_taskq_pop(&item)) {
 		if (item.fn != NULL) {
@@ -108,16 +108,16 @@ static void zb_taskq_drain(void)
 
 	/*
 	 * Keep the outgoing NWK security counter ahead of a reboot.  This is
-	 * the Zephyr equivalent of the vendor tl_zbTaskProcedure() tail call;
+	 * the Zephyr equivalent of the vendor zb_TaskProcedure() tail call;
 	 * zdo_ssInfoUpdate() persists the counter once every 1024 frames.
 	 */
 	zdo_ssInfoUpdate();
 }
 
-u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg)
+uint8_t zb_RxTaskPost(zb_callback_t fn, void *arg)
 {
 	k_spinlock_key_t key;
-	u8 next;
+	uint8_t next;
 
 	if (fn == NULL) {
 		return RET_INVALID_PARAMETER;
@@ -133,7 +133,7 @@ u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg)
 		.fn = fn,
 		.arg = arg,
 	};
-	next = (u8)((rx_task_wptr + 1U) % ARRAY_SIZE(rx_task_queue));
+	next = (uint8_t)((rx_task_wptr + 1U) % ARRAY_SIZE(rx_task_queue));
 	rx_task_wptr = next;
 	rx_task_count++;
 	k_spin_unlock(&task_lock, key);
@@ -141,10 +141,10 @@ u8 tl_zbRxTaskPost(tl_zb_callback_t fn, void *arg)
 	return RET_OK;
 }
 
-u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg)
+uint8_t zb_TxTaskPost(zb_callback_t fn, void *arg)
 {
 	k_spinlock_key_t key;
-	u8 next;
+	uint8_t next;
 
 	if (fn == NULL) {
 		return RET_INVALID_PARAMETER;
@@ -160,7 +160,7 @@ u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg)
 		.fn = fn,
 		.arg = arg,
 	};
-	next = (u8)((tx_task_wptr + 1U) % ARRAY_SIZE(tx_task_queue));
+	next = (uint8_t)((tx_task_wptr + 1U) % ARRAY_SIZE(tx_task_queue));
 	tx_task_wptr = next;
 	tx_task_count++;
 	k_spin_unlock(&task_lock, key);
@@ -169,10 +169,10 @@ u8 tl_zbTxTaskPost(tl_zb_callback_t fn, void *arg)
 	return RET_OK;
 }
 
-u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
+uint8_t zb_TaskPost(zb_callback_t fn, void *arg)
 {
 	k_spinlock_key_t key;
-	u8 next;
+	uint8_t next;
 
 	if (fn == NULL) {
 		return RET_INVALID_PARAMETER;
@@ -189,7 +189,7 @@ u8 tl_zbTaskPost(tl_zb_callback_t fn, void *arg)
 		.fn = fn,
 		.arg = arg,
 	};
-	next = (u8)((task_wptr + 1U) % ARRAY_SIZE(task_queue));
+	next = (uint8_t)((task_wptr + 1U) % ARRAY_SIZE(task_queue));
 	task_wptr = next;
 	task_count++;
 	k_spin_unlock(&task_lock, key);

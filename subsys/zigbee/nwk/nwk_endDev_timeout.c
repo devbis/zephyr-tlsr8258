@@ -12,26 +12,26 @@
 #include "ss_security_flags.h"
 
 typedef struct _attribute_packed_ {
-	u16 dstAddr;
-	u16 srcAddr;
-	u8 frameCtrlLow;
-	u8 frameCtrlHigh;
+	uint16_t dstAddr;
+	uint16_t srcAddr;
+	uint8_t frameCtrlLow;
+	uint8_t frameCtrlHigh;
 } nwk_hdr_frame_ctrl_bytes_t;
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
+	uint8_t cmdId;
 	nwkCmd_endDevTimeoutReq_t req;
 } nwk_endDevTimeout_req_payload_t;
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
+	uint8_t cmdId;
 	nwkCmd_endDevTimeoutResp_t rsp;
 } nwk_endDevTimeout_rsp_payload_t;
 
 typedef struct _attribute_packed_ {
-	u8 pad[9]; /* bytes 0-8 of the confirm buffer, not used here */
-	u8 status;
-	u16 srcAddr;
+	uint8_t pad[9]; /* bytes 0-8 of the confirm buffer, not used here */
+	uint8_t status;
+	uint16_t srcAddr;
 } nwk_endDevTimeout_req_cnf_t;
 
 STATIC_ASSERT(sizeof(nwk_endDevTimeout_nv_t) == 12);
@@ -42,7 +42,7 @@ STATIC_ASSERT(sizeof(nwk_endDevTimeout_req_cnf_t) == 12);
 
 enum {
 	NEIGHBOR_DEVICE_TYPE_STATUS_OFFSET =
-			OFFSETOF(tl_zb_normal_neighbor_entry_t, keepaliveRcvd) +
+			OFFSETOF(zb_normal_neighbor_entry_t, keepaliveRcvd) +
 		sizeof(bool),
 	NEIGHBOR_DEVICE_TYPE_MASK = 0x0eU,
 	NEIGHBOR_DEVICE_TYPE_END_DEVICE = NWK_DEVICE_TYPE_ED << 1,
@@ -60,25 +60,25 @@ int nwkEndDevWaitForTimeoutRspCb(void *arg)
 	return -1;
 }
 
-void nwkEndDevTimeoutReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 handle)
+void nwkEndDevTimeoutReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *cmd, uint8_t handle)
 {
 	nwkCmd_t *nwkCmd = (nwkCmd_t *)cmd;
 	nwk_endDevTimeout_req_payload_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, 3, payload, nwk_endDevTimeout_req_payload_t *);
-	u16 nextHop = pNwkHdr->dstAddr;
+	ZB_BUF_INITIAL_ALLOC(buf, 3, payload, nwk_endDevTimeout_req_payload_t *);
+	uint16_t nextHop = pNwkHdr->dstAddr;
 
 	payload->cmdId = nwkCmd->cmdId;
 	payload->req = nwkCmd->endDevTimeoutReq;
 
 	buf->hdr.handle = handle;
 
-	nwk_tx(buf, pNwkHdr, nextHop, 0, (u8 *)payload, 3);
+	nwk_tx(buf, pNwkHdr, nextHop, 0, (uint8_t *)payload, 3);
 }
 
-void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
+void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, uint8_t endDevCfg)
 {
-	tl_zb_normal_neighbor_entry_t *parent = tl_zbNeighborTableSearchForParent();
+	zb_normal_neighbor_entry_t *parent = zb_NeighborTableSearchForParent();
 
 	if (parent == NULL) {
 		return;
@@ -93,8 +93,8 @@ void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
 	nwk_hdr_t nwkHdr;
 	nwkCmd_t cmd;
 	nwk_hdr_frame_ctrl_bytes_t *hdr = (nwk_hdr_frame_ctrl_bytes_t *)&nwkHdr;
-	u8 parentInfo = g_zbNIB.parentInfo;
-	u8 security = 0;
+	uint8_t parentInfo = g_zbNIB.parentInfo;
+	uint8_t security = 0;
 	memset(&nwkHdr, 0, sizeof(nwkHdr));
 	memset(&cmd, 0, sizeof(cmd));
 
@@ -111,18 +111,18 @@ void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
 		parentInfo--;
 	}
 
-	hdr->frameCtrlHigh = (u8)((hdr->frameCtrlHigh & (u8)~0x20U) | (u8)(parentInfo << 5));
-	hdr->frameCtrlLow = (u8)((hdr->frameCtrlLow & (u8)~0x3cU) | 0x08U);
-	hdr->frameCtrlLow = (u8)((hdr->frameCtrlLow & (u8)~0x03U) | 0x01U);
-	hdr->frameCtrlHigh = (u8)((hdr->frameCtrlHigh & (u8)~0x02U) | (u8)(security << 1));
+	hdr->frameCtrlHigh = (uint8_t)((hdr->frameCtrlHigh & (uint8_t)~0x20U) | (uint8_t)(parentInfo << 5));
+	hdr->frameCtrlLow = (uint8_t)((hdr->frameCtrlLow & (uint8_t)~0x3cU) | 0x08U);
+	hdr->frameCtrlLow = (uint8_t)((hdr->frameCtrlLow & (uint8_t)~0x03U) | 0x01U);
+	hdr->frameCtrlHigh = (uint8_t)((hdr->frameCtrlHigh & (uint8_t)~0x02U) | (uint8_t)(security << 1));
 	hdr->frameCtrlHigh |= 0x10U;
 	hdr->frameCtrlHigh |= 0x3cU;
 
 	ZB_IEEE_ADDR_COPY(nwkHdr.srcIeeeAddr, g_zbMacPib.extAddress);
-	tl_zbExtAddrByIdx(parent->addrmapIdx, nwkHdr.dstIeeeAddr);
+	zb_ExtAddrByIdx(parent->addrmapIdx, nwkHdr.dstIeeeAddr);
 
 	nwkHdr.srcAddr = g_zbNIB.nwkAddr;
-	nwkHdr.dstAddr = tl_zbshortAddrByIdx(parent->addrmapIdx);
+	nwkHdr.dstAddr = zb_shortAddrByIdx(parent->addrmapIdx);
 	nwkHdr.seqNum = g_zbNIB.seqNum;
 	g_zbNIB.seqNum++;
 	nwkHdr.radius = 1;
@@ -132,7 +132,7 @@ void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg)
 	cmd.endDevTimeoutReq.reqTimeoutEnum = reqTimeoutEnum;
 	cmd.endDevTimeoutReq.endDevCfg = endDevCfg;
 
-	nwkEndDevTimeoutReqCmdSend(buf, &nwkHdr, (u8 *)&cmd,
+	nwkEndDevTimeoutReqCmdSend(buf, &nwkHdr, (uint8_t *)&cmd,
 				   NWK_INTERNAL_ENDDEVTIMEOUT_REQ_CMD_HANDLE);
 }
 
@@ -164,7 +164,7 @@ int keepaliveMsgSendTimerCb(void *arg)
 
 void keepaliveMsgSendStart(void)
 {
-	u32 timeout = (REQUESTED_TIMEOUT_VALUE_GET(g_zbNIB.endDevTimeoutDefault) * 1000U) / 3U;
+	uint32_t timeout = (REQUESTED_TIMEOUT_VALUE_GET(g_zbNIB.endDevTimeoutDefault) * 1000U) / 3U;
 
 	if (keepaliveMsgSendEvt != NULL) {
 		ev_timer_taskCancel(&keepaliveMsgSendEvt);
@@ -190,7 +190,7 @@ void nwkEndDevTimeoutRspCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	g_zbNIB.parentInfo = cmd->endDevTimeoutRsp.parentInfo;
 	keepaliveMsgSendStart();
 
-	tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(pNwkHdr->srcAddr);
+	zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(pNwkHdr->srcAddr);
 
 	if (entry == NULL) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -220,14 +220,14 @@ void nwkEndDevTimeoutReqCnfHandler(void *arg)
 		}
 
 		ev_timer_taskPost(nwkEndDevWaitForTimeoutRspCb, NULL,
-				  ((((u32)g_zbInfo.macPib.respWaitTime << 4) -
-				    (u32)g_zbInfo.macPib.respWaitTime)
+				  ((((uint32_t)g_zbInfo.macPib.respWaitTime << 4) -
+				    (uint32_t)g_zbInfo.macPib.respWaitTime)
 				   << 10) /
 					  1000U);
 		return;
 	}
 
-	tl_zbNwkNlmeNwkStatusInd(arg, buf->srcAddr, NWK_COMMAND_STATUS_PARENT_LINK_FAILURE);
+	zb_NwkNlmeNwkStatusInd(arg, buf->srcAddr, NWK_COMMAND_STATUS_PARENT_LINK_FAILURE);
 }
 
 void nwkEndDevTimeoutRejoin(void)
@@ -250,11 +250,11 @@ void nwkEndDevTimeoutInfoNVStore(void *arg)
 	 * (NV_MODULE_ADDRESS_TABLE), not NV_MODULE_ZB_INFO: every NV call in this
 	 * function uses that module. */
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(timeoutInfo),
-			    (u8 *)&itemInfo) == NV_SUCC) {
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
+			    (uint8_t *)&itemInfo) == NV_SUCC) {
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT,
 						itemInfo.opSect, i, sizeof(timeoutInfo),
-						(u8 *)&timeoutInfo) != NV_SUCC) {
+						(uint8_t *)&timeoutInfo) != NV_SUCC) {
 				continue;
 			}
 
@@ -263,7 +263,7 @@ void nwkEndDevTimeoutInfoNVStore(void *arg)
 			}
 
 			if (info->timeout == timeoutInfo.timeout) {
-				ev_buf_free((u8 *)info);
+				ev_buf_free((uint8_t *)info);
 				return;
 			}
 
@@ -273,31 +273,31 @@ void nwkEndDevTimeoutInfoNVStore(void *arg)
 	}
 
 	(void)nv_flashWriteNew(0, NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT, sizeof(*info),
-			       (u8 *)info);
-	ev_buf_free((u8 *)info);
+			       (uint8_t *)info);
+	ev_buf_free((uint8_t *)info);
 }
 
-void nwkEndDevKeepaliveSupport(u8 keepaliveSupport)
+void nwkEndDevKeepaliveSupport(uint8_t keepaliveSupport)
 {
 	g_zbNIB.parentInfo = keepaliveSupport;
 }
 
-void nwkEndDevTimeoutRspCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 handle)
+void nwkEndDevTimeoutRspCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *cmd, uint8_t handle)
 {
 	nwkCmd_t *nwkCmd = (nwkCmd_t *)cmd;
 	nwk_endDevTimeout_rsp_payload_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, 3, payload, nwk_endDevTimeout_rsp_payload_t *);
+	ZB_BUF_INITIAL_ALLOC(buf, 3, payload, nwk_endDevTimeout_rsp_payload_t *);
 
 	payload->cmdId = nwkCmd->cmdId;
 	payload->rsp = nwkCmd->endDevTimeoutRsp;
 
 	buf->hdr.handle = handle;
 
-	nwk_fwdPacket(buf, pNwkHdr, (u8 *)payload, 3);
+	nwk_fwdPacket(buf, pNwkHdr, (uint8_t *)payload, 3);
 }
 
-void nwkEndDevTimeoutInfoStore(tl_zb_normal_neighbor_entry_t *entry)
+void nwkEndDevTimeoutInfoStore(zb_normal_neighbor_entry_t *entry)
 {
 	nwk_endDevTimeout_nv_t *info =
 		(nwk_endDevTimeout_nv_t *)ev_buf_allocate(sizeof(nwk_endDevTimeout_nv_t));
@@ -306,10 +306,10 @@ void nwkEndDevTimeoutInfoStore(tl_zb_normal_neighbor_entry_t *entry)
 		return;
 	}
 
-	tl_zbExtAddrByIdx(entry->addrmapIdx, info->extAddr);
+	zb_ExtAddrByIdx(entry->addrmapIdx, info->extAddr);
 	info->timeout = entry->devTimeout;
 
-	tl_zbTaskPost(nwkEndDevTimeoutInfoNVStore, info);
+	zb_TaskPost(nwkEndDevTimeoutInfoNVStore, info);
 }
 
 void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
@@ -318,7 +318,7 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	nwkCmd_t rsp;
 	nwk_hdr_t nwkHdr;
 	nwk_hdr_frame_ctrl_bytes_t *hdr = (nwk_hdr_frame_ctrl_bytes_t *)&nwkHdr;
-	u8 security = 0;
+	uint8_t security = 0;
 
 	memset(&rsp, 0, sizeof(rsp));
 	memset(&nwkHdr, 0, sizeof(nwkHdr));
@@ -329,14 +329,14 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	    cmd->endDevTimeoutReq.endDevCfg != 0U) {
 		rsp.endDevTimeoutRsp.status = TIMEOUT_RSP_STATUS_INCORRECT_VALUE;
 	} else {
-		tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(pNwkHdr->srcAddr);
+		zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(pNwkHdr->srcAddr);
 
 		/* The SDK bitfield declaration does not reproduce the vendor status
 		 * byte layout with this compiler.  The vendor checks deviceType in
 		 * bits 1..3; derive its offset from the named preceding field instead
 		 * of assuming a 32-bit pointer size. */
 		if (entry == NULL ||
-		    (((u8 *)entry)[NEIGHBOR_DEVICE_TYPE_STATUS_OFFSET] &
+		    (((uint8_t *)entry)[NEIGHBOR_DEVICE_TYPE_STATUS_OFFSET] &
 		     NEIGHBOR_DEVICE_TYPE_MASK) != NEIGHBOR_DEVICE_TYPE_END_DEVICE) {
 			zb_buf_free(buf);
 			return;
@@ -368,9 +368,9 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		}
 	}
 
-	hdr->frameCtrlLow = (u8)((hdr->frameCtrlLow & (u8)~0x3cU) | 0x08U);
-	hdr->frameCtrlLow = (u8)((hdr->frameCtrlLow & (u8)~0x03U) | 0x01U);
-	hdr->frameCtrlHigh = (u8)((hdr->frameCtrlHigh & (u8)~0x02U) | (u8)(security << 1));
+	hdr->frameCtrlLow = (uint8_t)((hdr->frameCtrlLow & (uint8_t)~0x3cU) | 0x08U);
+	hdr->frameCtrlLow = (uint8_t)((hdr->frameCtrlLow & (uint8_t)~0x03U) | 0x01U);
+	hdr->frameCtrlHigh = (uint8_t)((hdr->frameCtrlHigh & (uint8_t)~0x02U) | (uint8_t)(security << 1));
 	hdr->frameCtrlHigh |= 0x10U;
 	hdr->frameCtrlHigh |= 0x08U;
 
@@ -384,7 +384,7 @@ void nwkEndDevTimeoutReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	nwkHdr.radius = 1;
 	nwkHdr.frameHdrLen = getNwkHdrSize(&nwkHdr);
 
-	nwkEndDevTimeoutRspCmdSend(buf, &nwkHdr, (u8 *)&rsp,
+	nwkEndDevTimeoutRspCmdSend(buf, &nwkHdr, (uint8_t *)&rsp,
 				   NWK_INTERNAL_ENDDEVTIMEOUT_RSP_CMD_HANDLE);
 }
 

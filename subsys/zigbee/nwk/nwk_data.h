@@ -6,34 +6,34 @@
 
 #include "zb_common.h"
 
-extern u8 quickDataPollCnt;
-extern u8 g_edBrcSkipParent;
+extern uint8_t quickDataPollCnt;
+extern uint8_t g_edBrcSkipParent;
 extern ev_timer_event_t *quickDataPollTimerEvt;
 extern nwkDataIndCb_t g_nwkDataIndCb;
 
-void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 indirect, u8 *payload,
-	    u8 payloadLen);
-void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen);
-void tl_zbNwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbNwkRejoinReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbNwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbMcpsRejoinRespCnfHandler(void *arg, u8 status, u16 shortAddr);
-void tl_zbNwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbNwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbNwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void tl_zbNwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint16_t nextHop, uint8_t indirect, uint8_t *payload,
+	    uint8_t payloadLen);
+void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload, uint8_t payloadLen);
+void zb_NwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_NwkRejoinReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_NwkRejoinRespCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_McpsRejoinRespCnfHandler(void *arg, uint8_t status, uint16_t shortAddr);
+void zb_NwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_NwkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_NwkLinkStatusCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
+void zb_NwkReportCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
 void nwkReportCmdHandler(void *arg, nwkCmd_t *cmd);
-u8 tl_zbNwkInterPanDataReq(void *arg);
-void nwkNldeDataCnf(void *arg, u8 status, u8 nsduHandle);
-void tl_zbNwkBeaconPayloadUpdate(void);
+uint8_t zb_NwkInterPanDataReq(void *arg);
+void nwkNldeDataCnf(void *arg, uint8_t status, uint8_t nsduHandle);
+void zb_NwkBeaconPayloadUpdate(void);
 void endDevMacDataPoll(void);
 void nwkRouteReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
 void nwkRouteReplyCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-void nwkRouteRecordInitiation(u16 srcAddr, u16 dstAddr);
+void nwkRouteRecordInitiation(uint16_t srcAddr, uint16_t dstAddr);
 void nwkRouteRecordCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd);
-tl_zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(u16 shortAddr);
-u8 tl_nwkGetAverageLqi(u8 oldLqi, u8 newLqi);
-void tl_zbMacMcpsDataConfirmHandler(void *arg);
-void tl_zbMacMcpsDataIndicationHandler(void *arg);
+zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(uint16_t shortAddr);
+uint8_t zb_nwkGetAverageLqi(uint8_t oldLqi, uint8_t newLqi);
+void zb_MacMcpsDataConfirmHandler(void *arg);
+void zb_MacMcpsDataIndicationHandler(void *arg);
 
 #endif

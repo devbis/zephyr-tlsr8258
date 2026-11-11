@@ -35,15 +35,15 @@ _CODE_SS_ void zdo_ssInfoSaveToFlash(void)
      * ss_ib.nwkSecurMaterialSet[0].key and ss_ib.nwkSecurMaterialSet[1].key
      *
      * */
-    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
+    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss_ib);
 #endif
 }
 
-_CODE_SS_ u8 zdo_ssInfoInit(void)
+_CODE_SS_ uint8_t zdo_ssInfoInit(void)
 {
-    u8 ret = NV_ITEM_NOT_FOUND;
+    uint8_t ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
-    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
+    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss_ib);
 
     /*
      * user can process network key(Decrypt) here :
@@ -52,9 +52,9 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
      * */
 #endif
 #if ZB_COORDINATOR_ROLE
-    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+    ss_ib.keyPairSetNew = (uint8_t *)g_ssTcKeyPair;
 #else
-    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+    ss_ib.keyPairSetNew = (uint8_t *)&g_ssDevKeyPair;
 #endif
     /*
      * ss_ib is stored in NV whole, pointer members included, and it has no
@@ -63,9 +63,9 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
      * after a rebuild, and a NULL tcLinkKey makes every Transport-Key fail
      * to decrypt.
      */
-    ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
-    ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
-    ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+    ss_ib.tcLinkKey = (uint8_t *)tcLinkKeyCentralDefault;
+    ss_ib.distributeLinkKey = (uint8_t *)linkKeyDistributedMaster;
+    ss_ib.touchLinkKey = (uint8_t *)linkKeyDistributedCertification;
     if (ret != NV_SUCC) {
         /*
          * A soft reset keeps SRAM, so without an NV record ss_ib can still
@@ -74,24 +74,24 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
          */
         memset(&ss_ib, 0, sizeof(ss_ib));
 #if ZB_COORDINATOR_ROLE
-        ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+        ss_ib.keyPairSetNew = (uint8_t *)g_ssTcKeyPair;
 #else
-        ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+        ss_ib.keyPairSetNew = (uint8_t *)&g_ssDevKeyPair;
 #endif
-        ss_ib.tcLinkKey = (u8 *)tcLinkKeyCentralDefault;
-        ss_ib.distributeLinkKey = (u8 *)linkKeyDistributedMaster;
-        ss_ib.touchLinkKey = (u8 *)linkKeyDistributedCertification;
+        ss_ib.tcLinkKey = (uint8_t *)tcLinkKeyCentralDefault;
+        ss_ib.distributeLinkKey = (uint8_t *)linkKeyDistributedMaster;
+        ss_ib.touchLinkKey = (uint8_t *)linkKeyDistributedCertification;
         ZB_IEEE_ADDR_INVALID(ss_ib.trust_center_address);
     }
     return ret;
 }
 
-_CODE_SS_ u8 zdo_ssInfoKeyGet(void)
+_CODE_SS_ uint8_t zdo_ssInfoKeyGet(void)
 {
-    u8 ret = NV_ITEM_NOT_FOUND;
+    uint8_t ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
     ss_info_base_t ss;
-    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss);
+    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss);
     if (ret == NV_SUCC) {
         ret = ss.activeSecureMaterialIndex;
     }

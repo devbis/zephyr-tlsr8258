@@ -79,10 +79,10 @@ void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
 }
 
 extern void aps_init(void);
-extern void tl_zbMacInit(u8 coldReset);
-extern void tl_zbNwkInit(u8 coldReset);
+extern void zb_MacInit(uint8_t coldReset);
+extern void zb_NwkInit(uint8_t coldReset);
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
-extern void tl_zbMacTaskProc(void);
+extern void zb_MacTaskProc(void);
 #endif
 
 static addrExt_t zb_runtime_ieee_addr;
@@ -182,7 +182,7 @@ void zb_platform_network_left(void)
 	zb_platform_app_network_left();
 }
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
-extern void zb_router_enable_parenting(u8 permit_duration);
+extern void zb_router_enable_parenting(uint8_t permit_duration);
 #endif
 static uint32_t zb_persistent_rejoin_started_ms;
 static uint32_t zb_last_commission_retry_ms;
@@ -316,7 +316,7 @@ static void zb_core_bootstrap_once(void)
 	}
 
 	if (!zb_core_init_done) {
-		u8 cold_reset = TRUE;
+		uint8_t cold_reset = TRUE;
 
 		/*
 		 * A soft reset can retain transient C state.  Reset the
@@ -342,8 +342,8 @@ static void zb_core_bootstrap_once(void)
 		/* Deterministic ED bootstrap order. */
 		ev_buf_init();
 		ev_timer_init();
-		tl_zbMacInit(cold_reset);
-		tl_zbNwkInit(cold_reset);
+		zb_MacInit(cold_reset);
+		zb_NwkInit(cold_reset);
 		aps_init();
 		af_init();
 		zdo_init();
@@ -363,7 +363,7 @@ static void zb_core_bootstrap_once(void)
 		 */
 		secondClockRun();
 		/*
-		 * tl_zbNwkInit() clears the transient context, including
+		 * zb_NwkInit() clears the transient context, including
 		 * is_factory_new.  If there is no valid persisted joined snapshot,
 		 * restore cannot leave that bit at zero: BDB would take the
 		 * non-factory-new/re-steer path and never run network discovery.
@@ -489,7 +489,7 @@ static void zb_core_bootstrap_once(void)
 	 * the persisted PIB again, but before persistent rejoin is scheduled.
 	 */
 	if (g_zbMacPib.phyChannelCur < 11U || g_zbMacPib.phyChannelCur > 26U) {
-		g_zbMacPib.phyChannelCur = (u8)ZB_CHANNEL_INITIAL;
+		g_zbMacPib.phyChannelCur = (uint8_t)ZB_CHANNEL_INITIAL;
 		g_zbInfo.macPib.phyChannelCur = g_zbMacPib.phyChannelCur;
 	}
 	/*
@@ -592,8 +592,8 @@ static void zb_process_deferred_persistent_rejoin(void)
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR)
 		/*
 		 * Advertise as a parent once secure join is complete. Until this
-		 * runs the MAC answers no beacon request: tl_zbMacBeaconRequestCb()
-		 * needs devType and beaconPayloadLen, and tl_zbMlmeCmdBeaconReqRecvd()
+		 * runs the MAC answers no beacon request: zb_MacBeaconRequestCb()
+		 * needs devType and beaconPayloadLen, and zb_MlmeCmdBeaconReqRecvd()
 		 * needs joined without joined_pro. Nothing in the imported stack sets
 		 * that up, so the port does it here.
 		 */
@@ -722,7 +722,7 @@ static void zb_link_watchdog_tick(void)
 
 #if defined(CONFIG_ZIGBEE_ED)
 	uint32_t scan_mask =
-		(((u32)1U << (TL_ZB_MAC_CHANNEL_STOP + 1U)) - ((u32)1U << TL_ZB_MAC_CHANNEL_START));
+		(((uint32_t)1U << (ZB_MAC_CHANNEL_STOP + 1U)) - ((uint32_t)1U << ZB_MAC_CHANNEL_START));
 	if (zb_rejoinReq(scan_mask, ZB_LINK_REJOIN_SCAN_DURATION) != ZDO_SUCCESS) {
 		LOG_WRN("zb link watchdog: rejoin start rejected (state busy)");
 	}
@@ -849,10 +849,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 			 */
 			zb_radio_l2_rx_poll();
 #if defined(CONFIG_ZIGBEE_ROUTER) || defined(CONFIG_ZIGBEE_COORDINATOR) || defined(CONFIG_ZIGBEE_ED)
-			for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
-				tl_zbNwkTaskProc();
+			for (uint8_t nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
+				zb_NwkTaskProc();
 			}
-			tl_zbMacTaskProc();
+			zb_MacTaskProc();
 #endif
 			if (!zb_bootstrap_done) {
 				zb_thread_wait();
@@ -873,7 +873,7 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		/*
 		 * The router and the libzigbee-based ED both pull in the
 		 * libzigbee NWK / MAC primitive dispatcher via
-		 * tl_zbNwkTaskProc(); drain the per-layer task queues on every
+		 * zb_NwkTaskProc(); drain the per-layer task queues on every
 		 * tick so high→NWK, MAC→NWK, and NWK→MAC primitives (active
 		 * scan requests, beacon-notify indications, association
 		 * requests, NLDE confirms) are delivered to their handlers.
@@ -885,10 +885,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 * Process a bounded batch so MAC2NWK does not lag behind the RF RX
 		 * callback queue and leave the device ACKing frames it never parses.
 		 */
-		for (u8 nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
-			tl_zbNwkTaskProc();
+		for (uint8_t nwk_pass = 0; nwk_pass < 16; nwk_pass++) {
+			zb_NwkTaskProc();
 		}
-		tl_zbMacTaskProc();
+		zb_MacTaskProc();
 #endif
 		zb_process_deferred_persistent_rejoin();
 		zb_process_deferred_commissioning();

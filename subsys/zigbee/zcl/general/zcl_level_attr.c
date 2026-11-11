@@ -79,45 +79,45 @@ zcl_levelAttr_t zcl_attr_level = {
 /* Attribute record list */
 const zclAttrInfo_t level_attrTbl[] = {
 #ifdef ZCL_ATTR_CURRENT_LEVEL_ENABLE
-    { ZCL_ATTRID_LEVEL_CURRENT_LEVEL,          ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE, (u8*)&zcl_attr_level.curLevel },
+    { ZCL_ATTRID_LEVEL_CURRENT_LEVEL,          ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE, (uint8_t*)&zcl_attr_level.curLevel },
 #endif
 
 #ifdef ZCL_ATTR_REMAINING_TIME_ENABLE
-    { ZCL_ATTRID_LEVEL_REMAINING_TIME,         ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (u8*)&zcl_attr_level.remainingTime },
+    { ZCL_ATTRID_LEVEL_REMAINING_TIME,         ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (uint8_t*)&zcl_attr_level.remainingTime },
 #endif
 
 #ifdef ZCL_ATTR_ONOFF_TRANS_TIME_ENABLE
-    { ZCL_ATTRID_LEVEL_ON_OFF_TRANSITION_TIME, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.onOffTransTime },
+    { ZCL_ATTRID_LEVEL_ON_OFF_TRANSITION_TIME, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.onOffTransTime },
 #endif
 
 #ifdef ZCL_ATTR_ON_LEVEL_ENABLE
-    { ZCL_ATTRID_LEVEL_ON_LEVEL,               ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.onLevel },
+    { ZCL_ATTRID_LEVEL_ON_LEVEL,               ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.onLevel },
 #endif
 
 #ifdef ZCL_ATTR_ON_TRANS_ENABLE
-    { ZCL_ATTRID_LEVEL_ON_TRANSITION_TIME,     ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.onTransitionTime },
+    { ZCL_ATTRID_LEVEL_ON_TRANSITION_TIME,     ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.onTransitionTime },
 #endif
 
 #ifdef ZCL_ATTR_OFF_TRANS_ENABLE
-    { ZCL_ATTRID_LEVEL_OFF_TRANSITION_TIME,    ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.offTransitionTime },
+    { ZCL_ATTRID_LEVEL_OFF_TRANSITION_TIME,    ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.offTransitionTime },
 #endif
 
 #ifdef ZCL_ATTR_DEFAULT_MOVE_RATE_ENABLE
-    { ZCL_ATTRID_LEVEL_DEFAULT_MOVE_RATE,      ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.defaultMoveRate },
+    { ZCL_ATTRID_LEVEL_DEFAULT_MOVE_RATE,      ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.defaultMoveRate },
 #endif
 
 #ifdef ZCL_ATTR_OPTIONS_ENABLE
-    { ZCL_ATTRID_LEVEL_OPTIONS,                ZCL_DATA_TYPE_BITMAP8, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.options },
+    { ZCL_ATTRID_LEVEL_OPTIONS,                ZCL_DATA_TYPE_BITMAP8, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.options },
 #endif
 
 #ifdef ZCL_ATTR_START_UP_CURRENT_LEVEL_ENABLE
-    { ZCL_ATTRID_LEVEL_START_UP_CURRENT_LEVEL, ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&zcl_attr_level.startUpCurrentLevel },
+    { ZCL_ATTRID_LEVEL_START_UP_CURRENT_LEVEL, ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&zcl_attr_level.startUpCurrentLevel },
 #endif
 
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,      ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (u8*)&zcl_attr_global_clusterRevision },
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,      ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (uint8_t*)&zcl_attr_global_clusterRevision },
 };
 
-const u8 zcl_level_attrNum = (sizeof(level_attrTbl) / sizeof(zclAttrInfo_t));
+const uint8_t zcl_level_attrNum = (sizeof(level_attrTbl) / sizeof(zclAttrInfo_t));
 
 nv_sts_t zcl_level_saveAttr(void)
 {

@@ -22,8 +22,8 @@
  *          limitations under the License.
  *
  *******************************************************************************************************/
-#ifndef TL_ZB_MAC_PIB_H
-#define TL_ZB_MAC_PIB_H
+#ifndef ZB_MAC_PIB_H
+#define ZB_MAC_PIB_H
 
 
 #define	MAC_INVALID_PANID                       0xFFFF
@@ -81,66 +81,66 @@
 
 #ifdef ZB_MAC_SECURITY
 typedef struct zb_mac_device_table_s {
-    u32 frameCounter;
-    u16 shortAddr;
+    uint32_t frameCounter;
+    uint16_t shortAddr;
     addrExt_t extAddr;
-    u16 panId;
-} tl_zb_mac_device_table_t;
+    uint16_t panId;
+} zb_mac_device_table_t;
 #endif
 
 /** @addtogroup zigbee_mac_pib_type Zigbee Mac PIB Types
  *  @{
  */
 typedef struct {
-    u32 beaconTxTime;                   //!< The time that the device transmitted its last beacon frame
+    uint32_t beaconTxTime;                   //!< The time that the device transmitted its last beacon frame
     addrExt_t coordExtAddress;          //!< coordinator ieee address
     addrExt_t extAddress;               //!< ieee address
-    u16 ackWaitDuration;                //!< the duration for waiting for an acknowledgment frame
-    u16 coordShortAddress;              //!< coordinator short address
-    u16 panId;                          //!< pan identifier
-    u16 shortAddress;                   //!< short address(joined in a network)
-    u16 superframeOrder;                //!< super-frame order
-    u16 transactionPersistenceTime;     //! The maximum time (in unit periods) that a transaction is stored by a coordinator and indicated in its beacon.
-    u16 frameTotalWaitTime;
-    u16 syncSymbolOffset;//4
+    uint16_t ackWaitDuration;                //!< the duration for waiting for an acknowledgment frame
+    uint16_t coordShortAddress;              //!< coordinator short address
+    uint16_t panId;                          //!< pan identifier
+    uint16_t shortAddress;                   //!< short address(joined in a network)
+    uint16_t superframeOrder;                //!< super-frame order
+    uint16_t transactionPersistenceTime;     //! The maximum time (in unit periods) that a transaction is stored by a coordinator and indicated in its beacon.
+    uint16_t frameTotalWaitTime;
+    uint16_t syncSymbolOffset;//4
     zb_mac_beacon_payload_t beaconPayload;//15
-    u8 beaconPayloadLen;
-    u8 associationPermit;
-    u8 associatedPanCoord;
-    u8 autoReq;//4
-    u8 battLifeExt;
-    u8 battLifeExtPeriods;
-    u8 beaconOrder;
-    u8 beaconSeqNum;
-    u8 seqNum;
-    u8 frameRetryNum;
-    u8 respWaitTime;
-    u8 maxCsmaBackoffs;
-    u8 promiscuousMode;
-    u8 timeStampSupported;
-    u8 securityEnabled;
+    uint8_t beaconPayloadLen;
+    uint8_t associationPermit;
+    uint8_t associatedPanCoord;
+    uint8_t autoReq;//4
+    uint8_t battLifeExt;
+    uint8_t battLifeExtPeriods;
+    uint8_t beaconOrder;
+    uint8_t beaconSeqNum;
+    uint8_t seqNum;
+    uint8_t frameRetryNum;
+    uint8_t respWaitTime;
+    uint8_t maxCsmaBackoffs;
+    uint8_t promiscuousMode;
+    uint8_t timeStampSupported;
+    uint8_t securityEnabled;
 
-    u8 gtsPermit;
-    u8 minBe;
-    u8 maxBe;
-    u8 phyPageCur;
-    u8 phyChannelCur;
-    u8 rxOnWhenIdle;
-    u8 txPower;
-    u8 resv[3];//76-bytes
+    uint8_t gtsPermit;
+    uint8_t minBe;
+    uint8_t maxBe;
+    uint8_t phyPageCur;
+    uint8_t phyChannelCur;
+    uint8_t rxOnWhenIdle;
+    uint8_t txPower;
+    uint8_t resv[3];//76-bytes
 
 #ifdef ZB_MAC_SECURITY
-    tl_zb_mac_device_table_t devTable[MAC_DEVICE_TABLE_SIZE];
-    u8 devTableEntry;
-    u32 frameCounter;
-    u8 secKey[16];
+    zb_mac_device_table_t devTable[MAC_DEVICE_TABLE_SIZE];
+    uint8_t devTableEntry;
+    uint32_t frameCounter;
+    uint8_t secKey[16];
 #endif
-} tl_zb_mac_pib_t;
+} zb_mac_pib_t;
 /** @} end of group zigbee_mac_pib_type */
 
 #define MAC_IB()        g_zbMacPib
 
-extern tl_zb_mac_pib_t g_zbMacPib;
+extern zb_mac_pib_t g_zbMacPib;
 
 
 
@@ -158,7 +158,7 @@ void generateIEEEAddr(void);
  * @return MAC_SUCCESS if it's successful, or MAC_INVALID_PARAMETER
  *
  * */
-u8 tl_zbMacAttrSet(u8 attribute, u8 *value, u8 len);
+uint8_t zb_MacAttrSet(uint8_t attribute, uint8_t *value, uint8_t len);
 
 /*
 * MLME-GET.request to get MAC pib attribute from upper layer to MAC layer
@@ -172,6 +172,6 @@ u8 tl_zbMacAttrSet(u8 attribute, u8 *value, u8 len);
 * @return MAC_SUCCESS if it's successful, or MAC_INVALID_PARAMETER
 *
 * */
-u8 tl_zbMacAttrGet(u8 attribute, u8 *value, u8 *len);
+uint8_t zb_MacAttrGet(uint8_t attribute, uint8_t *value, uint8_t *len);
 
-#endif /* TL_ZB_MAC_PIB_H */
+#endif /* ZB_MAC_PIB_H */

@@ -53,14 +53,14 @@ void zcl_zoneTabClear(void);
 static status_t zcl_iasZone_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_iasZone_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_iasZone_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     zcl_zoneTabClear();
 
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_SS_IAS_ZONE, manuCode, attrNum, attrTbl, zcl_iasZone_cmdHandler, cb);
 }
 
-_CODE_ZCL_ static bool zcl_zoneTypeMatched(u16 zoneType)
+_CODE_ZCL_ static bool zcl_zoneTypeMatched(uint16_t zoneType)
 {
     switch (zoneType) {
     case ZONE_TYPE_STANDARD_CIE:
@@ -91,13 +91,13 @@ _CODE_ZCL_ void zcl_zoneClearEntry(zcl_zoneTable_t *pZoneTab)
     if (pZoneTab) {
         pZoneTab->used = 0;
         pZoneTab->endpoint = 0xfe;
-        memset((u8 *)&pZoneTab->zone, 0, sizeof(zcl_zoneTabEntry_t));
+        memset((uint8_t *)&pZoneTab->zone, 0, sizeof(zcl_zoneTabEntry_t));
     }
 }
 
 _CODE_ZCL_ void zcl_zoneTabClear(void)
 {
-    for (u8 i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
     	zcl_zoneTable_t *pZoneTab = &g_zcl_zoneTab[i];
 
     	zcl_zoneClearEntry(pZoneTab);
@@ -106,7 +106,7 @@ _CODE_ZCL_ void zcl_zoneTabClear(void)
 
 _CODE_ZCL_ zcl_zoneTable_t *zcl_getZoneFreeEntry(void)
 {
-    for (u8 i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
         zcl_zoneTable_t *pZoneTab = &g_zcl_zoneTab[i];
 
         if (!pZoneTab->used) {
@@ -117,12 +117,12 @@ _CODE_ZCL_ zcl_zoneTable_t *zcl_getZoneFreeEntry(void)
     return NULL;
 }
 
-_CODE_ZCL_ u8 zcl_getZoneId(void)
+_CODE_ZCL_ uint8_t zcl_getZoneId(void)
 {
-    u8 zoneId = 0;
+    uint8_t zoneId = 0;
 
     do {
-        u8 i = 0;
+        uint8_t i = 0;
         for (i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
             zcl_zoneTable_t *pZoneTab = &g_zcl_zoneTab[i];
 
@@ -138,7 +138,7 @@ _CODE_ZCL_ u8 zcl_getZoneId(void)
     return ZCL_ZONE_ID_INVALID;
 }
 
-_CODE_ZCL_ zcl_zoneTable_t *zcl_addZoneEntry(u8 endpoint, u16 zoneType, addrExt_t zoneAddr, u8 *rspCode)
+_CODE_ZCL_ zcl_zoneTable_t *zcl_addZoneEntry(uint8_t endpoint, uint16_t zoneType, addrExt_t zoneAddr, uint8_t *rspCode)
 {
     zcl_zoneTable_t *pZoneTab = zcl_getZoneFreeEntry();
     if (!pZoneTab) {
@@ -146,7 +146,7 @@ _CODE_ZCL_ zcl_zoneTable_t *zcl_addZoneEntry(u8 endpoint, u16 zoneType, addrExt_
         return NULL;
     }
 
-    u8 zoneId = zcl_getZoneId();
+    uint8_t zoneId = zcl_getZoneId();
     if (zoneId == ZCL_ZONE_ID_INVALID) {
         *rspCode = ZONE_ENROLL_TOO_MANY_ZONES;
         return NULL;
@@ -162,9 +162,9 @@ _CODE_ZCL_ zcl_zoneTable_t *zcl_addZoneEntry(u8 endpoint, u16 zoneType, addrExt_
     return pZoneTab;
 }
 
-_CODE_ZCL_ zcl_zoneTable_t *zcl_findZoneEntry(u8 endpoint, u8 zoneId)
+_CODE_ZCL_ zcl_zoneTable_t *zcl_findZoneEntry(uint8_t endpoint, uint8_t zoneId)
 {
-    for (u8 i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
         zcl_zoneTable_t *pZoneTab = &g_zcl_zoneTab[i];
 
         if (pZoneTab->used && (pZoneTab->endpoint == endpoint) && (pZoneTab->zone.zoneId == zoneId)) {
@@ -175,9 +175,9 @@ _CODE_ZCL_ zcl_zoneTable_t *zcl_findZoneEntry(u8 endpoint, u8 zoneId)
     return NULL;
 }
 
-_CODE_ZCL_ zcl_zoneTable_t *zcl_searchZoneEntry(u8 endpoint, u16 zoneType, addrExt_t zoneAddr)
+_CODE_ZCL_ zcl_zoneTable_t *zcl_searchZoneEntry(uint8_t endpoint, uint16_t zoneType, addrExt_t zoneAddr)
 {
-    for (u8 i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ZONE_TABLE_NUM; i++) {
         zcl_zoneTable_t *pZoneTab = &g_zcl_zoneTab[i];
 
         if (pZoneTab->used && (pZoneTab->endpoint == endpoint) && (pZoneTab->zone.zoneType == zoneType) &&
@@ -189,9 +189,9 @@ _CODE_ZCL_ zcl_zoneTable_t *zcl_searchZoneEntry(u8 endpoint, u16 zoneType, addrE
     return NULL;
 }
 
-_CODE_ZCL_ status_t zcl_iasZone_enrollRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneEnrollRsp_t *pEnrollRsp)
+_CODE_ZCL_ status_t zcl_iasZone_enrollRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneEnrollRsp_t *pEnrollRsp)
 {
-    u8 buf[2];
+    uint8_t buf[2];
 
     buf[0] = pEnrollRsp->code;
     buf[1] = pEnrollRsp->zoneId;
@@ -200,15 +200,15 @@ _CODE_ZCL_ status_t zcl_iasZone_enrollRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasZone_initNormalOperationMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_iasZone_initNormalOperationMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_SS_IAS_ZONE, ZCL_CMD_INIT_NORMAL_OPERATION_MODE, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_iasZone_initTestMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneInitTestMode_t *pInitTestMode)
+_CODE_ZCL_ status_t zcl_iasZone_initTestMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneInitTestMode_t *pInitTestMode)
 {
-    u8 buf[2];
+    uint8_t buf[2];
 
     buf[0] = pInitTestMode->testModeDuration;
     buf[1] = pInitTestMode->currZoneSensLevel;
@@ -217,9 +217,9 @@ _CODE_ZCL_ status_t zcl_iasZone_initTestMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasZone_enrollReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneEnrollReq_t *pEnrollReq)
+_CODE_ZCL_ status_t zcl_iasZone_enrollReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneEnrollReq_t *pEnrollReq)
 {
-    u8 buf[4];
+    uint8_t buf[4];
 
     buf[0] = LO_UINT16(pEnrollReq->zoneType);
     buf[1] = HI_UINT16(pEnrollReq->zoneType);
@@ -230,9 +230,9 @@ _CODE_ZCL_ status_t zcl_iasZone_enrollReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 4, buf);
 }
 
-_CODE_ZCL_ status_t zcl_iasZone_statusChangeNotification(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zoneStatusChangeNoti_t *pStatusChangeNoti)
+_CODE_ZCL_ status_t zcl_iasZone_statusChangeNotification(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zoneStatusChangeNoti_t *pStatusChangeNoti)
 {
-    u8 buf[6];
+    uint8_t buf[6];
 
     buf[0] = LO_UINT16(pStatusChangeNoti->zoneStatus);
     buf[1] = HI_UINT16(pStatusChangeNoti->zoneStatus);
@@ -247,7 +247,7 @@ _CODE_ZCL_ status_t zcl_iasZone_statusChangeNotification(u8 srcEp, epInfo_t *pDs
 
 _CODE_ZCL_ static status_t zcl_enrollRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         zoneEnrollRsp_t zoneEnrollRsp;
@@ -262,7 +262,7 @@ _CODE_ZCL_ static status_t zcl_enrollRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_initNormalOperationModePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -273,7 +273,7 @@ _CODE_ZCL_ static status_t zcl_initNormalOperationModePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_initTestModePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         zoneInitTestMode_t zoneInitTestMode;
@@ -288,8 +288,8 @@ _CODE_ZCL_ static status_t zcl_initTestModePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_zoneStatusChangeNotificationPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zoneStatusChangeNoti_t statusChangeNoti;
@@ -308,10 +308,10 @@ _CODE_ZCL_ static status_t zcl_zoneStatusChangeNotificationPrc(zclIncoming_t *pI
 
 _CODE_ZCL_ static status_t zcl_zoneEnrollReqPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t *pData = pInMsg->pData;
 
     zoneEnrollReq_t enrollReq;
 
@@ -321,7 +321,7 @@ _CODE_ZCL_ static status_t zcl_zoneEnrollReqPrc(zclIncoming_t *pInMsg)
     pData += 2;
 
     zoneEnrollRsp_t enrollRsp;
-    memset((u8 *)&enrollRsp, 0, sizeof(zoneEnrollRsp_t));
+    memset((uint8_t *)&enrollRsp, 0, sizeof(zoneEnrollRsp_t));
     enrollRsp.zoneId = 0xFF;
 
     if (zcl_zoneTypeMatched(enrollReq.zoneType)) {
@@ -347,7 +347,7 @@ _CODE_ZCL_ static status_t zcl_zoneEnrollReqPrc(zclIncoming_t *pInMsg)
     }
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -363,7 +363,7 @@ _CODE_ZCL_ static status_t zcl_zoneEnrollReqPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasZone_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ZONE_ENROLL_RSP:
@@ -385,7 +385,7 @@ _CODE_ZCL_ static status_t zcl_iasZone_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_iasZone_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ZONE_STATUS_CHANGE_NOTIFICATION:

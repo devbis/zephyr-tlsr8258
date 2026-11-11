@@ -22,57 +22,57 @@ void zcl_rx_handler(void *p);
 #include "app_interview.h"
 #endif
 
-static const u8 app_basic_zcl_ver = 3U;
-static const u8 app_basic_app_ver = 1U;
-static const u8 app_basic_stack_ver = 2U;
-static const u8 app_basic_hw_ver = 1U;
+static const uint8_t app_basic_zcl_ver = 3U;
+static const uint8_t app_basic_app_ver = 1U;
+static const uint8_t app_basic_stack_ver = 2U;
+static const uint8_t app_basic_hw_ver = 1U;
 /* Mains powered for a router or coordinator, battery for an end device. */
-static const u8 app_basic_power_src =
+static const uint8_t app_basic_power_src =
 	(IS_ENABLED(CONFIG_ZIGBEE_ROUTER) || IS_ENABLED(CONFIG_ZIGBEE_COORDINATOR)) ? 0x01U : 0x03U;
-static const u16 app_basic_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static const uint16_t app_basic_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
-static const u8 app_basic_mfr_name[] = {
+static const uint8_t app_basic_mfr_name[] = {
 	sizeof(APP_PROFILE_MFR_NAME) - 1U, 'T', 'e', 'l', 'i', 'n', 'k',
 };
 
 /* ZCL character string: length byte followed by the characters. */
-static u8 app_basic_model_id[sizeof(APP_PROFILE_MODEL_ID)];
+static uint8_t app_basic_model_id[sizeof(APP_PROFILE_MODEL_ID)];
 
 static const zclAttrInfo_t app_basic_attr_tbl[] = {
 	{ZCL_ATTRID_BASIC_ZCL_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_zcl_ver},
+	 (uint8_t *)&app_basic_zcl_ver},
 	{ZCL_ATTRID_BASIC_APP_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_app_ver},
+	 (uint8_t *)&app_basic_app_ver},
 	{ZCL_ATTRID_BASIC_STACK_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_stack_ver},
+	 (uint8_t *)&app_basic_stack_ver},
 	{ZCL_ATTRID_BASIC_HW_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_hw_ver},
+	 (uint8_t *)&app_basic_hw_ver},
 	{ZCL_ATTRID_BASIC_MFR_NAME, ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ,
-	 (u8 *)app_basic_mfr_name},
+	 (uint8_t *)app_basic_mfr_name},
 	{ZCL_ATTRID_BASIC_MODEL_ID, ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ,
-	 (u8 *)app_basic_model_id},
+	 (uint8_t *)app_basic_model_id},
 	{ZCL_ATTRID_BASIC_POWER_SOURCE, ZCL_DATA_TYPE_ENUM8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_power_src},
+	 (uint8_t *)&app_basic_power_src},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_cluster_rev},
+	 (uint8_t *)&app_basic_cluster_rev},
 };
 
-#define APP_BASIC_ATTR_NUM ((u8)ARRAY_SIZE(app_basic_attr_tbl))
+#define APP_BASIC_ATTR_NUM ((uint8_t)ARRAY_SIZE(app_basic_attr_tbl))
 
-static u16 app_identify_time;
-static const u16 app_identify_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static uint16_t app_identify_time;
+static const uint16_t app_identify_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 static const zclAttrInfo_t app_identify_attr_tbl[] = {
 	{ZCL_ATTRID_IDENTIFY_TIME, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_identify_time},
+	 (uint8_t *)&app_identify_time},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_identify_cluster_rev},
+	 (uint8_t *)&app_identify_cluster_rev},
 };
 
 #define APP_IDENTIFY_ATTR_NUM                                                                      \
-	((u8)ARRAY_SIZE(app_identify_attr_tbl))
+	((uint8_t)ARRAY_SIZE(app_identify_attr_tbl))
 
-static u16 app_in_clusters[] = {
+static uint16_t app_in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
 };
@@ -108,7 +108,7 @@ static zcl_specClusterInfo_t app_cluster_info[] = {
 	},
 };
 
-#define APP_CLUSTER_NUM ((u8)ARRAY_SIZE(app_cluster_info))
+#define APP_CLUSTER_NUM ((uint8_t)ARRAY_SIZE(app_cluster_info))
 
 void app_profile_register(void)
 {

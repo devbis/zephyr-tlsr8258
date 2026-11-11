@@ -79,17 +79,17 @@
 
 typedef struct {
     void *pData;
-    u8 dataLen;
+    uint8_t dataLen;
 } zcl_doorlockReq_t;
 
 typedef struct {
-    u8 status;
+    uint8_t status;
 } zcl_doorlockRsp_t;
 
 #if 0
 /* Command callBack Function Type */
-typedef status_t (*zcl_doorLock_doorLockReqCb_t)(apsdeDataInd_t *pInd, u8 cmdId, u8 dataLen, u8 *pData);
-typedef void (*zcl_doorLock_doorLockRspCb_t)(apsdeDataInd_t *pInd, u8 cmdId, u8 rspStatus);
+typedef status_t (*zcl_doorLock_doorLockReqCb_t)(apsdeDataInd_t *pInd, uint8_t cmdId, uint8_t dataLen, uint8_t *pData);
+typedef void (*zcl_doorLock_doorLockRspCb_t)(apsdeDataInd_t *pInd, uint8_t cmdId, uint8_t rspStatus);
 
 /**
  *  @brief  Structure definition for commands callBack functions in door lock cluster
@@ -100,30 +100,30 @@ typedef struct {
 } zcl_doorLock_AppCallbacks_t;
 
 typedef struct {
-    u8 zcl_attr_LockState;
-    u8 zcl_attr_LockType;
-    u8 zcl_attr_ActuatorEnabled;
-    u8 zcl_attr_sendPinOta;
-    u8 zcl_attr_requirePinForRfOperation;
+    uint8_t zcl_attr_LockState;
+    uint8_t zcl_attr_LockType;
+    uint8_t zcl_attr_ActuatorEnabled;
+    uint8_t zcl_attr_sendPinOta;
+    uint8_t zcl_attr_requirePinForRfOperation;
 } zcl_attr_doorLock_t;
 
 
 extern const zclAttrInfo_t doorLock_attrTbl[];
-extern const u8 zcl_doorLock_attrNum;
+extern const uint8_t zcl_doorLock_attrNum;
 
 extern zcl_attr_doorLock_t g_zclDoorLockAttr;
 
 #define zcl_doorLockAttrGet()   &g_zclDoorLockAttr
 #endif
 
-status_t zcl_doorLock_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_doorLock_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_doorLock_doorLockReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, u8 *pCode);
+status_t zcl_doorLock_doorLockReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, uint8_t *pCode);
 #define zcl_doorLock_lockDoorCmdSend(a,b,c,d)           (zcl_doorLock_doorLockReq((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LOCK_DOOR, (d)))
 #define zcl_doorLock_unlockDoorCmdSend(a,b,c,d)         (zcl_doorLock_doorLockReq((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_UNLOCK_DOOR, (d)))
 #define zcl_doorLock_toggleDoorCmdSend(a,b,c,d)         (zcl_doorLock_doorLockReq((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_DOOR_LOCK_TOGGLE, (d)))
 
-status_t zcl_doorLock_doorLockRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, status_t rspStatus);
+status_t zcl_doorLock_doorLockRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, status_t rspStatus);
 #define zcl_doorLock_doorLockRspCmdSend(a,b,c,d,e,f)    (zcl_doorLock_doorLockRsp((a), (b), (c), (d), (e), (f)))
 #define zcl_doorLock_lockDoorRspCmdSend(a,b,c,d,e)      (zcl_doorLock_doorLockRsp((a), (b), (c), (d), ZCL_CMD_LOCK_DOOR_RESPONSE, (e)))
 #define zcl_doorLock_unlockDoorRspCmdSend(a,b,c,d,e)    (zcl_doorLock_doorLockRsp((a), (b), (c), (d), ZCL_CMD_UNLOCK_DOOR_RESPONSE, (e)))

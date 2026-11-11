@@ -102,28 +102,28 @@ enum {
  */
 typedef struct _attribute_packed_ {
     /* Logical type field 000 ZigBee coordinator, 001 ZigBee router, 010 ZigBee end device, 011-111 Reserved */
-    u8 logical_type:3;//device_type_t
+    uint8_t logical_type:3;//device_type_t
     /*
      * The complex descriptor available field of the node descriptor is one bit in length
      * and specifies whether a complex descriptor is available on this device. If this field
      * is set to 1, a complex descriptor is available. If this field is set to 0, a complex
      * descriptor is not available.
      */
-    u8 complex_descriptor_ava:1;
+    uint8_t complex_descriptor_ava:1;
     /*
      * The user descriptor available field of the node descriptor is one bit in length and
      * specifies whether a user descriptor is available on this device. If this field is set to
      * 1, a user descriptor is available. If this field is set to 0, a user descriptor is not
      * available.
      */
-    u8 user_descriptor_ava:1;
-    u8 reserved:3;//reserved
+    uint8_t user_descriptor_ava:1;
+    uint8_t reserved:3;//reserved
     /*
      * The APS flags field of the node descriptor is three bits in length and specifies the
      * application support sub-layer capabilities of the node.
      * This field is currently not supported and shall be set to zero.
      */
-    u8 aps_flag:3;//APS flags
+    uint8_t aps_flag:3;//APS flags
     /*
      * The frequency band field of the node descriptor is five bits in length and specifies
      * the frequency bands that are supported by the underlying IEEE 802.15.4 radio
@@ -134,19 +134,19 @@ typedef struct _attribute_packed_ {
      * 3~2400~2483.5MHz
      * 4~reserved
      */
-    u8 freq_band:5;//Frequency band
+    uint8_t freq_band:5;//Frequency band
     /*
      * The MAC capability flags field is eight bits in length and specifies the node
      * capabilities, as required by the IEEE 802.15.4-2003 MAC sub-layer
      */
-    u8 mac_capability_flag;
+    uint8_t mac_capability_flag;
     /*
      * The manufacturer code field of the node descriptor is sixteen bits in length and
      * specifies a manufacturer code that is allocated by the ZigBee Alliance, relating the
      * manufacturer to the device.
      */
-    u8 mcL8;//Manufacturer code
-    u8 mcH8;
+    uint8_t mcL8;//Manufacturer code
+    uint8_t mcH8;
     /*
      * The maximum buffer size field of the node descriptor is eight bits in length, with a
      * valid range of 0x00-0x7f. This field specifies the maximum size, in octets, of the
@@ -154,7 +154,7 @@ typedef struct _attribute_packed_ {
      * data or commands passed to or from the application by the application support
      * sub-layer, before any fragmentation or re-assembly.
      */
-    u8 max_buff_size;//Maximum buffer size
+    uint8_t max_buff_size;//Maximum buffer size
     /*
      * The maximum transfer size field of the node descriptor is sixteen bits in length,
      * with a valid range of 0x0000-0x7fff. This field specifies the maximum size, in
@@ -163,13 +163,13 @@ typedef struct _attribute_packed_ {
      * maximum buffer size field (see sub-clause 2.3.2.3.8) through the use of
      * fragmentation.
      */
-    u16	max_in_tr_size;//Maximum incoming transfer size
+    uint16_t	max_in_tr_size;//Maximum incoming transfer size
     /*
      * The server mask field of the node descriptor is sixteen bits in length, with bit
      * settings signifying the system server capabilities of this node. It is used to
      * facilitate discovery of particular system servers by other nodes on the system.
      */
-    u16	server_mask;//Server mask
+    uint16_t	server_mask;//Server mask
     /*
      * The maximum transfer size field of the node descriptor is sixteen bits in length,
      * with a valid range of 0x0000-0x7fff. This field specifies the maximum size, in
@@ -178,7 +178,7 @@ typedef struct _attribute_packed_ {
      * node maximum buffer size field (see sub-clause 2.3.2.3.8) through the use of
      * fragmentation.
      */
-    u16	max_out_tr_size;//Maximum outgoing transfer size
+    uint16_t	max_out_tr_size;//Maximum outgoing transfer size
     /*
      * The descriptor capability field of the node descriptor is eight bits in length, with
      * bit settings signifying the descriptor capabilities of this node. It is used to facilitate
@@ -186,7 +186,7 @@ typedef struct _attribute_packed_ {
      * system.0: Extended Active Endpoint lst Available; 1: Extended Simple Descriptor lst Available;
      * 2~27: reserved
      */
-    u8 desc_capability_field;//Descriptor capability field
+    uint8_t desc_capability_field;//Descriptor capability field
 } node_descriptor_t;
 
 //power mode enum
@@ -212,10 +212,10 @@ typedef enum {
 } power_source_level_t;
 
 typedef struct {
-    u8 current_power_mode:4;            //power_mode_t
-    u8 available_power_sources:4;       //power_source_t
-    u8 current_power_source:4;          //power_source_t
-    u8 current_power_source_level:4;    //power_source_level_t
+    uint8_t current_power_mode:4;            //power_mode_t
+    uint8_t available_power_sources:4;       //power_source_t
+    uint8_t current_power_source:4;          //power_source_t
+    uint8_t current_power_source_level:4;    //power_source_level_t
 } power_descriptor_t;
 
 /****************************************************************************
@@ -223,35 +223,35 @@ typedef struct {
  * 		The simple descriptor is mandatory for each endpoint present in the node.
 */
 typedef struct {
-    u16 app_profile_id;         //APP profile ID specifies the profile which supported on this EP.
-    u16 app_dev_id;             //APP DEV ID specifies the device description supported on this EP.
+    uint16_t app_profile_id;         //APP profile ID specifies the profile which supported on this EP.
+    uint16_t app_dev_id;             //APP DEV ID specifies the device description supported on this EP.
 
-    u8 endpoint;                //end-point num of the simple descriptor 1 ~ 240
-    u8 app_dev_ver:4;           //APP DEV version specifies the version of the device description supported
-    u8 reserved:4;              //Reserved
-    u8 app_in_cluster_count;    //The number of input clusters supported on this EP
-    u8 app_out_cluster_count;   //The number of output clusters supported on this EP
+    uint8_t endpoint;                //end-point num of the simple descriptor 1 ~ 240
+    uint8_t app_dev_ver:4;           //APP DEV version specifies the version of the device description supported
+    uint8_t reserved:4;              //Reserved
+    uint8_t app_in_cluster_count;    //The number of input clusters supported on this EP
+    uint8_t app_out_cluster_count;   //The number of output clusters supported on this EP
 
-    u16 *app_in_cluster_lst;    //Input cluster list address
-    u16 *app_out_cluster_lst;   //Output cluster list address
+    uint16_t *app_in_cluster_lst;    //Input cluster list address
+    uint16_t *app_out_cluster_lst;   //Output cluster list address
 } af_simple_descriptor_t;
 
 /**
  *  @brief  Definition for endpoint information type
  */
 typedef struct {
-    tl_zb_addr_t dstAddr;
+    zb_addr_t dstAddr;
 
-    u16 profileId;
-    u16 aliasSrcAddr;
+    uint16_t profileId;
+    uint16_t aliasSrcAddr;
 
     bool useAlias;
-    u8 aliasSeqNum;
-    u8 dstAddrMode;
-    u8 dstEp;
+    uint8_t aliasSeqNum;
+    uint8_t dstAddrMode;
+    uint8_t dstEp;
 
-    u8 txOptions; //aps_tx_options
-    u8 radius;
+    uint8_t txOptions; //aps_tx_options
+    uint8_t radius;
 } epInfo_t;
 
 /**
@@ -264,8 +264,8 @@ typedef struct {
     af_endpoint_cb_t cb_rx;                             /* data indication callback for this endpoint */
     af_dataCnf_cb_t cb_cnf;                             /* data transmission confirm callback for this endpoint */
     af_simple_descriptor_t *correspond_simple_desc;     /* the pointer to the simple descriptor for this endpoint */
-    u8 ep;                                              /* the endpoint */
-    u8 rsv[3];
+    uint8_t ep;                                              /* the endpoint */
+    uint8_t rsv[3];
 } af_endpoint_descriptor_t;
 
 
@@ -312,7 +312,7 @@ void af_nodeDescriptorSet(node_descriptor_t *value);
  *
  * @return      none
  */
-void af_nodeDescManuCodeUpdate(u16 manuCode);
+void af_nodeDescManuCodeUpdate(uint16_t manuCode);
 
 /****************************************************************************************************
  * @brief       update the field of the RX on when idle in the node descriptor
@@ -330,7 +330,7 @@ void af_nodeDescRxOnWhenIdleUpdate(bool enable);
  *
  * @return      none
  */
-void af_nodeDescStackRevisionSet(u8 revision);
+void af_nodeDescStackRevisionSet(uint8_t revision);
 
 /****************************************************************************************************
  * @brief       get the the stack revision of the node
@@ -339,7 +339,7 @@ void af_nodeDescStackRevisionSet(u8 revision);
  *
  * @return      stack revision
  */
-u8 af_nodeDescStackRevisionGet(void);
+uint8_t af_nodeDescStackRevisionGet(void);
 
 /****************************************************************************************************
  * @brief       get the field of the mac capability in node descriptor
@@ -348,7 +348,7 @@ u8 af_nodeDescStackRevisionGet(void);
  *
  * @return      mac capability
  */
-u8 af_nodeMacCapabilityGet(void);
+uint8_t af_nodeMacCapabilityGet(void);
 
 /****************************************************************************************************
  * @brief       get the node descriptor device type
@@ -367,7 +367,7 @@ device_type_t af_nodeDevTypeGet(void);
  *
  * @return      length of the simple descriptor info
  */
-u8 af_simpleDescriptorCopy(u8 *dst, af_simple_descriptor_t *sd);
+uint8_t af_simpleDescriptorCopy(uint8_t *dst, af_simple_descriptor_t *sd);
 
 /***************************************************************************************************
  * @brief       Copy node descriptor information
@@ -394,7 +394,7 @@ void af_powerDescriptorCopy(power_descriptor_t *dst);
  *
  * @return      available EP number
  */
-u8 af_availableEpNumGet(void);
+uint8_t af_availableEpNumGet(void);
 
 /**************************************************************************************************
  * @brief       Interface to get the af endpoint descriptor
@@ -421,7 +421,7 @@ af_endpoint_descriptor_t *af_zdoSimpleDescriptorGet(void);
  *
  * @return      point to the simple descriptor info
  */
-af_simple_descriptor_t *af_simpleDescGet(u8 ep);
+af_simple_descriptor_t *af_simpleDescGet(uint8_t ep);
 
 /**************************************************************************************************
  * @brief       Check whether simple descriptor request's profile identifier matched with local registered end point info
@@ -431,7 +431,7 @@ af_simple_descriptor_t *af_simpleDescGet(u8 ep);
  *
  * @return      TRUE or FALSE
  */
-bool af_profileMatchedLocal(u16 profileID, u8 ep);
+bool af_profileMatchedLocal(uint16_t profileID, uint8_t ep);
 
 /**************************************************************************************************
  * @brief       Check whether the cluster identifier matched with local registered end point info
@@ -441,7 +441,7 @@ bool af_profileMatchedLocal(u16 profileID, u8 ep);
  *
  * @return      TRUE or FALSE
  */
-bool af_clusterMatchedLocal(u16 clusterID, u8 ep);
+bool af_clusterMatchedLocal(uint16_t clusterID, uint8_t ep);
 
 /**************************************************************************************************
  * @brief       check if the cluster Id matched to the simple descriptor
@@ -451,7 +451,7 @@ bool af_clusterMatchedLocal(u16 clusterID, u8 ep);
  *
  * @return      1: match,  0: don't match
  */
-bool af_clsuterIdMatched(u16 clusterID, af_simple_descriptor_t *pSimpleDesc);
+bool af_clsuterIdMatched(uint16_t clusterID, af_simple_descriptor_t *pSimpleDesc);
 
 /**************************************************************************************
  * @brief       check if the profile Id matched to the simple descriptor
@@ -461,7 +461,7 @@ bool af_clsuterIdMatched(u16 clusterID, af_simple_descriptor_t *pSimpleDesc);
  *
  * @return      1: match,  0: don't match
  */
-bool af_profileIdMatched(u16 profileID, af_simple_descriptor_t *pSimpleDesc);
+bool af_profileIdMatched(uint16_t profileID, af_simple_descriptor_t *pSimpleDesc);
 
 /**************************************************************************************************
  * @brief       Register an endpoint and it's simple descriptor
@@ -475,7 +475,7 @@ bool af_profileIdMatched(u16 profileID, af_simple_descriptor_t *pSimpleDesc);
  *
  * @return      TRUE or FALSE
  */
-bool af_endpointRegister(u8 ep, af_simple_descriptor_t *simple_desc, af_endpoint_cb_t rx_cb, af_dataCnf_cb_t cnfCb);
+bool af_endpointRegister(uint8_t ep, af_simple_descriptor_t *simple_desc, af_endpoint_cb_t rx_cb, af_dataCnf_cb_t cnfCb);
 
 /**************************************************************************************************
  * @brief       Un-register an endpoint and it's simple descriptor
@@ -484,7 +484,7 @@ bool af_endpointRegister(u8 ep, af_simple_descriptor_t *simple_desc, af_endpoint
  *
  * @return      TRUE or FALSE
  */
-bool af_endpointUnregister(u8 ep);
+bool af_endpointUnregister(uint8_t ep);
 
 /***********************************************************************************************************
  * @brief       Send AF data
@@ -498,7 +498,7 @@ bool af_endpointUnregister(u8 ep);
  *
  * @return      Status
  */
-u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt);
+uint8_t af_dataSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t cmdPldLen, uint8_t *cmdPld, uint8_t *apsCnt);
 
 /***********************************************************************************************************
  * @brief       Interface to receive APS data confirm

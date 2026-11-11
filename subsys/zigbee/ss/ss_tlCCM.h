@@ -8,10 +8,10 @@
 
 #include "zb_common.h"
 
-void ss_tlChallengeGen(u8 *dst, u8 len);
-void ss_ttlMAC(u8 len, u8 *input, u8 *key, u8 *hashOut);
-u8 ss_keyHash(u8 *hashInput, u8 *key, u8 *hashOut);
-u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen, u8 *srcMsg);
-u8 ss_ccmDecryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen, u8 *srcMsg);
+void ss_tlChallengeGen(uint8_t *dst, uint8_t len);
+void ss_ttlMAC(uint8_t len, uint8_t *input, uint8_t *key, uint8_t *hashOut);
+uint8_t ss_keyHash(uint8_t *hashInput, uint8_t *key, uint8_t *hashOut);
+uint8_t ss_ccmEncryption(uint8_t *key, uint8_t *nonce, uint8_t nwkHdrLen, uint8_t *nwkHdr, uint8_t srcMsgLen, uint8_t *srcMsg);
+uint8_t ss_ccmDecryption(uint8_t *key, uint8_t *nonce, uint8_t nwkHdrLen, uint8_t *nwkHdr, uint8_t srcMsgLen, uint8_t *srcMsg);
 
 #endif

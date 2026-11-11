@@ -16,28 +16,28 @@
 #include "security_service.h"
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
-	u8 keyType;
+	uint8_t cmdId;
+	uint8_t keyType;
 	addrExt_t partnerAddr;
 } ss_request_key_cmd_t;
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
-	u8 keyType;
+	uint8_t cmdId;
+	uint8_t keyType;
 	addrExt_t srcAddr;
-	u8 hashVal[SEC_KEY_LEN];
+	uint8_t hashVal[SEC_KEY_LEN];
 } ss_verify_key_cmd_t;
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
-	u8 status;
-	u8 keyType;
+	uint8_t cmdId;
+	uint8_t status;
+	uint8_t keyType;
 	addrExt_t dstAddr;
 } ss_confirm_key_cmd_t;
 
 typedef struct _attribute_packed_ {
-	u8 cmdId;
-	u8 keySeqNum;
+	uint8_t cmdId;
+	uint8_t keySeqNum;
 } ss_switch_key_cmd_t;
 
 static inline void cmd_req_init(aps_cmd_send_req_t *req)
@@ -66,13 +66,13 @@ STATIC_ASSERT(OFFSETOF(ss_info_base_t, tcLinkKeyType) == 0x58);
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 
-_attribute_no_inline_ static void ss_apsmeUpdateDevReqSend(zb_buf_t *buf, u8 secure)
+_attribute_no_inline_ static void ss_apsmeUpdateDevReqSend(zb_buf_t *buf, uint8_t secure)
 {
 	ss_apsmeUpdateDeviceReq_t *req = (ss_apsmeUpdateDeviceReq_t *)buf;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, 12, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, 12, payload, uint8_t *);
 
 	payload[0] = APS_CMD_UPDATE_DEVICE_ID;
 	ZB_IEEE_ADDR_COPY(payload + 1, req->devAddr);
@@ -106,7 +106,7 @@ ss_tc_keyPair_t g_ssTcKeyPair[SS_TC_KEY_PAIR_CACHE_NUM];
 ss_dev_keyPair_t g_ssDevKeyPair;
 #endif
 
-u32 ss_outgoingFrameCntGet(void)
+uint32_t ss_outgoingFrameCntGet(void)
 {
 	return ss_ib.outgoingFrameCounter;
 }
@@ -114,16 +114,16 @@ u32 ss_outgoingFrameCntGet(void)
 void ss_devKeyPairSave(ss_dev_pair_set_t *keyPair)
 {
 	if (nv_flashWriteNew(0, NV_MODULE_KEYPAIR, NV_ITEM_SS_KEY_PAIR, sizeof(ss_dev_pair_set_t),
-			     (u8 *)keyPair) == NV_SUCC) {
+			     (uint8_t *)keyPair) == NV_SUCC) {
 		ss_ib.devKeyPairNum++;
 	}
 }
 
-u8 ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair)
+uint8_t ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair)
 {
 	itemIfno_t info = {0, 0};
 	nv_sts_t ret = nv_flashReadNew(0, NV_MODULE_KEYPAIR, ITEM_FIELD_IDLE,
-				       sizeof(ss_dev_pair_set_t), (u8 *)&info);
+				       sizeof(ss_dev_pair_set_t), (uint8_t *)&info);
 	ss_dev_pair_set_t candidate = {{0}, {0}, 0, 0, 0, 0, 0, 0};
 	ss_dev_pair_set_t best = {{0}, {0}, 0, 0, 0, 0, 0, 0};
 	bool haveCandidate = FALSE;
@@ -136,10 +136,10 @@ u8 ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair)
 	/* A successful metadata read does not mean that a matching key exists. */
 	ret = NV_ITEM_NOT_FOUND;
 
-	for (u16 i = 0; i <= info.opIndex; i++) {
+	for (uint16_t i = 0; i <= info.opIndex; i++) {
 		if (nv_flashReadByIndex(NV_MODULE_KEYPAIR, NV_ITEM_SS_KEY_PAIR, info.opSect, i,
 					sizeof(ss_dev_pair_set_t),
-					(u8 *)&candidate) == NV_ITEM_NOT_FOUND) {
+					(uint8_t *)&candidate) == NV_ITEM_NOT_FOUND) {
 			continue;
 		}
 
@@ -181,20 +181,20 @@ u8 ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair)
 	return ret;
 }
 
-u8 ss_devKeyPairDelete(addrExt_t extAddr)
+uint8_t ss_devKeyPairDelete(addrExt_t extAddr)
 {
 	itemIfno_t info = {0, 0};
 	nv_sts_t ret = nv_flashReadNew(0, NV_MODULE_KEYPAIR, ITEM_FIELD_IDLE,
-				       sizeof(ss_dev_pair_set_t), (u8 *)&info);
+				       sizeof(ss_dev_pair_set_t), (uint8_t *)&info);
 	ss_dev_pair_set_t keyPair;
 
 	if (ret != NV_SUCC) {
 		return ret;
 	}
 
-	for (u16 i = 0; i <= info.opIndex; i++) {
+	for (uint16_t i = 0; i <= info.opIndex; i++) {
 		if (nv_flashReadByIndex(NV_MODULE_KEYPAIR, NV_ITEM_SS_KEY_PAIR, info.opSect, i,
-					sizeof(ss_dev_pair_set_t), (u8 *)&keyPair) != NV_SUCC) {
+					sizeof(ss_dev_pair_set_t), (uint8_t *)&keyPair) != NV_SUCC) {
 			continue;
 		}
 
@@ -209,21 +209,21 @@ u8 ss_devKeyPairDelete(addrExt_t extAddr)
 	return NV_ITEM_NOT_FOUND;
 }
 
-u16 ss_devKeyPairInfoGet(void)
+uint16_t ss_devKeyPairInfoGet(void)
 {
 	itemIfno_t info = {0, 0};
 
 	ss_ib.devKeyPairNum = 0;
 	if (nv_flashReadNew(0, NV_MODULE_KEYPAIR, ITEM_FIELD_IDLE, sizeof(ss_dev_pair_set_t),
-			    (u8 *)&info) != NV_SUCC) {
+			    (uint8_t *)&info) != NV_SUCC) {
 		return ss_ib.devKeyPairNum;
 	}
 
-	for (u16 i = 0; i <= info.opIndex; i++) {
+	for (uint16_t i = 0; i <= info.opIndex; i++) {
 		ss_dev_pair_set_t keyPair;
 
 		if (nv_flashReadByIndex(NV_MODULE_KEYPAIR, NV_ITEM_SS_KEY_PAIR, info.opSect, i,
-					sizeof(ss_dev_pair_set_t), (u8 *)&keyPair) == NV_SUCC) {
+					sizeof(ss_dev_pair_set_t), (uint8_t *)&keyPair) == NV_SUCC) {
 			ss_ib.devKeyPairNum++;
 		}
 	}
@@ -231,11 +231,11 @@ u16 ss_devKeyPairInfoGet(void)
 	return ss_ib.devKeyPairNum;
 }
 
-u16 ss_nodeMacAddrFromdevKeyPair(u16 start_idx, u8 num, u8 *validNum, addrExt_t *nodeMacAddrList)
+uint16_t ss_nodeMacAddrFromdevKeyPair(uint16_t start_idx, uint8_t num, uint8_t *validNum, addrExt_t *nodeMacAddrList)
 {
 	itemIfno_t info = {0, 0};
-	u8 count = 0;
-	u16 seen = 0;
+	uint8_t count = 0;
+	uint16_t seen = 0;
 
 	*validNum = 0;
 	if (num == 0U) {
@@ -243,15 +243,15 @@ u16 ss_nodeMacAddrFromdevKeyPair(u16 start_idx, u8 num, u8 *validNum, addrExt_t 
 	}
 
 	if (nv_flashReadNew(0, NV_MODULE_KEYPAIR, ITEM_FIELD_IDLE, sizeof(ss_dev_pair_set_t),
-			    (u8 *)&info) != NV_SUCC) {
+			    (uint8_t *)&info) != NV_SUCC) {
 		return ss_ib.devKeyPairNum;
 	}
 
-	for (u16 i = 0; count < num && i <= info.opIndex; i++) {
+	for (uint16_t i = 0; count < num && i <= info.opIndex; i++) {
 		ss_dev_pair_set_t keyPair;
 
 		if (nv_flashReadByIndex(NV_MODULE_KEYPAIR, NV_ITEM_SS_KEY_PAIR, info.opSect, i,
-					sizeof(ss_dev_pair_set_t), (u8 *)&keyPair) != NV_SUCC) {
+					sizeof(ss_dev_pair_set_t), (uint8_t *)&keyPair) != NV_SUCC) {
 			continue;
 		}
 
@@ -268,10 +268,10 @@ u16 ss_nodeMacAddrFromdevKeyPair(u16 start_idx, u8 num, u8 *validNum, addrExt_t 
 	return ss_ib.devKeyPairNum;
 }
 
-void ss_nwkKeyGenerate(u8 *nwkKey)
+void ss_nwkKeyGenerate(uint8_t *nwkKey)
 {
-	for (u8 i = 0; i < 16U; i++) {
-		nwkKey[i] = (u8)(drv_u32Rand() >> 4);
+	for (uint8_t i = 0; i < 16U; i++) {
+		nwkKey[i] = (uint8_t)(drv_u32Rand() >> 4);
 	}
 
 	memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwkKey, SEC_KEY_LEN);
@@ -280,7 +280,7 @@ void ss_nwkKeyGenerate(u8 *nwkKey)
 	ss_ib.nwkSecurMaterialSet[0].keySeqNum = 0;
 }
 
-void ss_nwkKeyStore(u8 *nwkKey)
+void ss_nwkKeyStore(uint8_t *nwkKey)
 {
 	memcpy(ss_ib.nwkSecurMaterialSet[0].key, nwkKey, SEC_KEY_LEN);
 	ss_ib_active_secure_material_index_set(0);
@@ -292,8 +292,8 @@ void ss_apsmeRequestKeyReq(void *arg)
 {
 	ss_apsmeRequestKeyReq_t *req = (ss_apsmeRequestKeyReq_t *)arg;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
-	u8 payloadLen;
+	uint8_t *payload;
+	uint8_t payloadLen;
 
 	if (!ss_ib.tcPolicy.updateTCLKrequired ||
 	    (req->dstAddrMode != ADDR_MODE_SHORT && req->dstAddrMode != ADDR_MODE_EXT)) {
@@ -302,7 +302,7 @@ void ss_apsmeRequestKeyReq(void *arg)
 	}
 
 	payloadLen = (req->keyType == SS_KEYREQ_TYPE_APPLK) ? sizeof(ss_request_key_cmd_t) : 2U;
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, payloadLen, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, payloadLen, payload, uint8_t *);
 	payload[0] = APS_CMD_REQUEST_KEY_ID;
 	payload[1] = req->keyType;
 	if (req->keyType == SS_KEYREQ_TYPE_APPLK) {
@@ -331,7 +331,7 @@ void ss_apsmeRequestKeyReq(void *arg)
 #if defined(ZB_COORDINATOR_ROLE)
 ss_tc_keyPair_t *ss_tcKeyPairFind(addrExt_t extAddr)
 {
-	for (u8 i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
+	for (uint8_t i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
 		if (g_ssTcKeyPair[i].keyPair.used &&
 		    ZB_IEEE_ADDR_CMP(g_ssTcKeyPair[i].keyPair.device_address, extAddr)) {
 			return &g_ssTcKeyPair[i];
@@ -343,7 +343,7 @@ ss_tc_keyPair_t *ss_tcKeyPairFind(addrExt_t extAddr)
 
 ss_tc_keyPair_t *ss_tcKeyPairFreeGet(void)
 {
-	for (u8 i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
+	for (uint8_t i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
 		if (!g_ssTcKeyPair[i].keyPair.used) {
 			return &g_ssTcKeyPair[i];
 		}
@@ -359,7 +359,7 @@ void ss_tcKeyPairClear(ss_tc_keyPair_t *keyPair)
 
 void ss_tcKeyPairPeriodic(void)
 {
-	for (u8 i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
+	for (uint8_t i = 0; i < SS_TC_KEY_PAIR_CACHE_NUM; i++) {
 		if (!g_ssTcKeyPair[i].keyPair.used) {
 			continue;
 		}
@@ -377,7 +377,7 @@ void ss_tcKeyPairPeriodic(void)
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 void ss_apsmeUpdateDevReq(void *arg)
 {
-	u8 mode = ss_ib.tcLinkKeyType;
+	uint8_t mode = ss_ib.tcLinkKeyType;
 
 	if (mode == 0U) {
 		ss_apsmeUpdateDevReqSend((zb_buf_t *)arg, 1);
@@ -409,17 +409,17 @@ void ss_apsmeRemoveDeviceReq(void *arg)
 {
 	ss_apsmeRemoveDeviceReq_t *req = (ss_apsmeRemoveDeviceReq_t *)arg;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
-	u16 parentShortAddr;
-	u16 parentAddrMapIdx;
+	uint8_t *payload;
+	uint16_t parentShortAddr;
+	uint16_t parentAddrMapIdx;
 
-	if (tl_zbShortAddrByExtAddr(&parentShortAddr, req->parentAddr, &parentAddrMapIdx) ==
+	if (zb_ShortAddrByExtAddr(&parentShortAddr, req->parentAddr, &parentAddrMapIdx) ==
 	    0xffU) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 1 + EXT_ADDR_LEN, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 1 + EXT_ADDR_LEN, payload, uint8_t *);
 	payload[0] = APS_CMD_REMOVE_DEVICE_ID;
 	ZB_IEEE_ADDR_COPY(payload + 1, req->targetExtAddr);
 
@@ -428,7 +428,7 @@ void ss_apsmeRemoveDeviceReq(void *arg)
 	cmdReq.adu = payload;
 	cmdReq.dstAddr.shortAddr = parentShortAddr;
 	cmdReq.addrMode = ADDR_MODE_SHORT;
-	cmdReq.aduLen = (u8)(1 + EXT_ADDR_LEN);
+	cmdReq.aduLen = (uint8_t)(1 + EXT_ADDR_LEN);
 	cmdReq.secure = 1;
 	cmdReq.secureNwkLayer = 1;
 	aps_cmd_send(&cmdReq, APS_CMD_HANDLE_REMOVE_DEVICE);
@@ -438,29 +438,29 @@ void ss_apsRemoveDeviceCmdHandle(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	ss_apsmeRemoveDeviceInd_t *removeInd = (ss_apsmeRemoveDeviceInd_t *)arg;
-	u16 tcAddrMapIdx;
+	uint16_t tcAddrMapIdx;
 
 	ZB_IEEE_ADDR_COPY(removeInd->childExtAddr, ind->asdu + 1);
-	if (tl_zbExtAddrByShortAddr(ind->src_short_addr, removeInd->tcAddr, &tcAddrMapIdx) ==
+	if (zb_ExtAddrByShortAddr(ind->src_short_addr, removeInd->tcAddr, &tcAddrMapIdx) ==
 	    0xffU) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	tl_zbTaskPost(ss_zdoRemoveDeviceIndHandle, arg);
+	zb_TaskPost(ss_zdoRemoveDeviceIndHandle, arg);
 }
 
 void ss_apsTunnelCmdHandle(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	addrExt_t extAddr;
-	tl_zb_normal_neighbor_entry_t *entry;
+	zb_normal_neighbor_entry_t *entry;
 	nlde_data_req_t *req;
 	aps_tx_cache_list_t *cache;
 	apsdeDataConf_t cnf;
-	u8 *nsdu;
-	u8 nsduLen;
-	u16 dstAddr;
+	uint8_t *nsdu;
+	uint8_t nsduLen;
+	uint16_t dstAddr;
 
 	ZB_IEEE_ADDR_COPY(extAddr, ind->asdu + 1);
 	entry = nwk_neTblGetByExtAddr(extAddr);
@@ -470,9 +470,9 @@ void ss_apsTunnelCmdHandle(void *arg)
 		return;
 	}
 
-	dstAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
+	dstAddr = zb_shortAddrByIdx(entry->addrmapIdx);
 	nsdu = ind->asdu + 1U + EXT_ADDR_LEN;
-	nsduLen = (u8)(ind->asduLength - (1U + EXT_ADDR_LEN));
+	nsduLen = (uint8_t)(ind->asduLength - (1U + EXT_ADDR_LEN));
 
 	memset(arg, 0, sizeof(nlde_data_req_t));
 	req = (nlde_data_req_t *)arg;
@@ -504,16 +504,16 @@ void ss_apsmeTransportKeyReq(void *arg)
 {
 	ss_apsmeTransportKeyReq_t *req = (ss_apsmeTransportKeyReq_t *)arg;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
-	u8 *p;
-	u8 handle = APS_CMD_HANDLE_TRANSPORT_KEY;
+	uint8_t *payload;
+	uint8_t *p;
+	uint8_t handle = APS_CMD_HANDLE_TRANSPORT_KEY;
 
 	if (ZB_IEEE_ADDR_IS_ZERO(req->dstAddr) && req->keyType != SS_STANDARD_NETWORK_KEY) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 39, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 39, payload, uint8_t *);
 	p = payload;
 
 	*p++ = APS_CMD_TRANSPORT_KEY_ID;
@@ -546,7 +546,7 @@ void ss_apsmeTransportKeyReq(void *arg)
 	cmd_req_init(&cmdReq);
 	cmdReq.txBuf = (zb_buf_t *)arg;
 	cmdReq.adu = payload;
-	cmdReq.aduLen = (u8)(p - payload);
+	cmdReq.aduLen = (uint8_t)(p - payload);
 	/* Network-layer security is
 	 * the default and only the two tests below turn it off.  APS security is
 	 * decided by the destination alone: a broadcast key and a key
@@ -581,7 +581,7 @@ void ss_apsmeSwitchKeyReq(void *arg)
 	aps_cmd_send_req_t cmdReq;
 	ss_switch_key_cmd_t *payload;
 
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, sizeof(ss_switch_key_cmd_t), payload,
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, sizeof(ss_switch_key_cmd_t), payload,
 			     ss_switch_key_cmd_t *);
 	bool broadcast;
 
@@ -590,7 +590,7 @@ void ss_apsmeSwitchKeyReq(void *arg)
 
 	cmd_req_init(&cmdReq);
 	cmdReq.txBuf = (zb_buf_t *)arg;
-	cmdReq.adu = (u8 *)payload;
+	cmdReq.adu = (uint8_t *)payload;
 	cmdReq.aduLen = sizeof(ss_switch_key_cmd_t);
 	broadcast = ZB_IEEE_ADDR_IS_INVALID(req->dstAddr);
 	if (broadcast) {
@@ -617,19 +617,19 @@ void ss_apsUpdateDeviceCmdHandle(void *arg)
 	 * are themselves fields of that buffer.  Take everything out of the
 	 * frame before writing the first field of the indication.
 	 */
-	const u8 *asdu = ind->asdu;
-	u16 srcShortAddr = ind->src_short_addr;
-	u8 securityStatus = ind->security_status;
-	u16 devShortAddr = (u16)asdu[9] | ((u16)asdu[10] << 8);
-	u8 status = asdu[11];
+	const uint8_t *asdu = ind->asdu;
+	uint16_t srcShortAddr = ind->src_short_addr;
+	uint8_t securityStatus = ind->security_status;
+	uint16_t devShortAddr = (uint16_t)asdu[9] | ((uint16_t)asdu[10] << 8);
+	uint8_t status = asdu[11];
 	addrExt_t devAddr;
 	ss_dev_pair_set_t keyPair;
 	bool haveKeyPair;
-	u16 srcAddrMapIdx;
+	uint16_t srcAddrMapIdx;
 
 	ZB_IEEE_ADDR_COPY(devAddr, asdu + 1);
 
-	if (tl_zbExtAddrByShortAddr(srcShortAddr, updateInd->srcAddr, &srcAddrMapIdx) == 0xffU) {
+	if (zb_ExtAddrByShortAddr(srcShortAddr, updateInd->srcAddr, &srcAddrMapIdx) == 0xffU) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -649,13 +649,13 @@ void ss_apsUpdateDeviceCmdHandle(void *arg)
 		return;
 	}
 
-	tl_zbTaskPost(ss_zdoUpdateDeviceIndHandle, arg);
+	zb_TaskPost(ss_zdoUpdateDeviceIndHandle, arg);
 	if (g_gpDeviceAnnounceCheckCb != NULL) {
 		(void)g_gpDeviceAnnounceCheckCb(devShortAddr, devAddr);
 	}
 }
 
-u8 ss_apsVerifyKeyCmdValid(void *keyPair, u8 keyType)
+uint8_t ss_apsVerifyKeyCmdValid(void *keyPair, uint8_t keyType)
 {
 	if (!g_zbNwkCtx.is_tc) {
 		return APS_STATUS_ILLEGAL_REQUEST;
@@ -683,10 +683,10 @@ void ss_apsVerifyKeyCmdHandle(void *arg)
 	ss_verify_key_cmd_t verifyCmd;
 	ss_tc_keyPair_t *keyPair;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
-	u8 hashPad = 3;
-	u8 hashVal[SEC_KEY_LEN];
-	u8 status;
+	uint8_t *payload;
+	uint8_t hashPad = 3;
+	uint8_t hashVal[SEC_KEY_LEN];
+	uint8_t status;
 
 	if (ZB_NWK_IS_ADDRESS_BROADCAST(ind->dst_addr)) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -718,7 +718,7 @@ void ss_apsVerifyKeyCmdHandle(void *arg)
 	}
 
 	cmd_req_init(&cmdReq);
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 11, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 11, payload, uint8_t *);
 	payload[0] = APS_CMD_CONFIRM_KEY_ID;
 	payload[1] = status;
 	payload[2] = verifyCmd.keyType;
@@ -741,21 +741,21 @@ void ss_apsRequestKeyCmdHandle(void *arg)
 	ss_tc_keyPair_t *keyPair;
 	addrExt_t srcExtAddr;
 	aps_cmd_send_req_t cmdReq;
-	u8 *payload;
-	u16 srcAddrMapIdx;
+	uint8_t *payload;
+	uint16_t srcAddrMapIdx;
 
 	if (!g_zbNwkCtx.is_tc || ind->asdu[1] != SS_TC_LINK_KEY) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	if (tl_zbExtAddrByShortAddr(ind->src_short_addr, srcExtAddr, &srcAddrMapIdx) != RET_OK) {
+	if (zb_ExtAddrByShortAddr(ind->src_short_addr, srcExtAddr, &srcAddrMapIdx) != RET_OK) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
 	if (ss_ib.tcPolicy.allowTCLKrequest != 1U ||
-	    (int)ss_ib.devKeyPairNum >= (int)(TL_ZB_NWK_ADDR_MAP_SIZE - 1U)) {
+	    (int)ss_ib.devKeyPairNum >= (int)(ZB_NWK_ADDR_MAP_SIZE - 1U)) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -780,7 +780,7 @@ void ss_apsRequestKeyCmdHandle(void *arg)
 	keyPair->timeout = ss_ib.ssTimeoutPeriod / 1000U;
 
 	cmd_req_init(&cmdReq);
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 39, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, 39, payload, uint8_t *);
 	payload[0] = APS_CMD_TRANSPORT_KEY_ID;
 	payload[1] = SS_TC_LINK_KEY;
 	memcpy(payload + 2, keyPair->keyPair.linkKey, SEC_KEY_LEN);
@@ -804,7 +804,7 @@ void ss_apsmeVerifyKeyReq(void *arg)
 	ss_apsmeVerifyKeyReq_t *req = (ss_apsmeVerifyKeyReq_t *)arg;
 	aps_cmd_send_req_t cmdReq;
 	ss_verify_key_cmd_t *payload;
-	u8 hashInput = 3;
+	uint8_t hashInput = 3;
 
 	if (!ZB_IEEE_ADDR_CMP(req->dstAddr, ss_ib.trust_center_address) || g_zbNwkCtx.is_tc ||
 	    req->keyType != SS_TC_LINK_KEY || g_ssDevKeyPair.keyPair.used == 0U) {
@@ -812,7 +812,7 @@ void ss_apsmeVerifyKeyReq(void *arg)
 		return;
 	}
 
-	TL_BUF_INITIAL_ALLOC((zb_buf_t *)arg, sizeof(ss_verify_key_cmd_t), payload,
+	ZB_BUF_INITIAL_ALLOC((zb_buf_t *)arg, sizeof(ss_verify_key_cmd_t), payload,
 			     ss_verify_key_cmd_t *);
 	payload->cmdId = APS_CMD_VERIFY_KEY_ID;
 	payload->keyType = req->keyType;
@@ -821,7 +821,7 @@ void ss_apsmeVerifyKeyReq(void *arg)
 
 	cmd_req_init(&cmdReq);
 	cmdReq.txBuf = (zb_buf_t *)arg;
-	cmdReq.adu = (u8 *)payload;
+	cmdReq.adu = (uint8_t *)payload;
 	cmdReq.addrMode = ADDR_MODE_EXT;
 	ZB_IEEE_ADDR_COPY(cmdReq.dstAddr.extAddr, req->dstAddr);
 	cmdReq.aduLen = sizeof(ss_verify_key_cmd_t);
@@ -834,11 +834,11 @@ void ss_apsmeVerifyKeyReq(void *arg)
 void ss_apsTransportKeyCmdHandle(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
-	u8 *payload = ind->asdu;
-	u8 keyType = payload[1];
-	const u8 *key = payload + 2;
-	const u8 *dstExtAddr;
-	const u8 *srcExtAddr;
+	uint8_t *payload = ind->asdu;
+	uint8_t keyType = payload[1];
+	const uint8_t *key = payload + 2;
+	const uint8_t *dstExtAddr;
+	const uint8_t *srcExtAddr;
 
 	if (aps_ib.aps_authenticated && ind->security_status == 0U) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -846,12 +846,12 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 	}
 
 	if (keyType == SS_STANDARD_NETWORK_KEY) {
-		u8 keySeqNum = payload[18];
+		uint8_t keySeqNum = payload[18];
 
 		dstExtAddr = payload + 19;
 		srcExtAddr = payload + 27;
 
-		zdo_mgmt_nwk_flag &= (u8)~0x04U;
+		zdo_mgmt_nwk_flag &= (uint8_t)~0x04U;
 		if (zdo_af_get_use_tc_sec_on_nwk_key_rotation() &&
 		    ZB_IEEE_ADDR_IS_ZERO(dstExtAddr) && aps_ib.aps_authenticated &&
 		    (ind->security_status & SECURITY_IN_APSLAYER) == 0U) {
@@ -860,7 +860,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 
 		if (ext_addr_is_local(dstExtAddr) || ZB_IEEE_ADDR_IS_ZERO(dstExtAddr)) {
 			if (!aps_ib.aps_authenticated) {
-				tl_zb_normal_neighbor_entry_t *entry;
+				zb_normal_neighbor_entry_t *entry;
 
 				if (ind->src_addr_mode == ADDR_MODE_SHORT) {
 					entry = nwk_neTblGetByShortAddr(ind->src_short_addr);
@@ -876,7 +876,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 				{
 					addrExt_t parentExtAddr;
 
-					tl_zbExtAddrByIdx(entry->addrmapIdx, parentExtAddr);
+					zb_ExtAddrByIdx(entry->addrmapIdx, parentExtAddr);
 					if (entry->deviceType != NWK_DEVICE_TYPE_COORDINATOR &&
 					    ZB_IEEE_ADDR_CMP(srcExtAddr, parentExtAddr)) {
 						ss_securityModeSet(SS_SEMODE_DISTRIBUTED);
@@ -892,7 +892,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 			ZB_IEEE_ADDR_COPY(transportInd->srcAddr, srcExtAddr);
 			memcpy(transportInd->key, key, SEC_KEY_LEN);
 			transportInd->keySeqNum = keySeqNum;
-			tl_zbTaskPost(ss_zdoTransportKeyIndHandle, transportInd);
+			zb_TaskPost(ss_zdoTransportKeyIndHandle, transportInd);
 			return;
 		}
 	} else if (keyType == SS_TC_LINK_KEY) {
@@ -902,21 +902,21 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 		if (ext_addr_is_local(dstExtAddr)) {
 			ss_apsmeTransportKeyInd_t *transportInd = (ss_apsmeTransportKeyInd_t *)arg;
 
-			zdo_mgmt_nwk_flag &= (u8)~0x04U;
+			zdo_mgmt_nwk_flag &= (uint8_t)~0x04U;
 
 			/* Keep the sender mapping when the command arrived with a short
 			 * source address. */
 			if (ind->src_addr_mode == ADDR_MODE_SHORT) {
-				u16 addrRef;
+				uint16_t addrRef;
 
-				(void)tl_zbNwkAddrMapAdd(ind->src_short_addr, (u8 *)srcExtAddr,
+				(void)zb_NwkAddrMapAdd(ind->src_short_addr, (uint8_t *)srcExtAddr,
 							 &addrRef);
 			}
 
 			transportInd->keyType = keyType;
 			ZB_IEEE_ADDR_COPY(transportInd->srcAddr, srcExtAddr);
 			memcpy(transportInd->key, key, SEC_KEY_LEN);
-			tl_zbTaskPost(ss_zdoTransportKeyIndHandle, transportInd);
+			zb_TaskPost(ss_zdoTransportKeyIndHandle, transportInd);
 			return;
 		}
 	} else {
@@ -928,7 +928,7 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 	/* A key that is not for this device goes
 	 * straight to the child lookup, whatever this router's own state. */
 	{
-		tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr((u8 *)dstExtAddr);
+		zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr((uint8_t *)dstExtAddr);
 
 		if (entry != NULL && (entry->relationship == NEIGHBOR_IS_CHILD ||
 				      entry->relationship == NEIGHBOR_IS_UNAUTH_CHILD)) {
@@ -937,9 +937,9 @@ void ss_apsTransportKeyCmdHandle(void *arg)
 			cmd_req_init(&cmdReq);
 			cmdReq.txBuf = (zb_buf_t *)arg;
 			cmdReq.adu = payload;
-			cmdReq.aduLen = (u8)ind->asduLength;
+			cmdReq.aduLen = (uint8_t)ind->asduLength;
 			cmdReq.addrMode = ADDR_MODE_SHORT;
-			cmdReq.dstAddr.shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
+			cmdReq.dstAddr.shortAddr = zb_shortAddrByIdx(entry->addrmapIdx);
 			aps_cmd_send(&cmdReq, APS_CMD_HANDLE_TXKEYCMD_RELAY);
 			if (entry->relationship == NEIGHBOR_IS_UNAUTH_CHILD) {
 				entry->relationship = NEIGHBOR_IS_CHILD;
@@ -984,21 +984,21 @@ void ss_apsConfirmKeyCmdHandle(void *arg)
 void ss_apsSwitchKeyCmdHandle(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
-	u8 *payload = ind->asdu;
-	u8 keySeqNum = payload[1];
+	uint8_t *payload = ind->asdu;
+	uint8_t keySeqNum = payload[1];
 
 	if (keySeqNum != ss_ib.activeKeySeqNum && ss_zdoGetNwkKeyBySeqNum(keySeqNum) == NULL) {
 		if ((zdo_mgmt_nwk_flag & 0x04U) != 0U) {
-			tl_zbTaskPost(ss_zdoInsecureRejoin, NULL);
-			zdo_mgmt_nwk_flag &= (u8)~0x04U;
+			zb_TaskPost(ss_zdoInsecureRejoin, NULL);
+			zdo_mgmt_nwk_flag &= (uint8_t)~0x04U;
 		}
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
 	if ((zdo_mgmt_nwk_flag & 0x04U) != 0U) {
-		tl_zbTaskPost(ss_zdoInsecureRejoin, NULL);
-		zdo_mgmt_nwk_flag &= (u8)~0x04U;
+		zb_TaskPost(ss_zdoInsecureRejoin, NULL);
+		zdo_mgmt_nwk_flag &= (uint8_t)~0x04U;
 	} else {
 		ss_zdoNwkKeySwitch(keySeqNum);
 	}

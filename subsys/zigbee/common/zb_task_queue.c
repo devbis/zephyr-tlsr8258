@@ -8,17 +8,17 @@
 #include "ev_buffer.h"
 #include <stdint.h>
 
-static tl_zbtaskq_stack_t g_zbTaskQ[TL_Q_TYPE_MAX];
+static zb_taskq_stack_t g_zbTaskQ[ZB_Q_TYPE_MAX];
 
-u8 T_DBG_taskQPush_idx = 0;
+uint8_t T_DBG_taskQPush_idx = 0;
 uintptr_t T_DBG_taskQPush_cb = 0;
 uintptr_t T_DBG_taskQPush_data = 0;
-u8 T_DBG_taskQPop_idx = 0;
+uint8_t T_DBG_taskQPop_idx = 0;
 uintptr_t T_DBG_taskQPop_cb = 0;
 uintptr_t T_DBG_taskQPop_data = 0;
-u8 T_exceptTaskPost[2] = {0};
+uint8_t T_exceptTaskPost[2] = {0};
 
-u8 buf_type_get(void *arg)
+uint8_t buf_type_get(void *arg)
 {
 	if (is_zb_buf(arg)) {
 		return 0;
@@ -31,10 +31,10 @@ u8 buf_type_get(void *arg)
 	return 2;
 }
 
-tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
+zb_task_t *zb_TaskQPop(uint8_t idx, zb_task_t *taskInfo)
 {
-	tl_zb_task_t *task = NULL;
-	u32 irq;
+	zb_task_t *task = NULL;
+	uint32_t irq;
 
 	taskInfo->tlCb = NULL;
 	taskInfo->data = NULL;
@@ -43,15 +43,15 @@ tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
 
 	if (idx == 0U) {
 		if (taskQ_user.wptr != taskQ_user.rptr) {
-			u8 mask = (u8)(ZB_TASKQ_USERUSE_SIZE - 1U);
+			uint8_t mask = (uint8_t)(ZB_TASKQ_USERUSE_SIZE - 1U);
 			task = &taskQ_user.evt[taskQ_user.rptr & mask];
 			taskQ_user.rptr++;
 		}
 	} else {
-		tl_zbtaskq_stack_t *queue = &g_zbTaskQ[idx - 1U];
+		zb_taskq_stack_t *queue = &g_zbTaskQ[idx - 1U];
 
 		if (queue->wptr != queue->rptr) {
-			task = &queue->evt[queue->rptr & (TL_ZBTASKQ_STACKUSE_SIZE - 1U)];
+			task = &queue->evt[queue->rptr & (ZB_ZBTASKQ_STACKUSE_SIZE - 1U)];
 			queue->rptr++;
 		}
 	}
@@ -78,10 +78,10 @@ tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
 	return task;
 }
 
-_attribute_ram_code_ u8 tl_zbTaskQPush(u8 idx, tl_zb_task_t *task)
+_attribute_ram_code_ uint8_t zb_TaskQPush(uint8_t idx, zb_task_t *task)
 {
-	tl_zb_task_t *slot = NULL;
-	u32 irq = drv_disable_irq();
+	zb_task_t *slot = NULL;
+	uint32_t irq = drv_disable_irq();
 
 	if (idx == 0U) {
 		/* The vendor library does not truncate the difference and compares it signed. */
@@ -90,18 +90,18 @@ _attribute_ram_code_ u8 tl_zbTaskQPush(u8 idx, tl_zb_task_t *task)
 			return ZB_RET_OVERFLOW;
 		}
 
-		slot = &taskQ_user.evt[taskQ_user.wptr & (u8)(ZB_TASKQ_USERUSE_SIZE - 1U)];
+		slot = &taskQ_user.evt[taskQ_user.wptr & (uint8_t)(ZB_TASKQ_USERUSE_SIZE - 1U)];
 		taskQ_user.wptr++;
 	} else {
-		tl_zbtaskq_stack_t *queue = &g_zbTaskQ[idx - 1U];
+		zb_taskq_stack_t *queue = &g_zbTaskQ[idx - 1U];
 
 		/* The difference is compared signed against the queue depth. */
-		if ((int)queue->wptr - (int)queue->rptr > (TL_ZBTASKQ_STACKUSE_SIZE - 1)) {
+		if ((int)queue->wptr - (int)queue->rptr > (ZB_ZBTASKQ_STACKUSE_SIZE - 1)) {
 			drv_restore_irq(irq);
 			return ZB_RET_OVERFLOW;
 		}
 
-		slot = &queue->evt[queue->wptr & (TL_ZBTASKQ_STACKUSE_SIZE - 1U)];
+		slot = &queue->evt[queue->wptr & (ZB_ZBTASKQ_STACKUSE_SIZE - 1U)];
 		queue->wptr++;
 	}
 
@@ -130,7 +130,7 @@ void zb_sched_init(void)
 	taskQ_user.wptr = 0;
 	taskQ_user.rptr = 0;
 
-	for (u8 i = 0; i < ZB_TASKQ_USERUSE_SIZE; i++) {
+	for (uint8_t i = 0; i < ZB_TASKQ_USERUSE_SIZE; i++) {
 		taskQ_user.evt[i].tlCb = NULL;
 		taskQ_user.evt[i].data = NULL;
 	}
@@ -138,35 +138,35 @@ void zb_sched_init(void)
 	memset(g_zbTaskQ, 0, sizeof(g_zbTaskQ));
 }
 
-u8 tl_zbUserTaskQNum(void)
+uint8_t zb_UserTaskQNum(void)
 {
-	return (u8)(taskQ_user.wptr - taskQ_user.rptr);
+	return (uint8_t)(taskQ_user.wptr - taskQ_user.rptr);
 }
 
-void tl_zbTaskProcedure(void)
+void zb_TaskProcedure(void)
 {
-	tl_zb_task_t taskInfo;
+	zb_task_t taskInfo;
 
-	tl_zbMacTaskProc();
-	tl_zbNwkTaskProc();
+	zb_MacTaskProc();
+	zb_NwkTaskProc();
 
-	if (tl_zbTaskQPop(0, &taskInfo) != NULL) {
+	if (zb_TaskQPop(0, &taskInfo) != NULL) {
 		taskInfo.tlCb(taskInfo.data);
 	}
 
 	zdo_ssInfoUpdate();
 }
 
-u8 zb_isTaskDone(void)
+uint8_t zb_isTaskDone(void)
 {
-	u8 *queue = (u8 *)g_zbTaskQ;
-	u8 *end = queue + (TL_Q_TYPE_MAX - 1U) * sizeof(tl_zbtaskq_stack_t);
+	uint8_t *queue = (uint8_t *)g_zbTaskQ;
+	uint8_t *end = queue + (ZB_Q_TYPE_MAX - 1U) * sizeof(zb_taskq_stack_t);
 
 	/* The vendor object compares the first byte of each queue block with the
 	 * byte immediately before it.  Preserve that
 	 * observed layout/behavior instead of substituting the apparent wptr/rptr
 	 * fields at offsets 128/129. */
-	for (; queue != end; queue += sizeof(tl_zbtaskq_stack_t)) {
+	for (; queue != end; queue += sizeof(zb_taskq_stack_t)) {
 		if (queue[0] != queue[-1]) {
 			return 0;
 		}
@@ -175,15 +175,15 @@ u8 zb_isTaskDone(void)
 	return taskQ_user.wptr == taskQ_user.rptr;
 }
 
-u8 tl_zbTaskPost(tl_zb_callback_t func, void *arg)
+uint8_t zb_TaskPost(zb_callback_t func, void *arg)
 {
-	tl_zb_task_t taskInfo;
-	u8 status;
+	zb_task_t taskInfo;
+	uint8_t status;
 
 	taskInfo.tlCb = func;
 	taskInfo.data = arg;
 
-	status = tl_zbTaskQPush(0, &taskInfo);
+	status = zb_TaskQPush(0, &taskInfo);
 	if (status == ZB_RET_OK) {
 		return status;
 	}
@@ -195,7 +195,7 @@ u8 tl_zbTaskPost(tl_zb_callback_t func, void *arg)
 		break;
 	case 1:
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_EV_TASK_POST);
-		ev_buf_free((u8 *)arg);
+		ev_buf_free((uint8_t *)arg);
 		break;
 	default:
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_TASK_POST);
@@ -205,10 +205,10 @@ u8 tl_zbTaskPost(tl_zb_callback_t func, void *arg)
 	return status;
 }
 
-u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
+uint8_t zb_PrimitivePost(uint8_t layerQ, uint8_t primitive, void *arg)
 {
-	tl_zb_task_t taskInfo;
-	u8 status;
+	zb_task_t taskInfo;
+	uint8_t status;
 
 	T_exceptTaskPost[0] = layerQ;
 	T_exceptTaskPost[1] = primitive;
@@ -222,9 +222,9 @@ u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
 	taskInfo.tlCb = NULL;
 	taskInfo.data = arg;
 
-	status = tl_zbTaskQPush(layerQ, &taskInfo);
+	status = zb_TaskQPush(layerQ, &taskInfo);
 	if (status != ZB_RET_OK) {
-		if (layerQ == TL_Q_MAC2NWK) {
+		if (layerQ == ZB_Q_MAC2NWK) {
 			if (primitive == MAC_MLME_BEACON_NOTIFY_IND ||
 			    primitive == MAC_MCPS_DATA_IND) {
 				zb_buf_free((zb_buf_t *)arg);

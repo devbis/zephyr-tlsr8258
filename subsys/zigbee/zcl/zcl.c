@@ -53,38 +53,38 @@
  * LOCAL VARIABLES
  */
 zcl_ctrl_t zcl_vars;
-u8 zcl_seqNum;//ZCL seqNum
+uint8_t zcl_seqNum;//ZCL seqNum
 
-const u16 zcl_attr_global_clusterRevision = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+const uint16_t zcl_attr_global_clusterRevision = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 /**********************************************************************
  * LOCAL FUNCTIONS
  */
 #ifdef ZCL_READ
-u8 zcl_readHandler(zclIncoming_t *pCmd);
-u8 zcl_readRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_readHandler(zclIncoming_t *pCmd);
+uint8_t zcl_readRspHandler(zclIncoming_t *pCmd);
 #endif
 #ifdef ZCL_WRITE
-u8 zcl_writeHandler(zclIncoming_t *pCmd);
-u8 zcl_writeUndividedHandler(zclIncoming_t *pCmd);
-u8 zcl_writeRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_writeHandler(zclIncoming_t *pCmd);
+uint8_t zcl_writeUndividedHandler(zclIncoming_t *pCmd);
+uint8_t zcl_writeRspHandler(zclIncoming_t *pCmd);
 #endif
 #ifdef ZCL_REPORT
-u8 zcl_configReportHandler(zclIncoming_t *pCmd);
-u8 zcl_configReportRspHandler(zclIncoming_t *pCmd);
-u8 zcl_readReportCfgHandler(zclIncoming_t *pCmd);
-u8 zcl_readReportCfgRspHandler(zclIncoming_t *pCmd);
-u8 zcl_reportHandler(zclIncoming_t *pCmd);
+uint8_t zcl_configReportHandler(zclIncoming_t *pCmd);
+uint8_t zcl_configReportRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_readReportCfgHandler(zclIncoming_t *pCmd);
+uint8_t zcl_readReportCfgRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_reportHandler(zclIncoming_t *pCmd);
 #endif
 #ifdef ZCL_DISCOVER
-u8 zcl_discAttrsHandler(zclIncoming_t *pCmd);
-u8 zcl_discAttrsRspHandler(zclIncoming_t *pCmd);
-u8 zcl_discCmdsHandler(zclIncoming_t *pCmd);
-u8 zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd);
-u8 zcl_discAttrsExtRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_discAttrsHandler(zclIncoming_t *pCmd);
+uint8_t zcl_discAttrsRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_discCmdsHandler(zclIncoming_t *pCmd);
+uint8_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd);
+uint8_t zcl_discAttrsExtRspHandler(zclIncoming_t *pCmd);
 #endif
-u8 zcl_dfltRspHandler(zclIncoming_t *pCmd);
-u8 zcl_sendDfltRsp(zclIncoming_t *inMsg, u8 cmdId, u8 status);
+uint8_t zcl_dfltRspHandler(zclIncoming_t *pCmd);
+uint8_t zcl_sendDfltRsp(zclIncoming_t *inMsg, uint8_t cmdId, uint8_t status);
 
 /*********************************************************************
  * @fn      zcl_reset
@@ -101,7 +101,7 @@ _CODE_ZCL_ void zcl_reset(void)
 
     /* Reset attribute list */
     zcl_vars.clusterNum = 0;
-    for (u8 i = 0; i < ZCL_CLUSTER_NUM_MAX; i++) {
+    for (uint8_t i = 0; i < ZCL_CLUSTER_NUM_MAX; i++) {
         zcl_vars.clusterList[i].endpoint = 0xfe;
         zcl_vars.clusterList[i].clusterID = 0xffff;
         zcl_vars.clusterList[i].attrNum = 0;
@@ -122,7 +122,7 @@ _CODE_ZCL_ void zcl_init(zcl_hookFn_t fn)
 {
     /* reset control module */
     zcl_reset();
-    zcl_seqNum = (u8)zb_random();
+    zcl_seqNum = (uint8_t)zb_random();
     zcl_vars.hookFn = fn;
 }
 
@@ -133,10 +133,10 @@ _CODE_ZCL_ void zcl_init(zcl_hookFn_t fn)
  *
  * @return     None
  */
-_CODE_ZCL_ void zcl_register(u8 endpoint, u8 clusterNum, zcl_specClusterInfo_t *info)
+_CODE_ZCL_ void zcl_register(uint8_t endpoint, uint8_t clusterNum, zcl_specClusterInfo_t *info)
 {
     zcl_specClusterInfo_t *p = info;
-    for (u32 i = 0; i < clusterNum; i++) {
+    for (uint32_t i = 0; i < clusterNum; i++) {
         if (p->clusterRegisterFunc) {
             if (p->clusterRegisterFunc(endpoint, p->manuCode, p->attrNum, p->attrTbl, p->clusterAppCb) == ZCL_STA_INSUFFICIENT_SPACE) {
                 return;
@@ -156,9 +156,9 @@ _CODE_ZCL_ void zcl_register(u8 endpoint, u8 clusterNum, zcl_specClusterInfo_t *
  *
  * @return  None
  */
-_CODE_ZCL_ clusterInfo_t *zcl_findCluster(u8 endpoint, u16 clusterId)
+_CODE_ZCL_ clusterInfo_t *zcl_findCluster(uint8_t endpoint, uint16_t clusterId)
 {
-    for (u8 i = 0; i < ZCL_CLUSTER_NUM_MAX; i++) {
+    for (uint8_t i = 0; i < ZCL_CLUSTER_NUM_MAX; i++) {
         if ((zcl_vars.clusterList[i].endpoint == endpoint) && (zcl_vars.clusterList[i].clusterID == clusterId)) {
             return &zcl_vars.clusterList[i];
         }
@@ -179,7 +179,7 @@ _CODE_ZCL_ clusterInfo_t *zcl_findCluster(u8 endpoint, u16 clusterId)
  *
  * @return  ZCL Status @ref zcl_error_codes
  */
-_CODE_ZCL_ status_t zcl_registerCluster(u8 endpoint, u16 clusterId, u16 manuCode, u8 attrNum, const zclAttrInfo_t *pAttrTbl, cluster_cmdHdlr_t cmdHdlrFn, cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_registerCluster(uint8_t endpoint, uint16_t clusterId, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t *pAttrTbl, cluster_cmdHdlr_t cmdHdlrFn, cluster_forAppCb_t cb)
 {
     if (zcl_vars.clusterNum >= ZCL_CLUSTER_NUM_MAX) {
         return ZCL_STA_INSUFFICIENT_SPACE;
@@ -209,18 +209,18 @@ _CODE_ZCL_ status_t zcl_registerCluster(u8 endpoint, u16 clusterId, u16 manuCode
  *
  * @return  Length
  */
-_CODE_ZCL_ u8 zcl_getDataTypeLen(u8 dataType)
+_CODE_ZCL_ uint8_t zcl_getDataTypeLen(uint8_t dataType)
 {
     switch (dataType) {
     case ZCL_DATA_TYPE_BOOLEAN:
-        return sizeof(u8);
+        return sizeof(uint8_t);
 
     case ZCL_DATA_TYPE_DATA8:
     case ZCL_DATA_TYPE_BITMAP8:
     case ZCL_DATA_TYPE_UINT8:
     case ZCL_DATA_TYPE_INT8:
     case ZCL_DATA_TYPE_ENUM8:
-        return sizeof(u8);
+        return sizeof(uint8_t);
 
     case ZCL_DATA_TYPE_DATA16:
     case ZCL_DATA_TYPE_BITMAP16:
@@ -230,7 +230,7 @@ _CODE_ZCL_ u8 zcl_getDataTypeLen(u8 dataType)
     case ZCL_DATA_TYPE_SEMI_PREC:
     case ZCL_DATA_TYPE_CLUSTER_ID:
     case ZCL_DATA_TYPE_ATTR_ID:
-        return sizeof(u16);
+        return sizeof(uint16_t);
 
     case ZCL_DATA_TYPE_DATA24:
     case ZCL_DATA_TYPE_BITMAP24:
@@ -246,7 +246,7 @@ _CODE_ZCL_ u8 zcl_getDataTypeLen(u8 dataType)
     case ZCL_DATA_TYPE_UTC:
     case ZCL_DATA_TYPE_DATE:
     case ZCL_DATA_TYPE_BAC_OID:
-        return sizeof(u32);
+        return sizeof(uint32_t);
 
     case ZCL_DATA_TYPE_DATA40:
     case ZCL_DATA_TYPE_BITMAP40:
@@ -294,7 +294,7 @@ _CODE_ZCL_ u8 zcl_getDataTypeLen(u8 dataType)
  *
  * @return  TRUE or FALSE
  */
-_CODE_ZCL_ bool zcl_analogDataType(u8 dataType)
+_CODE_ZCL_ bool zcl_analogDataType(uint8_t dataType)
 {
     switch (dataType) {
     case ZCL_DATA_TYPE_UINT8:
@@ -338,20 +338,20 @@ _CODE_ZCL_ bool zcl_analogDataType(u8 dataType)
  *
  * @return  Data length
  */
-_CODE_ZCL_ u16 zcl_getAttrSize(u8 dataType, u8 *pData)
+_CODE_ZCL_ uint16_t zcl_getAttrSize(uint8_t dataType, uint8_t *pData)
 {
-    u16 dataLen = 0;
+    uint16_t dataLen = 0;
 
     if ((dataType == ZCL_DATA_TYPE_LONG_CHAR_STR) || (dataType == ZCL_DATA_TYPE_LONG_OCTET_STR)) {
         dataLen = BUILD_U16(pData[0], pData[1]) + 2; //long string length + 2 for length field
     } else if ((dataType == ZCL_DATA_TYPE_CHAR_STR) || (dataType == ZCL_DATA_TYPE_OCTET_STR)) {
         dataLen = *pData + 1; //string length + 1 for length field
     } else if (dataType == ZCL_DATA_TYPE_STRUCT) {
-        u8 itemNum = *pData;
+        uint8_t itemNum = *pData;
         dataLen += 2;
-        for (u8 i = 0; i < itemNum; i++) {
-            u8 dtUnion = pData[dataLen];
-            u8 lenTemp = zcl_getDataTypeLen(dtUnion);
+        for (uint8_t i = 0; i < itemNum; i++) {
+            uint8_t dtUnion = pData[dataLen];
+            uint8_t lenTemp = zcl_getDataTypeLen(dtUnion);
             dataLen += (lenTemp + 1);
         }
     } else {
@@ -372,8 +372,8 @@ _CODE_ZCL_ u16 zcl_getAttrSize(u8 dataType, u8 *pData)
  */
 _CODE_ZCL_ static int isLittleEndianMachineCheck(void)
 {
-    u16 test = 0x0001;
-    return (*((u8 *)(&test)));
+    uint16_t test = 0x0001;
+    return (*((uint8_t *)(&test)));
 }
 
 /*********************************************************************
@@ -387,7 +387,7 @@ _CODE_ZCL_ static int isLittleEndianMachineCheck(void)
  *
  * @return  None
  */
-_CODE_ZCL_ void zcl_analogDataBuild(u8 dataType, u8 *pData, u8 *pBuf)
+_CODE_ZCL_ void zcl_analogDataBuild(uint8_t dataType, uint8_t *pData, uint8_t *pBuf)
 {
     int curByteIdx;
     int remainingBytes;
@@ -420,14 +420,14 @@ _CODE_ZCL_ void zcl_analogDataBuild(u8 dataType, u8 *pData, u8 *pBuf)
  *
  * @return  None
  */
-_CODE_ZCL_ zclAttrInfo_t *zcl_findAttribute(u8 endpoint, u16 clusterId, u16 attrId)
+_CODE_ZCL_ zclAttrInfo_t *zcl_findAttribute(uint8_t endpoint, uint16_t clusterId, uint16_t attrId)
 {
     clusterInfo_t *pClusterList = zcl_findCluster(endpoint, clusterId);
     if (!pClusterList) {
         return NULL;
     }
 
-    for (u8 i = 0; i < pClusterList->attrNum; i++) {
+    for (uint8_t i = 0; i < pClusterList->attrNum; i++) {
         if (pClusterList->attrTable[i].id == attrId) {
             return (zclAttrInfo_t *)&pClusterList->attrTable[i];
         }
@@ -449,7 +449,7 @@ _CODE_ZCL_ zclAttrInfo_t *zcl_findAttribute(u8 endpoint, u16 clusterId, u16 attr
  *
  * @return  ZCL Status
  */
-_CODE_ZCL_ status_t zcl_getAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u16 *len, u8 *val)
+_CODE_ZCL_ status_t zcl_getAttrVal(uint8_t endpoint, uint16_t clusterId, uint16_t attrId, uint16_t *len, uint8_t *val)
 {
     zclAttrInfo_t *pAttrList = zcl_findAttribute(endpoint, clusterId, attrId);
     if (!pAttrList) {
@@ -482,14 +482,14 @@ _CODE_ZCL_ status_t zcl_getAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u16 *
  *
  * @return  ZCL Status
  */
-_CODE_ZCL_ status_t zcl_setAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u8 *val)
+_CODE_ZCL_ status_t zcl_setAttrVal(uint8_t endpoint, uint16_t clusterId, uint16_t attrId, uint8_t *val)
 {
     zclAttrInfo_t *pAttrEntry = zcl_findAttribute(endpoint, clusterId, attrId);
     if (!pAttrEntry) {
         return ZCL_STA_UNSUPPORTED_ATTRIBUTE;
     }
 
-    u16 len = zcl_getAttrSize(pAttrEntry->type, val);
+    uint16_t len = zcl_getAttrSize(pAttrEntry->type, val);
     memcpy(pAttrEntry->data, val, len);
 
     return ZCL_STA_SUCCESS;
@@ -507,7 +507,7 @@ _CODE_ZCL_ status_t zcl_setAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u8 *v
  *
  * @return  zclAttrInfo_t
  */
-_CODE_ZCL_ zclAttrInfo_t *zcl_attrRead(u8 endpoint, u16 clusterId, u16 attrId, status_t *status)
+_CODE_ZCL_ zclAttrInfo_t *zcl_attrRead(uint8_t endpoint, uint16_t clusterId, uint16_t attrId, status_t *status)
 {
     zclAttrInfo_t *pAttrEntry = zcl_findAttribute(endpoint, clusterId, attrId);
     if (!pAttrEntry) {
@@ -540,7 +540,7 @@ _CODE_ZCL_ zclAttrInfo_t *zcl_attrRead(u8 endpoint, u16 clusterId, u16 attrId, s
  *
  * @return  ZCL Status
  */
-_CODE_ZCL_ status_t zcl_attrWrite(u8 endpoint, u16 clusterId, zclWriteRec_t *pWriteRec, bool enable)
+_CODE_ZCL_ status_t zcl_attrWrite(uint8_t endpoint, uint16_t clusterId, zclWriteRec_t *pWriteRec, bool enable)
 {
     zclAttrInfo_t *pAttrEntry = zcl_findAttribute(endpoint, clusterId, pWriteRec->attrID);
     if (!pAttrEntry) {
@@ -576,9 +576,9 @@ _CODE_ZCL_ status_t zcl_attrWrite(u8 endpoint, u16 clusterId, zclWriteRec_t *pWr
  *
  * @return header length
  */
-_CODE_ZCL_ static u8 zcl_buildHdr(u8 *buf, u8 clusterSpec, u8 dir, u8 disDefRsp, u16 manufCode, u8 seqNum, u8 cmd)
+_CODE_ZCL_ static uint8_t zcl_buildHdr(uint8_t *buf, uint8_t clusterSpec, uint8_t dir, uint8_t disDefRsp, uint16_t manufCode, uint8_t seqNum, uint8_t cmd)
 {
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     ((zclFrmCtrl_t *)pBuf)->bf.type = (clusterSpec) ? ZCL_FRAME_TYPE_SPECIFIC_CMD : ZCL_FRAME_TYPE_PROFILE_CMD;
     ((zclFrmCtrl_t *)pBuf)->bf.manufSpec = manufCode ? 1 : 0;
@@ -619,54 +619,54 @@ _CODE_ZCL_ static u8 zcl_buildHdr(u8 *buf, u8 clusterSpec, u8 dir, u8 disDefRsp,
  *
  * @return  status_t
  */
-_CODE_ZCL_ status_t zcl_sendCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u8 cmd, u8 specific,
-                                u8 direction, u8 disableDefaultRsp, u16 manuCode, u8 seqNo, u16 cmdPldLen, u8 *cmdPld)
+_CODE_ZCL_ status_t zcl_sendCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint8_t cmd, uint8_t specific,
+                                uint8_t direction, uint8_t disableDefaultRsp, uint16_t manuCode, uint8_t seqNo, uint16_t cmdPldLen, uint8_t *cmdPld)
 {
-    u8 *asdu = (u8 *)ev_buf_allocate(5 /* ZCL header */ + cmdPldLen);
+    uint8_t *asdu = (uint8_t *)ev_buf_allocate(5 /* ZCL header */ + cmdPldLen);
     if (!asdu) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pAsdu = asdu;
+    uint8_t *pAsdu = asdu;
 
     /* Build ZCL header */
     pAsdu += zcl_buildHdr(asdu, specific, direction, disableDefaultRsp, manuCode, seqNo, cmd);
 
     /* Add ZCL payload */
     memcpy(pAsdu, cmdPld, cmdPldLen);
-    u16 asdulength = pAsdu - asdu + cmdPldLen;
+    uint16_t asdulength = pAsdu - asdu + cmdPldLen;
 
-    u8 apsCnt = 0;
-    u8 status = af_dataSend(srcEp, pDstEpInfo, clusterId, asdulength, asdu, &apsCnt);
+    uint8_t apsCnt = 0;
+    uint8_t status = af_dataSend(srcEp, pDstEpInfo, clusterId, asdulength, asdu, &apsCnt);
 
     ev_buf_free(asdu);
 
     return (status == RET_OK) ? ZCL_STA_SUCCESS : ZCL_STA_INSUFFICIENT_SPACE;
 }
 
-_CODE_ZCL_ status_t zcl_sendInterPANCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u8 cmd, u8 specific,
-                                        u8 direction, u8 disableDefaultRsp, u16 manuCode, u8 seqNo, u16 cmdPldLen, u8 *cmdPld)
+_CODE_ZCL_ status_t zcl_sendInterPANCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint8_t cmd, uint8_t specific,
+                                        uint8_t direction, uint8_t disableDefaultRsp, uint16_t manuCode, uint8_t seqNo, uint16_t cmdPldLen, uint8_t *cmdPld)
 {
-    u8 *asdu = (u8 *)ev_buf_allocate(8 + cmdPldLen);
+    uint8_t *asdu = (uint8_t *)ev_buf_allocate(8 + cmdPldLen);
     if (!asdu) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pAsdu = asdu;
+    uint8_t *pAsdu = asdu;
 
     /* Build ZCL header */
     pAsdu += zcl_buildHdr(asdu, specific, direction, disableDefaultRsp, manuCode, seqNo, cmd);
 
     /* Add ZCL payload */
     memcpy(pAsdu, cmdPld, cmdPldLen);
-    u16 asdulength = pAsdu - asdu + cmdPldLen;
+    uint16_t asdulength = pAsdu - asdu + cmdPldLen;
 
     if (ZCL_CLUSTER_TOUCHLINK_COMMISSIONING == clusterId) {
         pDstEpInfo->txOptions |= APS_TX_OPT_INTRA_PAN;
     }
 
-    u8 apsCnt = 0;
-    u8 status = af_dataSend(srcEp, pDstEpInfo, clusterId, asdulength, asdu, &apsCnt);
+    uint8_t apsCnt = 0;
+    uint8_t status = af_dataSend(srcEp, pDstEpInfo, clusterId, asdulength, asdu, &apsCnt);
 
     ev_buf_free(asdu);
 
@@ -684,7 +684,7 @@ _CODE_ZCL_ status_t zcl_sendInterPANCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 clus
  */
 _CODE_ZCL_ status_t zcl_foundationCmdHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pCmd->hdr.cmd) {
 #ifdef ZCL_READ
@@ -769,11 +769,11 @@ _CODE_ZCL_ status_t zcl_foundationCmdHandler(zclIncoming_t *pCmd)
 _CODE_ZCL_ void zcl_cmdHandler(void *pCmd)
 {
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pCmd;
-    u8 status = ZCL_STA_SUCCESS;
-    u8 toAppFlg = 0;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t toAppFlg = 0;
 
     zclIncoming_t inMsg;
-    TL_SETSTRUCTCONTENT(inMsg,0);
+    ZB_SETSTRUCTCONTENT(inMsg,0);
     inMsg.msg = pApsdeInd;
 
     /* Parse Header */
@@ -810,13 +810,13 @@ _CODE_ZCL_ void zcl_cmdHandler(void *pCmd)
     status = zcl_wwah_acceptCheck(&inMsg);
 #endif
 
-    u16 devEnableAttrLen = 0;
+    uint16_t devEnableAttrLen = 0;
     bool devEnable = TRUE;
 
     /* Check if basic device enable support */
     if (ZCL_STA_SUCCESS == zcl_getAttrVal(pApsdeInd->indInfo.dst_ep,
                                           ZCL_CLUSTER_GEN_BASIC, ZCL_ATTRID_BASIC_DEV_ENABLED,
-                                          &devEnableAttrLen, (u8*)&devEnable)) {
+                                          &devEnableAttrLen, (uint8_t*)&devEnable)) {
         if (!devEnable) {
             if ((pApsdeInd->indInfo.cluster_id != ZCL_CLUSTER_GEN_IDENTIFY) &&
                 (inMsg.hdr.frmCtrl.bf.type == ZCL_FRAME_TYPE_PROFILE_CMD) &&
@@ -885,7 +885,7 @@ _CODE_ZCL_ void zcl_rx_handler(void *pData)
 #if defined(CONFIG_ARCH_POSIX)
     zcl_cmdHandler(pData);
 #else
-    TL_SCHEDULE_TASK(zcl_cmdHandler, pData);
+    ZB_SCHEDULE_TASK(zcl_cmdHandler, pData);
 #endif
 }
 
@@ -908,39 +908,39 @@ _CODE_ZCL_ void zcl_rx_handler(void *pData)
  *
  * @return  status_t
  */
-_CODE_ZCL_ status_t zcl_read(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadCmd_t *readCmd)
+_CODE_ZCL_ status_t zcl_read(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadCmd_t *readCmd)
 {
-    u16 len = readCmd->numAttr * 2; // Attribute ID
+    uint16_t len = readCmd->numAttr * 2; // Attribute ID
 
     if (len == 0) {
     	return ZCL_STA_INVALID_FIELD;
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
     	return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < readCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readCmd->numAttr; i++) {
         *pBuf++ = LO_UINT16(readCmd->attrID[i]);
         *pBuf++ = HI_UINT16(readCmd->attrID[i]);
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_readRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadRspCmd_t *readRspCmd)
+_CODE_ZCL_ status_t zcl_readRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadRspCmd_t *readRspCmd)
 {
-    u16 len = 0;
+    uint16_t len = 0;
     zclReadRspStatus_t *pReadRspStatus = NULL;
 
-    for (u8 i = 0; i < readRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readRspCmd->numAttr; i++) {
         pReadRspStatus = &(readRspCmd->attrList[i]);
         len += 2 + 1;	//attr ID + status
         if (pReadRspStatus->status == ZCL_STA_SUCCESS) {
@@ -954,14 +954,14 @@ _CODE_ZCL_ status_t zcl_readRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < readRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readRspCmd->numAttr; i++) {
         pReadRspStatus = &(readRspCmd->attrList[i]);
         /* Fill attribute ID */
         *pBuf++ = LO_UINT16(pReadRspStatus->attrID);
@@ -974,14 +974,14 @@ _CODE_ZCL_ status_t zcl_readRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u
             *pBuf++ = pReadRspStatus->dataType;
             /* Fill attribute data */
             if (pReadRspStatus->data != NULL) {
-                u16 dataLen = zcl_getAttrSize(pReadRspStatus->dataType, pReadRspStatus->data);
+                uint16_t dataLen = zcl_getAttrSize(pReadRspStatus->dataType, pReadRspStatus->data);
                 memcpy(pBuf, pReadRspStatus->data, dataLen);
                 pBuf += dataLen;
             }
         }
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
@@ -990,21 +990,21 @@ _CODE_ZCL_ status_t zcl_readRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u
 
 _CODE_ZCL_ zclReadRspCmd_t *zcl_parseInReadRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = 0;
-    u16 dataLen = 0;
-    u16 attrDataLen = 0;
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = 0;
+    uint16_t dataLen = 0;
+    uint16_t attrDataLen = 0;
     zclReadRspStatus_t *pReadRspStatus = NULL;
 
     while (pBuf < (pCmd->pData + pCmd->dataLen)) {
-        u8 status;
+        uint8_t status;
 
         numAttr++;
         pBuf += 2;
 
         status = *pBuf++;
         if (status == ZCL_STA_SUCCESS) {
-            u8 dataType = *pBuf++;
+            uint8_t dataType = *pBuf++;
             attrDataLen = zcl_getAttrSize(dataType, pBuf);
             pBuf += attrDataLen;
 
@@ -1013,14 +1013,14 @@ _CODE_ZCL_ zclReadRspCmd_t *zcl_parseInReadRspCmd(zclIncoming_t *pCmd)
     }
 
     /* get the length of Read Response Command */
-    u16 len = sizeof(zclReadRspCmd_t) + numAttr * sizeof(zclReadRspStatus_t);
+    uint16_t len = sizeof(zclReadRspCmd_t) + numAttr * sizeof(zclReadRspStatus_t);
     zclReadRspCmd_t *p = (zclReadRspCmd_t *)ev_buf_allocate(len + dataLen);
     if (p != NULL) {
         pBuf = pCmd->pData;
-        u8 *pData = (u8 *)((u8 *)p + len);
+        uint8_t *pData = (uint8_t *)((uint8_t *)p + len);
 
         p->numAttr = numAttr;
-        for (u8 i = 0; i < p->numAttr; i++) {
+        for (uint8_t i = 0; i < p->numAttr; i++) {
             pReadRspStatus = &(p->attrList[i]);
             /* Build attribute ID */
             pReadRspStatus->attrID = BUILD_U16(pBuf[0], pBuf[1]);
@@ -1061,12 +1061,12 @@ _CODE_ZCL_ status_t zcl_readRspHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclReadCmd_t *zcl_parseInReadCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
+    uint8_t *pBuf = pCmd->pData;
 
     zclReadCmd_t *p = (zclReadCmd_t *)ev_buf_allocate(sizeof(zclReadCmd_t) + pCmd->dataLen);
     if (p != NULL) {
         p->numAttr = pCmd->dataLen / 2;	//attr ID
-        for (u8 i = 0; i < p->numAttr; i++) {
+        for (uint8_t i = 0; i < p->numAttr; i++) {
             p->attrID[i] = BUILD_U16(pBuf[0], pBuf[1]);
             pBuf += 2;
         }
@@ -1077,9 +1077,9 @@ _CODE_ZCL_ zclReadCmd_t *zcl_parseInReadCmd(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
 
     /* diagnostics last message LQI */
     g_sysDiags.lastMessageLQI = pCmd->msg->indInfo.lqi;
@@ -1103,7 +1103,7 @@ _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
      */
 
     /* Build Read Response Command */
-    u16 len = sizeof(zclReadRspCmd_t) + (pReadCmd->numAttr * sizeof(zclReadRspStatus_t));
+    uint16_t len = sizeof(zclReadRspCmd_t) + (pReadCmd->numAttr * sizeof(zclReadRspStatus_t));
     zclReadRspCmd_t *pReadRspCmd = (zclReadRspCmd_t *)ev_buf_allocate(len);
     if (!pReadRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
@@ -1111,7 +1111,7 @@ _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
 
     pReadRspCmd->numAttr = pReadCmd->numAttr;
 
-    for (u8 i = 0; i < pReadCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < pReadCmd->numAttr; i++) {
         zclAttrInfo_t *pAttrEntry = zcl_attrRead(endpoint, clusterId, pReadCmd->attrID[i], &status);
         if (pAttrEntry) {
             pReadRspCmd->attrList[i].dataType = pAttrEntry->type;
@@ -1122,7 +1122,7 @@ _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
     }
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -1165,25 +1165,25 @@ _CODE_ZCL_ status_t zcl_readHandler(zclIncoming_t *pCmd)
  *
  * @return  None
  */
-_CODE_ZCL_ status_t zcl_writeReq(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 cmd, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclWriteCmd_t *writeCmd)
+_CODE_ZCL_ status_t zcl_writeReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t cmd, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclWriteCmd_t *writeCmd)
 {
-    u16 len = 0;
+    uint16_t len = 0;
     zclWriteRec_t *pWriteRec = NULL;
 
-    for (u8 i = 0; i < writeCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < writeCmd->numAttr; i++) {
         pWriteRec = &(writeCmd->attrList[i]);
         len += 2 + 1;	//attrID + dataType
         len += zcl_getAttrSize(pWriteRec->dataType, pWriteRec->attrData);	//attribute data length
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < writeCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < writeCmd->numAttr; i++) {
         pWriteRec = &(writeCmd->attrList[i]);
         /* Fill attribute ID */
         *pBuf++ = LO_UINT16(pWriteRec->attrID);
@@ -1191,30 +1191,30 @@ _CODE_ZCL_ status_t zcl_writeReq(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, 
         /* Fill data type */
         *pBuf++ = pWriteRec->dataType;
         /* Fill attribute value */
-        u16 dataLen = zcl_getAttrSize(pWriteRec->dataType, pWriteRec->attrData);
+        uint16_t dataLen = zcl_getAttrSize(pWriteRec->dataType, pWriteRec->attrData);
         memcpy(pBuf, pWriteRec->attrData, dataLen);
         pBuf += dataLen;
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, cmd, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, cmd, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_writeRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclWriteRspCmd_t *writeRspCmd)
+_CODE_ZCL_ status_t zcl_writeRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclWriteRspCmd_t *writeRspCmd)
 {
-    u16 len = writeRspCmd->numAttr * (1 + 2);	//status + attrID
+    uint16_t len = writeRspCmd->numAttr * (1 + 2);	//status + attrID
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < writeRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < writeRspCmd->numAttr; i++) {
         *pBuf++ = writeRspCmd->attrList[i].status;
         *pBuf++ = LO_UINT16(writeRspCmd->attrList[i].attrID);
         *pBuf++ = HI_UINT16(writeRspCmd->attrList[i].attrID);
@@ -1224,7 +1224,7 @@ _CODE_ZCL_ status_t zcl_writeRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, 
         len = 1;
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_WRITE_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_WRITE_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
@@ -1233,10 +1233,10 @@ _CODE_ZCL_ status_t zcl_writeRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, 
 
 _CODE_ZCL_ zclWriteRspCmd_t *zcl_parseInWriteRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = (pCmd->dataLen == 1) ? 1 : (pCmd->dataLen / 3);
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = (pCmd->dataLen == 1) ? 1 : (pCmd->dataLen / 3);
 
-    u16 len = sizeof(zclWriteRspCmd_t) + numAttr * sizeof(zclWriteRspStatus_t);
+    uint16_t len = sizeof(zclWriteRspCmd_t) + numAttr * sizeof(zclWriteRspStatus_t);
     zclWriteRspCmd_t *p = (zclWriteRspCmd_t *)ev_buf_allocate(len);
     if (p != NULL) {
         p->numAttr = numAttr;
@@ -1245,7 +1245,7 @@ _CODE_ZCL_ zclWriteRspCmd_t *zcl_parseInWriteRspCmd(zclIncoming_t *pCmd)
             p->attrList[0].status = *pBuf;
             p->attrList[0].attrID = 0xFFFF;
         } else {
-            for (u8 i = 0; i < numAttr; i++) {
+            for (uint8_t i = 0; i < numAttr; i++) {
                 p->attrList[i].status = *pBuf++;
                 p->attrList[i].attrID = BUILD_U16(pBuf[0], pBuf[1]);
                 pBuf += 2;
@@ -1273,16 +1273,16 @@ _CODE_ZCL_ status_t zcl_writeRspHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclWriteCmd_t *zcl_parseInWriteCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = 0;
-    u16 dataLen = 0;
-    u16 attrDataLen = 0;
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = 0;
+    uint16_t dataLen = 0;
+    uint16_t attrDataLen = 0;
 
     while (pBuf < (pCmd->pData + pCmd->dataLen)) {
         numAttr++;
         pBuf += 2;
 
-        u8 dataType = *pBuf++;
+        uint8_t dataType = *pBuf++;
 
         attrDataLen = zcl_getAttrSize(dataType, pBuf);
         pBuf += attrDataLen;
@@ -1291,14 +1291,14 @@ _CODE_ZCL_ zclWriteCmd_t *zcl_parseInWriteCmd(zclIncoming_t *pCmd)
     }
 
     /* get the length of Write Command */
-    u16 len = sizeof(zclWriteCmd_t) + numAttr * sizeof(zclWriteRec_t);
+    uint16_t len = sizeof(zclWriteCmd_t) + numAttr * sizeof(zclWriteRec_t);
     zclWriteCmd_t *p = (zclWriteCmd_t *)ev_buf_allocate(len + dataLen);
     if (p != NULL) {
         pBuf = pCmd->pData;
-        u8 *pData = (u8 *)((u8 *)p + len);
+        uint8_t *pData = (uint8_t *)((uint8_t *)p + len);
 
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             zclWriteRec_t *pWriteRec = &(p->attrList[i]);
             /* Build attribute ID */
             pWriteRec->attrID = BUILD_U16(pBuf[0], pBuf[1]);
@@ -1321,12 +1321,12 @@ _CODE_ZCL_ zclWriteCmd_t *zcl_parseInWriteCmd(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_writeHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
     zclWriteRspCmd_t *pWriteRspCmd = NULL;
-    u8 succWriteAttrCnt = 0;
-    u8 failWriteAttrCnt = 0;
+    uint8_t succWriteAttrCnt = 0;
+    uint8_t failWriteAttrCnt = 0;
     bool rspSend = FALSE;
 
     /* Parse In Write Command */
@@ -1339,7 +1339,7 @@ _CODE_ZCL_ status_t zcl_writeHandler(zclIncoming_t *pCmd)
 
     if (pCmd->hdr.cmd == ZCL_CMD_WRITE) {
         /* Build Write Response Command */
-        u16 len = sizeof(zclWriteRspCmd_t) + (pWriteCmd->numAttr * sizeof(zclWriteRspStatus_t));
+        uint16_t len = sizeof(zclWriteRspCmd_t) + (pWriteCmd->numAttr * sizeof(zclWriteRspStatus_t));
         pWriteRspCmd = (zclWriteRspCmd_t *)ev_buf_allocate(len);
         if (!pWriteRspCmd) {
             return ZCL_STA_INSUFFICIENT_SPACE;
@@ -1351,7 +1351,7 @@ _CODE_ZCL_ status_t zcl_writeHandler(zclIncoming_t *pCmd)
         //rspSend = FALSE;
     }
 
-    for (u8 i = 0; i < pWriteCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < pWriteCmd->numAttr; i++) {
         zclWriteRec_t *pWriteRec = &(pWriteCmd->attrList[i]);
 
         status = zcl_attrWrite(endpoint, clusterId, pWriteRec, TRUE);
@@ -1375,7 +1375,7 @@ _CODE_ZCL_ status_t zcl_writeHandler(zclIncoming_t *pCmd)
         }
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstEp = pCmd->msg->indInfo.src_ep;
         dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -1402,9 +1402,9 @@ _CODE_ZCL_ status_t zcl_writeHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_writeUndividedHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
     zclWriteRec_t *pWriteRec = NULL;
     bool needWrite = TRUE;
 
@@ -1416,13 +1416,13 @@ _CODE_ZCL_ status_t zcl_writeUndividedHandler(zclIncoming_t *pCmd)
         pCmd->attrCmd = (void *)pWriteCmd;
     }
 
-    u16 len = sizeof(zclWriteRspCmd_t) + pWriteCmd->numAttr * sizeof(zclWriteRspStatus_t);
+    uint16_t len = sizeof(zclWriteRspCmd_t) + pWriteCmd->numAttr * sizeof(zclWriteRspStatus_t);
     zclWriteRspCmd_t *pWriteRspCmd = (zclWriteRspCmd_t *)ev_buf_allocate(len);
     if (!pWriteRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    for (u8 i = 0; i < pWriteCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < pWriteCmd->numAttr; i++) {
         pWriteRec = &(pWriteCmd->attrList[i]);
 
         status = zcl_attrWrite(endpoint, clusterId, pWriteRec, FALSE);
@@ -1438,7 +1438,7 @@ _CODE_ZCL_ status_t zcl_writeUndividedHandler(zclIncoming_t *pCmd)
     pWriteRspCmd->numAttr = pWriteCmd->numAttr;
 
     if (needWrite) {
-        for (u8 i = 0; i < pWriteCmd->numAttr; i++) {
+        for (uint8_t i = 0; i < pWriteCmd->numAttr; i++) {
             pWriteRec = &(pWriteCmd->attrList[i]);
 
             zcl_attrWrite(endpoint, clusterId, pWriteRec, TRUE);
@@ -1449,7 +1449,7 @@ _CODE_ZCL_ status_t zcl_writeUndividedHandler(zclIncoming_t *pCmd)
     }
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -1475,12 +1475,12 @@ _CODE_ZCL_ status_t zcl_writeUndividedHandler(zclIncoming_t *pCmd)
  **************************** Report ***************************************
  ***************************************************************************/
 #ifdef ZCL_REPORT
-_CODE_ZCL_ status_t zcl_configReport(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclCfgReportCmd_t *cfgReportCmd)
+_CODE_ZCL_ status_t zcl_configReport(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclCfgReportCmd_t *cfgReportCmd)
 {
-    u16 len = 0;
+    uint16_t len = 0;
     zclCfgReportRec_t *pReportRec = NULL;
 
-    for (u8 i = 0; i < cfgReportCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < cfgReportCmd->numAttr; i++) {
         pReportRec = &(cfgReportCmd->attrList[i]);
 
         len += 1 + 2;	//direction + attrID
@@ -1496,14 +1496,14 @@ _CODE_ZCL_ status_t zcl_configReport(u8 srcEp, epInfo_t *pDstEpInfo, u16 cluster
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < cfgReportCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < cfgReportCmd->numAttr; i++) {
         pReportRec = &(cfgReportCmd->attrList[i]);
 
         *pBuf++ = pReportRec->direction; //direction
@@ -1518,7 +1518,7 @@ _CODE_ZCL_ status_t zcl_configReport(u8 srcEp, epInfo_t *pDstEpInfo, u16 cluster
             *pBuf++ = HI_UINT16(pReportRec->maxReportInt);
 
             if (zcl_analogDataType(pReportRec->dataType)) {
-                u16 dataLen = zcl_getAttrSize(pReportRec->dataType, pReportRec->reportableChange);
+                uint16_t dataLen = zcl_getAttrSize(pReportRec->dataType, pReportRec->reportableChange);
                 memcpy(pBuf, pReportRec->reportableChange, dataLen);
                 pBuf += dataLen;
             }
@@ -1528,28 +1528,28 @@ _CODE_ZCL_ status_t zcl_configReport(u8 srcEp, epInfo_t *pDstEpInfo, u16 cluster
         }
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_CONFIG_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_CONFIG_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_configReportRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclCfgReportRspCmd_t *cfgReportRspCmd)
+_CODE_ZCL_ status_t zcl_configReportRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclCfgReportRspCmd_t *cfgReportRspCmd)
 {
-    u16 len = (cfgReportRspCmd->numAttr == 0) ? 1 : (cfgReportRspCmd->numAttr * (1 + 1 + 2));//status + direction + attrID
+    uint16_t len = (cfgReportRspCmd->numAttr == 0) ? 1 : (cfgReportRspCmd->numAttr * (1 + 1 + 2));//status + direction + attrID
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     if (cfgReportRspCmd->numAttr == 0) {
         *pBuf++ = ZCL_STA_SUCCESS;
     } else {
-        for (u8 i = 0; i < cfgReportRspCmd->numAttr; i++) {
+        for (uint8_t i = 0; i < cfgReportRspCmd->numAttr; i++) {
             *pBuf++ = cfgReportRspCmd->attrList[i].status;
             *pBuf++ = cfgReportRspCmd->attrList[i].direction;
             *pBuf++ = LO_UINT16(cfgReportRspCmd->attrList[i].attrID);
@@ -1557,43 +1557,43 @@ _CODE_ZCL_ status_t zcl_configReportRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clus
         }
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_CONFIG_REPORT_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_CONFIG_REPORT_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_readReportConfig(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadReportCfgCmd_t *readReportCfgCmd)
+_CODE_ZCL_ status_t zcl_readReportConfig(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadReportCfgCmd_t *readReportCfgCmd)
 {
-    u16 len = readReportCfgCmd->numAttr * (1 + 2); //direction + attrID
+    uint16_t len = readReportCfgCmd->numAttr * (1 + 2); //direction + attrID
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < readReportCfgCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readReportCfgCmd->numAttr; i++) {
         *pBuf++ = readReportCfgCmd->attrList[i].direction;
         *pBuf++ = LO_UINT16(readReportCfgCmd->attrList[i].attrID);
         *pBuf++ = HI_UINT16(readReportCfgCmd->attrList[i].attrID);
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_REPORT_CFG, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_REPORT_CFG, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_readReportConfigRsp( u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadReportCfgRspCmd_t *readReportCfgRspCmd)
+_CODE_ZCL_ status_t zcl_readReportConfigRsp( uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadReportCfgRspCmd_t *readReportCfgRspCmd)
 {
-    u16 len = 0;
+    uint16_t len = 0;
     zclReportCfgRspRec_t *pRec = NULL;
 
-    for (u8 i = 0; i < readReportCfgRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readReportCfgRspCmd->numAttr; i++) {
         pRec = &(readReportCfgRspCmd->attrList[i]);
 
         len += 1 + 1 + 2; //status + direction + attrID
@@ -1610,14 +1610,14 @@ _CODE_ZCL_ status_t zcl_readReportConfigRsp( u8 srcEp, epInfo_t *pDstEpInfo, u16
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < readReportCfgRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < readReportCfgRspCmd->numAttr; i++) {
         pRec = &(readReportCfgRspCmd->attrList[i]);
 
         *pBuf++ = pRec->status; //status;
@@ -1634,7 +1634,7 @@ _CODE_ZCL_ status_t zcl_readReportConfigRsp( u8 srcEp, epInfo_t *pDstEpInfo, u16
                 *pBuf++ = HI_UINT16(pRec->maxReportInt);
 
                 if (zcl_analogDataType(pRec->dataType)) {
-                    u16 dataLen = zcl_getAttrSize(pRec->dataType, pRec->reportableChange);
+                    uint16_t dataLen = zcl_getAttrSize(pRec->dataType, pRec->reportableChange);
                     memcpy(pBuf, pRec->reportableChange, dataLen);
                     pBuf += dataLen;
                 }
@@ -1645,69 +1645,69 @@ _CODE_ZCL_ status_t zcl_readReportConfigRsp( u8 srcEp, epInfo_t *pDstEpInfo, u16
         }
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_REPORT_CFG_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_READ_REPORT_CFG_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_report(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 direction, u8 seqNo, u16 manuCode, u16 clusterId, u16 attrID, u8 dataType, u8 *pData)
+_CODE_ZCL_ status_t zcl_report(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, uint16_t manuCode, uint16_t clusterId, uint16_t attrID, uint8_t dataType, uint8_t *pData)
 {
-    u16 len = 0;
-    u8 attrSize = zcl_getAttrSize(dataType, pData);
+    uint16_t len = 0;
+    uint8_t attrSize = zcl_getAttrSize(dataType, pData);
 
     len += 2 + 1; //attrID + data type
     len += attrSize;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(attrID);
     *pBuf++ = HI_UINT16(attrID);
     *pBuf++ = dataType;
     memcpy(pBuf, pData, attrSize);
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_reportAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 direction, u8 seqNo, u16 manuCode, u16 clusterId, zclReportCmd_t *pReportAttrs)
+_CODE_ZCL_ status_t zcl_reportAttrs(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, uint16_t manuCode, uint16_t clusterId, zclReportCmd_t *pReportAttrs)
 {
-    u16 len = 0;
+    uint16_t len = 0;
     zclReport_t *pAttr = NULL;
 
-    for (u8 i = 0; i < pReportAttrs->numAttr; i++) {
+    for (uint8_t i = 0; i < pReportAttrs->numAttr; i++) {
         pAttr = &(pReportAttrs->attrList[i]);
         len += 2 + 1; //attrID + dataType
         len += zcl_getAttrSize(pAttr->dataType, pAttr->attrData);
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
-    for (u8 i = 0; i < pReportAttrs->numAttr; i++) {
+    for (uint8_t i = 0; i < pReportAttrs->numAttr; i++) {
         pAttr = &(pReportAttrs->attrList[i]);
         *pBuf++ = LO_UINT16(pAttr->attrID);
         *pBuf++ = HI_UINT16(pAttr->attrID);
         *pBuf++ = pAttr->dataType;
-        u16 dataLen = zcl_getAttrSize(pAttr->dataType, pAttr->attrData);
+        uint16_t dataLen = zcl_getAttrSize(pAttr->dataType, pAttr->attrData);
         memcpy(pBuf, pAttr->attrData, dataLen);
         pBuf += dataLen;
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_REPORT, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
@@ -1716,12 +1716,12 @@ _CODE_ZCL_ status_t zcl_reportAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDe
 
 _CODE_ZCL_ zclCfgReportCmd_t *zcl_parseInCfgReportCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 direction;
-    u8 dataType;
-    u8 numAttr = 0;
-    u8 reportChangeLen;
-    u16 dataLen = 0;
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t direction;
+    uint8_t dataType;
+    uint8_t numAttr = 0;
+    uint8_t reportChangeLen;
+    uint16_t dataLen = 0;
     zclCfgReportRec_t *pCfgReportRec = NULL;
 
     while (pBuf < (pCmd->pData + pCmd->dataLen)) {
@@ -1747,17 +1747,17 @@ _CODE_ZCL_ zclCfgReportCmd_t *zcl_parseInCfgReportCmd(zclIncoming_t *pCmd)
         }
     }
 
-    u8 len = sizeof(zclCfgReportCmd_t) + numAttr * sizeof(zclCfgReportRec_t);
+    uint8_t len = sizeof(zclCfgReportCmd_t) + numAttr * sizeof(zclCfgReportRec_t);
     zclCfgReportCmd_t *p = (zclCfgReportCmd_t *)ev_buf_allocate(len + dataLen);
     if (p != NULL) {
-        memset((u8 *)p , 0, len + dataLen);
+        memset((uint8_t *)p , 0, len + dataLen);
 
         pBuf = pCmd->pData;
-        u8 *pData = (u8 *)((u8 *)p + len);
+        uint8_t *pData = (uint8_t *)((uint8_t *)p + len);
 
         p->numAttr = numAttr;
 
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             pCfgReportRec = &(p->attrList[i]);
 
             pCfgReportRec->direction = *pBuf++;
@@ -1789,7 +1789,7 @@ _CODE_ZCL_ zclCfgReportCmd_t *zcl_parseInCfgReportCmd(zclIncoming_t *pCmd)
     return p;
 }
 
-_CODE_ZCL_ status_t zcl_configureReporting(u8 endpoint, u16 profileId, u16 clusterId, zclCfgReportRec_t *pCfgReportRec)
+_CODE_ZCL_ status_t zcl_configureReporting(uint8_t endpoint, uint16_t profileId, uint16_t clusterId, zclCfgReportRec_t *pCfgReportRec)
 {
     zclAttrInfo_t *pAttrEntry = zcl_findAttribute(endpoint, clusterId, pCfgReportRec->attrID);
     if (!pAttrEntry) {
@@ -1846,11 +1846,11 @@ _CODE_ZCL_ status_t zcl_configureReporting(u8 endpoint, u16 profileId, u16 clust
 
 _CODE_ZCL_ status_t zcl_configReportHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 profileId = pCmd->msg->indInfo.profile_id;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
-    u8 cfgReportChange = 0;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t profileId = pCmd->msg->indInfo.profile_id;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t cfgReportChange = 0;
 
     /* Parse In Configure Report Command */
     zclCfgReportCmd_t *pCfgReportCmd = zcl_parseInCfgReportCmd(pCmd);
@@ -1864,7 +1864,7 @@ _CODE_ZCL_ status_t zcl_configReportHandler(zclIncoming_t *pCmd)
         return ZCL_STA_INVALID_FIELD;
     }
 
-    u8 len = sizeof(zclCfgReportRspCmd_t) + pCfgReportCmd->numAttr * sizeof(zclCfgReportStatus_t);
+    uint8_t len = sizeof(zclCfgReportRspCmd_t) + pCfgReportCmd->numAttr * sizeof(zclCfgReportStatus_t);
     zclCfgReportRspCmd_t *pCfgReportRspCmd = (zclCfgReportRspCmd_t *)ev_buf_allocate(len);
     if (!pCfgReportRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
@@ -1872,7 +1872,7 @@ _CODE_ZCL_ status_t zcl_configReportHandler(zclIncoming_t *pCmd)
 
     pCfgReportRspCmd->numAttr = 0;
 
-    for (u8 i = 0; i < pCfgReportCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < pCfgReportCmd->numAttr; i++) {
         zclCfgReportRec_t *pCfgReportRec = &(pCfgReportCmd->attrList[i]);
 
         status = zcl_configureReporting(endpoint, profileId, clusterId, pCfgReportRec);
@@ -1892,7 +1892,7 @@ _CODE_ZCL_ status_t zcl_configReportHandler(zclIncoming_t *pCmd)
     }
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -1915,10 +1915,10 @@ _CODE_ZCL_ status_t zcl_configReportHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclCfgReportRspCmd_t *zcl_parseInCfgReportRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = (pCmd->dataLen == 1) ? 1 : (pCmd->dataLen / (1 + 1 + 2));//status + direction + attrID
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = (pCmd->dataLen == 1) ? 1 : (pCmd->dataLen / (1 + 1 + 2));//status + direction + attrID
 
-    u16 len = sizeof(zclCfgReportRspCmd_t) + numAttr * sizeof(zclCfgReportStatus_t);
+    uint16_t len = sizeof(zclCfgReportRspCmd_t) + numAttr * sizeof(zclCfgReportStatus_t);
     zclCfgReportRspCmd_t *p = (zclCfgReportRspCmd_t *)ev_buf_allocate(len);
     if (p != NULL) {
         p->numAttr = numAttr;
@@ -1927,7 +1927,7 @@ _CODE_ZCL_ zclCfgReportRspCmd_t *zcl_parseInCfgReportRspCmd(zclIncoming_t *pCmd)
             p->attrList[0].direction = 0xFF;
             p->attrList[0].attrID = 0xFFFF;
         } else {
-            for (u8 i = 0; i < p->numAttr; i++) {
+            for (uint8_t i = 0; i < p->numAttr; i++) {
                 p->attrList[i].status = *pBuf++;
                 p->attrList[i].direction = *pBuf++;
                 p->attrList[i].attrID = BUILD_U16(pBuf[0], pBuf[1]);
@@ -1939,7 +1939,7 @@ _CODE_ZCL_ zclCfgReportRspCmd_t *zcl_parseInCfgReportRspCmd(zclIncoming_t *pCmd)
     return p;
 }
 
-_CODE_ZCL_ u8 zcl_configReportRspHandler(zclIncoming_t *pCmd)
+_CODE_ZCL_ uint8_t zcl_configReportRspHandler(zclIncoming_t *pCmd)
 {
     zclCfgReportRspCmd_t *pCfgReportRspCmd = NULL;
 
@@ -1956,14 +1956,14 @@ _CODE_ZCL_ u8 zcl_configReportRspHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclReadReportCfgCmd_t *zcl_parseInReadReportCfgCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = pCmd->dataLen / (1 + 2); //direction + attrID
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = pCmd->dataLen / (1 + 2); //direction + attrID
 
-    u16 len = sizeof(zclReadReportCfgCmd_t) + numAttr * sizeof(zclReadReportCfgRec_t);
+    uint16_t len = sizeof(zclReadReportCfgCmd_t) + numAttr * sizeof(zclReadReportCfgRec_t);
     zclReadReportCfgCmd_t *p = (zclReadReportCfgCmd_t *)ev_buf_allocate(len);
     if (p != NULL) {
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             p->attrList[i].direction = *pBuf++;
             p->attrList[i].attrID = BUILD_U16(pBuf[0], pBuf[1]);
             pBuf += 2;
@@ -1975,9 +1975,9 @@ _CODE_ZCL_ zclReadReportCfgCmd_t *zcl_parseInReadReportCfgCmd(zclIncoming_t *pCm
 
 _CODE_ZCL_ status_t zcl_readReportCfgHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
 
     /* Parse In Read Report Configure Command */
     zclReadReportCfgCmd_t *pReadReportCfgCmd = zcl_parseInReadReportCfgCmd(pCmd);
@@ -1987,7 +1987,7 @@ _CODE_ZCL_ status_t zcl_readReportCfgHandler(zclIncoming_t *pCmd)
         pCmd->attrCmd = (void *)pReadReportCfgCmd;
     }
 
-    u8 len = sizeof(zclReadReportCfgRspCmd_t) + pReadReportCfgCmd->numAttr * sizeof(zclReportCfgRspRec_t);
+    uint8_t len = sizeof(zclReadReportCfgRspCmd_t) + pReadReportCfgCmd->numAttr * sizeof(zclReportCfgRspRec_t);
     zclReadReportCfgRspCmd_t *pReadReportCfgRspCmd = (zclReadReportCfgRspCmd_t *)ev_buf_allocate(len);
     if (!pReadReportCfgRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
@@ -1995,7 +1995,7 @@ _CODE_ZCL_ status_t zcl_readReportCfgHandler(zclIncoming_t *pCmd)
 
     pReadReportCfgRspCmd->numAttr = pReadReportCfgCmd->numAttr;
 
-    for (u8 i = 0; i < pReadReportCfgCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < pReadReportCfgCmd->numAttr; i++) {
         zclAttrInfo_t *pAttrEntry = zcl_findAttribute(endpoint, clusterId, pReadReportCfgCmd->attrList[i].attrID);
         if (pAttrEntry) {
             if (pReadReportCfgCmd->attrList[i].direction == ZCL_SEND_ATTR_REPORTS) {
@@ -2028,7 +2028,7 @@ _CODE_ZCL_ status_t zcl_readReportCfgHandler(zclIncoming_t *pCmd)
     }
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -2044,20 +2044,20 @@ _CODE_ZCL_ status_t zcl_readReportCfgHandler(zclIncoming_t *pCmd)
         status = ZCL_STA_CMD_HAS_RESP;
     }
 
-    ev_buf_free((u8 *)pReadReportCfgRspCmd);
+    ev_buf_free((uint8_t *)pReadReportCfgRspCmd);
 
     return status;
 }
 
 _CODE_ZCL_ zclReadReportCfgRspCmd_t *zcl_parseInReadReportCfgRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = 0;
-    u8 status;
-    u8 direction;
-    u8 dataType;
-    u8 reportChangeLen = 0;
-    u16 dataLen = 0;
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = 0;
+    uint8_t status;
+    uint8_t direction;
+    uint8_t dataType;
+    uint8_t reportChangeLen = 0;
+    uint16_t dataLen = 0;
     zclReportCfgRspRec_t *pRec = NULL;
 
     while (pBuf < (pCmd->pData + pCmd->dataLen)) {
@@ -2084,14 +2084,14 @@ _CODE_ZCL_ zclReadReportCfgRspCmd_t *zcl_parseInReadReportCfgRspCmd(zclIncoming_
         }
     }
 
-    u16 len = sizeof(zclReadReportCfgRspCmd_t) + numAttr * sizeof(zclReportCfgRspRec_t);
+    uint16_t len = sizeof(zclReadReportCfgRspCmd_t) + numAttr * sizeof(zclReportCfgRspRec_t);
     zclReadReportCfgRspCmd_t *p = (zclReadReportCfgRspCmd_t *)ev_buf_allocate(len + dataLen);
     if (p != NULL) {
         pBuf = pCmd->pData;
-        u8 *pData = (u8 *)((u8 *)p + len);
+        uint8_t *pData = (uint8_t *)((uint8_t *)p + len);
 
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             pRec = &(p->attrList[i]);
 
             pRec->status = *pBuf++;
@@ -2143,11 +2143,11 @@ _CODE_ZCL_ status_t zcl_readReportCfgRspHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclReportCmd_t *zcl_parseInReportCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = 0;
-    u8 dataType;
-    u16 attrDataLen = 0;
-    u16 dataLen = 0;
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = 0;
+    uint8_t dataType;
+    uint16_t attrDataLen = 0;
+    uint16_t dataLen = 0;
     zclReport_t *pReportRec = NULL;
 
     while (pBuf < (pCmd->pData + pCmd->dataLen)) {
@@ -2162,14 +2162,14 @@ _CODE_ZCL_ zclReportCmd_t *zcl_parseInReportCmd(zclIncoming_t *pCmd)
         dataLen += attrDataLen;
     }
 
-    u16 len = sizeof(zclReportCmd_t) + numAttr * sizeof(zclReport_t);
+    uint16_t len = sizeof(zclReportCmd_t) + numAttr * sizeof(zclReport_t);
     zclReportCmd_t* p = (zclReportCmd_t *)ev_buf_allocate(len + dataLen);
     if (p != NULL) {
         pBuf = pCmd->pData;
-        u8 *pData = (u8 *)((u8 *)p + len);
+        uint8_t *pData = (uint8_t *)((uint8_t *)p + len);
 
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             pReportRec = &(p->attrList[i]);
 
             pReportRec->attrID = BUILD_U16(pBuf[0], pBuf[1]);
@@ -2209,16 +2209,16 @@ _CODE_ZCL_ status_t zcl_reportHandler(zclIncoming_t *pCmd)
  **************************** Default **************************************
  ***************************************************************************/
 
-_CODE_ZCL_ status_t zcl_sendDfltRsp(zclIncoming_t *inMsg, u8 cmdId, u8 status)
+_CODE_ZCL_ status_t zcl_sendDfltRsp(zclIncoming_t *inMsg, uint8_t cmdId, uint8_t status)
 {
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)inMsg->msg;
-    u8 srcEp = pApsdeInd->indInfo.dst_ep;
-    u8 buf[2];
+    uint8_t srcEp = pApsdeInd->indInfo.dst_ep;
+    uint8_t buf[2];
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
-    u8 dir = inMsg->hdr.frmCtrl.bf.dir ? 0 : 1;
+    uint8_t dir = inMsg->hdr.frmCtrl.bf.dir ? 0 : 1;
 
     dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -2237,7 +2237,7 @@ _CODE_ZCL_ status_t zcl_sendDfltRsp(zclIncoming_t *inMsg, u8 cmdId, u8 status)
 
 _CODE_ZCL_ zclDefaultRspCmd_t *zcl_parseInDftRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
+    uint8_t *pBuf = pCmd->pData;
 
     zclDefaultRspCmd_t *p = (zclDefaultRspCmd_t *)ev_buf_allocate(sizeof(zclDefaultRspCmd_t));
     if (p != NULL) {
@@ -2250,8 +2250,8 @@ _CODE_ZCL_ zclDefaultRspCmd_t *zcl_parseInDftRspCmd(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_dfltRspHandler(zclIncoming_t *pCmd)
 {
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
 
     if (!pCmd->hdr.frmCtrl.bf.disDefResp) {
         pCmd->hdr.frmCtrl.bf.disDefResp = 1;
@@ -2269,12 +2269,12 @@ _CODE_ZCL_ status_t zcl_dfltRspHandler(zclIncoming_t *pCmd)
     if ((clusterId == ZCL_CLUSTER_OTA) &&
         (pDfltRspCmd->commandID == ZCL_CMD_OTA_UPGRADE_END_REQ) &&
         (pDfltRspCmd->statusCode == ZCL_STA_ABORT)) {
-        u16 dataLen = 0;
-        u8 data = 0;
+        uint16_t dataLen = 0;
+        uint8_t data = 0;
 
         if (ZCL_STA_SUCCESS == zcl_getAttrVal(endpoint, ZCL_CLUSTER_OTA,
                                               ZCL_ATTRID_OTA_IMAGE_UPGRADE_STATUS,
-                                              &dataLen, (u8 *)&data)) {
+                                              &dataLen, (uint8_t *)&data)) {
             if (data == IMAGE_UPGRADE_STATUS_DOWNLOAD_COMPLETE) {
                 ota_upgradeAbort();
             }
@@ -2290,9 +2290,9 @@ _CODE_ZCL_ status_t zcl_dfltRspHandler(zclIncoming_t *pCmd)
  ***************************************************************************/
 #ifdef ZCL_DISCOVER
 
-_CODE_ZCL_ status_t zcl_discAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrCmd_t *discAttrCmd)
+_CODE_ZCL_ status_t zcl_discAttrs(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrCmd_t *discAttrCmd)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = LO_UINT16(discAttrCmd->startAttr);
     buf[1] = HI_UINT16(discAttrCmd->startAttr);
@@ -2301,36 +2301,36 @@ _CODE_ZCL_ status_t zcl_discAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId,
     return zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR, FALSE, direction, disableDefaultRsp, manuCode, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_discAttrsRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrRspCmd_t *discAttrRspCmd)
+_CODE_ZCL_ status_t zcl_discAttrsRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrRspCmd_t *discAttrRspCmd)
 {
-    u16 len = 1; //complete
+    uint16_t len = 1; //complete
 
     len += discAttrRspCmd->numAttr * (2 + 1); //attrID + dataType
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = discAttrRspCmd->discComplete;
-    for (u8 i = 0; i < discAttrRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < discAttrRspCmd->numAttr; i++) {
         *pBuf++ = LO_UINT16(discAttrRspCmd->attrList[i].attrID);
         *pBuf++ = HI_UINT16(discAttrRspCmd->attrList[i].attrID);
         *pBuf++ = discAttrRspCmd->attrList[i].dataType;
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_discAttrsExtended(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrCmd_t *discAttrCmd)
+_CODE_ZCL_ status_t zcl_discAttrsExtended(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrCmd_t *discAttrCmd)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = LO_UINT16(discAttrCmd->startAttr);
     buf[1] = HI_UINT16(discAttrCmd->startAttr);
@@ -2339,28 +2339,28 @@ _CODE_ZCL_ status_t zcl_discAttrsExtended(u8 srcEp, epInfo_t *pDstEpInfo, u16 cl
     return zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR_EXTD, FALSE, direction, disableDefaultRsp, manuCode, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_discAttrsExtendedRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrExtRspCmd_t *discAttrExtRspCmd)
+_CODE_ZCL_ status_t zcl_discAttrsExtendedRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrExtRspCmd_t *discAttrExtRspCmd)
 {
-    u16 len = 1; //complete
+    uint16_t len = 1; //complete
 
     len += discAttrExtRspCmd->numAttr * (2 + 1 + 1); //attrID + dataType + accessControl
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = discAttrExtRspCmd->discComplete;
-    for (u8 i = 0; i < discAttrExtRspCmd->numAttr; i++) {
+    for (uint8_t i = 0; i < discAttrExtRspCmd->numAttr; i++) {
         *pBuf++ = LO_UINT16(discAttrExtRspCmd->extAttrInfo[i].attrID);
         *pBuf++ = HI_UINT16(discAttrExtRspCmd->extAttrInfo[i].attrID);
         *pBuf++ = discAttrExtRspCmd->extAttrInfo[i].dataType;
         *pBuf++ = discAttrExtRspCmd->extAttrInfo[i].accessControl;
     }
 
-    u8 status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR_EXTD_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
+    uint8_t status = zcl_sendCmd(srcEp, pDstEpInfo, clusterId, ZCL_CMD_DISCOVER_ATTR_EXTD_RSP, FALSE, direction, disableDefaultRsp, manuCode, seqNo, len, buf);
 
     ev_buf_free(buf);
 
@@ -2369,7 +2369,7 @@ _CODE_ZCL_ status_t zcl_discAttrsExtendedRsp(u8 srcEp, epInfo_t *pDstEpInfo, u16
 
 _CODE_ZCL_ zclDiscoverAttrCmd_t *zcl_parseInDiscAttrsCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
+    uint8_t *pBuf = pCmd->pData;
 
     zclDiscoverAttrCmd_t *p = (zclDiscoverAttrCmd_t *)ev_buf_allocate(sizeof(zclDiscoverAttrCmd_t));
     if (p != NULL) {
@@ -2383,10 +2383,10 @@ _CODE_ZCL_ zclDiscoverAttrCmd_t *zcl_parseInDiscAttrsCmd(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_discAttrsHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
-    u8 numAttr = 0;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t numAttr = 0;
     bool status_disComplete = TRUE;
 
     /* Parse In Discover Attributes Command */
@@ -2403,7 +2403,7 @@ _CODE_ZCL_ status_t zcl_discAttrsHandler(zclIncoming_t *pCmd)
 
     pCluster = zcl_findCluster(endpoint, clusterId);
     if (pCluster) {
-        for (u8 i = 0; i < pCluster->attrNum; i++) {
+        for (uint8_t i = 0; i < pCluster->attrNum; i++) {
             if (numAttr >= pDiscAttrCmd->maxAttrIDs) {
                 break;
             }
@@ -2416,17 +2416,17 @@ _CODE_ZCL_ status_t zcl_discAttrsHandler(zclIncoming_t *pCmd)
         }
     }
 
-    u16 len = sizeof(zclDiscoverAttrRspCmd_t) + numAttr * sizeof(zclDiscoverAttrInfo_t);
+    uint16_t len = sizeof(zclDiscoverAttrRspCmd_t) + numAttr * sizeof(zclDiscoverAttrInfo_t);
     zclDiscoverAttrRspCmd_t *pDiscAttrRspCmd = (zclDiscoverAttrRspCmd_t *)ev_buf_allocate(len);
     if (!pDiscAttrRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
     if (numAttr > 0) {
-        u8 j = 0;
+        uint8_t j = 0;
         pCluster = zcl_findCluster(endpoint, clusterId);
         if (pCluster) {
-            for (u8 i = 0; i < pCluster->attrNum; i++) {
+            for (uint8_t i = 0; i < pCluster->attrNum; i++) {
                 pAttrEntry = (zclAttrInfo_t *)&pCluster->attrTable[i];
 
                 if (pAttrEntry->id >= pDiscAttrCmd->startAttr) {
@@ -2444,7 +2444,7 @@ _CODE_ZCL_ status_t zcl_discAttrsHandler(zclIncoming_t *pCmd)
     pDiscAttrRspCmd->numAttr = numAttr;
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -2467,10 +2467,10 @@ _CODE_ZCL_ status_t zcl_discAttrsHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ status_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u16 clusterId = pCmd->msg->indInfo.cluster_id;
-    u8 endpoint = pCmd->msg->indInfo.dst_ep;
-    u8 numAttr = 0;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint16_t clusterId = pCmd->msg->indInfo.cluster_id;
+    uint8_t endpoint = pCmd->msg->indInfo.dst_ep;
+    uint8_t numAttr = 0;
     bool status_discComplete = TRUE;
 
     /* Parse In Discover Attributes Command */
@@ -2487,7 +2487,7 @@ _CODE_ZCL_ status_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd)
 
     pCluster = zcl_findCluster(endpoint, clusterId);
     if (pCluster) {
-        for (u8 i = 0; i < pCluster->attrNum; i++) {
+        for (uint8_t i = 0; i < pCluster->attrNum; i++) {
             if (numAttr >= pDiscAttrCmd->maxAttrIDs) {
                 break;
             }
@@ -2500,17 +2500,17 @@ _CODE_ZCL_ status_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd)
         }
     }
 
-    u16 len = sizeof(zclDiscoverAttrExtRspCmd_t) + numAttr * sizeof(zclExtAttrInfo_t);
+    uint16_t len = sizeof(zclDiscoverAttrExtRspCmd_t) + numAttr * sizeof(zclExtAttrInfo_t);
     zclDiscoverAttrExtRspCmd_t *pDiscAttrExtRspCmd = (zclDiscoverAttrExtRspCmd_t *)ev_buf_allocate(len);
     if (!pDiscAttrExtRspCmd) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
     if (numAttr > 0) {
-        u8 j = 0;
+        uint8_t j = 0;
         pCluster = zcl_findCluster(endpoint, clusterId);
         if (pCluster) {
-            for (u8 i = 0; i < pCluster->attrNum; i++) {
+            for (uint8_t i = 0; i < pCluster->attrNum; i++) {
                 pAttrEntry = (zclAttrInfo_t *)&pCluster->attrTable[i];
 
                 if (pAttrEntry->id >= pDiscAttrCmd->startAttr) {
@@ -2529,7 +2529,7 @@ _CODE_ZCL_ status_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd)
     pDiscAttrExtRspCmd->numAttr = numAttr;
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     dstEp.dstEp = pCmd->msg->indInfo.src_ep;
     dstEp.profileId = pCmd->msg->indInfo.profile_id;
@@ -2552,15 +2552,15 @@ _CODE_ZCL_ status_t zcl_discAttrsExtendedHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclDiscoverAttrRspCmd_t *zcl_parseInDiscAttrsRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = (pCmd->dataLen - 1 /* complete */) / (2 + 1); //attrID + dataType
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = (pCmd->dataLen - 1 /* complete */) / (2 + 1); //attrID + dataType
 
-    u16 len = sizeof(zclDiscoverAttrRspCmd_t) + numAttr * sizeof(zclDiscoverAttrInfo_t);
+    uint16_t len = sizeof(zclDiscoverAttrRspCmd_t) + numAttr * sizeof(zclDiscoverAttrInfo_t);
     zclDiscoverAttrRspCmd_t *p = (zclDiscoverAttrRspCmd_t *)ev_buf_allocate(len);
     if (p != NULL) {
         p->discComplete = *pBuf++;
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             p->attrList[i].attrID = BUILD_U16(pBuf[0], pBuf[1]);
             pBuf += 2;
             p->attrList[i].dataType = *pBuf++;
@@ -2587,7 +2587,7 @@ _CODE_ZCL_ status_t zcl_discAttrsRspHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclDiscoverCmdsCmd_t *zcl_parseInDiscCmdsCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
+    uint8_t *pBuf = pCmd->pData;
 
     zclDiscoverCmdsCmd_t *p = (zclDiscoverCmdsCmd_t *)ev_buf_allocate(sizeof(zclDiscoverCmdsCmd_t));
     if (p != NULL) {
@@ -2605,15 +2605,15 @@ _CODE_ZCL_ status_t zcl_discCmdsHandler(zclIncoming_t *pCmd)
 
 _CODE_ZCL_ zclDiscoverAttrExtRspCmd_t *zcl_parseInDiscAttrsExtRspCmd(zclIncoming_t *pCmd)
 {
-    u8 *pBuf = pCmd->pData;
-    u8 numAttr = (pCmd->dataLen - 1 /* complete */) / (2 + 1 + 1); //attrID + dataType + accessControl
+    uint8_t *pBuf = pCmd->pData;
+    uint8_t numAttr = (pCmd->dataLen - 1 /* complete */) / (2 + 1 + 1); //attrID + dataType + accessControl
 
-    u16 len = sizeof(zclDiscoverAttrExtRspCmd_t) + numAttr * sizeof(zclExtAttrInfo_t);
+    uint16_t len = sizeof(zclDiscoverAttrExtRspCmd_t) + numAttr * sizeof(zclExtAttrInfo_t);
     zclDiscoverAttrExtRspCmd_t *p = (zclDiscoverAttrExtRspCmd_t *)ev_buf_allocate(len);
     if (p != NULL) {
         p->discComplete = *pBuf++;
         p->numAttr = numAttr;
-        for (u8 i = 0; i < numAttr; i++) {
+        for (uint8_t i = 0; i < numAttr; i++) {
             p->extAttrInfo[i].attrID = BUILD_U16(pBuf[0], pBuf[1]);
             pBuf += 2;
             p->extAttrInfo[i].dataType = *pBuf++;

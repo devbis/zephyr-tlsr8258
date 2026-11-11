@@ -50,15 +50,15 @@
  */
 static status_t zcl_ota_cmdHandler(zclIncoming_t *pInMsg);
 
-_CODE_ZCL_ status_t zcl_ota_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_ota_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_OTA, manuCode, attrNum, attrTbl, zcl_ota_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_ota_imageNotifySend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_imageNotify_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_imageNotifySend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_imageNotify_t *pReq)
 {
-    u8 buf[10];
-    u8 *pBuf = buf;
+    uint8_t buf[10];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->payloadType;
     *pBuf++ = pReq->queryJitter;
@@ -78,13 +78,13 @@ _CODE_ZCL_ status_t zcl_ota_imageNotifySend(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_IMAGE_NOTIFY, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_queryNextImageReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_queryNextImageReq_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_queryNextImageReqSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_queryNextImageReq_t *pReq)
 {
-    u8 buf[11];
-    u8 *pBuf = buf;
+    uint8_t buf[11];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->fc;
     *pBuf++ = LO_UINT16(pReq->manuCode);
@@ -101,13 +101,13 @@ _CODE_ZCL_ status_t zcl_ota_queryNextImageReqSend(u8 srcEp, epInfo_t *pDstEpInfo
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_QUERY_NEXT_IMAGE_REQ, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_queryNextImageRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_queryNextImageRsp_t *pRsp)
+_CODE_ZCL_ status_t zcl_ota_queryNextImageRspSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_queryNextImageRsp_t *pRsp)
 {
-    u8 buf[13];
-    u8 *pBuf = buf;
+    uint8_t buf[13];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pRsp->st;
     if (pRsp->st == ZCL_STA_SUCCESS) {
@@ -126,13 +126,13 @@ _CODE_ZCL_ status_t zcl_ota_queryNextImageRspSend(u8 srcEp, epInfo_t *pDstEpInfo
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_QUERY_NEXT_IMAGE_RSP, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_imageBlockReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_imageBlockReq_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_imageBlockReqSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_imageBlockReq_t *pReq)
 {
-    u8 buf[24];
-    u8 *pBuf = buf;
+    uint8_t buf[24];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->fc;
     *pBuf++ = LO_UINT16(pReq->manuCode);
@@ -158,13 +158,13 @@ _CODE_ZCL_ status_t zcl_ota_imageBlockReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_IMAGE_BLOCK_REQ, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_imagePageReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_imagePageReq_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_imagePageReqSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_imagePageReq_t *pReq)
 {
-    u8 buf[26];
-    u8 *pBuf = buf;
+    uint8_t buf[26];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->fc;
     *pBuf++ = LO_UINT16(pReq->manuCode);
@@ -190,12 +190,12 @@ _CODE_ZCL_ status_t zcl_ota_imagePageReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_IMAGE_PAGE_REQ, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_imageBlockRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_imageBlockRsp_t *pRsp)
+_CODE_ZCL_ status_t zcl_ota_imageBlockRspSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_imageBlockRsp_t *pRsp)
 {
-    u8 len = 0;
+    uint8_t len = 0;
 
     if (pRsp->st == ZCL_STA_SUCCESS) {
         len = 14 + pRsp->rsp.success.dataSize;
@@ -205,12 +205,12 @@ _CODE_ZCL_ status_t zcl_ota_imageBlockRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8
         len = 1;
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pRsp->st;
     if (pRsp->st == ZCL_STA_SUCCESS) {
@@ -249,10 +249,10 @@ _CODE_ZCL_ status_t zcl_ota_imageBlockRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_ota_upgradeEndReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_upgradeEndReq_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_upgradeEndReqSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_upgradeEndReq_t *pReq)
 {
-    u8 buf[9];
-    u8 *pBuf = buf;
+    uint8_t buf[9];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pReq->st;
     *pBuf++ = LO_UINT16(pReq->manuCode);
@@ -265,13 +265,13 @@ _CODE_ZCL_ status_t zcl_ota_upgradeEndReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8
     *pBuf++ = U32_BYTE3(pReq->fileVer);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_UPGRADE_END_REQ, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_upgradeEndRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_upgradeEndRsp_t *pRsp)
+_CODE_ZCL_ status_t zcl_ota_upgradeEndRspSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_upgradeEndRsp_t *pRsp)
 {
-    u8 buf[16];
-    u8 *pBuf = buf;
+    uint8_t buf[16];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pRsp->manuCode);
     *pBuf++ = HI_UINT16(pRsp->manuCode);
@@ -291,13 +291,13 @@ _CODE_ZCL_ status_t zcl_ota_upgradeEndRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8
     *pBuf++ = U32_BYTE3(pRsp->upgradeTime);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_UPGRADE_END_RSP, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_queryDevSpecFileReqSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_querySpecFileReq_t *pReq)
+_CODE_ZCL_ status_t zcl_ota_queryDevSpecFileReqSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_querySpecFileReq_t *pReq)
 {
-    u8 buf[18];
-    u8 *pBuf = buf;
+    uint8_t buf[18];
+    uint8_t *pBuf = buf;
 
     ZB_IEEE_ADDR_COPY(pBuf, pReq->reqNodeAddr);
     pBuf += EXT_ADDR_LEN;
@@ -313,13 +313,13 @@ _CODE_ZCL_ status_t zcl_ota_queryDevSpecFileReqSend(u8 srcEp, epInfo_t *pDstEpIn
     *pBuf++ = HI_UINT16(pReq->zbStackVer);
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_QUERY_DEVICE_SPECIFIC_FILE_REQ, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_ota_queryDevSpecFileRspSend(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, ota_querySpecFileRsp_t *pRsp)
+_CODE_ZCL_ status_t zcl_ota_queryDevSpecFileRspSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, ota_querySpecFileRsp_t *pRsp)
 {
-    u8 buf[13];
-    u8 *pBuf = buf;
+    uint8_t buf[13];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pRsp->st;
     if (pRsp->st == ZCL_STA_SUCCESS) {
@@ -338,14 +338,14 @@ _CODE_ZCL_ status_t zcl_ota_queryDevSpecFileRspSend(u8 srcEp, epInfo_t *pDstEpIn
     }
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_OTA, ZCL_CMD_OTA_QUERY_DEVICE_SPECIFIC_FILE_RSP, TRUE,
-                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
 _CODE_ZCL_ static status_t zcl_ota_queryNextImageReqPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_queryNextImageReq_t req;
@@ -372,7 +372,7 @@ _CODE_ZCL_ static status_t zcl_ota_imageBlockReqPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_imageBlockReq_t req;
@@ -406,7 +406,7 @@ _CODE_ZCL_ static status_t zcl_ota_imagePageReqPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_imagePageReq_t req;
@@ -441,7 +441,7 @@ _CODE_ZCL_ static status_t zcl_ota_upgradeEndReqPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_upgradeEndReq_t req;
@@ -466,7 +466,7 @@ _CODE_ZCL_ static status_t zcl_ota_queryDeviceSpecificFileReqPrc(zclIncoming_t *
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_querySpecFileReq_t req;
@@ -493,7 +493,7 @@ _CODE_ZCL_ static status_t zcl_ota_imageNotifyPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_imageNotify_t imageNotify;
@@ -524,7 +524,7 @@ _CODE_ZCL_ static status_t zcl_ota_queryNextImageRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_queryNextImageRsp_t rsp;
@@ -551,7 +551,7 @@ _CODE_ZCL_ static status_t zcl_ota_imageBlockRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_imageBlockRsp_t rsp;
@@ -587,7 +587,7 @@ _CODE_ZCL_ static status_t zcl_ota_upgradeEndRspPrc(zclIncoming_t *pInMsg)
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_upgradeEndRsp_t rsp;
@@ -613,7 +613,7 @@ _CODE_ZCL_ static status_t zcl_ota_queryDeviceSpecificFileRspPrc(zclIncoming_t *
 {
     status_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         ota_querySpecFileRsp_t rsp;
@@ -638,7 +638,7 @@ _CODE_ZCL_ static status_t zcl_ota_queryDeviceSpecificFileRspPrc(zclIncoming_t *
 
 _CODE_ZCL_ static status_t zcl_ota_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_OTA_QUERY_NEXT_IMAGE_REQ:
@@ -666,7 +666,7 @@ _CODE_ZCL_ static status_t zcl_ota_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_ota_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_OTA_IMAGE_NOTIFY:

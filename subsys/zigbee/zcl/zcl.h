@@ -130,10 +130,10 @@ typedef struct apsdeDataInd_s apsdeDataInd_t;
  *  @brief  Definition for ZCL Attribute Information Entry
  */
 typedef struct zclAttrInfo {
-    u16 id;                     //!< Attribute ID
-    u8 type;                    //!< Attribute type
-    u8 access;                  //!< Attribute access control
-    u8 *data;
+    uint16_t id;                     //!< Attribute ID
+    uint8_t type;                    //!< Attribute type
+    uint8_t access;                  //!< Attribute access control
+    uint8_t *data;
 } zclAttrInfo_t;
 
 /**
@@ -141,13 +141,13 @@ typedef struct zclAttrInfo {
  */
 typedef union zclFrmCtrl {
     struct {
-        u8 type:2;              //!< ZCL Frame type
-        u8 manufSpec:1;         //!< Manufacturer specific frame
-        u8 dir:1;               //!< Direction. 0:client->server, 1:server->client
-        u8 disDefResp:1;        //!< Disable default response
-        u8 reserved:3;          //!< reserved
+        uint8_t type:2;              //!< ZCL Frame type
+        uint8_t manufSpec:1;         //!< Manufacturer specific frame
+        uint8_t dir:1;               //!< Direction. 0:client->server, 1:server->client
+        uint8_t disDefResp:1;        //!< Disable default response
+        uint8_t reserved:3;          //!< reserved
     } bf;                       //!< bit access field
-    u8 byte;                    //!< byte access field
+    uint8_t byte;                    //!< byte access field
 } zclFrmCtrl_t;
 
 /**
@@ -155,27 +155,27 @@ typedef union zclFrmCtrl {
  */
 typedef struct zclHdr {
     zclFrmCtrl_t frmCtrl;       //!< Frame control field structure
-    u16 manufCode;              //!< Manufacturer code
-    u8 seqNum;                  //!< Sequence number - used to identify response frame
-    u8 cmd;                     //!< Command ID
+    uint16_t manufCode;              //!< Manufacturer code
+    uint8_t seqNum;                  //!< Sequence number - used to identify response frame
+    uint8_t cmd;                     //!< Command ID
 } zclHdr_t;
 
 /**
  *  @brief  Definition for ZCL Read Attribute command format
  */
 typedef struct {
-    u8 numAttr;                  //!< number of attributes in the list
-    u16 attrID[];               //!< supported attributes list
+    uint8_t numAttr;                  //!< number of attributes in the list
+    uint16_t attrID[];               //!< supported attributes list
 } zclReadCmd_t;
 
 /**
  *  @brief  Definition for ZCL Read response status command format
  */
 typedef struct {
-    u16 attrID;                 //!< attribute ID
-    u8 status;                  //!< should be ZCL_STATUS_SUCCESS or error
-    u8 dataType;                //!< attribute data type
-    u8 *data;                   //!< this structure is allocated, so the data is HERE
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t status;                  //!< should be ZCL_STATUS_SUCCESS or error
+    uint8_t dataType;                //!< attribute data type
+    uint8_t *data;                   //!< this structure is allocated, so the data is HERE
                                 //!< the size depends on the attribute data type
 } zclReadRspStatus_t;
 
@@ -183,7 +183,7 @@ typedef struct {
  *  @brief  Definition for ZCL Read response command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of attributes in the list
+    uint8_t numAttr;                         //!< number of attributes in the list
     zclReadRspStatus_t attrList[];      //!< attribute status list
 } zclReadRspCmd_t;
 
@@ -191,16 +191,16 @@ typedef struct {
  *  @brief  Definition for ZCL write attribute record format
  */
 typedef struct {
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type
-    u8 *attrData;               //!< this structure is allocated
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type
+    uint8_t *attrData;               //!< this structure is allocated
 } zclWriteRec_t;
 
 /**
  *  @brief  Definition for ZCL write command format
  */
 typedef struct {
-    u8 numAttr;                 //!< number of attribute records in the list
+    uint8_t numAttr;                 //!< number of attribute records in the list
     zclWriteRec_t attrList[];   //!< attribute records
 } zclWriteCmd_t;
 
@@ -208,15 +208,15 @@ typedef struct {
  *  @brief  Definition for ZCL write attribute status format
  */
 typedef struct {
-    u8 status;                  //!< should be ZCL_STATUS_SUCCESS or error
-    u16 attrID;                 //!< attribute ID
+    uint8_t status;                  //!< should be ZCL_STATUS_SUCCESS or error
+    uint16_t attrID;                 //!< attribute ID
 } zclWriteRspStatus_t;
 
 /**
  *  @brief  Definition for ZCL write attribute response command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of attribute status in the list
+    uint8_t numAttr;                         //!< number of attribute status in the list
     zclWriteRspStatus_t attrList[];     //!< attribute status records
 } zclWriteRspCmd_t;
 
@@ -224,20 +224,20 @@ typedef struct {
  *  @brief  Definition for ZCL Configure Report record format
  */
 typedef struct {
-    u8 direction;               //!< to send or receive reports of the attribute
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type
-    u16 minReportInt;           //!< minimum reporting interval
-    u16 maxReportInt;           //!< maximum reporting interval
-    u16 timeoutPeriod;          //!< timeout period
-    u8 *reportableChange;       //!< reportable change (only applicable to analog data type)
+    uint8_t direction;               //!< to send or receive reports of the attribute
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type
+    uint16_t minReportInt;           //!< minimum reporting interval
+    uint16_t maxReportInt;           //!< maximum reporting interval
+    uint16_t timeoutPeriod;          //!< timeout period
+    uint8_t *reportableChange;       //!< reportable change (only applicable to analog data type)
 } zclCfgReportRec_t;
 
 /**
  *  @brief  Definition for ZCL configure report command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of attribute IDs in the list
+    uint8_t numAttr;                         //!< number of attribute IDs in the list
     zclCfgReportRec_t attrList[];       //!< attribute ID list
 } zclCfgReportCmd_t;
 
@@ -245,16 +245,16 @@ typedef struct {
  *  @brief  Definition for ZCL configure report status format
  */
 typedef struct {
-    u8 status;                  //!< should be ZCL_STATUS_SUCCESS or error
-    u8 direction;               //!< whether attributes are reported or reports of attributes are received
-    u16 attrID;                 //!< attribute ID
+    uint8_t status;                  //!< should be ZCL_STATUS_SUCCESS or error
+    uint8_t direction;               //!< whether attributes are reported or reports of attributes are received
+    uint16_t attrID;                 //!< attribute ID
 } zclCfgReportStatus_t;
 
 /**
  *  @brief  Definition for ZCL configure report response command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of attribute status in the list
+    uint8_t numAttr;                         //!< number of attribute status in the list
     zclCfgReportStatus_t attrList[];    //!< attribute status records
 } zclCfgReportRspCmd_t;
 
@@ -262,15 +262,15 @@ typedef struct {
  *  @brief  Definition for ZCL read reporting configuration command format
  */
 typedef struct {
-    u8 direction;               //!< to send or receive reports of the attribute
-    u16 attrID;                 //!< attribute ID
+    uint8_t direction;               //!< to send or receive reports of the attribute
+    uint16_t attrID;                 //!< attribute ID
 } zclReadReportCfgRec_t;
 
 /**
  *  @brief  Definition for ZCL read report configuration command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of attributes in the list
+    uint8_t numAttr;                         //!< number of attributes in the list
     zclReadReportCfgRec_t attrList[];   //!< attribute ID list
 } zclReadReportCfgCmd_t;
 
@@ -278,21 +278,21 @@ typedef struct {
  *  @brief  Definition for ZCL attribute reporting configuration record format
  */
 typedef struct {
-    u8 status;                  //!< status field
-    u8 direction;               //!< to send or receive reports of the attribute
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type
-    u16 minReportInt;           //!< minimum reporting interval
-    u16 maxReportInt;           //!< maximum reporting interval
-    u16 timeoutPeriod;          //!< timeout period
-    u8 *reportableChange;       //!< reportable change (only applicable to analog data type)
+    uint8_t status;                  //!< status field
+    uint8_t direction;               //!< to send or receive reports of the attribute
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type
+    uint16_t minReportInt;           //!< minimum reporting interval
+    uint16_t maxReportInt;           //!< maximum reporting interval
+    uint16_t timeoutPeriod;          //!< timeout period
+    uint8_t *reportableChange;       //!< reportable change (only applicable to analog data type)
 } zclReportCfgRspRec_t;
 
 /**
  *  @brief  Definition for ZCL read reporting configuration response command format
  */
 typedef struct {
-    u8 numAttr;                         //!< number of records in the list
+    uint8_t numAttr;                         //!< number of records in the list
     zclReportCfgRspRec_t attrList[];    //!< attribute reporting configuration list
 } zclReadReportCfgRspCmd_t;
 
@@ -300,16 +300,16 @@ typedef struct {
  *  @brief  Definition for ZCL attribute report command format
  */
 typedef struct {
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type
-    u8 *attrData;               //!< this structure is allocated, so the data is HERE
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type
+    uint8_t *attrData;               //!< this structure is allocated, so the data is HERE
 } zclReport_t;
 
 /**
  *  @brief  Definition for ZCL report command format
  */
 typedef struct {
-    u8 numAttr;                 //!< number of reports in the list
+    uint8_t numAttr;                 //!< number of reports in the list
     zclReport_t attrList[];     //!< attribute report list
 } zclReportCmd_t;
 
@@ -317,24 +317,24 @@ typedef struct {
  *  @brief  Definition for ZCL default response command format
  */
 typedef struct {
-    u8 commandID;
-    u8 statusCode;
+    uint8_t commandID;
+    uint8_t statusCode;
 } zclDefaultRspCmd_t;
 
 /**
  *  @brief  Definition for ZCL discover attribute command format
  */
 typedef struct {
-    u16 startAttr;              //!< specifies the minimum value of the identifier to begin attribute discovery.
-    u8 maxAttrIDs;              //!< maximum number of attribute IDs required
+    uint16_t startAttr;              //!< specifies the minimum value of the identifier to begin attribute discovery.
+    uint8_t maxAttrIDs;              //!< maximum number of attribute IDs required
 } zclDiscoverAttrCmd_t;
 
 /**
  *  @brief  Definition for ZCL discover attribute information format
  */
 typedef struct {
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type (see Table 17 in Spec)
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type (see Table 17 in Spec)
 } zclDiscoverAttrInfo_t;
 
 // Discover Attributes Response Command format
@@ -342,8 +342,8 @@ typedef struct {
  *  @brief  Definition for ZCL discover attribute response command format
  */
 typedef struct {
-    u8 discComplete;            //!< whether or not there're more attributes to be discovered
-    u8 numAttr;                 //!< number of attributes in the list
+    uint8_t discComplete;            //!< whether or not there're more attributes to be discovered
+    uint8_t numAttr;                 //!< number of attributes in the list
     zclDiscoverAttrInfo_t attrList[];   //!< supported attributes list
 } zclDiscoverAttrRspCmd_t;
 
@@ -351,43 +351,43 @@ typedef struct {
  *  @brief  Definition for ZCL string data type
  */
 typedef struct {
-    u8 *pStr;
-    u8 strLen;
+    uint8_t *pStr;
+    uint8_t strLen;
 } UTF8String_t;
 
 /**
  *  @brief  Definition for ZCL discover commands information
  */
 typedef struct {
-    u8 startCmdID;
-    u8 maxCmdID;
+    uint8_t startCmdID;
+    uint8_t maxCmdID;
 } zclDiscoverCmdsCmd_t;
 
 /**
  *  @brief  Definition for ZCL discover commands response format
  */
 typedef struct {
-    u8 discComplete;
-    u8 cmdType;
-    u8 numCmd;
-    u8 *pCmdID;
+    uint8_t discComplete;
+    uint8_t cmdType;
+    uint8_t numCmd;
+    uint8_t *pCmdID;
 } zclDiscoverCmdsRspCmd_t;
 
 /**
  *  @brief  Definition for ZCL extended attributes information
  */
 typedef struct {
-    u16 attrID;                 //!< attribute ID
-    u8 dataType;                //!< attribute data type
-    u8 accessControl;           //!< attribute access control
+    uint16_t attrID;                 //!< attribute ID
+    uint8_t dataType;                //!< attribute data type
+    uint8_t accessControl;           //!< attribute access control
 } zclExtAttrInfo_t;
 
 /**
  *  @brief  Definition for ZCL discover extended attributes response format
  */
 typedef struct {
-    u8 discComplete;            //!< whether or not there're more attributes to be discovered
-    u8 numAttr;                 //!< number of attributes in the list
+    uint8_t discComplete;            //!< whether or not there're more attributes to be discovered
+    uint8_t numAttr;                 //!< number of attributes in the list
     zclExtAttrInfo_t extAttrInfo[];     //!< supported extended attributes list
 } zclDiscoverAttrExtRspCmd_t;
 
@@ -401,20 +401,20 @@ typedef struct {
  *  		if minInterval is 0xffff and maxInterval is 0, than back to default reporting configuration, reportable change field set to 0.
  */
 typedef struct _attribute_packed_ {
-    u16 profileID;
-    u16 clusterID;
-    u16 attrID;
-    u16 minIntDft;
-    u16 maxIntDft;
-    u16 minInterval;//seconds
-    u16 maxInterval;//seconds
-    u16 minIntCnt;
-    u16 maxIntCnt;
-    u8 endPoint;
-    u8 dataType;
-    u8 reportableChange[REPORTABLE_CHANGE_MAX_ANALOG_SIZE];
-    u8 prevData[REPORTABLE_CHANGE_MAX_ANALOG_SIZE];
-    u8 used;
+    uint16_t profileID;
+    uint16_t clusterID;
+    uint16_t attrID;
+    uint16_t minIntDft;
+    uint16_t maxIntDft;
+    uint16_t minInterval;//seconds
+    uint16_t maxInterval;//seconds
+    uint16_t minIntCnt;
+    uint16_t maxIntCnt;
+    uint8_t endPoint;
+    uint8_t dataType;
+    uint8_t reportableChange[REPORTABLE_CHANGE_MAX_ANALOG_SIZE];
+    uint8_t prevData[REPORTABLE_CHANGE_MAX_ANALOG_SIZE];
+    uint8_t used;
 } reportCfgInfo_t; //37-bytes
 
 #ifndef ZCL_REPORTING_TABLE_NUM
@@ -425,7 +425,7 @@ typedef struct _attribute_packed_ {
  *  @brief  Definition for ZCL reporting table
  */
 typedef struct _attribute_packed_ {
-    u8 reportNum;
+    uint8_t reportNum;
     reportCfgInfo_t reportCfgInfo[ZCL_REPORTING_TABLE_NUM];
 } zcl_reportingTab_t;
 
@@ -435,21 +435,21 @@ extern zcl_reportingTab_t reportingTab;
  *  @brief  Definition for the incoming cluster command address information
  */
 typedef struct {
-    u16 profileId;
-    u16 srcAddr;
-    u16 dstAddr;
-    u8 srcEp;
-    u8 dstEp;
-    u8 seqNum;
-    u8 dirCluster:1;
-    u8 apsSec:1;
-    u8 reserved:6;
+    uint16_t profileId;
+    uint16_t srcAddr;
+    uint16_t dstAddr;
+    uint8_t srcEp;
+    uint8_t dstEp;
+    uint8_t seqNum;
+    uint8_t dirCluster:1;
+    uint8_t apsSec:1;
+    uint8_t reserved:6;
 } zclIncomingAddrInfo_t;
 
 /**
  *  @brief  Definition for the application function pointer type to handle incoming cluster command.
  */
-typedef status_t (*cluster_forAppCb_t)(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload);
+typedef status_t (*cluster_forAppCb_t)(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload);
 
 /**
  *  @brief  Definition for incoming ZCL message format
@@ -457,9 +457,9 @@ typedef status_t (*cluster_forAppCb_t)(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdI
 typedef struct {
     cluster_forAppCb_t clusterAppCb;
     apsdeDataInd_t *msg;                //!< incoming message
-    u8 *pData;                          //!< pointer to data after header
+    uint8_t *pData;                          //!< pointer to data after header
     void *attrCmd;                      //!< pointer to the parsed attribute or command
-    u16 dataLen;                        //!< length of remaining data
+    uint16_t dataLen;                        //!< length of remaining data
     zclIncomingAddrInfo_t addrInfo;
     zclHdr_t hdr;                       //!< ZCL header parsed
 } zclIncoming_t;
@@ -473,7 +473,7 @@ typedef status_t (*cluster_cmdHdlr_t)(zclIncoming_t *pInHdlrMsg);
 /**
  *  @brief  Definition for function pointer type to register a cluster.
  */
-typedef status_t (*cluster_registerFunc_t)(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+typedef status_t (*cluster_registerFunc_t)(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 /**
  *  @brief  Definition for ZCL Hook function format.
@@ -488,16 +488,16 @@ typedef struct {
     const zclAttrInfo_t *attrTable;
     cluster_cmdHdlr_t cmdHandlerFunc;
     cluster_forAppCb_t clusterAppCb;
-    u16 clusterID;
-    u16 manuCode;
-    u8 endpoint;
-    u8 attrNum;
+    uint16_t clusterID;
+    uint16_t manuCode;
+    uint8_t endpoint;
+    uint8_t attrNum;
 } clusterInfo_t;
 
 typedef struct {
-    u16 clusterId;
-    u16 manuCode;
-    u16 attrNum;
+    uint16_t clusterId;
+    uint16_t manuCode;
+    uint16_t attrNum;
     const zclAttrInfo_t *attrTbl;
     cluster_registerFunc_t clusterRegisterFunc;
     cluster_forAppCb_t clusterAppCb;
@@ -510,9 +510,9 @@ typedef struct {
 
 typedef struct {
     zcl_hookFn_t hookFn;
-    u16 reserved;
-    u8 curState;
-    u8 clusterNum;
+    uint16_t reserved;
+    uint8_t curState;
+    uint8_t clusterNum;
     clusterInfo_t clusterList[ZCL_CLUSTER_NUM_MAX];
 } zcl_ctrl_t;
 
@@ -520,10 +520,10 @@ typedef struct {
 /**
  *  @brief  Definition for ZCL layer sequence number.
  */
-extern u8 zcl_seqNum;
+extern uint8_t zcl_seqNum;
 #define ZCL_SEQ_NUM     (zcl_seqNum++)
 
-extern const u16 zcl_attr_global_clusterRevision;
+extern const uint16_t zcl_attr_global_clusterRevision;
 
 /** @addtogroup  ZCL_Fountions ZCL APIs
  *  @{
@@ -559,7 +559,7 @@ void zcl_init(zcl_hookFn_t fn);
  *
  * @return     None
  */
-void zcl_register(u8 endpoint, u8 clusterNum, zcl_specClusterInfo_t *info);
+void zcl_register(uint8_t endpoint, uint8_t clusterNum, zcl_specClusterInfo_t *info);
 
 /**
  * @brief      Find the cluster table by specified cluster ID and endpoint
@@ -569,7 +569,7 @@ void zcl_register(u8 endpoint, u8 clusterNum, zcl_specClusterInfo_t *info);
  *
  * @return     pointer
  */
-clusterInfo_t *zcl_findCluster(u8 endpoint, u16 clusterId);
+clusterInfo_t *zcl_findCluster(uint8_t endpoint, uint16_t clusterId);
 
 /**
  * @brief      Register the cluster to ZCL
@@ -583,7 +583,7 @@ clusterInfo_t *zcl_findCluster(u8 endpoint, u16 clusterId);
  *
  * @return     ZCL Status @ref zcl_error_codes
  */
-status_t zcl_registerCluster(u8 endpoint, u16 clusterId, u16 manuCode, u8 attrNum, const zclAttrInfo_t *pAttrTbl, cluster_cmdHdlr_t cmdHdlrFn, cluster_forAppCb_t cb);
+status_t zcl_registerCluster(uint8_t endpoint, uint16_t clusterId, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t *pAttrTbl, cluster_cmdHdlr_t cmdHdlrFn, cluster_forAppCb_t cb);
 
 /**
  * @brief       Used to send Profile and Cluster Specific Command messages.
@@ -602,12 +602,12 @@ status_t zcl_registerCluster(u8 endpoint, u16 clusterId, u16 manuCode, u8 attrNu
  *
  * @return      ZCL Status @ref zcl_error_codes
  */
-status_t zcl_sendCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u8 cmd, u8 specific,
-                     u8 direction, u8 disableDefaultRsp, u16 manuCode, u8 seqNo, u16 cmdPldLen, u8 *cmdPld);
+status_t zcl_sendCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint8_t cmd, uint8_t specific,
+                     uint8_t direction, uint8_t disableDefaultRsp, uint16_t manuCode, uint8_t seqNo, uint16_t cmdPldLen, uint8_t *cmdPld);
 
 
-status_t zcl_sendInterPANCmd(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u8 cmd, u8 specific,
-                             u8 direction, u8 disableDefaultRsp, u16 manuCode, u8 seqNo, u16 cmdPldLen, u8 *cmdPld);
+status_t zcl_sendInterPANCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint8_t cmd, uint8_t specific,
+                             uint8_t direction, uint8_t disableDefaultRsp, uint16_t manuCode, uint8_t seqNo, uint16_t cmdPldLen, uint8_t *cmdPld);
 
 /**
  * @brief      Receive handler for data from APS/AF layer
@@ -625,7 +625,7 @@ void zcl_rx_handler(void *pData);
  *
  * @return     TRUE / FALSE
  */
-bool zcl_analogDataType(u8 dataType);
+bool zcl_analogDataType(uint8_t dataType);
 
 /**
  * @brief      Get data length according to data type
@@ -634,7 +634,7 @@ bool zcl_analogDataType(u8 dataType);
  *
  * @return     length
  */
-u8 zcl_getDataTypeLen(u8 dataType);
+uint8_t zcl_getDataTypeLen(uint8_t dataType);
 
 /**
  * @brief      Get the length of ZCL attribute date
@@ -644,7 +644,7 @@ u8 zcl_getDataTypeLen(u8 dataType);
  *
  * @return     attribute length
  */
-u16 zcl_getAttrSize(u8 dataType, u8 *pData);
+uint16_t zcl_getAttrSize(uint8_t dataType, uint8_t *pData);
 
 /**
  * @brief      Get ZCL attribute value according to specified cluster and attribute ID 
@@ -657,7 +657,7 @@ u16 zcl_getAttrSize(u8 dataType, u8 *pData);
  *
  * @return     ZCL Status @ref zcl_error_codes
  */
-status_t zcl_getAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u16 *len, u8 *val);
+status_t zcl_getAttrVal(uint8_t endpoint, uint16_t clusterId, uint16_t attrId, uint16_t *len, uint8_t *val);
 
 /**
  * @brief      Set ZCL attribute value according to specified attribute entry
@@ -669,7 +669,7 @@ status_t zcl_getAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u16 *len, u8 *va
  *
  * @return     ZCL Status @ref zcl_error_codes
  */
-status_t zcl_setAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u8 *val);
+status_t zcl_setAttrVal(uint8_t endpoint, uint16_t clusterId, uint16_t attrId, uint8_t *val);
 
 /**
  * @brief      Find the cluster table by specified cluster ID and endpoint
@@ -680,7 +680,7 @@ status_t zcl_setAttrVal(u8 endpoint, u16 clusterId, u16 attrId, u8 *val);
  *
  * @return     pointer
  */
-zclAttrInfo_t *zcl_findAttribute(u8 endpoint, u16 clusterId, u16 attrId);
+zclAttrInfo_t *zcl_findAttribute(uint8_t endpoint, uint16_t clusterId, uint16_t attrId);
 
 
 /******************************************************************************************************************************
@@ -701,7 +701,7 @@ zclAttrInfo_t *zcl_findAttribute(u8 endpoint, u16 clusterId, u16 attrId);
  *
  * @return      status_t
  */
-status_t zcl_read(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadCmd_t *readCmd);
+status_t zcl_read(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadCmd_t *readCmd);
 #define zcl_sendReadCmd(a,b,c,d,e,f)                    (zcl_read((a), (b), (c), MANUFACTURER_CODE_NONE, (d), (e), ZCL_SEQ_NUM, (f)))
 #define zcl_sendReadWithMfgCodeCmd(a,b,c,d,e,f,g)       (zcl_read((a), (b), (c), (d), (e), (f), ZCL_SEQ_NUM, (g)))
 
@@ -723,7 +723,7 @@ status_t zcl_read(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u
  *
  * @return      status_t
  */
-status_t zcl_writeReq(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 cmd, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclWriteCmd_t *writeCmd);
+status_t zcl_writeReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t cmd, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclWriteCmd_t *writeCmd);
 #define zcl_sendWriteCmd(a,b,c,d,e,f)                   (zcl_writeReq((a), (b), (c), MANUFACTURER_CODE_NONE, ZCL_CMD_WRITE, (d), (e), ZCL_SEQ_NUM, (f)))
 #define zcl_sendWriteWithMfgCodeCmd(a,b,c,d,e,f,g)      (zcl_writeReq((a), (b), (c), (d), ZCL_CMD_WRITE, (e), (f), ZCL_SEQ_NUM, (g)))
 #define zcl_sendWriteUndividedCmd(a,b,c,d,e,f)          (zcl_writeReq((a), (b), (c), MANUFACTURER_CODE_NONE, ZCL_CMD_WRITE_UNDIVIDED, (d), (e), ZCL_SEQ_NUM, (f)))
@@ -746,27 +746,27 @@ status_t zcl_writeReq(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCod
  *
  * @return      None
  */
-status_t zcl_configReport(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclCfgReportCmd_t *cfgReportCmd);
+status_t zcl_configReport(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclCfgReportCmd_t *cfgReportCmd);
 #define zcl_sendCfgReportCmd(a,b,c,d,e,f)       (zcl_configReport((a), (b), (c), MANUFACTURER_CODE_NONE, (d), (e), ZCL_SEQ_NUM, (f)))
 
-status_t zcl_readReportConfig(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclReadReportCfgCmd_t *readReportCfgCmd);
+status_t zcl_readReportConfig(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclReadReportCfgCmd_t *readReportCfgCmd);
 #define zcl_sendReadReportCfgCmd(a,b,c,d,e,f)   (zcl_readReportConfig((a), (b), (c), MANUFACTURER_CODE_NONE, (d), (e), ZCL_SEQ_NUM, (f)))
 
-status_t zcl_report(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 direction, u8 seqNo, u16 manuCode, u16 clusterId, u16 attrID, u8 dataType, u8 *pData);
+status_t zcl_report(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, uint16_t manuCode, uint16_t clusterId, uint16_t attrID, uint8_t dataType, uint8_t *pData);
 #define zcl_sendReportCmd(a,b,c,d,e,f,g,h)      (zcl_report((a), (b), (c), (d), ZCL_SEQ_NUM, MANUFACTURER_CODE_NONE, (e), (f), (g), (h)))
 
-status_t zcl_reportAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 direction, u8 seqNo, u16 manuCode, u16 clusterId, zclReportCmd_t *pReportAttrs);
+status_t zcl_reportAttrs(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, uint16_t manuCode, uint16_t clusterId, zclReportCmd_t *pReportAttrs);
 #define zcl_sendReportAttrsCmd(a,b,c,d,e,f)     (zcl_reportAttrs((a), (b), (c), (d), ZCL_SEQ_NUM, MANUFACTURER_CODE_NONE, (e), (f)))
 
 //for internal
 void zcl_reportingTabInit(void);
-u8 zcl_reportingEntryActiveNumGet(void);
-reportCfgInfo_t *zcl_reportCfgInfoEntryFind(u8 endpoint, u16 clusterId, u16 attrID);
+uint8_t zcl_reportingEntryActiveNumGet(void);
+reportCfgInfo_t *zcl_reportCfgInfoEntryFind(uint8_t endpoint, uint16_t clusterId, uint16_t attrID);
 reportCfgInfo_t *zcl_reportCfgInfoEntryFreeGet(void);
 void zcl_reportCfgInfoEntryClear(reportCfgInfo_t *pEntry);
 void zcl_reportCfgInfoEntryRst(reportCfgInfo_t *pEntry);
-void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, u8 endPoint, u16 profileId, u16 clusterId, zclCfgReportRec_t *pCfgReportRec);
-status_t zcl_configureReporting(u8 endpoint, u16 profileId, u16 clusterId, zclCfgReportRec_t *pCfgReportRec);
+void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, uint8_t endPoint, uint16_t profileId, uint16_t clusterId, zclCfgReportRec_t *pCfgReportRec);
+status_t zcl_configureReporting(uint8_t endpoint, uint16_t profileId, uint16_t clusterId, zclCfgReportRec_t *pCfgReportRec);
 
 //for application
 void report_handler(void);
@@ -788,10 +788,10 @@ void report_handler(void);
  *
  * @return      status_t
  */
-status_t zcl_discAttrs(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrCmd_t *discAttrCmd);
+status_t zcl_discAttrs(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrCmd_t *discAttrCmd);
 #define zcl_sendDiscAttrsCmd(a,b,c,d,e,f)       (zcl_discAttrs((a), (b), (c), MANUFACTURER_CODE_NONE, (d), (e), ZCL_SEQ_NUM, (f)))
 
-status_t zcl_discAttrsExtended(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 manuCode, u8 disableDefaultRsp, u8 direction, u8 seqNo, zclDiscoverAttrCmd_t *discAttrCmd);
+status_t zcl_discAttrsExtended(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t manuCode, uint8_t disableDefaultRsp, uint8_t direction, uint8_t seqNo, zclDiscoverAttrCmd_t *discAttrCmd);
 #define zcl_sendDiscAttrsExtendedCmd(a,b,c,d,e,f)       (zcl_discAttrsExtended((a), (b), (c), MANUFACTURER_CODE_NONE, (d), (e), ZCL_SEQ_NUM, (f)))
 
 #endif /* ZCL_DISCOVER */

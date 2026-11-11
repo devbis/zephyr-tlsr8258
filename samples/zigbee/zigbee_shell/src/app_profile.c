@@ -32,7 +32,7 @@ LOG_MODULE_REGISTER(app_profile);
  * compiler_zephyr.h defines _attribute_packed_ -> __packed so that
  * the SDK's "typedef struct _attribute_packed_ {...}" pattern produces
  * anonymous packed structs instead of a struct named _attribute_packed_.
- * zb_types.h provides u8/u16/u32 which ZCL/AF headers use but do not
+ * zb_types.h provides uint8_t/uint16_t/uint32_t which ZCL/AF headers use but do not
  * include themselves.
  * af/zb_af.h defines epInfo_t which zcl.h uses in function declarations.
  */
@@ -71,59 +71,59 @@ void zcl_rx_handler(void *p);
 /* ------------------------------------------------------------------ */
 
 /* ZCL CHAR_STR encoding: first byte is length, then the characters.  */
-static const u8 app_basic_zcl_ver = 3U;
-static const u8 app_basic_app_ver = 1U;
-static const u8 app_basic_stack_ver = 2U;
-static const u8 app_basic_hw_ver = 1U;
-static const u8 app_basic_power_src = 0x03U; /* Battery (0x03) */
-static const u16 app_basic_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static const uint8_t app_basic_zcl_ver = 3U;
+static const uint8_t app_basic_app_ver = 1U;
+static const uint8_t app_basic_stack_ver = 2U;
+static const uint8_t app_basic_hw_ver = 1U;
+static const uint8_t app_basic_power_src = 0x03U; /* Battery (0x03) */
+static const uint16_t app_basic_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 /* Manufacturer name and model ID as ZCL CHAR_STR (length-prefixed). */
-static u8 app_basic_mfr_name[1U + sizeof(APP_PROFILE_MFR_NAME)] = {
+static uint8_t app_basic_mfr_name[1U + sizeof(APP_PROFILE_MFR_NAME)] = {
 	sizeof(APP_PROFILE_MFR_NAME) - 1U,
 };
 
-static u8 app_basic_model_id[1U + sizeof(APP_PROFILE_MODEL_ID)] = {
+static uint8_t app_basic_model_id[1U + sizeof(APP_PROFILE_MODEL_ID)] = {
 	sizeof(APP_PROFILE_MODEL_ID) - 1U,
 };
 
 static const zclAttrInfo_t app_basic_attr_tbl[] = {
 	{ZCL_ATTRID_BASIC_ZCL_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_zcl_ver},
+	 (uint8_t *)&app_basic_zcl_ver},
 	{ZCL_ATTRID_BASIC_APP_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_app_ver},
+	 (uint8_t *)&app_basic_app_ver},
 	{ZCL_ATTRID_BASIC_STACK_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_stack_ver},
+	 (uint8_t *)&app_basic_stack_ver},
 	{ZCL_ATTRID_BASIC_HW_VER, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_hw_ver},
+	 (uint8_t *)&app_basic_hw_ver},
 	{ZCL_ATTRID_BASIC_MFR_NAME, ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ,
-	 (u8 *)app_basic_mfr_name},
+	 (uint8_t *)app_basic_mfr_name},
 	{ZCL_ATTRID_BASIC_MODEL_ID, ZCL_DATA_TYPE_CHAR_STR, ACCESS_CONTROL_READ,
-	 (u8 *)app_basic_model_id},
+	 (uint8_t *)app_basic_model_id},
 	{ZCL_ATTRID_BASIC_POWER_SOURCE, ZCL_DATA_TYPE_ENUM8, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_power_src},
+	 (uint8_t *)&app_basic_power_src},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_basic_cluster_rev},
+	 (uint8_t *)&app_basic_cluster_rev},
 };
 
-#define APP_BASIC_ATTR_NUM ((u8)ARRAY_SIZE(app_basic_attr_tbl))
+#define APP_BASIC_ATTR_NUM ((uint8_t)ARRAY_SIZE(app_basic_attr_tbl))
 
 /* ------------------------------------------------------------------ */
 /* Identify cluster attribute table                                    */
 /* ------------------------------------------------------------------ */
 
-static u16 app_identify_time;
-static const u16 app_identify_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static uint16_t app_identify_time;
+static const uint16_t app_identify_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 static const zclAttrInfo_t app_identify_attr_tbl[] = {
 	{ZCL_ATTRID_IDENTIFY_TIME, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_identify_time},
+	 (uint8_t *)&app_identify_time},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_identify_cluster_rev},
+	 (uint8_t *)&app_identify_cluster_rev},
 };
 
 #define APP_IDENTIFY_ATTR_NUM                                                                      \
-	((u8)ARRAY_SIZE(app_identify_attr_tbl))
+	((uint8_t)ARRAY_SIZE(app_identify_attr_tbl))
 
 #if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
 /* ------------------------------------------------------------------ */
@@ -132,26 +132,26 @@ static const zclAttrInfo_t app_identify_attr_tbl[] = {
 
 static const struct gpio_dt_spec app_led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 static bool app_onoff_state;
-static const u16 app_onoff_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static const uint16_t app_onoff_cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 static const zclAttrInfo_t app_onoff_attr_tbl[] = {
 	{ZCL_ATTRID_ONOFF, ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE,
-	 (u8 *)&app_onoff_state},
+	 (uint8_t *)&app_onoff_state},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&app_onoff_cluster_rev},
+	 (uint8_t *)&app_onoff_cluster_rev},
 };
 
-#define APP_ONOFF_ATTR_NUM ((u8)ARRAY_SIZE(app_onoff_attr_tbl))
+#define APP_ONOFF_ATTR_NUM ((uint8_t)ARRAY_SIZE(app_onoff_attr_tbl))
 
 static void app_onoff_set(bool on)
 {
 	app_onoff_state = on;
 	gpio_pin_set_dt(&app_led, on ? 1 : 0);
 	zcl_setAttrVal(APP_PROFILE_ENDPOINT, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF,
-		       (u8 *)&app_onoff_state);
+		       (uint8_t *)&app_onoff_state);
 }
 
-static status_t app_onoff_cmd(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payload)
+static status_t app_onoff_cmd(zclIncomingAddrInfo_t *addr_info, uint8_t cmd_id, void *payload)
 {
 	ARG_UNUSED(addr_info);
 	ARG_UNUSED(payload);
@@ -178,7 +178,7 @@ static status_t app_onoff_cmd(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void 
 /* In-cluster list and simple descriptor                               */
 /* ------------------------------------------------------------------ */
 
-static u16 app_in_clusters[] = {
+static uint16_t app_in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
 #if defined(CONFIG_ZIGBEE_ZCL_ON_OFF)
@@ -190,7 +190,7 @@ static u16 app_in_clusters[] = {
 };
 
 #if defined(CONFIG_ZIGBEE_OTA)
-static u16 app_out_clusters[] = {
+static uint16_t app_out_clusters[] = {
 	ZCL_CLUSTER_OTA,
 };
 #endif
@@ -226,7 +226,7 @@ static ota_preamble_t app_ota_preamble = {
 	.manufacturerCode = 0x1141U,
 };
 
-static void app_ota_event(u8 evt, u8 status)
+static void app_ota_event(uint8_t evt, uint8_t status)
 {
 	if ((evt == OTA_EVT_COMPLETE) && (status == ZCL_STA_SUCCESS)) {
 		LOG_INF("OTA image downloaded, rebooting into MCUboot");
@@ -272,7 +272,7 @@ static zcl_specClusterInfo_t app_cluster_info[] = {
 #endif
 };
 
-#define APP_CLUSTER_NUM ((u8)ARRAY_SIZE(app_cluster_info))
+#define APP_CLUSTER_NUM ((uint8_t)ARRAY_SIZE(app_cluster_info))
 
 /* ------------------------------------------------------------------ */
 /* Public API                                                          */

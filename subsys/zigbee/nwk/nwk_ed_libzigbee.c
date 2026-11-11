@@ -34,7 +34,7 @@
 
 extern void zdo_nlme_leave_confirm_cb(void *arg);
 
-/* tl_zbNwkNlmeLeaveRequestHandler() now comes from the imported stack. */
+/* zb_NwkNlmeLeaveRequestHandler() now comes from the imported stack. */
 
 void zb_ed_operation_abort(void)
 {
@@ -59,11 +59,11 @@ void zb_ed_runtime_reset(void)
 	aps_ib.aps_use_insecure_join = TRUE;
 }
 
-void zb_ed_fixed_join_target(u8 channel, u16 pan_id, u16 short_addr,
-				     const u8 *ext_pan_id, const u8 *nwk_key,
-				     const u8 *tc_addr)
+void zb_ed_fixed_join_target(uint8_t channel, uint16_t pan_id, uint16_t short_addr,
+				     const uint8_t *ext_pan_id, const uint8_t *nwk_key,
+				     const uint8_t *tc_addr)
 {
-	tl_zbMacChannelSet(channel);
+	zb_MacChannelSet(channel);
 	g_zbInfo.macPib.panId = pan_id;
 	g_zbInfo.nwkNib.panId = pan_id;
 	g_zbInfo.macPib.shortAddress = short_addr;
@@ -77,6 +77,6 @@ void zb_ed_fixed_join_target(u8 channel, u16 pan_id, u16 short_addr,
 		memcpy(ss_ib.trust_center_address, tc_addr, EXT_ADDR_LEN);
 	}
 	if (nwk_key != NULL) {
-		zb_preConfigNwkKey((u8 *)nwk_key, FALSE);
+		zb_preConfigNwkKey((uint8_t *)nwk_key, FALSE);
 	}
 }

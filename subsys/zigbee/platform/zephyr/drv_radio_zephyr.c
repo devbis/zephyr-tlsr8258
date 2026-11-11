@@ -39,19 +39,19 @@ struct zb_radio_ctx {
 	atomic_t rx_irq_count;
 	atomic_t rx_accept_count;
 	atomic_t rx_drop_count;
-	u8 last_rx_rssi_raw;
-	s8 last_rx_rssi_dbm;
-	u8 current_channel;
-	u8 last_rx_len;
-	u8 last_tx_len;
-	u8 last_tx_seq;
+	uint8_t last_rx_rssi_raw;
+	int8_t last_rx_rssi_dbm;
+	uint8_t current_channel;
+	uint8_t last_rx_len;
+	uint8_t last_tx_len;
+	uint8_t last_tx_seq;
 	bool last_ack_frame_pending;
-	u8 last_error;
-	u8 trx_state;
-	u8 tx_power;
+	uint8_t last_error;
+	uint8_t trx_state;
+	uint8_t tx_power;
 	/* PAN ID and short address last written by zb_radio_filter_sync(). */
-	u16 synced_pan_id;
-	u16 synced_short_addr;
+	uint16_t synced_pan_id;
+	uint16_t synced_short_addr;
 };
 
 static struct zb_radio_ctx g_radio;
@@ -62,15 +62,15 @@ static struct zb_radio_ctx g_radio;
  * the driver sink into zb_bufs instead, so this buffer only absorbs those
  * writes.
  */
-static u8 zb_radio_legacy_rx_buf[8];
+static uint8_t zb_radio_legacy_rx_buf[8];
 
-static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len);
+static int zb_radio_submit_tx(const uint8_t *psdu, uint8_t psdu_len);
 static int zb_radio_process_rx_frame(const uint8_t *psdu, uint8_t len, int8_t rssi_dbm);
-extern void zb_macDataRecvHandler(u8 *rxBuf, u8 *data, u8 len, u8 ackPkt, u32 timestamp, s8 rssi);
+extern void zb_macDataRecvHandler(uint8_t *rxBuf, uint8_t *data, uint8_t len, uint8_t ackPkt, uint32_t timestamp, int8_t rssi);
 extern void zb_macDataSendHandler(void);
 extern void mac_trxTask(void *arg);
 #if defined(ZB_ROUTER_ROLE)
-extern u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 update);
+extern uint8_t zb_MacPendingDataCheck(uint8_t addrMode, uint8_t *addr, uint8_t update);
 #endif
 #include "mac/includes/mac_trx_api.h"
 #include "zb_common.h"
@@ -134,7 +134,7 @@ static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
 		return;
 	}
 
-	header_len = tl_zbMacHdrSize(frame_ctrl);
+	header_len = zb_MacHdrSize(frame_ctrl);
 	if ((header_len >= psdu_len) || (psdu[header_len] != MAC_CMD_DATA_REQUEST)) {
 		return;
 	}
@@ -168,7 +168,7 @@ static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
 	}
 
 	src_addr = &psdu[src_offset];
-	(void)tl_zbMacPendingDataCheck(src_mode, (u8 *)src_addr, 1U);
+	(void)zb_MacPendingDataCheck(src_mode, (uint8_t *)src_addr, 1U);
 }
 #endif
 
@@ -197,9 +197,9 @@ static void zb_radio_mark_pending_data(const uint8_t *psdu, uint8_t psdu_len)
 /*
  * The MAC waits for an acknowledgment carrying the sequence number of the
  * frame it queued, which is the third byte of the frame the radio is about to
- * send (tl_zbMacTx() reads the same byte into mac_trx_vars.ackSeqNum).
+ * send (zb_MacTx() reads the same byte into mac_trx_vars.ackSeqNum).
  */
-void zb_radio_note_tx_frame(const u8 *frame)
+void zb_radio_note_tx_frame(const uint8_t *frame)
 {
 	g_radio.last_tx_seq = (frame != NULL) ? frame[2] : 0U;
 }
@@ -214,21 +214,21 @@ void zb_radio_note_tx_frame(const u8 *frame)
 /* See CONFIG_ZIGBEE_RADIO_ACK_FP_UNKNOWN. */
 #define ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN IS_ENABLED(CONFIG_ZIGBEE_RADIO_ACK_FP_UNKNOWN)
 
-static bool zb_radio_psdu_is_data_request(const u8 *psdu, u8 psdu_len)
+static bool zb_radio_psdu_is_data_request(const uint8_t *psdu, uint8_t psdu_len)
 {
-	u16 frame_ctrl;
-	u8 hdr_len;
+	uint16_t frame_ctrl;
+	uint8_t hdr_len;
 
 	if (psdu_len < 3U) {
 		return false;
 	}
 
-	frame_ctrl = (u16)psdu[0] | ((u16)psdu[1] << 8);
+	frame_ctrl = (uint16_t)psdu[0] | ((uint16_t)psdu[1] << 8);
 	if ((frame_ctrl & MAC_FCF_FRAME_TYPE_MASK) != MAC_FRAME_TYPE_COMMAND) {
 		return false;
 	}
 
-	hdr_len = tl_zbMacHdrSize(frame_ctrl);
+	hdr_len = zb_MacHdrSize(frame_ctrl);
 	return (hdr_len < psdu_len) && (psdu[hdr_len] == MAC_CMD_DATA_REQUEST);
 }
 
@@ -239,7 +239,7 @@ static bool zb_radio_psdu_is_data_request(const u8 *psdu, u8 psdu_len)
  * state in which it accepts that response, and leaves it when the response
  * arrives or the wait times out.
  */
-static bool zb_radio_ack_frame_pending(const u8 *psdu, u8 psdu_len, bool reported)
+static bool zb_radio_ack_frame_pending(const uint8_t *psdu, uint8_t psdu_len, bool reported)
 {
 	if (!ZB_RADIO_ACK_FRAME_PENDING_UNKNOWN) {
 		return reported;
@@ -251,7 +251,7 @@ static bool zb_radio_ack_frame_pending(const u8 *psdu, u8 psdu_len, bool reporte
 
 static void zb_radio_tx_complete_deferred(void *arg)
 {
-	rf_busyFlag &= (u8)~TX_BUSY;
+	rf_busyFlag &= (uint8_t)~TX_BUSY;
 	zb_macDataSendHandler();
 	if (arg == ZB_RADIO_TX_DONE_NO_ACK) {
 		return;
@@ -276,7 +276,7 @@ static void zb_radio_tx_complete_deferred(void *arg)
 		 * and the sequence number, and matches the latter against the
 		 * frame still awaiting acknowledgment.
 		 */
-		u8 ack_frame[3] = {
+		uint8_t ack_frame[3] = {
 			/*
 			 * Frame type ACK, as zb_radio_psdu_is_ack() reads it, and
 			 * the Frame Pending bit of the ACK the radio received.
@@ -336,12 +336,12 @@ static void zb_radio_set_auto_ack_fpb(void)
 	}
 }
 
-static void zb_radio_set_error(u8 err)
+static void zb_radio_set_error(uint8_t err)
 {
 	g_radio.last_error = err;
 }
 
-static int zb_radio_start_impl(u8 channel)
+static int zb_radio_start_impl(uint8_t channel)
 {
 	int ret;
 
@@ -373,7 +373,7 @@ static int zb_radio_start_impl(u8 channel)
 	return 0;
 }
 
-static bool zb_radio_live_rssi_sample(s8 *rssi)
+static bool zb_radio_live_rssi_sample(int8_t *rssi)
 {
 	int ret;
 
@@ -439,7 +439,7 @@ static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 
 	rssi_clamped = CLAMP((int16_t)rssi_dbm, -110, 17);
 	g_radio.last_rx_rssi_raw = (uint8_t)(rssi_clamped + 110);
-	g_radio.last_rx_rssi_dbm = (s8)rssi_clamped;
+	g_radio.last_rx_rssi_dbm = (int8_t)rssi_clamped;
 	g_radio.last_rx_len = rx_len;
 	atomic_set(&g_radio.last_rx_rssi_valid, 1);
 	atomic_inc(&g_radio.rx_accept_count);
@@ -467,7 +467,7 @@ static int zb_radio_process_rx_frame(const uint8_t *psdu_in, uint8_t len, int8_t
 	const uint8_t *psdu;
 	uint8_t psdu_len;
 	uint8_t mac_len;
-	u8 ack_pkt;
+	uint8_t ack_pkt;
 
 	if ((psdu_in == NULL) || (len == 0U) || (len > ZB_RADIO_RX_PSDU_MAX)) {
 		return -EINVAL;
@@ -499,7 +499,7 @@ static int zb_radio_process_rx_frame(const uint8_t *psdu_in, uint8_t len, int8_t
 		 * later, so give every frame a zb_buf of its own instead.
 		 */
 		zb_buf_t *zbuf = zb_buf_allocate();
-		u8 *frame;
+		uint8_t *frame;
 
 		if (zbuf == NULL) {
 			return -ENOMEM;
@@ -512,7 +512,7 @@ static int zb_radio_process_rx_frame(const uint8_t *psdu_in, uint8_t len, int8_t
 		psdu = frame;
 		dma = frame;
 	}
-	zb_macDataRecvHandler((u8 *)dma, (u8 *)psdu, mac_len, ack_pkt, 0U, rssi_dbm);
+	zb_macDataRecvHandler((uint8_t *)dma, (uint8_t *)psdu, mac_len, ack_pkt, 0U, rssi_dbm);
 	return 0;
 }
 
@@ -614,10 +614,10 @@ void zb_radio_reset(void)
 	zb_radio_init();
 }
 
-void zb_radio_trx_switch(u8 mode, u8 phy_chn)
+void zb_radio_trx_switch(uint8_t mode, uint8_t phy_chn)
 {
 	int ret;
-	u8 logical_chn;
+	uint8_t logical_chn;
 
 	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
 		return;
@@ -699,7 +699,7 @@ void zb_radio_trx_off_auto_mode(void)
 	}
 }
 
-void zb_radio_tx_power_set(u8 level)
+void zb_radio_tx_power_set(uint8_t level)
 {
 	g_radio.tx_power = level;
 
@@ -719,9 +719,9 @@ int zb_radio_tx_power_dbm_set(int16_t dbm)
 	return g_radio.api->set_txpower(g_radio.dev, dbm);
 }
 
-s8 zb_radio_rssi_get(void)
+int8_t zb_radio_rssi_get(void)
 {
-	s8 live_rssi;
+	int8_t live_rssi;
 
 	if (zb_radio_live_rssi_sample(&live_rssi)) {
 		return live_rssi;
@@ -731,10 +731,10 @@ s8 zb_radio_rssi_get(void)
 		return ZB_RADIO_RSSI_FALLBACK_DBM;
 	}
 
-	return (s8)((int16_t)g_radio.last_rx_rssi_raw - 110);
+	return (int8_t)((int16_t)g_radio.last_rx_rssi_raw - 110);
 }
 
-void zb_radio_tx_start(u8 *tx_buf)
+void zb_radio_tx_start(uint8_t *tx_buf)
 {
 	const uint8_t *psdu;
 	uint8_t psdu_len;
@@ -815,7 +815,7 @@ static void zb_radio_filter_sync_joining(void)
 				     g_zbMacPib.extAddress);
 }
 
-static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
+static int zb_radio_submit_tx(const uint8_t *psdu, uint8_t psdu_len)
 {
 	struct net_if *iface;
 	struct net_pkt *pkt;
@@ -898,7 +898,7 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	 * task-queue drain so the state machine has set timer_evt_state=1
 	 * before SEND_SUCC fires.
 	 */
-	ret = tl_zbTxTaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
+	ret = zb_TxTaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
 	if (ret != RET_OK) {
 		/*
 		 * The frame is already on air. Failing the submit would leave the
@@ -909,7 +909,7 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 		 * ordering against pending RX callbacks degrades, delivery does
 		 * not.
 		 */
-		ret = tl_zbTaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
+		ret = zb_TaskPost(zb_radio_tx_complete_deferred, tx_done_arg);
 		if (ret != RET_OK) {
 			LOG_ERR("cannot queue radio TX completion (status=%d)", ret);
 			zb_radio_set_error(ZB_PLATFORM_RADIO_ERR_TX_SUBMIT);
@@ -920,9 +920,9 @@ static int zb_radio_submit_tx(const u8 *psdu, u8 psdu_len)
 	return 0;
 }
 
-u8 zb_radio_tx_done_get(void)
+uint8_t zb_radio_tx_done_get(void)
 {
-	return (u8)atomic_get(&g_radio.tx_done);
+	return (uint8_t)atomic_get(&g_radio.tx_done);
 }
 
 void zb_radio_tx_done_clear(void)
@@ -930,9 +930,9 @@ void zb_radio_tx_done_clear(void)
 	atomic_set(&g_radio.tx_done, 0);
 }
 
-u8 zb_radio_rx_done_get(void)
+uint8_t zb_radio_rx_done_get(void)
 {
-	return (u8)atomic_get(&g_radio.rx_done);
+	return (uint8_t)atomic_get(&g_radio.rx_done);
 }
 
 void zb_radio_rx_done_clear(void)
@@ -940,22 +940,22 @@ void zb_radio_rx_done_clear(void)
 	atomic_set(&g_radio.rx_done, 0);
 }
 
-u8 zb_radio_trx_state_get(void)
+uint8_t zb_radio_trx_state_get(void)
 {
 	return g_radio.trx_state;
 }
 
-void zb_radio_rx_buf_set(u8 *addr)
+void zb_radio_rx_buf_set(uint8_t *addr)
 {
 	ARG_UNUSED(addr);
 }
 
-u8 *zb_radio_next_rx_buf_get(void)
+uint8_t *zb_radio_next_rx_buf_get(void)
 {
 	return zb_radio_legacy_rx_buf;
 }
 
-u8 zb_radio_pkt_rssi_get(const u8 *p)
+uint8_t zb_radio_pkt_rssi_get(const uint8_t *p)
 {
 	ARG_UNUSED(p);
 

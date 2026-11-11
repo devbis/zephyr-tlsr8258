@@ -12,52 +12,52 @@
 #include "security_service.h"
 
 typedef struct _attribute_packed_ {
-	u8 securityLevel: 3;
-	u8 keyIdentifer: 2;
-	u8 extendedNonce: 1;
-	u8 reserved: 2;
-	u32 frameCnt;
+	uint8_t securityLevel: 3;
+	uint8_t keyIdentifer: 2;
+	uint8_t extendedNonce: 1;
+	uint8_t reserved: 2;
+	uint32_t frameCnt;
 } ss_apsEncryAuxCommonHdr_t;
 
 typedef struct _attribute_packed_ {
-	u8 securityLevel: 3;
-	u8 keyIdentifer: 2;
-	u8 extendedNonce: 1;
-	u8 reserved: 2;
-	u32 frameCnt;
+	uint8_t securityLevel: 3;
+	uint8_t keyIdentifer: 2;
+	uint8_t extendedNonce: 1;
+	uint8_t reserved: 2;
+	uint32_t frameCnt;
 	addrExt_t srcAddr;
-	u8 keySeqNum;
+	uint8_t keySeqNum;
 } ss_apsNwkAuxFrameHdr_t;
 
 typedef struct _attribute_packed_ {
 	addrExt_t srcAddr;
-	u32 frameCnt;
-	u8 secureCtrl;
+	uint32_t frameCnt;
+	uint8_t secureCtrl;
 } ss_securityCcmNonce_t;
 
 typedef struct _attribute_packed_ {
-	u8 apsHdrLen;
-	u8 frameCtrl;
-	u8 apsCounter;
-	u8 srcEp;
-	u16 srcShortAddr;
+	uint8_t apsHdrLen;
+	uint8_t frameCtrl;
+	uint8_t apsCounter;
+	uint8_t srcEp;
+	uint16_t srcShortAddr;
 } ss_apsHdrParsed_t;
 
-#define SS_CLR_SECURITY_LEVEL(d)    ((*(u8 *)(d)) &= 0xf8U)
-#define SS_SET_SECURITY_LEVEL(d, v) ((*(u8 *)(d)) = (u8)((*(u8 *)(d) & 0xf8U) | ((v) & 0x07U)))
+#define SS_CLR_SECURITY_LEVEL(d)    ((*(uint8_t *)(d)) &= 0xf8U)
+#define SS_SET_SECURITY_LEVEL(d, v) ((*(uint8_t *)(d)) = (uint8_t)((*(uint8_t *)(d) & 0xf8U) | ((v) & 0x07U)))
 #define SS_AUX_NONCE_INCLUDE(d)     ((d) & BIT(5))
 
-u8 g_zbDefaultLinkKeyEn = 1;
+uint8_t g_zbDefaultLinkKeyEn = 1;
 
-_CODE_SS_ u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt)
+_CODE_SS_ uint8_t ss_apsEnAuxHdrFill(uint8_t *auxHdr, void *keyInfo, uint8_t extNonceOpt)
 {
-	u8 *p = auxHdr + 5;
-	u8 *key = (u8 *)keyInfo;
+	uint8_t *p = auxHdr + 5;
+	uint8_t *key = (uint8_t *)keyInfo;
 
 	COPY_U32TOBUFFER(auxHdr + 1, ss_ib.outgoingFrameCounter);
 	ss_ib.outgoingFrameCounter++;
 
-	auxHdr[0] = (u8)((auxHdr[0] & (u8)~0x07U) | 0x05U);
+	auxHdr[0] = (uint8_t)((auxHdr[0] & (uint8_t)~0x07U) | 0x05U);
 
 	if (key != NULL) {
 		auxHdr[0] |= 0x20U;
@@ -66,44 +66,44 @@ _CODE_SS_ u8 ss_apsEnAuxHdrFill(u8 *auxHdr, void *keyInfo, u8 extNonceOpt)
 
 		if (key[0] != 5U) {
 			if (key[1] == 1U) {
-				auxHdr[0] = (u8)((auxHdr[0] & (u8)~0x18U) | 0x10U);
+				auxHdr[0] = (uint8_t)((auxHdr[0] & (uint8_t)~0x18U) | 0x10U);
 			} else {
 				auxHdr[0] |= 0x18U;
 			}
 		} else {
-			auxHdr[0] &= (u8)~0x18U;
+			auxHdr[0] &= (uint8_t)~0x18U;
 		}
 	} else if ((extNonceOpt & 0x20U) != 0U) {
 		auxHdr[0] |= 0x20U;
 		ZB_IEEE_ADDR_COPY(auxHdr + 5, g_zbMacPib.extAddress);
 		p = auxHdr + 13;
-		auxHdr[0] &= (u8)~0x18U;
+		auxHdr[0] &= (uint8_t)~0x18U;
 	} else {
-		auxHdr[0] &= (u8)~0x18U;
+		auxHdr[0] &= (uint8_t)~0x18U;
 	}
 
-	return (u8)(p - auxHdr);
+	return (uint8_t)(p - auxHdr);
 }
 
-_CODE_SS_ static void ss_apsSecureStatus(void *arg, u16 addrShort, aps_status_t status)
+_CODE_SS_ static void ss_apsSecureStatus(void *arg, uint16_t addrShort, aps_status_t status)
 {
 	nlme_nwkStatus_ind_t *cmd = (nlme_nwkStatus_ind_t *)arg;
 
 	cmd->status = (nwk_statusCode_t)status;
 	cmd->nwkAddr = addrShort;
-	tl_zbTaskPost(zdo_nlme_status_indication, arg);
+	zb_TaskPost(zdo_nlme_status_indication, arg);
 }
 
-_CODE_SS_ u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t extAddr)
+_CODE_SS_ uint8_t ss_apsSecureFrame(void *p, uint8_t apsHdrAuxLen, uint8_t apsHdrLen, addrExt_t extAddr)
 {
 	nlde_data_req_t *nldereq = (nlde_data_req_t *)p;
 	ss_apsNwkAuxFrameHdr_t aux;
 	ss_securityCcmNonce_t nonce;
 	ss_dev_pair_set_t keyPair;
-	u8 *payloadAddr;
-	u8 *key = NULL;
-	u8 keyTemp[SEC_KEY_LEN];
-	u8 *msgStartAddr = nldereq->nsdu;
+	uint8_t *payloadAddr;
+	uint8_t *key = NULL;
+	uint8_t keyTemp[SEC_KEY_LEN];
+	uint8_t *msgStartAddr = nldereq->nsdu;
 	bool haveKeyPair = FALSE;
 
 	memset(&aux, 0, sizeof(aux));
@@ -113,7 +113,7 @@ _CODE_SS_ u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t
 
 	payloadAddr = msgStartAddr + apsHdrAuxLen;
 	msgStartAddr[0] |= 0x20U;
-	memcpy(&aux, msgStartAddr + apsHdrLen, (u16)(apsHdrAuxLen - apsHdrLen));
+	memcpy(&aux, msgStartAddr + apsHdrLen, (uint16_t)(apsHdrAuxLen - apsHdrLen));
 
 	if (aux.keyIdentifer == SS_SECUR_NWK_KEY) {
 		key = ss_ib.nwkSecurMaterialSet[ss_ib_active_secure_material_index_get()].key;
@@ -139,7 +139,7 @@ _CODE_SS_ u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t
 		}
 
 		if (aux.keyIdentifer != SS_SECUR_DATA_KEY) {
-			u8 hashInput = (aux.keyIdentifer == SS_SECUR_KEY_LOAD_KEY) ? 2U : 0U;
+			uint8_t hashInput = (aux.keyIdentifer == SS_SECUR_KEY_LOAD_KEY) ? 2U : 0U;
 			if (ss_keyHash(&hashInput, key, keyTemp) == RET_OK) {
 				key = keyTemp;
 			}
@@ -148,43 +148,43 @@ _CODE_SS_ u8 ss_apsSecureFrame(void *p, u8 apsHdrAuxLen, u8 apsHdrLen, addrExt_t
 
 	nonce.frameCnt = aux.frameCnt;
 	aux.securityLevel = 5;
-	nonce.secureCtrl = *(u8 *)&aux;
+	nonce.secureCtrl = *(uint8_t *)&aux;
 	ZB_IEEE_ADDR_COPY(nonce.srcAddr, g_zbMacPib.extAddress);
 
 	{
-		u8 srcMsgLen = (u8)(nldereq->nsduLen - apsHdrAuxLen);
-		u8 len = ss_ccmEncryption(key, (u8 *)&nonce, apsHdrAuxLen, msgStartAddr, srcMsgLen,
+		uint8_t srcMsgLen = (uint8_t)(nldereq->nsduLen - apsHdrAuxLen);
+		uint8_t len = ss_ccmEncryption(key, (uint8_t *)&nonce, apsHdrAuxLen, msgStartAddr, srcMsgLen,
 					  payloadAddr);
 
-		nldereq->nsduLen = (u8)(apsHdrAuxLen + len);
+		nldereq->nsduLen = (uint8_t)(apsHdrAuxLen + len);
 	}
 
 	SS_CLR_SECURITY_LEVEL(msgStartAddr + apsHdrLen);
 	return RET_OK;
 }
 
-_CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
+_CODE_SS_ uint8_t ss_apsDecryptFrame(void *arg)
 {
 	nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
-	ss_apsHdrParsed_t *apsHdr = (ss_apsHdrParsed_t *)((u8 *)arg + sizeof(nlde_data_ind_t));
+	ss_apsHdrParsed_t *apsHdr = (ss_apsHdrParsed_t *)((uint8_t *)arg + sizeof(nlde_data_ind_t));
 	ss_apsEncryAuxCommonHdr_t aux;
 	ss_securityCcmNonce_t nonce;
 	ss_dev_pair_set_t keyPair;
-	u8 keyTemp[SEC_KEY_LEN];
-	u8 *auxStart;
-	u8 *cursor;
-	u8 *key = NULL;
-	u8 *retryPayload = NULL;
-	u8 *retryKey;
-	u8 retryKeyIndex;
-	u8 retryKeyCount;
-	u8 publicKeyMask;
-	u8 factoryNewTransport;
+	uint8_t keyTemp[SEC_KEY_LEN];
+	uint8_t *auxStart;
+	uint8_t *cursor;
+	uint8_t *key = NULL;
+	uint8_t *retryPayload = NULL;
+	uint8_t *retryKey;
+	uint8_t retryKeyIndex;
+	uint8_t retryKeyCount;
+	uint8_t publicKeyMask;
+	uint8_t factoryNewTransport;
 	ss_dev_pair_set_t *pair;
-	u16 addrMapIdx;
+	uint16_t addrMapIdx;
 	addrExt_t neighborExtAddr;
-	tl_zb_normal_neighbor_entry_t *neighbor;
-	u8 ret;
+	zb_normal_neighbor_entry_t *neighbor;
+	uint8_t ret;
 
 	memset(&aux, 0, sizeof(aux));
 	memset(&nonce, 0, sizeof(nonce));
@@ -200,8 +200,8 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 		return RET_ERROR;
 	}
 
-	if (tl_zbExtAddrByShortAddr(apsHdr->srcShortAddr, nonce.srcAddr, &addrMapIdx) ==
-		    TL_RETURN_INVALID &&
+	if (zb_ExtAddrByShortAddr(apsHdr->srcShortAddr, nonce.srcAddr, &addrMapIdx) ==
+		    ZB_RETURN_INVALID &&
 	    aps_ib.aps_authenticated) {
 		return RET_ERROR;
 	}
@@ -235,7 +235,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 	}
 
 	if (aux.keyIdentifer == SS_SECUR_KEY_TRANSPORT_KEY) {
-		neighbor = tl_zbNeighborTableSearchFromShortAddr(apsHdr->srcShortAddr,
+		neighbor = zb_NeighborTableSearchFromShortAddr(apsHdr->srcShortAddr,
 								 neighborExtAddr, &addrMapIdx);
 		if (neighbor != NULL && neighbor->deviceType != NWK_DEVICE_TYPE_COORDINATOR &&
 		    ZB_IEEE_ADDR_CMP(neighborExtAddr, nonce.srcAddr)) {
@@ -253,7 +253,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 	}
 
 	if (aux.keyIdentifer != SS_SECUR_DATA_KEY) {
-		u8 hashInput = (aux.keyIdentifer == SS_SECUR_KEY_LOAD_KEY) ? 2U : 0U;
+		uint8_t hashInput = (aux.keyIdentifer == SS_SECUR_KEY_LOAD_KEY) ? 2U : 0U;
 
 		if (ss_keyHash(&hashInput, key, keyTemp) == RET_OK) {
 			key = keyTemp;
@@ -262,13 +262,13 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 
 	nonce.frameCnt = aux.frameCnt;
 	aux.securityLevel = 5;
-	nonce.secureCtrl = *(u8 *)&aux;
+	nonce.secureCtrl = *(uint8_t *)&aux;
 
 	factoryNewTransport =
-		(u8)((zb_isDeviceFactoryNew() != FALSE) && (g_zbNwkCtx.is_factory_new != 0U) &&
+		(uint8_t)((zb_isDeviceFactoryNew() != FALSE) && (g_zbNwkCtx.is_factory_new != 0U) &&
 		     (aux.keyIdentifer == SS_SECUR_KEY_TRANSPORT_KEY));
 	if (factoryNewTransport != 0U) {
-		u8 payloadLen = (u8)((ind->nsdu + ind->nsduLen) - cursor);
+		uint8_t payloadLen = (uint8_t)((ind->nsdu + ind->nsduLen) - cursor);
 
 		retryPayload = ev_buf_allocate(payloadLen);
 		if (retryPayload != NULL) {
@@ -276,35 +276,35 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 		}
 	}
 
-	ret = ss_ccmDecryption(key, (u8 *)&nonce, (u8)(cursor - ind->nsdu), ind->nsdu,
-			       (u8)((ind->nsdu + ind->nsduLen) - cursor), cursor);
+	ret = ss_ccmDecryption(key, (uint8_t *)&nonce, (uint8_t)(cursor - ind->nsdu), ind->nsdu,
+			       (uint8_t)((ind->nsdu + ind->nsduLen) - cursor), cursor);
 
 	if (factoryNewTransport != 0U && zb_isDeviceFactoryNew() != FALSE && ret != RET_OK &&
 	    retryPayload != NULL && pair == NULL) {
-		u8 payloadLen = (u8)((ind->nsdu + ind->nsduLen) - cursor);
+		uint8_t payloadLen = (uint8_t)((ind->nsdu + ind->nsduLen) - cursor);
 
-		publicKeyMask = (u8)(g_zbDefaultLinkKeyEn &
+		publicKeyMask = (uint8_t)(g_zbDefaultLinkKeyEn &
 				     (LINKKEY_MASTER_KEY_EN | LINKKEY_CERTIFICATION_KEY_EN));
 		retryKeyCount = 3;
 		for (retryKeyIndex = 0U; retryKeyIndex < retryKeyCount; retryKeyIndex++) {
 			if (retryKeyIndex == 0U) {
 				if ((publicKeyMask & LINKKEY_MASTER_KEY_EN) != 0U) {
-					retryKey = (u8 *)linkKeyDistributedMaster;
+					retryKey = (uint8_t *)linkKeyDistributedMaster;
 				} else if ((publicKeyMask & LINKKEY_CERTIFICATION_KEY_EN) != 0U) {
-					retryKey = (u8 *)linkKeyDistributedCertification;
+					retryKey = (uint8_t *)linkKeyDistributedCertification;
 				} else {
-					retryKey = (u8 *)tcLinkKeyCentralDefault;
+					retryKey = (uint8_t *)tcLinkKeyCentralDefault;
 				}
 			} else if (retryKeyIndex == 1U) {
 				if ((publicKeyMask & LINKKEY_CERTIFICATION_KEY_EN) != 0U) {
-					retryKey = (u8 *)linkKeyDistributedCertification;
+					retryKey = (uint8_t *)linkKeyDistributedCertification;
 				} else if ((publicKeyMask & LINKKEY_MASTER_KEY_EN) != 0U) {
-					retryKey = (u8 *)linkKeyDistributedMaster;
+					retryKey = (uint8_t *)linkKeyDistributedMaster;
 				} else {
-					retryKey = (u8 *)tcLinkKeyCentralDefault;
+					retryKey = (uint8_t *)tcLinkKeyCentralDefault;
 				}
 			} else {
-				retryKey = (u8 *)tcLinkKeyCentralDefault;
+				retryKey = (uint8_t *)tcLinkKeyCentralDefault;
 			}
 
 			if (memcmp(retryKey, key, SEC_KEY_LEN) == 0) {
@@ -313,8 +313,8 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 
 			memcpy(cursor, retryPayload, payloadLen);
 			key = retryKey;
-			ret = ss_ccmDecryption(key, (u8 *)&nonce, (u8)(cursor - ind->nsdu),
-					       ind->nsdu, (u8)((ind->nsdu + ind->nsduLen) - cursor),
+			ret = ss_ccmDecryption(key, (uint8_t *)&nonce, (uint8_t)(cursor - ind->nsdu),
+					       ind->nsdu, (uint8_t)((ind->nsdu + ind->nsduLen) - cursor),
 					       cursor);
 			if (ret == RET_OK) {
 				break;
@@ -331,7 +331,7 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 	}
 
 	if (ret == RET_OK) {
-		ind->nsduLen = (u8)(ind->nsduLen - ((cursor - auxStart) + 4));
+		ind->nsduLen = (uint8_t)(ind->nsduLen - ((cursor - auxStart) + 4));
 		ind->nsdu = ind->nsdu + (cursor - auxStart);
 	}
 
@@ -340,5 +340,5 @@ _CODE_SS_ u8 ss_apsDecryptFrame(void *arg)
 
 void ss_pubLinkKeySelect(ss_pubLinkKeyOpt_e ks)
 {
-	g_zbDefaultLinkKeyEn = (u8)ks;
+	g_zbDefaultLinkKeyEn = (uint8_t)ks;
 }

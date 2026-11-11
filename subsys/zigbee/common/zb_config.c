@@ -29,7 +29,7 @@
 /* Zephyr port: vendor "includes/zb_common.h" is replaced by the local
  * zb_common.h aggregator that pulls in the same af/aps/mac/nwk/ss
  * headers. Vendor types tied to the vendor task/buffer runtime
- * (zb_buf_pool_t, tl_zbtaskq_user_t) are gated by the
+ * (zb_buf_pool_t, zb_taskq_user_t) are gated by the
  * ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL / _TASKQ_USER macros below — the
  * Zephyr runtime uses zb_main.c + drv_nv_zephyr.c instead, so those
  * tables would just sit unused.
@@ -49,8 +49,8 @@
  * normally provide. Mirrored from tl_zigbee_sdk vendor defaults so the
  * SDK zb_config.c body stays bit-identical.
  */
-#ifndef TL_RXPRIMITIVEHDR
-#define TL_RXPRIMITIVEHDR               32
+#ifndef ZB_RXPRIMITIVEHDR
+#define ZB_RXPRIMITIVEHDR               32
 #endif
 #ifndef ZB_MAC_RX_ON_WHEN_IDLE
 #define ZB_MAC_RX_ON_WHEN_IDLE          0
@@ -95,54 +95,54 @@ sys_diagnostics_t g_sysDiags;
  * Routers and end devices to join PAN with this ID
  */
 #define DEFAULT_PANID   MAC_INVALID_PANID
-u16 TL_ZB_ASSOCJOIN_PERMIT_PANID = DEFAULT_PANID;
+uint16_t ZB_ASSOCJOIN_PERMIT_PANID = DEFAULT_PANID;
 
 /*
  * Setting this to a value other than MAC_INVALID_PANID (0xFFFF) causes
  * Routers and end devices to filter the PAN ID when associate join a network
  */
 #define FILTER_PANID    MAC_INVALID_PANID
-u16 TL_ZB_ASSOCJOIN_FILTER_PANID = FILTER_PANID;
+uint16_t ZB_ASSOCJOIN_FILTER_PANID = FILTER_PANID;
 
 /* APS data fragmentation setting */
-u8 APS_INTERFRAME_DELAY = 100;//ms
-u8 APS_MAX_WINDOW_SIZE = 1;
-u8 APS_FRAGMEMT_PAYLOAD_SIZE = 64;
+uint8_t APS_INTERFRAME_DELAY = 100;//ms
+uint8_t APS_MAX_WINDOW_SIZE = 1;
+uint8_t APS_FRAGMEMT_PAYLOAD_SIZE = 64;
 
 //The maximum number of retries allowed after a transmission failure.
-u8 APS_MAX_FRAME_RETRIES = 3;
-u8 APS_ACK_EXPIRY = 2;//seconds
+uint8_t APS_MAX_FRAME_RETRIES = 3;
+uint8_t APS_ACK_EXPIRY = 2;//seconds
 
 #if !ZB_ZEPHYR_NO_VENDOR_BUFFER_POOL
 /* buffer pool size for zigbee pro */
-u8 ZB_BUF_POOL_SIZE = ZB_BUF_POOL_NUM;
+uint8_t ZB_BUF_POOL_SIZE = ZB_BUF_POOL_NUM;
 zb_buf_pool_t g_mPool;
 #endif
 
 #if !ZB_ZEPHYR_NO_VENDOR_TASKQ_USER
 /* taskQ size */
-u8 ZB_TASKQ_USERUSE_SIZE = TL_ZBTASKQ_USERUSE_SIZE;
-tl_zbtaskq_user_t taskQ_user;
+uint8_t ZB_TASKQ_USERUSE_SIZE = ZB_ZBTASKQ_USERUSE_SIZE;
+zb_taskq_user_t taskQ_user;
 #endif
 
 /* for indirect pending queue */
-u8 ZB_MAC_PENDING_TRANS_QUEUE_SIZE = ZB_MAC_PENDING_TRANS_QUEUE_NUM;
-u8 ZB_MAC_EXT_EXPEIRY_CNT = ZB_MAC_INTERNAL_EXPIRY_CNT;
+uint8_t ZB_MAC_PENDING_TRANS_QUEUE_SIZE = ZB_MAC_PENDING_TRANS_QUEUE_NUM;
+uint8_t ZB_MAC_EXT_EXPEIRY_CNT = ZB_MAC_INTERNAL_EXPIRY_CNT;
 
 /* the lqi threshold for neighbor */
-u8 NWK_NEIGHBORTBL_ADD_LQITHRESHOLD = 0x45;
+uint8_t NWK_NEIGHBORTBL_ADD_LQITHRESHOLD = 0x45;
 
 /* the life time for unauthorized child table, 5 seconds */
-u32 NWK_UNAUTH_CHILD_TABLE_LIFE_TIME = (5 * 1000);
+uint32_t NWK_UNAUTH_CHILD_TABLE_LIFE_TIME = (5 * 1000);
 
 /* timeout waiting for transport nwk key during association join or security rejoin, 30 seconds */
-u32 TRANSPORT_NETWORK_KEY_WAIT_TIME = (30 * 1000);
+uint32_t TRANSPORT_NETWORK_KEY_WAIT_TIME = (30 * 1000);
 
 /* the cost threshold for one hop */
-u8 NWK_COST_THRESHOLD_ONEHOP = 7;
+uint8_t NWK_COST_THRESHOLD_ONEHOP = 7;
 
 /* the cost threshold to choose next hop from neighbor table */
-u8 NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD = 5;
+uint8_t NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD = 5;
 
 /* whether add src ieee address in nwk header for the data from higher level */
 bool NWK_HEADER_SRC_IEEE_INCLUDE = FALSE;
@@ -153,19 +153,19 @@ bool SS_ALLOW_REMOTE_TC_POLICY_CHANGE = TRUE;//FALSE;
 #endif
 
 /* address mapping table */
-u16 TL_ZB_NWK_ADDR_MAP_SIZE = TL_ZB_NWK_ADDR_MAP_NUM;
-tl_zb_addr_map_t g_nwkAddrMap;
+uint16_t ZB_NWK_ADDR_MAP_SIZE = ZB_NWK_ADDR_MAP_NUM;
+zb_addr_map_t g_nwkAddrMap;
 
 /* neighbor table */
-u8 TL_ZB_NEIGHBOR_TABLE_SIZE = TL_ZB_NEIGHBOR_TABLE_NUM;
-u8 TL_ZB_CHILD_TABLE_SIZE = TL_ZB_CHILD_TABLE_NUM;
-tl_zb_neighbor_entry_t g_zb_neighborTbl;
+uint8_t ZB_NEIGHBOR_TABLE_SIZE = ZB_NEIGHBOR_TABLE_NUM;
+uint8_t ZB_CHILD_TABLE_SIZE = ZB_CHILD_TABLE_NUM;
+zb_neighbor_entry_t g_zb_neighborTbl;
 
 /* Broadcasting table */
 #if ZB_ROUTER_ROLE
 bool NWK_BRC_PASSIVE_ACK_ENABLE = TRUE;
-u8 NWK_BRC_TRANSTBL_SIZE = NWK_BRC_TRANSTBL_NUM;
-u32 NWK_BRC_JITTER = NWK_MAX_BROADCAST_JITTER;
+uint8_t NWK_BRC_TRANSTBL_SIZE = NWK_BRC_TRANSTBL_NUM;
+uint32_t NWK_BRC_JITTER = NWK_MAX_BROADCAST_JITTER;
 nwk_brcTransRecordEntry_t g_brcTransTab[NWK_BRC_TRANSTBL_NUM];
 #endif
 
@@ -174,71 +174,71 @@ nwk_brcTransRecordEntry_t g_brcTransTab[NWK_BRC_TRANSTBL_NUM];
  * shared with the router-side endDev-timeout path).
  */
 bool AUTO_QUICK_DATA_POLL_ENABLE = TRUE;
-u32 AUTO_QUICK_DATA_POLL_INTERVAL = POLL_RATE_QUARTERSECONDS;//ms
-u8 AUTO_QUICK_DATA_POLL_TIMES = 3;
+uint32_t AUTO_QUICK_DATA_POLL_INTERVAL = POLL_RATE_QUARTERSECONDS;//ms
+uint8_t AUTO_QUICK_DATA_POLL_TIMES = 3;
 
 /* choose the previous parent first when rejoin. */
 bool PRE_PARENT_FIRST_WHEN_REJOIN = TRUE;
 
 /* binding table */
-u8 APS_BINDING_TABLE_SIZE = APS_BINDING_TABLE_NUM;
+uint8_t APS_BINDING_TABLE_SIZE = APS_BINDING_TABLE_NUM;
 aps_binding_entry_t g_apsBindingTbl[APS_BINDING_TABLE_NUM];
 
 /* group table */
-u8 APS_GROUP_TABLE_SIZE = APS_GROUP_TABLE_NUM;
+uint8_t APS_GROUP_TABLE_SIZE = APS_GROUP_TABLE_NUM;
 aps_group_tbl_ent_t aps_group_tbl[APS_GROUP_TABLE_NUM];
-u16 GROUP_MESSAGE_SEND_ADDRESS = NWK_BROADCAST_RX_ON_WHEN_IDLE;
+uint16_t GROUP_MESSAGE_SEND_ADDRESS = NWK_BROADCAST_RX_ON_WHEN_IDLE;
 
 /* APS layer TX cache size */
-u8 APS_TX_CACHE_TABLE_SIZE = APS_TX_CACHE_TABLE_NUM;
+uint8_t APS_TX_CACHE_TABLE_SIZE = APS_TX_CACHE_TABLE_NUM;
 aps_tx_cache_list_t aps_txCache_tbl[APS_TX_CACHE_TABLE_NUM];
 
 /* the offset of the rx buffer to the zb-buffer */
-u8 RX_ZBBUF_OFFSET = TL_RXPRIMITIVEHDR;
+uint8_t RX_ZBBUF_OFFSET = ZB_RXPRIMITIVEHDR;
 
 /* MAC layer TX Queue size */
-u8 MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
+uint8_t MAC_TX_QUEUE_SIZE = TX_QUEUE_BN;
 tx_data_queue g_txQueue[TX_QUEUE_BN];
 
 /* WWAH long up time threshold, (24 * 60 * 60) seconds. */
-u32 LONG_UPTIME_THRESHOLD = 86400;
+uint32_t LONG_UPTIME_THRESHOLD = 86400;
 
 //default network key
 /* If all zero, will generate 16-bytes network key randomly. */
 #if 1
-const u8 nwkKeyDefault[] = {
+const uint8_t nwkKeyDefault[] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0
 };
 #else
-const u8 nwkKeyDefault[] = {
+const uint8_t nwkKeyDefault[] = {
     0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78, 0x89,
     0x9a, 0xab, 0xbc, 0xcd, 0xde, 0xef, 0xf0, 0x01
 };
 #endif
 
 //Global trust center link key which used in centralized security network
-const u8 tcLinkKeyCentralDefault[] = {
+const uint8_t tcLinkKeyCentralDefault[] = {
     0x5a, 0x69, 0x67, 0x42, 0x65, 0x65, 0x41, 0x6c,
     0x6c, 0x69, 0x61, 0x6e, 0x63, 0x65, 0x30, 0x39
 };
 
 //certification link key for distributed network
-const u8 linkKeyDistributedCertification[] = {
+const uint8_t linkKeyDistributedCertification[] = {
     0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
     0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf
 };
 
 /* touch-link link key */
-const u8 touchLinkKeyCertification[] = {
+const uint8_t touchLinkKeyCertification[] = {
     0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
     0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf
 };
 
 /* Default PIB settings for MAC layer. */
-const tl_zb_mac_pib_t macPibDefault = {
+const zb_mac_pib_t macPibDefault = {
     .ackWaitDuration                    = (ZB_MAC_UNIT_BACKOFF_PERIOD + ZB_PHY_TURNROUNDTIME
-                                        + ZB_PHY_SHR_DURATION + (u16)(6 * ZB_PHY_SYMBOLS_PER_OCTET)),
+                                        + ZB_PHY_SHR_DURATION + (uint16_t)(6 * ZB_PHY_SYMBOLS_PER_OCTET)),
     .frameRetryNum                      = ZB_MAC_FRAME_RETRIES_MAX,
     .transactionPersistenceTime         = 0x01f4,
     .panId                              = DEFAULT_PANID,
@@ -323,7 +323,7 @@ const zdo_attrCfg_t zdoCfgAttrDefault = {
 /*
  * @brief: get record entry for broadcasting record table
  */
-nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(u8 idx)
+nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(uint8_t idx)
 {
     return &g_brcTransTab[idx];
 }
@@ -331,7 +331,7 @@ nwk_brcTransRecordEntry_t *brcTransRecordEntryGet(u8 idx)
 /*
  * @brief: get the size of the broadcasting record table
  */
-u32 brcTransRecordTblSizeGet(void)
+uint32_t brcTransRecordTblSizeGet(void)
 {
     return (sizeof(g_brcTransTab));
 }
@@ -349,7 +349,7 @@ aps_binding_entry_t *bindTblEntryGet(void)
 /*
  * @brief: get the size of zigbee buffer
  */
-u32 zbBufferSizeGet(void)
+uint32_t zbBufferSizeGet(void)
 {
     return (sizeof(g_mPool));
 }
@@ -358,15 +358,15 @@ u32 zbBufferSizeGet(void)
 /*
  * @brief: get the size of the neighbor table
  */
-u32 neighborTblSizeGet(void)
+uint32_t neighborTblSizeGet(void)
 {
-    return (sizeof(tl_zb_neighbor_entry_t));
+    return (sizeof(zb_neighbor_entry_t));
 }
 
 /*
  * @brief: get the size of the address mapping table
  */
-u32 addrMapTblSizeGet(void)
+uint32_t addrMapTblSizeGet(void)
 {
-    return (sizeof(tl_zb_addr_map_t));
+    return (sizeof(zb_addr_map_t));
 }

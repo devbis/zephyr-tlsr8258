@@ -68,44 +68,44 @@ typedef struct _attribute_packed_ {
     files in order to quickly identify and distinguish the file as being a ZigBee OTA cluster upgrade file,
     without having to examine the whole file content. This helps distinguishing the file from other file
     types on disk. The value is defined to be "0x0BEEF11E".*/
-    u32 otaUpgradeFileID;
+    uint32_t otaUpgradeFileID;
 
     /*The current OTA header version shall be 0x0100 with major version of "01" and minor version of "00".*/
-    u16 otaHdrVer;
+    uint16_t otaHdrVer;
 
     /*This value indicates full length of the OTA header in bytes, including the OTA upgrade file identifier,
     OTA header length itself to any optional fields.*/
-    u16 otaHdrLen;
+    uint16_t otaHdrLen;
     //The bit mask indicates whether additional information such as Image Signature or Signing Certificate
     //are included as part of the OTA Upgrade Image.
-    u16 otaHdrFC;
+    uint16_t otaHdrFC;
 
-    u16 manufacturerCode;
+    uint16_t manufacturerCode;
 
     /*The manufacturer should assign an appropriate and unique image type value to each of its devices in
     651 order to distinguish the products.*/
-    u16 imageType;
+    uint16_t imageType;
 
     //
-    u32 fileVer;
-    u16 zbStackVer;
+    uint32_t fileVer;
+    uint16_t zbStackVer;
     //TLNK
-    u8 otaHdrString[32];
+    uint8_t otaHdrString[32];
     //The value represents the total image size in bytes.
-    u32 totalImageSize;
+    uint32_t totalImageSize;
 
-    u8 securityCredVer;
+    uint8_t securityCredVer;
     addrExt_t fileDest;
-    u16 minHdrVer;
-    u16 maxHdrVer;
+    uint16_t minHdrVer;
+    uint16_t maxHdrVer;
 } ota_hdrFields_t; //69-bytes
 
 typedef struct {
-    u32 fileVer;
+    uint32_t fileVer;
     //The value represents the total image size in bytes.
-    u32 totalImageSize;
-    u16 imageType;
-    u16 manufacturerCode;
+    uint32_t totalImageSize;
+    uint16_t imageType;
+    uint16_t manufacturerCode;
 } ota_preamble_t;
 
 
@@ -150,22 +150,22 @@ typedef enum {
 typedef struct {
     af_simple_descriptor_t *simpleDesc;
     ota_preamble_t *pOtaPreamble;//run code bin firmware info
-    u32 downloadImageSize;
+    uint32_t downloadImageSize;
     epInfo_t otaServerEpInfo;//server endPoint information
-    u8 imageBlockRetry;
-    u8 upgradeEndRetry;
+    uint8_t imageBlockRetry;
+    uint8_t upgradeEndRetry;
     bool isOtaServer;
 } ota_ctx_t;
 
 typedef struct _attribute_packed_ {
-    u32 offset;
-    u32 crcValue;
-    u32 otaElementPos;
-    u32 otaElementLen;
-    u16 otaElementTag;
-    u8 otaElementInfo1;//manufacturer specific use
-    u8 otaElementInfo2;//manufacturer specific use, fillNum
-    u8 clientOtaFlg;
+    uint32_t offset;
+    uint32_t crcValue;
+    uint32_t otaElementPos;
+    uint32_t otaElementLen;
+    uint16_t otaElementTag;
+    uint8_t otaElementInfo1;//manufacturer specific use
+    uint8_t otaElementInfo2;//manufacturer specific use, fillNum
+    uint8_t clientOtaFlg;
 } ota_clientInfo_t;
 
 typedef enum {
@@ -174,7 +174,7 @@ typedef enum {
     OTA_EVT_COMPLETE,
 } ota_evt_t;
 
-typedef void (*ota_processMsg_t)(u8 evt, u8 status);
+typedef void (*ota_processMsg_t)(uint8_t evt, uint8_t status);
 
 typedef struct {
     ota_processMsg_t processMsgCbFunc;
@@ -183,19 +183,19 @@ typedef struct {
 
 
 extern addrExt_t zcl_attr_upgradeServerID;
-extern u32 zcl_attr_fileOffset;
-extern u32 zcl_attr_currFileVer;
-extern u16 zcl_attr_currZigbeeStackVer;
-extern u32 zcl_attr_downloadFileVer;
-extern u16 zcl_attr_downloadZigbeeStackVer;
-extern u8 zcl_attr_imageUpgradeStatus;
-extern u16 zcl_attr_manufacturerID;
-extern u16 zcl_attr_imageTypeID;
-extern u16 zcl_attr_minBlockPeriod;//in seconds
-//extern u32 zcl_attr_imageStamp;
+extern uint32_t zcl_attr_fileOffset;
+extern uint32_t zcl_attr_currFileVer;
+extern uint16_t zcl_attr_currZigbeeStackVer;
+extern uint32_t zcl_attr_downloadFileVer;
+extern uint16_t zcl_attr_downloadZigbeeStackVer;
+extern uint8_t zcl_attr_imageUpgradeStatus;
+extern uint16_t zcl_attr_manufacturerID;
+extern uint16_t zcl_attr_imageTypeID;
+extern uint16_t zcl_attr_minBlockPeriod;//in seconds
+//extern uint32_t zcl_attr_imageStamp;
 
 extern const zcl_specClusterInfo_t g_otaClusterList[];
-extern u8 OTA_CB_CLUSTER_NUM;
+extern uint8_t OTA_CB_CLUSTER_NUM;
 
 
 extern bool g_otaEncryptionNeeded;
@@ -203,14 +203,14 @@ extern bool g_otaEncryptionNeeded;
 #define OTA_IMAGE_UNENCRYPTION_REJECT()     g_otaEncryptionNeeded = 1
 
 
-status_t zcl_otaCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload);
+status_t zcl_otaCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload);
 
-void ota_wwah_useTrustCenter(u8 endpoint);
+void ota_wwah_useTrustCenter(uint8_t endpoint);
 
-u8 ota_loadImageInfo(ota_hdrFields_t *oh);
+uint8_t ota_loadImageInfo(ota_hdrFields_t *oh);
 void ota_init(ota_type_e type, af_simple_descriptor_t *simpleDesc, ota_preamble_t *otaPreamble, ota_callBack_t *cb);
-void ota_queryStart(u16 seconds);
-void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, u8 srvEndPoint);
+void ota_queryStart(uint16_t seconds);
+void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, uint8_t srvEndPoint);
 void ota_mcuReboot(void);
 void ota_upgradeAbort(void);
 

@@ -37,92 +37,92 @@ void zdo_touchLinkCbRegister(zdo_touchLinkCb_t *cbTbl)
 	zdoTouchLinkCb = cbTbl;
 }
 
-void zdo_af_set_link_retry_threshold(u8 threshold)
+void zdo_af_set_link_retry_threshold(uint8_t threshold)
 {
 	zdo_cfg_attributes.config_parent_link_retry_threshold = threshold;
 }
 
-u8 zdo_af_get_link_retry_threshold(void)
+uint8_t zdo_af_get_link_retry_threshold(void)
 {
 	return zdo_cfg_attributes.config_parent_link_retry_threshold;
 }
 
-u32 zdo_af_get_syn_rate(void)
+uint32_t zdo_af_get_syn_rate(void)
 {
 	return zdo_cfg_attributes.config_nwk_indirectPollRate;
 }
 
-void zdo_af_set_syn_rate(u32 newRate)
+void zdo_af_set_syn_rate(uint32_t newRate)
 {
 	zdo_cfg_attributes.config_nwk_indirectPollRate = newRate;
 }
 
-void zdo_af_set_rejoin_times(u8 times)
+void zdo_af_set_rejoin_times(uint8_t times)
 {
 	zdo_cfg_attributes.config_rejoin_times = times;
 }
 
-u8 zdo_af_get_rejoin_times(void)
+uint8_t zdo_af_get_rejoin_times(void)
 {
 	return zdo_cfg_attributes.config_rejoin_times;
 }
 
-void zdo_af_set_rejoin_duration(u16 duration)
+void zdo_af_set_rejoin_duration(uint16_t duration)
 {
 	zdo_cfg_attributes.config_rejoin_duration = duration;
 }
 
-u16 zdo_af_get_rejoin_duration(void)
+uint16_t zdo_af_get_rejoin_duration(void)
 {
 	return zdo_cfg_attributes.config_rejoin_duration;
 }
 
-void zdo_af_set_rejoin_backoff_time(u16 interval)
+void zdo_af_set_rejoin_backoff_time(uint16_t interval)
 {
 	zdo_cfg_attributes.config_rejoin_backoff_time = interval;
 }
 
-u16 zdo_af_get_rejoin_backoff_time(void)
+uint16_t zdo_af_get_rejoin_backoff_time(void)
 {
 	return zdo_cfg_attributes.config_rejoin_backoff_time;
 }
 
-void zdo_af_set_max_rejoin_backoff_time(u16 interval)
+void zdo_af_set_max_rejoin_backoff_time(uint16_t interval)
 {
 	zdo_cfg_attributes.config_max_rejoin_backoff_time = interval;
 }
 
-u16 zdo_af_get_max_rejoin_backoff_time(void)
+uint16_t zdo_af_get_max_rejoin_backoff_time(void)
 {
 	return zdo_cfg_attributes.config_max_rejoin_backoff_time;
 }
 
-void zdo_af_set_rejoin_backoff_iteration(u16 iteration)
+void zdo_af_set_rejoin_backoff_iteration(uint16_t iteration)
 {
 	zdo_cfg_attributes.config_rejoin_backoff_iteration = iteration;
 }
 
-u16 zdo_af_get_rejoin_backoff_iteration(void)
+uint16_t zdo_af_get_rejoin_backoff_iteration(void)
 {
 	return zdo_cfg_attributes.config_rejoin_backoff_iteration;
 }
 
-void zdo_af_set_accept_nwk_update_pan_id(u16 panId)
+void zdo_af_set_accept_nwk_update_pan_id(uint16_t panId)
 {
 	zdo_cfg_attributes.config_accept_nwk_update_pan_id = panId;
 }
 
-u16 zdo_af_get_accept_nwk_update_pan_id(void)
+uint16_t zdo_af_get_accept_nwk_update_pan_id(void)
 {
 	return zdo_cfg_attributes.config_accept_nwk_update_pan_id;
 }
 
-void zdo_af_set_accept_nwk_update_channel(u8 channel)
+void zdo_af_set_accept_nwk_update_channel(uint8_t channel)
 {
 	zdo_cfg_attributes.config_accept_nwk_update_channel = channel;
 }
 
-u8 zdo_af_get_accept_nwk_update_channel(void)
+uint8_t zdo_af_get_accept_nwk_update_channel(void)
 {
 	return zdo_cfg_attributes.config_accept_nwk_update_channel;
 }
@@ -147,29 +147,29 @@ bool zdo_af_get_use_tc_sec_on_nwk_key_rotation(void)
 	return zdo_cfg_attributes.config_use_tc_sec_on_nwk_key_rotation;
 }
 
-u8 zdo_af_get_scan_attempts(void)
+uint8_t zdo_af_get_scan_attempts(void)
 {
 	return zdo_cfg_attributes.config_nwk_scan_attempts;
 }
 
-void zdo_af_set_scan_attempts(u8 attempts)
+void zdo_af_set_scan_attempts(uint8_t attempts)
 {
 	zdo_cfg_attributes.config_nwk_scan_attempts = attempts;
 }
 
-u16 zdo_af_get_nwk_time_btwn_scans(void)
+uint16_t zdo_af_get_nwk_time_btwn_scans(void)
 {
 	return zdo_cfg_attributes.config_nwk_time_btwn_scans;
 }
 
-u8 zdo_af_get_permit_join_duration(void)
+uint8_t zdo_af_get_permit_join_duration(void)
 {
 	return zdo_cfg_attributes.config_permit_join_duration;
 }
 
-u8 zdo_channel_page2num(u32 channelMask)
+uint8_t zdo_channel_page2num(uint32_t channelMask)
 {
-	for (u8 ch = 11U; ch < 27U; ch++) {
+	for (uint8_t ch = 11U; ch < 27U; ch++) {
 		if ((channelMask >> ch) & 0x1U) {
 			return ch;
 		}

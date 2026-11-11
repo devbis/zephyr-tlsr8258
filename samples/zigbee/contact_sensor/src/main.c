@@ -22,26 +22,26 @@
 
 #define CIE_ADDR_LEN 8U
 
-static const u16 cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
-static u8 zone_state = ZONE_STATE_NOT_ENROLLED;
-static const u16 zone_type = ZONE_TYPE_CONTACT_SWITCH;
-static u16 zone_status;
-static u8 zone_id = ZCL_ZONE_ID_INVALID;
-static u8 cie_addr[CIE_ADDR_LEN];
+static const uint16_t cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static uint8_t zone_state = ZONE_STATE_NOT_ENROLLED;
+static const uint16_t zone_type = ZONE_TYPE_CONTACT_SWITCH;
+static uint16_t zone_status;
+static uint8_t zone_id = ZCL_ZONE_ID_INVALID;
+static uint8_t cie_addr[CIE_ADDR_LEN];
 
 static const zclAttrInfo_t zone_attr_tbl[] = {
 	{ZCL_ATTRID_ZONE_STATE, ZCL_DATA_TYPE_ENUM8, ACCESS_CONTROL_READ, &zone_state},
-	{ZCL_ATTRID_ZONE_TYPE, ZCL_DATA_TYPE_ENUM16, ACCESS_CONTROL_READ, (u8 *)&zone_type},
+	{ZCL_ATTRID_ZONE_TYPE, ZCL_DATA_TYPE_ENUM16, ACCESS_CONTROL_READ, (uint8_t *)&zone_type},
 	{ZCL_ATTRID_ZONE_STATUS, ZCL_DATA_TYPE_BITMAP16, ACCESS_CONTROL_READ,
-	 (u8 *)&zone_status},
+	 (uint8_t *)&zone_status},
 	{ZCL_ATTRID_IAS_CIE_ADDR, ZCL_DATA_TYPE_IEEE_ADDR,
 	 ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, cie_addr},
 	{ZCL_ATTRID_ZONE_ID, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ, &zone_id},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&cluster_rev},
+	 (uint8_t *)&cluster_rev},
 };
 
-static u16 in_clusters[] = {
+static uint16_t in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
 	ZCL_CLUSTER_SS_IAS_ZONE,
@@ -61,7 +61,7 @@ static af_simple_descriptor_t simple_desc = {
 
 static zcl_specClusterInfo_t clusters[APP_COMMON_CLUSTER_NUM + 1U];
 
-static void dst_unicast(epInfo_t *dst, u16 addr, u8 ep)
+static void dst_unicast(epInfo_t *dst, uint16_t addr, uint8_t ep)
 {
 	memset(dst, 0, sizeof(*dst));
 	dst->dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
@@ -89,10 +89,10 @@ static void zone_status_report(bool alarm)
 	if (alarm) {
 		zone_status |= ZONE_STATUS_BIT_ALARM1;
 	} else {
-		zone_status &= (u16)~ZONE_STATUS_BIT_ALARM1;
+		zone_status &= (uint16_t)~ZONE_STATUS_BIT_ALARM1;
 	}
 	zcl_setAttrVal(APP_ENDPOINT, ZCL_CLUSTER_SS_IAS_ZONE, ZCL_ATTRID_ZONE_STATUS,
-		       (u8 *)&zone_status);
+		       (uint8_t *)&zone_status);
 
 	if (!zb_isDeviceJoinedNwk() || (zone_state != ZONE_STATE_ENROLLED)) {
 		return;
@@ -112,7 +112,7 @@ static void button_cb(uint8_t idx, bool pressed)
 	}
 }
 
-static status_t zone_cb(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payload)
+static status_t zone_cb(zclIncomingAddrInfo_t *addr_info, uint8_t cmd_id, void *payload)
 {
 	ARG_UNUSED(addr_info);
 

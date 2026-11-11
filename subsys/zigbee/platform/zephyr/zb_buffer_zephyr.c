@@ -10,7 +10,7 @@
  * router build doesn't pull in g_mPool (it depends on
  * zb_buf_pool_t which the Zephyr port doesn't mirror). Instead,
  * back the same zb_buf_allocate / zb_buf_free / zb_buf_clear /
- * is_zb_buf / tl_bufInitalloc / tl_phyRxBufTozbBuf API with a
+ * is_zb_buf / zb_bufInitalloc / zb_phyRxBufTozbBuf API with a
  * Zephyr k_mem_slab so callers stay binary-compatible with the
  * libzigbee NWK / MAC ports.
  */
@@ -53,12 +53,12 @@ K_MEM_SLAB_DEFINE_STATIC(zb_snap_slab, ZB_BUF_RX_SNAPSHOT_BYTES, CONFIG_ZIGBEE_R
  * Snapshot block a buffer holds plus one (0: none), by buffer index, and the buffer
  * a block belongs to.
  */
-static u8 zb_snap_of_buf[ZB_BUF_POOL_NUM];
-static u8 zb_buf_of_snap[CONFIG_ZIGBEE_RX_SNAPSHOTS];
+static uint8_t zb_snap_of_buf[ZB_BUF_POOL_NUM];
+static uint8_t zb_buf_of_snap[CONFIG_ZIGBEE_RX_SNAPSHOTS];
 #else
 typedef struct {
 	zb_buf_t zb;
-	u8 rx_snapshot[ZB_BUF_RX_SNAPSHOT_BYTES];
+	uint8_t rx_snapshot[ZB_BUF_RX_SNAPSHOT_BYTES];
 } zb_buf_block_t;
 #endif
 
@@ -69,14 +69,14 @@ K_MEM_SLAB_DEFINE_STATIC(zb_buf_slab, sizeof(zb_buf_block_t), ZB_BUF_POOL_NUM,
  * Track slab ownership so an invalid or duplicate free cannot corrupt the
  * slab free list.
  */
-static volatile u32 zb_buf_in_use[2];
+static volatile uint32_t zb_buf_in_use[2];
 static struct k_spinlock zb_buf_lock;
 
 /* zb_buf_in_use has one bit per block; zb_buf_to_ref() reserves 0xff. */
 BUILD_ASSERT(ZB_BUF_POOL_NUM <= ARRAY_SIZE(zb_buf_in_use) * 32U,
 	     "zb_buf pool larger than its ownership bitmap");
 
-static bool zb_buf_index(const zb_buf_t *buf, u32 *index)
+static bool zb_buf_index(const zb_buf_t *buf, uint32_t *index)
 {
 	uintptr_t addr = (uintptr_t)buf;
 	uintptr_t base = (uintptr_t)zb_buf_slab.buffer;
@@ -87,35 +87,35 @@ static bool zb_buf_index(const zb_buf_t *buf, u32 *index)
 		return false;
 	}
 
-	*index = (u32)((addr - base) / zb_buf_slab.info.block_size);
+	*index = (uint32_t)((addr - base) / zb_buf_slab.info.block_size);
 	return *index < ZB_BUF_POOL_NUM;
 }
 
-static inline bool zb_buf_owned(u32 index)
+static inline bool zb_buf_owned(uint32_t index)
 {
 	return (zb_buf_in_use[index >> 5] & BIT(index & 31U)) != 0U;
 }
 
-static inline void zb_buf_mark_owned(u32 index)
+static inline void zb_buf_mark_owned(uint32_t index)
 {
 	zb_buf_in_use[index >> 5] |= BIT(index & 31U);
 }
 
-static inline void zb_buf_mark_free(u32 index)
+static inline void zb_buf_mark_free(uint32_t index)
 {
 	zb_buf_in_use[index >> 5] &= ~BIT(index & 31U);
 }
 
 #if ZB_BUF_SNAPSHOT_POOL
-static inline u8 *zb_snap_addr(u32 snap)
+static inline uint8_t *zb_snap_addr(uint32_t snap)
 {
-	return (u8 *)zb_snap_slab.buffer + (size_t)snap * ZB_BUF_RX_SNAPSHOT_BYTES;
+	return (uint8_t *)zb_snap_slab.buffer + (size_t)snap * ZB_BUF_RX_SNAPSHOT_BYTES;
 }
 
 /* Give the snapshot of a buffer back to its pool. Call with zb_buf_lock held. */
-static void zb_snap_release(u32 buf_index)
+static void zb_snap_release(uint32_t buf_index)
 {
-	u8 held = zb_snap_of_buf[buf_index];
+	uint8_t held = zb_snap_of_buf[buf_index];
 
 	if (held != 0U) {
 		zb_snap_of_buf[buf_index] = 0U;
@@ -124,22 +124,22 @@ static void zb_snap_release(u32 buf_index)
 }
 
 /* The snapshot of a buffer, taken from the pool when it has none. NULL when the pool is empty. */
-static u8 *zb_snap_get(zb_buf_t *buf)
+static uint8_t *zb_snap_get(zb_buf_t *buf)
 {
 	k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
-	u32 index;
-	u8 *snap = NULL;
+	uint32_t index;
+	uint8_t *snap = NULL;
 
 	if (zb_buf_index(buf, &index)) {
 		if (zb_snap_of_buf[index] == 0U) {
 			void *block;
 
 			if (k_mem_slab_alloc(&zb_snap_slab, &block, K_NO_WAIT) == 0) {
-				u32 snap_index = (u32)((u8 *)block - (u8 *)zb_snap_slab.buffer) /
+				uint32_t snap_index = (uint32_t)((uint8_t *)block - (uint8_t *)zb_snap_slab.buffer) /
 						 ZB_BUF_RX_SNAPSHOT_BYTES;
 
-				zb_snap_of_buf[index] = (u8)(snap_index + 1U);
-				zb_buf_of_snap[snap_index] = (u8)index;
+				zb_snap_of_buf[index] = (uint8_t)(snap_index + 1U);
+				zb_buf_of_snap[snap_index] = (uint8_t)index;
 			}
 		}
 		if (zb_snap_of_buf[index] != 0U) {
@@ -167,7 +167,7 @@ zb_buf_t *zb_buf_allocate(void)
 	 */
 	((zb_buf_t *)block)->hdr.used = 1;
 	{
-		u32 index;
+		uint32_t index;
 		k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
 
 		if (zb_buf_index((zb_buf_t *)block, &index)) {
@@ -184,7 +184,7 @@ void zb_buf_free(zb_buf_t *buf)
 		return;
 	}
 	{
-		u32 index;
+		uint32_t index;
 		k_spinlock_key_t key;
 
 		if (!zb_buf_index(buf, &index)) {
@@ -216,7 +216,7 @@ void zb_buf_clear(zb_buf_t *p)
  * Map a pointer into a buffer payload back to its zb_buf.
  *
  * The imported MAC records the sequence number it waits to see acknowledged as
- * txBuf->buf[2], while callers hand it a frame pointer that tl_bufInitalloc()
+ * txBuf->buf[2], while callers hand it a frame pointer that zb_bufInitalloc()
  * placed near the end of the payload. On this port those are different bytes,
  * so the radio side needs the owning buffer to read the same one the MAC did.
  */
@@ -232,7 +232,7 @@ zb_buf_t *zb_buf_owner_of(const void *payload)
 
 	if ((payload != NULL) && (addr >= snap_base) &&
 	    (addr < snap_base + (size_t)CONFIG_ZIGBEE_RX_SNAPSHOTS * ZB_BUF_RX_SNAPSHOT_BYTES)) {
-		u8 owner = zb_buf_of_snap[(addr - snap_base) / ZB_BUF_RX_SNAPSHOT_BYTES];
+		uint8_t owner = zb_buf_of_snap[(addr - snap_base) / ZB_BUF_RX_SNAPSHOT_BYTES];
 
 		return (zb_buf_t *)(base + (size_t)owner * block);
 	}
@@ -255,34 +255,34 @@ bool is_zb_buf(void *p)
 	       ((addr - base) % zb_buf_slab.info.block_size == 0U);
 }
 
-zb_buf_t *zb_buf_from_ref(u8 ref)
+zb_buf_t *zb_buf_from_ref(uint8_t ref)
 {
 	if (ref >= ZB_BUF_POOL_NUM) {
 		return NULL;
 	}
 
-	return (zb_buf_t *)((u8 *)zb_buf_slab.buffer + ((size_t)ref * zb_buf_slab.info.block_size));
+	return (zb_buf_t *)((uint8_t *)zb_buf_slab.buffer + ((size_t)ref * zb_buf_slab.info.block_size));
 }
 
-u8 zb_buf_to_ref(zb_buf_t *buf)
+uint8_t zb_buf_to_ref(zb_buf_t *buf)
 {
-	u32 index;
+	uint32_t index;
 
-	return zb_buf_index(buf, &index) ? (u8)index : 0xffU;
+	return zb_buf_index(buf, &index) ? (uint8_t)index : 0xffU;
 }
 
 /*
- * Bytes tl_bufInitalloc() keeps free after an allocation, as the vendor does:
+ * Bytes zb_bufInitalloc() keeps free after an allocation, as the vendor does:
  * ported MAC/NWK/security code appends security material after it.
  */
 #define ZB_BUF_TAIL_RESERVE 8U
 
 /*
- * The vendor TL_BUF_INITIAL_ALLOC pattern hands back the tail of the
+ * The vendor ZB_BUF_INITIAL_ALLOC pattern hands back the tail of the
  * buf->buf[] payload area minus `size` bytes, 4-byte aligned. libzigbee
  * callers then write headers there and grow forward.
  */
-void *tl_bufInitalloc(zb_buf_t *p, u8 size)
+void *zb_bufInitalloc(zb_buf_t *p, uint8_t size)
 {
 	if (p == NULL || (size_t)size + ZB_BUF_TAIL_RESERVE > ZB_BUF_SIZE) {
 		return NULL;
@@ -298,7 +298,7 @@ void *tl_bufInitalloc(zb_buf_t *p, u8 size)
  * the PSDU pointer + meta (timestamp / rssi / len) into the first
  * few bytes of buf->buf[].
  */
-u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
+uint8_t *zb_phyRxBufTozbBuf(uint8_t *rxBuf)
 {
 	zb_buf_t *owner;
 
@@ -308,26 +308,26 @@ u8 *tl_phyRxBufTozbBuf(u8 *rxBuf)
 	 */
 	owner = zb_buf_owner_of(rxBuf);
 	if (owner != NULL) {
-		return (u8 *)owner;
+		return (uint8_t *)owner;
 	}
 
-	return (u8 *)zb_buf_allocate();
+	return (uint8_t *)zb_buf_allocate();
 }
 
-u8 zb_buf_rx_free_count(void)
+uint8_t zb_buf_rx_free_count(void)
 {
 #if ZB_BUF_SNAPSHOT_POOL
-	return (u8)MIN(k_mem_slab_num_free_get(&zb_buf_slab),
+	return (uint8_t)MIN(k_mem_slab_num_free_get(&zb_buf_slab),
 		       k_mem_slab_num_free_get(&zb_snap_slab));
 #else
-	return (u8)k_mem_slab_num_free_get(&zb_buf_slab);
+	return (uint8_t)k_mem_slab_num_free_get(&zb_buf_slab);
 #endif
 }
 
-u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
+uint8_t *zb_buf_rx_payload_capture(zb_buf_t *buf, const uint8_t *data, uint8_t len)
 {
 #if ZB_BUF_SNAPSHOT_POOL
-	u8 *snapshot;
+	uint8_t *snapshot;
 
 	if (buf == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
 		return NULL;
@@ -339,7 +339,7 @@ u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len)
 	}
 #else
 	zb_buf_block_t *block = (zb_buf_block_t *)buf;
-	u8 *snapshot;
+	uint8_t *snapshot;
 
 	if (block == NULL || data == NULL || len > ZB_BUF_RX_SNAPSHOT_SIZE) {
 		return NULL;
@@ -368,8 +368,8 @@ void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src)
 	}
 
 #if ZB_BUF_SNAPSHOT_POOL
-	u32 src_index;
-	u8 *to;
+	uint32_t src_index;
+	uint8_t *to;
 
 	if (!zb_buf_index(src, &src_index) || zb_snap_of_buf[src_index] == 0U) {
 		return;
@@ -385,17 +385,17 @@ void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src)
 #endif
 }
 
-u8 *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const u8 *p)
+uint8_t *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const uint8_t *p)
 {
 #if ZB_BUF_SNAPSHOT_POOL
 	uintptr_t addr = (uintptr_t)p;
-	u8 *result = NULL;
-	u32 src_index;
-	u32 dst_index;
+	uint8_t *result = NULL;
+	uint32_t src_index;
+	uint32_t dst_index;
 	k_spinlock_key_t key;
 
 	if (addr >= (uintptr_t)src && addr < (uintptr_t)src + sizeof(zb_buf_t)) {
-		return (u8 *)dst + (addr - (uintptr_t)src);
+		return (uint8_t *)dst + (addr - (uintptr_t)src);
 	}
 
 	key = k_spin_lock(&zb_buf_lock);
@@ -412,6 +412,6 @@ u8 *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const u8 *p)
 	return result;
 #else
 	/* The received frame follows the buffer in its block, so one offset serves both. */
-	return (u8 *)dst->buf + (p - src->buf);
+	return (uint8_t *)dst->buf + (p - src->buf);
 #endif
 }

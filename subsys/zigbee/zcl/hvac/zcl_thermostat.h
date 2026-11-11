@@ -105,27 +105,27 @@ typedef enum {
 } setpointMode_t;
 
 typedef struct {
-    u8 mode;//setpointMode_t
-    s8 amount;
+    uint8_t mode;//setpointMode_t
+    int8_t amount;
 } zcl_thermostat_setpointRaiseLowerCmd_t;
 
 /**
  *  @brief	set weekly schedule command
  */
 typedef struct {
-    u16 transTime;
-    u16 heatSetpoint;
+    uint16_t transTime;
+    uint16_t heatSetpoint;
 } heatMode_t;
 
 typedef struct {
-    u16 transTime;
-    u16 coolSetpoint;
+    uint16_t transTime;
+    uint16_t coolSetpoint;
 } coolMode_t;
 
 typedef struct {
-    u16 transTime;
-    u16 heatSetpoint;
-    u16 coolSetpoint;
+    uint16_t transTime;
+    uint16_t heatSetpoint;
+    uint16_t coolSetpoint;
 } bothMode_t;
 
 typedef union {
@@ -140,17 +140,17 @@ typedef union {
 
 typedef struct {
     sequenceMode_t sequenceMode;
-    u8 numOfTransForSequence;
-    u8 dayOfWeekForSequence;
-    u8 modeForSequence;
+    uint8_t numOfTransForSequence;
+    uint8_t dayOfWeekForSequence;
+    uint8_t modeForSequence;
 } zcl_thermostat_setWeeklyScheduleCmd_t;
 
 /**
  *  @brief	get weekly schedule command
  */
 typedef struct {
-    u8 daysToReturn;
-    u8 modeToReturn;
+    uint8_t daysToReturn;
+    uint8_t modeToReturn;
 } zcl_thermostat_getWeeklyScheduleCmd_t;
 
 /**
@@ -162,36 +162,36 @@ typedef zcl_thermostat_setWeeklyScheduleCmd_t zcl_thermostat_getWeeklyScheduleRs
  *  @brief	get relay status log response command
  */
 typedef struct {
-    u16 timeOfDay;
-    u16 relayStatus;
-    s16 localTemp;
-    u16 setpoint;
-    u16 unreadEntries;
-    u8 hunidityInPercentage;
+    uint16_t timeOfDay;
+    uint16_t relayStatus;
+    int16_t localTemp;
+    uint16_t setpoint;
+    uint16_t unreadEntries;
+    uint8_t hunidityInPercentage;
 } zcl_thermostat_getRelayStatusLogRspCmd_t;
 
 
-status_t zcl_thermostat_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_thermostat_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_thermostat_setpointRaiseLowerCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_thermostat_setpointRaiseLowerCmd_t *pCmd);
+status_t zcl_thermostat_setpointRaiseLowerCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_setpointRaiseLowerCmd_t *pCmd);
 #define zcl_thermostat_setpointRaiseLowerCmdSend(a,b,c,d)       (zcl_thermostat_setpointRaiseLowerCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_thermostat_setWeeklyScheduleCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_thermostat_setWeeklyScheduleCmd_t *pCmd);
+status_t zcl_thermostat_setWeeklyScheduleCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_setWeeklyScheduleCmd_t *pCmd);
 #define zcl_thermostat_setWeeklyScheduleCmdSend(a,b,c,d)        (zcl_thermostat_setWeeklyScheduleCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_thermostat_getWeeklyScheduleCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_thermostat_getWeeklyScheduleCmd_t *pCmd);
+status_t zcl_thermostat_getWeeklyScheduleCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_getWeeklyScheduleCmd_t *pCmd);
 #define zcl_thermostat_getWeeklyScheduleCmdSend(a,b,c,d)        (zcl_thermostat_getWeeklyScheduleCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_thermostat_clearWeeklyScheduleCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_thermostat_clearWeeklyScheduleCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_thermostat_clearWeeklyScheduleCmdSend(a,b,c)        (zcl_thermostat_clearWeeklyScheduleCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_thermostat_getRelayStatusLogCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_thermostat_getRelayStatusLogCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_thermostat_getRelayStatusLogCmdSend(a,b,c)          (zcl_thermostat_getRelayStatusLogCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_thermostat_getWeeklyScheduleRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_thermostat_getWeeklyScheduleRspCmd_t *pCmd);
+status_t zcl_thermostat_getWeeklyScheduleRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_getWeeklyScheduleRspCmd_t *pCmd);
 #define zcl_thermostat_getWeeklyScheduleRspCmdSend(a,b,c,d,e)   (zcl_thermostat_getWeeklyScheduleRspCmd((a), (b), (c), (d), (e)))
 
-status_t zcl_thermostat_getRelayStatusLogRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_thermostat_getRelayStatusLogRspCmd_t *pCmd);
+status_t zcl_thermostat_getRelayStatusLogRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_thermostat_getRelayStatusLogRspCmd_t *pCmd);
 #define zcl_thermostat_getRelayStatusLogRspCmdSend(a,b,c,d)     (zcl_thermostat_getRelayStatusLogRspCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 #endif	/* ZCL_THERMOSTAT_H */

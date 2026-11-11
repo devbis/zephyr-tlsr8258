@@ -26,11 +26,11 @@ LOG_MODULE_DECLARE(zigbee, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #if defined(CONFIG_ZIGBEE_BDB)
 #if ZB_PLATFORM_BDB_ED_RESTORE
-extern void zb_ed_fixed_join_target(u8 channel, u16 panId, u16 shortAddr, const u8 *extPanId,
-				    const u8 *nwkKey, const u8 *tcAddr);
+extern void zb_ed_fixed_join_target(uint8_t channel, uint16_t panId, uint16_t shortAddr, const uint8_t *extPanId,
+				    const uint8_t *nwkKey, const uint8_t *tcAddr);
 extern void zb_ed_operation_abort(void);
 #endif
-extern void bdb_outgoingFrameCountUpdate(u8 repower);
+extern void bdb_outgoingFrameCountUpdate(uint8_t repower);
 extern void bdb_zdoAssocDone(zdo_start_device_confirm_t *startDevCnf);
 extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
@@ -42,7 +42,7 @@ extern void bdb_zdoStartDevCnf(zdo_start_device_confirm_t *startDevCnf);
 
 static bool zb_bdb_bootstrap_ready;
 static bool zb_bdb_restore_joined_target_pending;
-static const u16 zb_shell_in_clusters[] = {
+static const uint16_t zb_shell_in_clusters[] = {
 	ZB_SHELL_CLUSTER_BASIC,
 	ZB_SHELL_CLUSTER_IDENTIFY,
 };
@@ -53,19 +53,19 @@ void __weak zb_platform_app_bdb_commissioning_status(uint8_t status, bool joined
 	ARG_UNUSED(joinedNetwork);
 }
 
-static void zb_shell_bdb_init_cb(u8 status, u8 joinedNetwork)
+static void zb_shell_bdb_init_cb(uint8_t status, uint8_t joinedNetwork)
 {
 	ARG_UNUSED(status);
 	ARG_UNUSED(joinedNetwork);
 }
 
-static void zb_shell_bdb_commissioning_cb(u8 status, void *arg)
+static void zb_shell_bdb_commissioning_cb(uint8_t status, void *arg)
 {
 	ARG_UNUSED(arg);
 	zb_platform_app_bdb_commissioning_status((uint8_t)status, g_zbNwkCtx.joined ? true : false);
 }
 
-static void zb_shell_bdb_identify_cb(u8 endpoint, u16 srcAddr, u16 identifyTime)
+static void zb_shell_bdb_identify_cb(uint8_t endpoint, uint16_t srcAddr, uint16_t identifyTime)
 {
 	ARG_UNUSED(endpoint);
 	ARG_UNUSED(srcAddr);
@@ -135,7 +135,7 @@ static af_simple_descriptor_t zb_shell_simple_desc = {
 	.reserved = 0U,
 	.app_in_cluster_count = 2U,
 	.app_out_cluster_count = 0U,
-	.app_in_cluster_lst = (u16 *)zb_shell_in_clusters,
+	.app_in_cluster_lst = (uint16_t *)zb_shell_in_clusters,
 	.app_out_cluster_lst = NULL,
 };
 
@@ -143,13 +143,13 @@ static struct zb_platform_bdb_fixed_target zb_bootstrap_target;
 static struct zb_platform_bdb_join_profile zb_bootstrap_profile;
 
 #if ZB_PLATFORM_BDB_ED_RESTORE
-static bool zb_platform_bdb_key_is_set(const u8 *key)
+static bool zb_platform_bdb_key_is_set(const uint8_t *key)
 {
 	if (key == NULL) {
 		return false;
 	}
 
-	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+	for (uint8_t i = 0U; i < SEC_KEY_LEN; i++) {
 		if (key[i] != 0U) {
 			return true;
 		}
@@ -158,7 +158,7 @@ static bool zb_platform_bdb_key_is_set(const u8 *key)
 	return false;
 }
 
-static u8 *zb_platform_bdb_active_nwk_key_get(void)
+static uint8_t *zb_platform_bdb_active_nwk_key_get(void)
 {
 	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL) {
 		return NULL;
@@ -210,7 +210,7 @@ static void zb_platform_bdb_drop_stale_joined_state_if_needed(void)
 
 static bool zb_platform_bdb_restore_joined_target(void)
 {
-	u8 *nwkKey = NULL;
+	uint8_t *nwkKey = NULL;
 	int rc;
 
 	zb_platform_bdb_repair_joined_flag_if_needed();
@@ -237,7 +237,7 @@ static bool zb_platform_bdb_restore_joined_target(void)
 	}
 
 	zb_rejoinSecModeSet(REJOIN_SECURITY);
-	if (zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,
+	if (zdo_nwkRejoinStart((uint32_t)1U << g_zbMacPib.phyChannelCur,
 			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
 		LOG_WRN("zb bdb restore: secure rejoin start failed on channel %u",
 			g_zbMacPib.phyChannelCur);
@@ -349,8 +349,8 @@ static void zb_platform_bdb_apply_fixed_target(void)
 #if !ZB_PLATFORM_BDB_ED_RESTORE
 	return;
 #else
-	const u8 *tc_addr = NULL;
-	const u8 *nwk_key = NULL;
+	const uint8_t *tc_addr = NULL;
+	const uint8_t *nwk_key = NULL;
 
 	if (g_zbNwkCtx.joined) {
 		return;
@@ -378,7 +378,7 @@ static void zb_platform_bdb_apply_fixed_target(void)
 	if (zb_platform_bdb_key_is_set(zb_bootstrap_target.network_key)) {
 		zb_preConfigNwkKey(zb_bootstrap_target.network_key, FALSE);
 	}
-	g_bdbAttrs.primaryChannelSet = ((u32)1U << zb_bootstrap_target.channel);
+	g_bdbAttrs.primaryChannelSet = ((uint32_t)1U << zb_bootstrap_target.channel);
 	g_bdbAttrs.secondaryChannelSet = 0U;
 #endif
 }
@@ -416,7 +416,7 @@ static void zb_platform_bdb_apply_join_profile(void)
 #if defined(ZB_ROUTER_ROLE)
 static bool zb_platform_bdb_router_has_valid_join_context(void)
 {
-	const u8 *key;
+	const uint8_t *key;
 
 	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL ||
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
@@ -429,7 +429,7 @@ static bool zb_platform_bdb_router_has_valid_join_context(void)
 	}
 
 	key = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
-	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+	for (uint8_t i = 0U; i < SEC_KEY_LEN; i++) {
 		if (key[i] != 0U) {
 			return true;
 		}
@@ -460,7 +460,7 @@ static void zb_platform_bdb_router_restore_ext_pan(void)
 
 static bool zb_platform_bdb_router_rejoin_context(void)
 {
-	const u8 *key;
+	const uint8_t *key;
 
 	if (ss_ib.activeSecureMaterialIndex >= SECUR_N_SECUR_MATERIAL ||
 	    g_zbMacPib.panId == MAC_INVALID_PANID ||
@@ -472,7 +472,7 @@ static bool zb_platform_bdb_router_rejoin_context(void)
 	}
 
 	key = ss_ib.nwkSecurMaterialSet[ss_ib.activeSecureMaterialIndex].key;
-	for (u8 i = 0U; i < SEC_KEY_LEN; i++) {
+	for (uint8_t i = 0U; i < SEC_KEY_LEN; i++) {
 		if (key[i] != 0U) {
 			return true;
 		}
@@ -501,7 +501,7 @@ static bool zb_platform_bdb_router_rejoin_start(void)
 	}
 
 	zb_rejoinSecModeSet(REJOIN_SECURITY);
-	if (zdo_nwkRejoinStart((u32)1U << g_zbMacPib.phyChannelCur,
+	if (zdo_nwkRejoinStart((uint32_t)1U << g_zbMacPib.phyChannelCur,
 			       zdo_cfg_attributes.config_nwk_scan_duration) != ZDO_SUCCESS) {
 		LOG_WRN("zb bdb: router recovery rejoin start failed on channel %u",
 			g_zbMacPib.phyChannelCur);
@@ -538,7 +538,7 @@ int zb_platform_bdb_init_default(void)
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return -ENOTSUP;
 #else
-	u32 frameCounter = 0U;
+	uint32_t frameCounter = 0U;
 	af_simple_descriptor_t *registered_desc;
 
 	if (zb_bdb_bootstrap_ready && g_bdbCtx.simpleDesc == NULL) {
@@ -639,7 +639,7 @@ int zb_platform_bdb_init_default(void)
 	/*
 	 * The vendor flow runs ss_zdoInit(TRUE) from bdb_init() to raise
 	 * securityLevel to 5, but the Zephyr platform bootstrap bypasses
-	 * bdb_init() entirely (only called from tl_bdbReset()). Without
+	 * bdb_init() entirely (only called from zb_bdbReset()). Without
 	 * securityLevel=5 the gate at zdo_nwk_manager.c:892 takes the
 	 * `securityLevel == 0` shortcut: after MAC-associate SUCCESS, the
 	 * join-confirm goes straight to zdo_startup_complete (which used
@@ -649,7 +649,7 @@ int zb_platform_bdb_init_default(void)
 	 * inbound Transport-Key, never installs the network key, and the
 	 * TC interview never completes. Set securityLevel=5 here so the
 	 * auth-wait branch fires. Avoid calling full ss_zdoInit(TRUE)
-	 * because its other side-effects (tl_neighborFrameCntReset +
+	 * because its other side-effects (zb_neighborFrameCntReset +
 	 * ss_devKeyPairInfoGet) wedge MAC RX (seen on the TLSR8258).
 	 */
 	ss_ib_security_level_set(5U);
@@ -688,7 +688,7 @@ int zb_platform_bdb_init_default(void)
 	 */
 	zb_platform_app_register_endpoints();
 
-	tl_bdbAttrInit();
+	zb_bdbAttrInit();
 	memset(&g_bdbCtx, 0, sizeof(g_bdbCtx));
 	g_bdbCtx.bdbAppCb = &zb_shell_bdb_cb;
 
@@ -733,7 +733,7 @@ int zb_platform_bdb_init_default(void)
 	 * configured scan mask is applied first; the application's fixed
 	 * target and join profile override it.
 	 */
-	g_bdbAttrs.primaryChannelSet = (u32)ZB_CHANNEL_SCAN_MASK;
+	g_bdbAttrs.primaryChannelSet = (uint32_t)ZB_CHANNEL_SCAN_MASK;
 	g_bdbAttrs.secondaryChannelSet = 0U;
 	zb_platform_bdb_apply_fixed_target();
 	zb_platform_bdb_apply_join_profile();
@@ -749,7 +749,7 @@ uint8_t zb_platform_bdb_network_steer_start(void)
 #if !defined(CONFIG_ZIGBEE_BDB)
 	return 0xFFU;
 #else
-	u8 status;
+	uint8_t status;
 
 	if (zb_platform_bdb_init_default() != 0) {
 		LOG_ERR("zb bdb steer: init failed");

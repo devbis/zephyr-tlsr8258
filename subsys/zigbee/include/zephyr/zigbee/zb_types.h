@@ -19,36 +19,25 @@
 #include <soc.h>
 #endif
 
-typedef uint8_t   u8;
-typedef int8_t    s8;
-typedef uint16_t  u16;
-typedef int16_t   s16;
-typedef uint32_t  u32;
-typedef int32_t   s32;
-typedef uint64_t  u64;
-typedef int64_t   s64;
-
-typedef u32 u24;
-typedef s32 s24;
-typedef u8  status_t;
-typedef u32 UTCTime;
-typedef u32 arg_t;
-typedef void (*fn_ptr)(u8 *);
+typedef uint8_t  status_t;
+typedef uint32_t UTCTime;
+typedef uint32_t arg_t;
+typedef void (*fn_ptr)(uint8_t *);
 
 enum { ZB_FALSE = 0, ZB_TRUE = 1 };
 
-typedef u8 cId_t;
-typedef u8 addrExt_t[8];
-typedef u8 extPANId_t[8];
+typedef uint8_t cId_t;
+typedef uint8_t addrExt_t[8];
+typedef uint8_t extPANId_t[8];
 typedef addrExt_t extAddr_t;
 
 typedef union {
-	u16 shortAddr;
+	uint16_t shortAddr;
 	addrExt_t extAddr;
-} tl_zb_addr_t;
+} zb_addr_t;
 
 typedef union {
-	u32 srcId;
+	uint32_t srcId;
 	addrExt_t gpdIeeeAddr;
 } gpdId_t;
 
@@ -58,10 +47,10 @@ typedef union {
 
 typedef struct {
 	union {
-		u16 shortAddr;
+		uint16_t shortAddr;
 		addrExt_t extAddr;
 	} addr;
-	u8 addrMode;
+	uint8_t addrMode;
 } addr_t;
 
 #ifndef FALSE
@@ -71,9 +60,9 @@ typedef struct {
 #define TRUE  (!FALSE)
 #endif
 
-#define U32_MAX_VAL  ((u32)0xffffffff)
-#define U16_MAX_VAL  ((u16)0xffff)
-#define U8_MAX_VAL   ((u8)0xff)
+#define U32_MAX_VAL  ((uint32_t)0xffffffff)
+#define U16_MAX_VAL  ((uint16_t)0xffff)
+#define U8_MAX_VAL   ((uint8_t)0xff)
 
 /* Generic status codes (match SDK values) */
 #define SUCCESS                 0x00

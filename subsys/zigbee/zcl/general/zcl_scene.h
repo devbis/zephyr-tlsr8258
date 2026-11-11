@@ -113,13 +113,13 @@
  *  @brief  Structure definition for scene table entry in scene cluster
  */
 typedef struct _attribute_packed_ {
-    u16 groupId;                                //!< The group ID for which this scene applies
-    u8 sceneId;                                 //!< The identifier, unique within this group, which is used to identify this scene.
-    u8 sceneName[ZCL_MAX_SCENE_NAME_LEN];       //!< The name of the scene
-    u16 transTime;                              //!< Seconds it will take for the device to change from its current state to the requested scene.
-    u16 transTime100ms;                         //!< todo - check if this causes any problems
-    u8 extFieldLen;                             //!< The length of extension field
-    u8 extField[ZCL_MAX_SCENE_EXT_FIELD_SIZE];  //!< The extension field
+    uint16_t groupId;                                //!< The group ID for which this scene applies
+    uint8_t sceneId;                                 //!< The identifier, unique within this group, which is used to identify this scene.
+    uint8_t sceneName[ZCL_MAX_SCENE_NAME_LEN];       //!< The name of the scene
+    uint16_t transTime;                              //!< Seconds it will take for the device to change from its current state to the requested scene.
+    uint16_t transTime100ms;                         //!< todo - check if this causes any problems
+    uint8_t extFieldLen;                             //!< The length of extension field
+    uint8_t extField[ZCL_MAX_SCENE_EXT_FIELD_SIZE];  //!< The extension field
 } zcl_sceneEntry_t; //44-bytes? according to app configuration
 
 /**
@@ -133,58 +133,58 @@ typedef struct _attribute_packed_ {
  *  @brief  Structure definition for view scene command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } viewScene_t;
 
 /**
  *  @brief  Structure definition for remove scene command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } removeScene_t;
 
 /**
  *  @brief  Structure definition for remove all scene command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
+    uint16_t groupId;        //!< group id
 } removeAllScene_t;
 
 /**
  *  @brief  Structure definition for store scene command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } storeScene_t;
 
 /**
  *  @brief  Structure definition for recall scene command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
-    u16 transTime;      //!< transition time, tenth of a second
-    u8 sceneId;         //!< scene id
+    uint16_t groupId;        //!< group id
+    uint16_t transTime;      //!< transition time, tenth of a second
+    uint8_t sceneId;         //!< scene id
 } recallScene_t;
 
 /**
  *  @brief  Structure definition for get scene member ship command in scene cluster
  */
 typedef struct {
-    u16 groupId;        //!< group id
+    uint16_t groupId;        //!< group id
 } getSceneMemship_t;
 
 /**
  *  @brief  Structure definition for copy scene  command in scene cluster
  */
 typedef struct {
-    u8 mode;            //!< mode (all scenes in group or particular group )
-    u16 groupIdFrom;    //!< group id from
-    u8 sceneIdFrom;     //!< scene id from
-    u16 groupIdTo;      //!< group id to
-    u8 sceneIdTo;       //!< scene id to
+    uint8_t mode;            //!< mode (all scenes in group or particular group )
+    uint16_t groupIdFrom;    //!< group id from
+    uint8_t sceneIdFrom;     //!< scene id from
+    uint16_t groupIdTo;      //!< group id to
+    uint8_t sceneIdTo;       //!< scene id to
 } copyScene_t;
 
 
@@ -192,16 +192,16 @@ typedef struct {
  *  @brief  Structure definition for add scene response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint8_t status;          //!< status
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } addSceneRsp_t;
 
 /**
  *  @brief  Structure definition for view scene response in scene cluster
  */
 typedef struct {
-    u8 status;                  //!< status
+    uint8_t status;                  //!< status
     zcl_sceneEntry_t scene;     //!< scene
 } viewSceneRsp_t;
 
@@ -209,46 +209,46 @@ typedef struct {
  *  @brief  Structure definition for remove scene response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint8_t status;          //!< status
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } removeSceneRsp_t;
 
 /**
  *  @brief  Structure definition for remove all scene response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u16 groupId;        //!< group id
+    uint8_t status;          //!< status
+    uint16_t groupId;        //!< group id
 } removeAllSceneRsp_t;
 
 /**
  *  @brief  Structure definition for store scene response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u16 groupId;        //!< group id
-    u8 sceneId;         //!< scene id
+    uint8_t status;          //!< status
+    uint16_t groupId;        //!< group id
+    uint8_t sceneId;         //!< scene id
 } storeSceneRsp_t;
 
 /**
  *  @brief  Structure definition for get scene membership response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u8 capacity;        //!< capacity
-    u16 groupId;        //!< group id
-    u8 sceneCnt;        //!< scene count
-    u8 *sceneList;      //!< scene list
+    uint8_t status;          //!< status
+    uint8_t capacity;        //!< capacity
+    uint16_t groupId;        //!< group id
+    uint8_t sceneCnt;        //!< scene count
+    uint8_t *sceneList;      //!< scene list
 } getSceneMemRsp_t;
 
 /**
  *  @brief  Structure definition for copy scene response in scene cluster
  */
 typedef struct {
-    u8 status;          //!< status
-    u16 groupIdFrom;    //!< group id from
-    u8 sceneIdFrom;     //!< scene id from
+    uint8_t status;          //!< status
+    uint16_t groupIdFrom;    //!< group id from
+    uint8_t sceneIdFrom;     //!< scene id from
 } copySceneRsp_t;
 
 
@@ -274,8 +274,8 @@ typedef union {
  */
 typedef void (*zcl_storeSceneCb_t)(apsdeDataInd_t *pApsdeInd, zcl_sceneEntry_t *pScene);
 typedef void (*zcl_recallSceneCb_t)(apsdeDataInd_t *pApsdeInd, zcl_sceneEntry_t *pScene);
-typedef void (*zcl_addSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, u8 cmdId, addSceneRsp_t *pAddSceneRsp);
-typedef void (*zcl_viewSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, u8 cmdId, viewSceneRsp_t *pViewSceneRsp);
+typedef void (*zcl_addSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, uint8_t cmdId, addSceneRsp_t *pAddSceneRsp);
+typedef void (*zcl_viewSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, uint8_t cmdId, viewSceneRsp_t *pViewSceneRsp);
 typedef void (*zcl_removeSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, removeSceneRsp_t *pRemoveSceneRsp);
 typedef void (*zcl_removeAllSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, removeAllSceneRsp_t *pRemoveAllSceneRsp);
 typedef void (*zcl_storeSceneRspCb_t)(apsdeDataInd_t *pApsdeInd, storeSceneRsp_t *pStoreSceneRsp);
@@ -307,11 +307,11 @@ typedef struct {
  *  @brief  Structure definition for scene management information
  */
 typedef struct {
-    u8 sceneCnt;                //!< the number of  scenes currently in the device's scene table
-    u8 currentScene;            //!< the Scene ID of the scene last invoked
-    u16 currentGroup;           //!< the Group ID  of the scene last invoked
-    u8 sceneValid;              //!< indicates whether the state of the device
-    u8 nameSupport;             //!< indicates whether or not scene names are supported
+    uint8_t sceneCnt;                //!< the number of  scenes currently in the device's scene table
+    uint8_t currentScene;            //!< the Scene ID of the scene last invoked
+    uint16_t currentGroup;           //!< the Group ID  of the scene last invoked
+    uint8_t sceneValid;              //!< indicates whether the state of the device
+    uint8_t nameSupport;             //!< indicates whether or not scene names are supported
     addrExt_t lastConfigBy;     //!< Specifies the IEEE address of the device that last configured the scene table
     zcl_sceneEntry_t scene_table[ZCL_SCENE_TABLE_NUM];  //!< Store information for each scene capable of being invoked on a device
 } zcl_sceneAttr_t;
@@ -327,7 +327,7 @@ extern zcl_sceneAttr_t zcl_attr_scene;
  */
 extern const zclAttrInfo_t scene_attrTbl[];
 
-extern const u8 zcl_scene_attrNum;
+extern const uint8_t zcl_scene_attrNum;
 
 /** @} end of group ZCL_Scene_Variables */
 #endif
@@ -336,8 +336,8 @@ extern const u8 zcl_scene_attrNum;
  *  @brief  Structure definition for scene table
  */
 typedef struct _attribute_packed_ {
-    u8 used;
-    u8 endpoint;
+    uint8_t used;
+    uint8_t endpoint;
     zcl_sceneEntry_t scene;
 } zcl_sceneTable_t;
 
@@ -354,7 +354,7 @@ extern zcl_sceneTable_t g_zcl_sceneTab[];
  *
  * @return      Status
  */
-status_t zcl_scene_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_scene_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 /**
@@ -369,7 +369,7 @@ status_t zcl_scene_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      status_t
  */
-status_t zcl_scene_addScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, addScene_t *pAddScene);
+status_t zcl_scene_addScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, addScene_t *pAddScene);
 #define zcl_scene_addSceneCmd(a,b,c,d)                  (zcl_scene_addScene((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_SCENE_ADD_SCENE, (d)))
 #define zcl_scene_enhancedAddSceneCmd(a,b,c,d)          (zcl_scene_addScene((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_SCENE_ENHANCED_ADD_SCENE, (d)))
 
@@ -385,7 +385,7 @@ status_t zcl_scene_addScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp
  *
  * @return      status_t
  */
-status_t zcl_scene_viewScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, viewScene_t *pViewScene);
+status_t zcl_scene_viewScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, viewScene_t *pViewScene);
 #define zcl_scene_viewSceneCmd(a,b,c,d)                 (zcl_scene_viewScene((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_SCENE_VIEW_SCENE, (d)))
 #define zcl_scene_enhancedViewSceneCmd(a,b,c,d)         (zcl_scene_viewScene((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_SCENE_ENHANCED_VIEW_SCENE, (d)))
 
@@ -400,7 +400,7 @@ status_t zcl_scene_viewScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRs
  *
  * @return      status_t
  */
-status_t zcl_scene_removeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, removeScene_t *pRemoveScene);
+status_t zcl_scene_removeScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, removeScene_t *pRemoveScene);
 #define zcl_scene_removeSceneCmd(a,b,c,d)               (zcl_scene_removeScene((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -414,7 +414,7 @@ status_t zcl_scene_removeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefault
  *
  * @return      status_t
  */
-status_t zcl_scene_removeAllScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, removeAllScene_t *pRemoveAllScene);
+status_t zcl_scene_removeAllScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, removeAllScene_t *pRemoveAllScene);
 #define zcl_scene_removeAllSceneCmd(a,b,c,d)            (zcl_scene_removeAllScene((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -428,7 +428,7 @@ status_t zcl_scene_removeAllScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefa
  *
  * @return      status_t
  */
-status_t zcl_scene_storeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, storeScene_t *pStoreScene);
+status_t zcl_scene_storeScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, storeScene_t *pStoreScene);
 #define zcl_scene_storeSceneCmd(a,b,c,d)                (zcl_scene_storeScene((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -442,7 +442,7 @@ status_t zcl_scene_storeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultR
  *
  * @return      status_t
  */
-status_t zcl_scene_recallScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, recallScene_t *pRecallScene);
+status_t zcl_scene_recallScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, recallScene_t *pRecallScene);
 #define zcl_scene_recallSceneCmd(a,b,c,d)               (zcl_scene_recallScene((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -456,7 +456,7 @@ status_t zcl_scene_recallScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefault
  *
  * @return      status_t
  */
-status_t zcl_scene_getSceneMemship(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getSceneMemship_t *pGetMembership);
+status_t zcl_scene_getSceneMemship(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getSceneMemship_t *pGetMembership);
 #define zcl_scene_getSceneMemshipCmd(a,b,c,d)           (zcl_scene_getSceneMemship((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 /**
@@ -470,11 +470,11 @@ status_t zcl_scene_getSceneMemship(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDef
  *
  * @return      status_t
  */
-status_t zcl_scene_copyScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, copyScene_t *pCopyScene);
+status_t zcl_scene_copyScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, copyScene_t *pCopyScene);
 #define zcl_scene_copySceneCmd(a,b,c,d)                 (zcl_scene_copyScene((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 
-extern void zcl_scene_removeAllSceneEntry(u8 endpoint, u16 groupId, bool updateNV);
+extern void zcl_scene_removeAllSceneEntry(uint8_t endpoint, uint16_t groupId, bool updateNV);
 
 /** @} end of group ZCL_SCENE_Fountions */
 

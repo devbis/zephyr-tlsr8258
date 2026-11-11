@@ -13,52 +13,52 @@
 #include "mac_mlme.h"
 #include "mac_scan.h"
 
-static inline u8 *phy_ind_raw_get(void *arg)
+static inline uint8_t *phy_ind_raw_get(void *arg)
 {
 	return ((mac_phy_ind_meta_t *)arg)->payload;
 }
 
 typedef struct {
-	u32 cmdId;
+	uint32_t cmdId;
 	void (*handler)(void *arg, void *raw);
 } mac_mlme_phy_evt_t;
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-static void tl_zbMlmeCmdAssociateReqRecvd(void *arg, void *raw);
-static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw);
+static void zb_MlmeCmdAssociateReqRecvd(void *arg, void *raw);
+static void zb_MlmeCmdBeaconReqRecvd(void *arg, void *raw);
 #endif
 #if defined(ZB_COORDINATOR_ROLE)
-static void tl_zbMlmeCmdPanIdConflictNotifyRecvd(void *arg, void *raw);
+static void zb_MlmeCmdPanIdConflictNotifyRecvd(void *arg, void *raw);
 #endif
-static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw);
-static void tl_zbMlmeCmdDataReqRecvd(void *arg, void *raw);
-static void tl_zbMlmeCmdOrphanNotifyRecvd(void *arg, void *raw);
-static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw);
+static void zb_MlmeCmdAssociateRespRecvd(void *arg, void *raw);
+static void zb_MlmeCmdDataReqRecvd(void *arg, void *raw);
+static void zb_MlmeCmdOrphanNotifyRecvd(void *arg, void *raw);
+static void zb_MlmeCmdCoordRealignRecvd(void *arg, void *raw);
 
 const mac_mlme_phy_evt_t g_zbMacMlmeEventFromPhyTbl[] = {
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-	{MAC_CMD_ASSOCIATION_REQUEST, tl_zbMlmeCmdAssociateReqRecvd},
-	{MAC_CMD_BEACON_REQUEST, tl_zbMlmeCmdBeaconReqRecvd},
+	{MAC_CMD_ASSOCIATION_REQUEST, zb_MlmeCmdAssociateReqRecvd},
+	{MAC_CMD_BEACON_REQUEST, zb_MlmeCmdBeaconReqRecvd},
 #endif
-	{MAC_CMD_ASSOCIATION_RESPONSE, tl_zbMlmeCmdAssociateRespRecvd},
-	{MAC_CMD_DISASSOCIATION_NOTIFICATION, tl_zbMlmeCmdDisassociateNotifyRecvd},
+	{MAC_CMD_ASSOCIATION_RESPONSE, zb_MlmeCmdAssociateRespRecvd},
+	{MAC_CMD_DISASSOCIATION_NOTIFICATION, zb_MlmeCmdDisassociateNotifyRecvd},
 #if defined(ZB_COORDINATOR_ROLE)
 	/* The coordinator entry sits here, not before the association response
 	 * (_coordinator/mac_mlme.s:.rodata.g_zbMacMlmeEventFromPhyTbl). */
-	{MAC_CMD_PAN_ID_CONFLICT_NOTIFICATION, tl_zbMlmeCmdPanIdConflictNotifyRecvd},
+	{MAC_CMD_PAN_ID_CONFLICT_NOTIFICATION, zb_MlmeCmdPanIdConflictNotifyRecvd},
 #endif
-	{MAC_CMD_DATA_REQUEST, tl_zbMlmeCmdDataReqRecvd},
-	{MAC_CMD_ORPHAN_NOTIFICATION, tl_zbMlmeCmdOrphanNotifyRecvd},
-	{MAC_CMD_COORDINATOR_REALIGNMENT, tl_zbMlmeCmdCoordRealignRecvd},
+	{MAC_CMD_DATA_REQUEST, zb_MlmeCmdDataReqRecvd},
+	{MAC_CMD_ORPHAN_NOTIFICATION, zb_MlmeCmdOrphanNotifyRecvd},
+	{MAC_CMD_COORDINATOR_REALIGNMENT, zb_MlmeCmdCoordRealignRecvd},
 };
 
-static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw)
+static void zb_MlmeCmdCoordRealignRecvd(void *arg, void *raw)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
-	u8 *payload = phy_ind_raw_get(arg);
-	u16 panId = (u16)payload[1] | ((u16)payload[2] << 8);
-	u16 shortAddr = (u16)payload[6] | ((u16)payload[7] << 8);
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
+	uint8_t *payload = phy_ind_raw_get(arg);
+	uint16_t panId = (uint16_t)payload[1] | ((uint16_t)payload[2] << 8);
+	uint16_t shortAddr = (uint16_t)payload[6] | ((uint16_t)payload[7] << 8);
 
 	if (panId != g_zbInfo.macPib.panId || payload[5] != g_zbInfo.macPib.phyChannelCur ||
 	    shortAddr != g_zbInfo.macPib.shortAddress ||
@@ -67,7 +67,7 @@ static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw)
 		return;
 	}
 
-	g_zbInfo.macPib.coordShortAddress = (u16)payload[3] | ((u16)payload[4] << 8);
+	g_zbInfo.macPib.coordShortAddress = (uint16_t)payload[3] | ((uint16_t)payload[4] << 8);
 
 	if (mhr->srcAddrMode == ADDR_MODE_EXT) {
 		ZB_IEEE_ADDR_COPY(g_zbInfo.macPib.coordExtAddress, mhr->srcAddr.extAddr);
@@ -75,42 +75,42 @@ static void tl_zbMlmeCmdCoordRealignRecvd(void *arg, void *raw)
 		ZB_IEEE_ADDR_ZERO(g_zbInfo.macPib.coordExtAddress);
 	}
 
-	tl_zbMacOrphanScanStatusUpdate();
+	zb_MacOrphanScanStatusUpdate();
 	zb_buf_free(buf);
 }
 
-static void tl_zbMlmeCmdDataReqRecvd(void *arg, void *raw)
+static void zb_MlmeCmdDataReqRecvd(void *arg, void *raw)
 {
 	(void)raw;
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-	tl_zbMacMlmeDataRequestCb(arg);
+	zb_MacMlmeDataRequestCb(arg);
 #else
 	zb_buf_free((zb_buf_t *)arg);
 #endif
 }
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-static void tl_zbMlmeCmdAssociateReqRecvd(void *arg, void *raw)
+static void zb_MlmeCmdAssociateReqRecvd(void *arg, void *raw)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
-	u8 *payload = phy_ind_raw_get(arg);
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
+	uint8_t *payload = phy_ind_raw_get(arg);
 	zb_mlme_associate_ind_t *ind = (zb_mlme_associate_ind_t *)buf;
 
 	ZB_IEEE_ADDR_COPY(ind->devAddress, mhr->srcAddr.extAddr);
-	*(u8 *)&ind->capbilityInfo = payload[1];
+	*(uint8_t *)&ind->capbilityInfo = payload[1];
 	ind->lqi = ((mac_phy_ind_meta_t *)buf)->linkQuality;
 
 	if (macAppIndCb == NULL || macAppIndCb->macAssociationReqRcvCb == NULL ||
 	    macAppIndCb->macAssociationReqRcvCb(arg)) {
-		tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_IND, arg);
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_ASSOCIATE_IND, arg);
 		return;
 	}
 
 	zb_buf_free(buf);
 }
 
-static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw)
+static void zb_MlmeCmdBeaconReqRecvd(void *arg, void *raw)
 {
 	(void)raw;
 
@@ -125,7 +125,7 @@ static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw)
 	}
 
 	g_zbMacCtx.beaconTriesNum = 3;
-	tl_zbMacBeaconRequestCb();
+	zb_MacBeaconRequestCb();
 	/* Beacon transmission uses the dedicated MAC TX buffer, not this RX
 	 * indication buffer. Release it after the synchronous callback so
 	 * repeated beacon requests cannot exhaust the Zephyr buffer slab. */
@@ -133,10 +133,10 @@ static void tl_zbMlmeCmdBeaconReqRecvd(void *arg, void *raw)
 }
 #endif
 
-static void tl_zbMlmeCmdOrphanNotifyRecvd(void *arg, void *raw)
+static void zb_MlmeCmdOrphanNotifyRecvd(void *arg, void *raw)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
 	mac_mlme_orphan_ind_t *ind = (mac_mlme_orphan_ind_t *)buf;
 
 	if (mhr->srcAddrMode != ADDR_MODE_EXT) {
@@ -145,11 +145,11 @@ static void tl_zbMlmeCmdOrphanNotifyRecvd(void *arg, void *raw)
 	}
 
 	ZB_IEEE_ADDR_COPY(ind->orphanAddr, mhr->srcAddr.extAddr);
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ORPHAN_IND, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_ORPHAN_IND, arg);
 }
 
 #if defined(ZB_COORDINATOR_ROLE)
-static void tl_zbMlmeCmdPanIdConflictNotifyRecvd(void *arg, void *raw)
+static void zb_MlmeCmdPanIdConflictNotifyRecvd(void *arg, void *raw)
 {
 	zb_mlme_sync_loss_ind_t *ind = (zb_mlme_sync_loss_ind_t *)arg;
 
@@ -159,10 +159,10 @@ static void tl_zbMlmeCmdPanIdConflictNotifyRecvd(void *arg, void *raw)
 	ind->reason = ZB_SYNC_LOSS_REASON_PAN_ID_CONFLICT;
 	ind->logicalChannel = g_zbInfo.macPib.phyChannelCur;
 	ind->channelPage = g_zbInfo.macPib.phyPageCur;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_SYNC_LOSS_IND, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_SYNC_LOSS_IND, arg);
 }
 
-void tl_zbMacCmdPanIdConflictNotifySendCheck(void *arg, u8 status)
+void zb_MacCmdPanIdConflictNotifySendCheck(void *arg, uint8_t status)
 {
 	zb_mlme_sync_loss_ind_t *ind;
 
@@ -181,15 +181,15 @@ void tl_zbMacCmdPanIdConflictNotifySendCheck(void *arg, u8 status)
 	ind->reason = ZB_SYNC_LOSS_REASON_PAN_ID_CONFLICT;
 	ind->logicalChannel = g_zbInfo.macPib.phyChannelCur;
 	ind->channelPage = g_zbInfo.macPib.phyPageCur;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_SYNC_LOSS_IND, ind);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_SYNC_LOSS_IND, ind);
 }
 #endif
 
-static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
+static void zb_MlmeCmdAssociateRespRecvd(void *arg, void *raw)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
-	tl_zb_mac_mhr_t *mhr = (tl_zb_mac_mhr_t *)raw;
-	u8 *payload = phy_ind_raw_get(arg);
+	zb_mac_mhr_t *mhr = (zb_mac_mhr_t *)raw;
+	uint8_t *payload = phy_ind_raw_get(arg);
 	zb_mlme_associate_conf_t *cnf = (zb_mlme_associate_conf_t *)buf;
 
 	memset(buf, 0, sizeof(*cnf));
@@ -211,7 +211,7 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
 		return;
 	}
 
-	tl_zbMacAssociateRespReceived();
+	zb_MacAssociateRespReceived();
 	zb_buf_free((zb_buf_t *)associationReqOrigBuffer);
 	associationReqOrigBuffer = NULL;
 
@@ -219,13 +219,13 @@ static void tl_zbMlmeCmdAssociateRespRecvd(void *arg, void *raw)
 	COPY_BUFFERTOU16(g_zbInfo.macPib.shortAddress, payload + 1);
 	cnf->status = payload[3];
 
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_ASSOCIATE_CNF, arg);
 }
 
-void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
+void zb_PhyMlmeIndicate(void *arg, uint8_t *raw, uint8_t len)
 {
-	u8 *payload;
-	u8 cmdId;
+	uint8_t *payload;
+	uint8_t cmdId;
 
 	(void)len;
 
@@ -238,7 +238,7 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
 		return;
 	}
 
-	for (u8 i = 0; i < ARRAY_SIZE(g_zbMacMlmeEventFromPhyTbl); i++) {
+	for (uint8_t i = 0; i < ARRAY_SIZE(g_zbMacMlmeEventFromPhyTbl); i++) {
 		if (g_zbMacMlmeEventFromPhyTbl[i].cmdId == cmdId &&
 		    g_zbMacMlmeEventFromPhyTbl[i].handler != NULL) {
 			g_zbMacMlmeEventFromPhyTbl[i].handler(arg, raw);
@@ -249,7 +249,7 @@ void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len)
 	zb_buf_free((zb_buf_t *)arg);
 }
 
-void tl_zbMacPollRequestHandler(void *arg)
+void zb_MacPollRequestHandler(void *arg)
 {
 	mac_mlme_poll_req_t *pollReq = (mac_mlme_poll_req_t *)arg;
 	zb_mlme_data_req_cmd_t req;
@@ -272,16 +272,16 @@ void tl_zbMacPollRequestHandler(void *arg)
 	}
 
 	req.cbType = MAC_POLL_REQUEST_CALLBACK;
-	tl_zbMacMlmeDataRequestCmdSend(&req, (zb_buf_t *)arg, MAC_STA_INVALID_PARAMETER);
+	zb_MacMlmeDataRequestCmdSend(&req, (zb_buf_t *)arg, MAC_STA_INVALID_PARAMETER);
 }
 
-void tl_zbMacResetRequestHandler(void *arg)
+void zb_MacResetRequestHandler(void *arg)
 {
 	((mac_mlme_reset_conf_t *)arg)->status = MAC_SUCCESS;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_RESET_CNF, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_RESET_CNF, arg);
 }
 
-void tl_zbMacStartReqConfirm(void *arg, u8 status)
+void zb_MacStartReqConfirm(void *arg, uint8_t status)
 {
 	zb_mac_mlme_start_req_t *req = (zb_mac_mlme_start_req_t *)arg;
 	mac_mlme_startCnf_t *cnf = (mac_mlme_startCnf_t *)arg;
@@ -293,18 +293,18 @@ void tl_zbMacStartReqConfirm(void *arg, u8 status)
 		g_zbInfo.macPib.panId = req->panId;
 		g_zbInfo.macPib.phyPageCur = req->channelPage;
 		g_zbInfo.macPib.phyChannelCur = req->logicalChannel;
-		tl_zbMacChannelSet(req->logicalChannel);
+		zb_MacChannelSet(req->logicalChannel);
 		rf_setTrxState(RF_STATE_RX);
 	}
 
 	cnf->status = status;
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_START_CNF, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_START_CNF, arg);
 }
 
-void tl_zbMacStartRequestHandler(void *arg)
+void zb_MacStartRequestHandler(void *arg)
 {
 	zb_mac_mlme_start_req_t *req = (zb_mac_mlme_start_req_t *)arg;
-	u8 status = MAC_STA_INVALID_PARAMETER;
+	uint8_t status = MAC_STA_INVALID_PARAMETER;
 
 	if (req->beaconOrder <= 15U &&
 	    (req->beaconOrder >= req->superframeOrder || req->superframeOrder == 15U)) {
@@ -315,39 +315,39 @@ void tl_zbMacStartRequestHandler(void *arg)
 	}
 
 	if (g_zbNwkCtx.joined_pro) {
-		tl_zbMacStartReqConfirm(arg, MAC_STA_INVALID_PARAMETER);
+		zb_MacStartReqConfirm(arg, MAC_STA_INVALID_PARAMETER);
 		return;
 	}
 
 	if (status != MAC_SUCCESS) {
-		tl_zbMacStartReqConfirm(arg, status);
+		zb_MacStartReqConfirm(arg, status);
 		return;
 	}
 
 	if (req->coordRealignment == 0U) {
-		tl_zbMacStartReqConfirm(arg, MAC_SUCCESS);
+		zb_MacStartReqConfirm(arg, MAC_SUCCESS);
 		return;
 	}
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 	((zb_buf_t *)arg)->hdr.handle = MAC_INTERNAL_START_REQUEST_HANDLE;
-	status = tl_zbMacMlmeCoordRealignmentCmdSend(1, 0, 0, arg);
+	status = zb_MacMlmeCoordRealignmentCmdSend(1, 0, 0, arg);
 	if (status != MAC_SUCCESS) {
-		tl_zbMacStartReqConfirm(arg, MAC_STA_CHANNEL_ACCESS_FAILURE);
+		zb_MacStartReqConfirm(arg, MAC_STA_CHANNEL_ACCESS_FAILURE);
 	}
 #else
-	tl_zbMacStartReqConfirm(arg, MAC_SUCCESS);
+	zb_MacStartReqConfirm(arg, MAC_SUCCESS);
 #endif
 }
 
-void tl_zbMacCommStatusSend(void *arg, u8 status)
+void zb_MacCommStatusSend(void *arg, uint8_t status)
 {
-	tl_zb_mac_mhr_t mhr;
+	zb_mac_mhr_t mhr;
 	mac_pending_tx_ctx_t *pendingCtx = (mac_pending_tx_ctx_t *)arg;
 	zb_mlme_comm_status_ind_t *ind = (zb_mlme_comm_status_ind_t *)arg;
-	u8 *raw = pendingCtx->txData;
+	uint8_t *raw = pendingCtx->txData;
 
-	tl_zbMacHdrParse(&mhr, raw);
+	zb_MacHdrParse(&mhr, raw);
 
 	ZB_IEEE_ADDR_COPY(ind->srcAddr.addr.extAddr, mhr.srcAddr.extAddr);
 	ind->srcAddr.addrMode = mhr.srcAddrMode;
@@ -356,5 +356,5 @@ void tl_zbMacCommStatusSend(void *arg, u8 status)
 	ind->status = status;
 	ind->isAssoc = TRUE;
 
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_COMM_STATUS_IND, arg);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_COMM_STATUS_IND, arg);
 }

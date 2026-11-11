@@ -18,7 +18,7 @@
 typedef struct {
 	ev_timer_event_t *evt;
 	extPANId_t epid;
-	u8 cnt;
+	uint8_t cnt;
 } nwk_panidConflictDetect_t;
 
 nwk_panidConflictDetect_t g_panIdConflictDected = {NULL, {0}, 0};
@@ -30,14 +30,14 @@ static inline bool nwk_panid_security_enabled(void)
 	       ss_keyPreconfigured();
 }
 
-static inline u8 nwk_panid_report_count(const nwkCmd_nwkReport_t *report)
+static inline uint8_t nwk_panid_report_count(const nwkCmd_nwkReport_t *report)
 {
-	return (u8)(*(u8 *)&report->options & 0x1fU);
+	return (uint8_t)(*(uint8_t *)&report->options & 0x1fU);
 }
 
-static bool nwk_panid_in_list(const u16 *panIds, u8 count, u16 panId)
+static bool nwk_panid_in_list(const uint16_t *panIds, uint8_t count, uint16_t panId)
 {
-	for (u8 i = 0; i < count; i++) {
+	for (uint8_t i = 0; i < count; i++) {
 		if (panIds[i] == panId) {
 			return TRUE;
 		}
@@ -46,13 +46,13 @@ static bool nwk_panid_in_list(const u16 *panIds, u8 count, u16 panId)
 	return FALSE;
 }
 
-static inline void nwk_panid_hdr_init(nwk_hdr_t *hdr, u16 dstAddr, bool security)
+static inline void nwk_panid_hdr_init(nwk_hdr_t *hdr, uint16_t dstAddr, bool security)
 {
 	memset(hdr, 0, sizeof(*hdr));
 
 	hdr->dstAddr = dstAddr;
 	hdr->srcAddr = g_zbNIB.nwkAddr;
-	hdr->radius = (u8)(g_zbNIB.maxDepth << 1);
+	hdr->radius = (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr->seqNum = g_zbNIB.seqNum++;
 	hdr->frameControl.frameType = FRAME_TYPE_COMMAND;
 	hdr->frameControl.protocolVer = ZB_PROTOCOL_VERSION;
@@ -63,30 +63,30 @@ static inline void nwk_panid_hdr_init(nwk_hdr_t *hdr, u16 dstAddr, bool security
 	hdr->frameHdrLen = getNwkHdrSize(hdr);
 }
 
-void nwkReportCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkReportCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 count = nwk_panid_report_count(&cmd->nwkReport);
-	u8 payloadLen = (u8)(10U + (u8)(count << 1));
-	u8 *payload;
+	uint8_t count = nwk_panid_report_count(&cmd->nwkReport);
+	uint8_t payloadLen = (uint8_t)(10U + (uint8_t)(count << 1));
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, payloadLen, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, payloadLen, payload, uint8_t *);
 
 	payload[0] = cmd->cmdId;
-	payload[1] = *(u8 *)&cmd->nwkReport.options;
+	payload[1] = *(uint8_t *)&cmd->nwkReport.options;
 	ZB_EXTPANID_COPY(payload + 2, cmd->nwkReport.epid);
-	memcpy(payload + 10, cmd->nwkReport.panIds, (u8)(count << 1));
+	memcpy(payload + 10, cmd->nwkReport.panIds, (uint8_t)(count << 1));
 	buf->hdr.handle = handle;
 	nwk_fwdPacket(buf, pNwkHdr, payload, payloadLen);
 }
 
-void nwkUpdateCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkUpdateCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 *payload;
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, 13, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, 13, payload, uint8_t *);
 
 	payload[0] = cmd->cmdId;
-	payload[1] = *(u8 *)&cmd->nwkUpdate.options;
+	payload[1] = *(uint8_t *)&cmd->nwkUpdate.options;
 	ZB_EXTPANID_COPY(payload + 2, cmd->nwkUpdate.epid);
 	payload[10] = cmd->nwkUpdate.updateId;
 	memcpy(payload + 11, &cmd->nwkUpdate.newPanId, sizeof(cmd->nwkUpdate.newPanId));
@@ -94,7 +94,7 @@ void nwkUpdateCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handl
 	nwk_fwdPacket(buf, pNwkHdr, payload, 13);
 }
 
-int tl_zbNwkPanidConflictSetPanidCb(void *arg)
+int zb_NwkPanidConflictSetPanidCb(void *arg)
 {
 	(void)arg;
 
@@ -111,7 +111,7 @@ int tl_zbNwkPanidConflictSetPanidCb(void *arg)
 		req->panCoordinator = af_nodeDevTypeGet();
 		req->batteryLifeExt = 0;
 		g_zbNwkCtx.state = NLME_STATE_PANID_CONFLICT;
-		tl_zbPrimitivePost(TL_Q_NWK2MAC, MAC_MLME_START_REQ, buf);
+		zb_PrimitivePost(ZB_Q_NWK2MAC, MAC_MLME_START_REQ, buf);
 		g_sysDiags.panIdModified++;
 	}
 
@@ -120,24 +120,24 @@ int tl_zbNwkPanidConflictSetPanidCb(void *arg)
 	return -1;
 }
 
-void tl_zbNwkPanidConflictSetPanidStart(void)
+void zb_NwkPanidConflictSetPanidStart(void)
 {
 	if (panidConflictTimerEvt == NULL) {
-		panidConflictTimerEvt = ev_timer_taskPost(tl_zbNwkPanidConflictSetPanidCb, NULL,
+		panidConflictTimerEvt = ev_timer_taskPost(zb_NwkPanidConflictSetPanidCb, NULL,
 							  g_zbNIB.nwkBroadcastDeliveryTime);
 	}
 }
 
-int tl_zbNwkPanidConflictDoubleCheck(void *arg)
+int zb_NwkPanidConflictDoubleCheck(void *arg)
 {
 	(void)arg;
 
-	(void)tl_zbMacMlmeBeaconRequestCmdSend();
+	(void)zb_MacMlmeBeaconRequestCmdSend();
 
 	/* The counter is
 	 * tested as a signed byte, so a zero counter expires immediately instead
 	 * of wrapping to 255. */
-	if ((s8)(--g_panIdConflictDected.cnt) > 0) {
+	if ((int8_t)(--g_panIdConflictDected.cnt) > 0) {
 		return 2000;
 	}
 
@@ -146,7 +146,7 @@ int tl_zbNwkPanidConflictDoubleCheck(void *arg)
 	return -1;
 }
 
-bool tl_zbNwkPanidConflictDetect(u16 panId, extPANId_t epid)
+bool zb_NwkPanidConflictDetect(uint16_t panId, extPANId_t epid)
 {
 	if (g_zbNIB.panId != panId) {
 		return FALSE;
@@ -172,20 +172,20 @@ bool tl_zbNwkPanidConflictDetect(u16 panId, extPANId_t epid)
 
 	ZB_EXTPANID_COPY(g_panIdConflictDected.epid, epid);
 	g_panIdConflictDected.cnt = 2;
-	g_panIdConflictDected.evt = ev_timer_taskPost(tl_zbNwkPanidConflictDoubleCheck, NULL, 20);
+	g_panIdConflictDected.evt = ev_timer_taskPost(zb_NwkPanidConflictDoubleCheck, NULL, 20);
 
 	return FALSE;
 }
 
-void tl_zbNwkReportForPanidConflict(zb_buf_t *buf)
+void zb_NwkReportForPanidConflict(zb_buf_t *buf)
 {
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u16 managerAddr = g_zbNIB.managerAddr;
-	u16 managerAddrMapIdx;
+	uint16_t managerAddr = g_zbNIB.managerAddr;
+	uint16_t managerAddrMapIdx;
 
 	nwk_panid_hdr_init(&hdr, managerAddr, nwk_panid_security_enabled());
-	if (tl_zbExtAddrByShortAddr(managerAddr, hdr.dstIeeeAddr, &managerAddrMapIdx) == 0U) {
+	if (zb_ExtAddrByShortAddr(managerAddr, hdr.dstIeeeAddr, &managerAddrMapIdx) == 0U) {
 		hdr.frameControl.dstIEEEAddr = 1;
 	}
 
@@ -194,11 +194,11 @@ void tl_zbNwkReportForPanidConflict(zb_buf_t *buf)
 	cmd.nwkReport.options.reportInfoCnt = g_zbNwkCtx.known_panids_cnt;
 	cmd.nwkReport.options.reportCmdId = 0;
 	ZB_EXTPANID_COPY(cmd.nwkReport.epid, g_zbNIB.extPANId);
-	cmd.nwkReport.panIds = (u8 *)g_zbNwkCtx.known_panids;
+	cmd.nwkReport.panIds = (uint8_t *)g_zbNwkCtx.known_panids;
 	nwkReportCmdSend(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_REPORT_CMD_HANDLE);
 }
 
-void tl_zbNwkUpdateForPanidConflict(zb_buf_t *buf, u16 newPanId)
+void zb_NwkUpdateForPanidConflict(zb_buf_t *buf, uint16_t newPanId)
 {
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
@@ -224,7 +224,7 @@ void tl_zbNwkUpdateForPanidConflict(zb_buf_t *buf, u16 newPanId)
 	nwkUpdateCmdSend(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_UPDATE_CMD_PAN_ID_UPDATE_HANDLE);
 }
 
-void tl_zbNwkPanidConflictProcess(void *arg)
+void zb_NwkPanidConflictProcess(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 
@@ -232,12 +232,12 @@ void tl_zbNwkPanidConflictProcess(void *arg)
 	 * reports the conflict to it.  The vendor library compares g_zbInfo+104/105
 	 * (managerAddr) with g_zbInfo+102/103 (nwkAddr). */
 	if (g_zbNIB.managerAddr != g_zbNIB.nwkAddr) {
-		tl_zbNwkReportForPanidConflict(buf);
+		zb_NwkReportForPanidConflict(buf);
 		return;
 	}
 
 	for (;;) {
-		u16 newPanId = (u16)drv_u32Rand();
+		uint16_t newPanId = (uint16_t)drv_u32Rand();
 
 		/* The vendor checks new_panid only when the known-PAN list is non-empty. */
 		if ((g_zbNwkCtx.known_panids_cnt != 0U) && (newPanId == g_zbNwkCtx.new_panid)) {
@@ -254,7 +254,7 @@ void tl_zbNwkPanidConflictProcess(void *arg)
 		}
 
 		g_zbNIB.updateId++;
-		tl_zbNwkUpdateForPanidConflict(buf, newPanId);
+		zb_NwkUpdateForPanidConflict(buf, newPanId);
 		return;
 	}
 }
@@ -269,8 +269,8 @@ void nwkReportCmdHandler(void *arg, nwkCmd_t *cmd)
 	g_zbNwkCtx.panIdConflict = 1;
 
 	for (;;) {
-		u16 newPanId = (u16)drv_u32Rand();
-		u8 reportCnt = nwk_panid_report_count(&cmd->nwkReport);
+		uint16_t newPanId = (uint16_t)drv_u32Rand();
+		uint8_t reportCnt = nwk_panid_report_count(&cmd->nwkReport);
 
 		if (newPanId == 0U) {
 			continue;
@@ -286,26 +286,26 @@ void nwkReportCmdHandler(void *arg, nwkCmd_t *cmd)
 		}
 
 		if (reportCnt != 0U &&
-		    nwk_panid_in_list((const u16 *)cmd->nwkReport.panIds, reportCnt, newPanId)) {
+		    nwk_panid_in_list((const uint16_t *)cmd->nwkReport.panIds, reportCnt, newPanId)) {
 			continue;
 		}
 
 		g_zbNIB.updateId++;
-		tl_zbNwkUpdateForPanidConflict((zb_buf_t *)arg, newPanId);
+		zb_NwkUpdateForPanidConflict((zb_buf_t *)arg, newPanId);
 		return;
 	}
 }
 
 void nwkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
-	u8 options = *(u8 *)&cmd->nwkUpdate.options;
+	uint8_t options = *(uint8_t *)&cmd->nwkUpdate.options;
 
 	if (g_zbNwkCtx.panidUpdateRecv) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	if ((options & (u8)~0x1fU) != 0U) {
+	if ((options & (uint8_t)~0x1fU) != 0U) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -325,7 +325,7 @@ void nwkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	g_zbNwkCtx.panidUpdateRecv = 1;
 	g_zbNwkCtx.panIdConflict = 1;
 	g_zbNwkCtx.new_panid = cmd->nwkUpdate.newPanId;
-	tl_zbNwkPanidConflictSetPanidStart();
+	zb_NwkPanidConflictSetPanidStart();
 
 	if (pNwkHdr->srcAddr == g_zbNIB.managerAddr) {
 		g_zbNIB.updateId = cmd->nwkUpdate.updateId;
@@ -334,7 +334,7 @@ void nwkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	zb_buf_free((zb_buf_t *)arg);
 }
 
-void tl_zbNwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
@@ -343,7 +343,7 @@ void tl_zbNwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cm
 		nwkBrcTransJitterSet(NWK_BRC_JITTER);
 
 		if (nwkBrcTimerStart(buf, pNwkHdr, macInd->msdu + pNwkHdr->frameHdrLen,
-				     (u8)(macInd->msduLength - pNwkHdr->frameHdrLen)) !=
+				     (uint8_t)(macInd->msduLength - pNwkHdr->frameHdrLen)) !=
 		    NWK_STATUS_SUCCESS) {
 			nwk_brcTransRecordEntry_t *record =
 				nwkBrcTransEntryFind(pNwkHdr->srcAddr, pNwkHdr->seqNum);
@@ -364,7 +364,7 @@ void nwk_panIdConflictCnfHandler(void *arg)
 {
 	g_zbNIB.panId = g_zbMacPib.panId;
 
-	tl_zbNwkBeaconPayloadUpdate();
+	zb_NwkBeaconPayloadUpdate();
 
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.panIdConflict = 0;
@@ -372,7 +372,7 @@ void nwk_panIdConflictCnfHandler(void *arg)
 	g_zbNwkCtx.known_panids_cnt = 0;
 	memset(g_zbNwkCtx.known_panids, 0, sizeof(g_zbNwkCtx.known_panids));
 
-	tl_zbNwkNlmeNwkStatusInd(arg, g_zbNIB.managerAddr,
+	zb_NwkNlmeNwkStatusInd(arg, g_zbNIB.managerAddr,
 				 NWK_COMMAND_STATUS_PAN_IDENTIFIER_UPDATE);
 }
 
@@ -380,14 +380,14 @@ void nwk_panIdConflictCnfHandler(void *arg)
 
 void nwkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
-	u8 options = *(u8 *)&cmd->nwkUpdate.options;
+	uint8_t options = *(uint8_t *)&cmd->nwkUpdate.options;
 
 	if (g_zbNwkCtx.panidUpdateRecv) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
 
-	if ((options & (u8)~0x1fU) != 0U) {
+	if ((options & (uint8_t)~0x1fU) != 0U) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
 	}
@@ -414,7 +414,7 @@ void nwkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	zb_buf_free((zb_buf_t *)arg);
 }
 
-void tl_zbNwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkNetworkUpdateCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	nwkUpdateCmdHandler(arg, pNwkHdr, cmd);
 }
@@ -423,7 +423,7 @@ void nwk_panIdConflictCnfHandler(void *arg)
 {
 	g_zbInfo.nwkNib.panId = g_zbInfo.macPib.panId;
 
-	tl_zbNwkBeaconPayloadUpdate();
+	zb_NwkBeaconPayloadUpdate();
 
 	g_zbNwkCtx.state = NLME_STATE_IDLE;
 	g_zbNwkCtx.panIdConflict = 0;
@@ -431,7 +431,7 @@ void nwk_panIdConflictCnfHandler(void *arg)
 	g_zbNwkCtx.known_panids_cnt = 0;
 	memset(g_zbNwkCtx.known_panids, 0, sizeof(g_zbNwkCtx.known_panids));
 
-	tl_zbNwkNlmeNwkStatusInd(arg, g_zbNIB.managerAddr,
+	zb_NwkNlmeNwkStatusInd(arg, g_zbNIB.managerAddr,
 				 NWK_COMMAND_STATUS_PAN_IDENTIFIER_UPDATE);
 }
 

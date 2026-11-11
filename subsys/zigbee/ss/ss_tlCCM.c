@@ -14,14 +14,14 @@ enum {
 	AES_CCM_MIC_LEN = 4,
 };
 
-static void aes_block_xor(u8 *dst, const u8 *src)
+static void aes_block_xor(uint8_t *dst, const uint8_t *src)
 {
-	for (u8 i = 0; i < AES_BLOCK_SIZE_LOCAL; i++) {
+	for (uint8_t i = 0; i < AES_BLOCK_SIZE_LOCAL; i++) {
 		dst[i] ^= src[i];
 	}
 }
 
-static inline void aes_ccm_ctr_blk_fill(u8 *ctr, const u8 *iv, u16 counter)
+static inline void aes_ccm_ctr_blk_fill(uint8_t *ctr, const uint8_t *iv, uint16_t counter)
 {
 	ctr[0] = AES_CCM_L_VALUE;
 	memcpy(ctr + 1, iv, 13);
@@ -33,18 +33,18 @@ static inline void aes_ccm_ctr_blk_fill(u8 *ctr, const u8 *iv, u16 counter)
  * Input: an integer challenge len which is the challenge length in bytes.
  * Output: a statistically unique and unpredictable challenge string.
  */
-_CODE_SS_ void ss_tlChallengeGen(u8 *dst, u8 len)
+_CODE_SS_ void ss_tlChallengeGen(uint8_t *dst, uint8_t len)
 {
-	for (u8 i = 0; i < len; i++) {
-		dst[i] = (u8)drv_u32Rand();
+	for (uint8_t i = 0; i < len; i++) {
+		dst[i] = (uint8_t)drv_u32Rand();
 	}
 }
 
-_CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
+_CODE_SS_ void zb_cryHashFunction(uint8_t *data, uint8_t len, uint8_t *result)
 {
-	u8 block[AES_BLOCK_SIZE_LOCAL];
-	u8 pos = 0;
-	u8 idx = 0;
+	uint8_t block[AES_BLOCK_SIZE_LOCAL];
+	uint8_t pos = 0;
+	uint8_t idx = 0;
 
 	memset(result, 0, AES_BLOCK_SIZE_LOCAL);
 
@@ -68,17 +68,17 @@ _CODE_SS_ void tl_cryHashFunction(u8 *data, u8 len, u8 *result)
 		block[pos++] = 0;
 	}
 
-	block[pos++] = (u8)(((u16)len << 3) >> 8);
-	block[pos] = (u8)(((u16)len << 3) & 0xffU);
+	block[pos++] = (uint8_t)(((uint16_t)len << 3) >> 8);
+	block[pos] = (uint8_t)(((uint16_t)len << 3) & 0xffU);
 
 	drv_aes_encrypt(result, block, result);
 	aes_block_xor(result, block);
 }
 
-_CODE_SS_ void ss_ttlMAC(u8 len, u8 *input, u8 *key, u8 *hashOut)
+_CODE_SS_ void ss_ttlMAC(uint8_t len, uint8_t *input, uint8_t *key, uint8_t *hashOut)
 {
-	u8 hasIn[2 * AES_BLOCK_SIZE_LOCAL];
-	u8 *tmpBuf;
+	uint8_t hasIn[2 * AES_BLOCK_SIZE_LOCAL];
+	uint8_t *tmpBuf;
 
 	if (len > 0x70U) {
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_COMMON_PARAM_ERROR);
@@ -92,29 +92,29 @@ _CODE_SS_ void ss_ttlMAC(u8 len, u8 *input, u8 *key, u8 *hashOut)
 		return;
 	}
 
-	for (u8 i = 0; i < AES_BLOCK_SIZE_LOCAL; i++) {
+	for (uint8_t i = 0; i < AES_BLOCK_SIZE_LOCAL; i++) {
 		hasIn[i] = key[i] ^ 0x5cU;
 		tmpBuf[i] = key[i] ^ 0x36U;
 	}
 
-	for (u8 i = 0; i < len; i++) {
+	for (uint8_t i = 0; i < len; i++) {
 		tmpBuf[i + AES_BLOCK_SIZE_LOCAL] = input[i];
 	}
 
-	tl_cryHashFunction(tmpBuf, (u8)(AES_BLOCK_SIZE_LOCAL + len), hasIn + AES_BLOCK_SIZE_LOCAL);
-	tl_cryHashFunction(hasIn, 2 * AES_BLOCK_SIZE_LOCAL, hashOut);
+	zb_cryHashFunction(tmpBuf, (uint8_t)(AES_BLOCK_SIZE_LOCAL + len), hasIn + AES_BLOCK_SIZE_LOCAL);
+	zb_cryHashFunction(hasIn, 2 * AES_BLOCK_SIZE_LOCAL, hashOut);
 	ev_buf_free(tmpBuf);
 }
 
-_CODE_SS_ u8 ss_keyHash(u8 *hashInput, u8 *key, u8 *hashOut)
+_CODE_SS_ uint8_t ss_keyHash(uint8_t *hashInput, uint8_t *key, uint8_t *hashOut)
 {
 	ss_ttlMAC(1, hashInput, key, hashOut);
 	return RET_OK;
 }
 
-void ss_mmoHash(u8 *data, u8 len, u8 *result)
+void ss_mmoHash(uint8_t *data, uint8_t len, uint8_t *result)
 {
-	tl_cryHashFunction(data, len, result);
+	zb_cryHashFunction(data, len, result);
 }
 
 /*
@@ -122,20 +122,20 @@ void ss_mmoHash(u8 *data, u8 len, u8 *result)
  *
  * @brief   Calculate CBC-MAC part of CCM*.
  */
-_CODE_SS_ u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen,
-			     u8 *result)
+_CODE_SS_ uint8_t aes_ccmAuthTran(uint8_t M, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen,
+			     uint8_t *result)
 {
-	u8 b0[AES_BLOCK_SIZE_LOCAL];
-	u8 x[AES_BLOCK_SIZE_LOCAL];
-	u8 *authData;
-	u16 authLen = (u16)aStrLen + 2U;
-	u16 totalLen;
-	u16 authOffset = 0;
-	u16 msgOffset = 0;
-	u16 authRemain = authLen;
-	u16 msgRemain = mStrLen;
+	uint8_t b0[AES_BLOCK_SIZE_LOCAL];
+	uint8_t x[AES_BLOCK_SIZE_LOCAL];
+	uint8_t *authData;
+	uint16_t authLen = (uint16_t)aStrLen + 2U;
+	uint16_t totalLen;
+	uint16_t authOffset = 0;
+	uint16_t msgOffset = 0;
+	uint16_t authRemain = authLen;
+	uint16_t msgRemain = mStrLen;
 
-	b0[0] = (u8)(AES_CCM_L_VALUE | (((M - 2U) >> 1) << 3) | ((aStrLen != 0U) ? 0x40U : 0U));
+	b0[0] = (uint8_t)(AES_CCM_L_VALUE | (((M - 2U) >> 1) << 3) | ((aStrLen != 0U) ? 0x40U : 0U));
 	memcpy(b0 + 1, iv, 13);
 	b0[14] = HI_UINT16(mStrLen);
 	b0[15] = LO_UINT16(mStrLen);
@@ -153,31 +153,31 @@ _CODE_SS_ u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
 
 	totalLen = authLen;
 	if (totalLen & 0x0fU) {
-		totalLen = (u16)((totalLen & (u16)~0x0fU) + 0x10U);
+		totalLen = (uint16_t)((totalLen & (uint16_t)~0x0fU) + 0x10U);
 	}
 
-	totalLen = (u16)(totalLen + mStrLen);
+	totalLen = (uint16_t)(totalLen + mStrLen);
 	if (mStrLen & 0x0fU) {
-		totalLen = (u16)((totalLen & (u16)~0x0fU) + 0x10U);
+		totalLen = (uint16_t)((totalLen & (uint16_t)~0x0fU) + 0x10U);
 	}
 
-	for (u16 processed = 0; processed < (u16)(totalLen + AES_BLOCK_SIZE_LOCAL);
+	for (uint16_t processed = 0; processed < (uint16_t)(totalLen + AES_BLOCK_SIZE_LOCAL);
 	     processed += AES_BLOCK_SIZE_LOCAL) {
 		aes_block_xor(x, b0);
 		drv_aes_encrypt(key, x, x);
 
 		if (authRemain > AES_BLOCK_SIZE_LOCAL) {
 			memcpy(b0, authData + authOffset, AES_BLOCK_SIZE_LOCAL);
-			authOffset = (u16)(authOffset + AES_BLOCK_SIZE_LOCAL);
-			authRemain = (u16)(authRemain - AES_BLOCK_SIZE_LOCAL);
+			authOffset = (uint16_t)(authOffset + AES_BLOCK_SIZE_LOCAL);
+			authRemain = (uint16_t)(authRemain - AES_BLOCK_SIZE_LOCAL);
 		} else if (authRemain != 0U) {
 			memcpy(b0, authData + authOffset, authRemain);
 			memset(b0 + authRemain, 0, AES_BLOCK_SIZE_LOCAL - authRemain);
 			authRemain = 0;
 		} else if (msgRemain >= AES_BLOCK_SIZE_LOCAL) {
 			memcpy(b0, mStr + msgOffset, AES_BLOCK_SIZE_LOCAL);
-			msgOffset = (u16)(msgOffset + AES_BLOCK_SIZE_LOCAL);
-			msgRemain = (u16)(msgRemain - AES_BLOCK_SIZE_LOCAL);
+			msgOffset = (uint16_t)(msgOffset + AES_BLOCK_SIZE_LOCAL);
+			msgRemain = (uint16_t)(msgRemain - AES_BLOCK_SIZE_LOCAL);
 		} else {
 			memcpy(b0, mStr + msgOffset, msgRemain);
 			memset(b0 + msgRemain, 0, AES_BLOCK_SIZE_LOCAL - msgRemain);
@@ -190,14 +190,14 @@ _CODE_SS_ u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
 	return RET_OK;
 }
 
-_CODE_SS_ u8 aes_ccmBaseTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen,
-			     u8 *mic, u8 opt)
+_CODE_SS_ uint8_t aes_ccmBaseTran(uint8_t M, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen,
+			     uint8_t *mic, uint8_t opt)
 {
-	u8 ctr[AES_BLOCK_SIZE_LOCAL];
-	u8 stream[AES_BLOCK_SIZE_LOCAL];
-	u16 counter = 0;
-	u16 remain = mStrLen;
-	u16 offset = 0;
+	uint8_t ctr[AES_BLOCK_SIZE_LOCAL];
+	uint8_t stream[AES_BLOCK_SIZE_LOCAL];
+	uint16_t counter = 0;
+	uint16_t remain = mStrLen;
+	uint16_t offset = 0;
 
 	(void)aStr;
 	(void)aStrLen;
@@ -206,40 +206,40 @@ _CODE_SS_ u8 aes_ccmBaseTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *a
 	aes_ccm_ctr_blk_fill(ctr, iv, counter);
 	drv_aes_encrypt(key, ctr, stream);
 
-	for (u8 i = 0; i < M; i++) {
+	for (uint8_t i = 0; i < M; i++) {
 		mic[i] ^= stream[i];
 	}
 
 	counter = 1;
 	while (remain != 0U) {
-		u8 chunk = (remain >= AES_BLOCK_SIZE_LOCAL) ? AES_BLOCK_SIZE_LOCAL : (u8)remain;
+		uint8_t chunk = (remain >= AES_BLOCK_SIZE_LOCAL) ? AES_BLOCK_SIZE_LOCAL : (uint8_t)remain;
 
 		aes_ccm_ctr_blk_fill(ctr, iv, counter);
 		drv_aes_encrypt(key, ctr, stream);
 
-		for (u8 i = 0; i < chunk; i++) {
+		for (uint8_t i = 0; i < chunk; i++) {
 			mStr[offset + i] ^= stream[i];
 		}
 
-		offset = (u16)(offset + chunk);
-		remain = (u16)(remain - chunk);
+		offset = (uint16_t)(offset + chunk);
+		remain = (uint16_t)(remain - chunk);
 		counter++;
 	}
 
 	return RET_OK;
 }
 
-_CODE_SS_ u8 aes_ccmEncTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen,
-			    u8 *result)
+_CODE_SS_ uint8_t aes_ccmEncTran(uint8_t M, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen,
+			    uint8_t *result)
 {
 	return aes_ccmBaseTran(M, key, iv, mStr, mStrLen, aStr, aStrLen, result,
 			       AES_CCM_OPT_ENCRYPT);
 }
 
-_CODE_SS_ u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen,
-			      u8 *srcMsg)
+_CODE_SS_ uint8_t ss_ccmEncryption(uint8_t *key, uint8_t *nonce, uint8_t nwkHdrLen, uint8_t *nwkHdr, uint8_t srcMsgLen,
+			      uint8_t *srcMsg)
 {
-	u8 mic[AES_CCM_MIC_LEN];
+	uint8_t mic[AES_CCM_MIC_LEN];
 
 	if (aes_ccmAuthTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen,
 			    mic) != RET_OK) {
@@ -248,20 +248,20 @@ _CODE_SS_ u8 ss_ccmEncryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 s
 
 	aes_ccmEncTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic);
 	memcpy(srcMsg + srcMsgLen, mic, AES_CCM_MIC_LEN);
-	return (u8)(srcMsgLen + AES_CCM_MIC_LEN);
+	return (uint8_t)(srcMsgLen + AES_CCM_MIC_LEN);
 }
 
-_CODE_SS_ u8 aes_ccmDecTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen,
-			    u8 *mic)
+_CODE_SS_ uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen,
+			    uint8_t *mic)
 {
 	return aes_ccmBaseTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, mic,
 			       AES_CCM_OPT_DECRYPT);
 }
 
-_CODE_SS_ u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr,
-				u8 aStrLen, u8 *mic)
+_CODE_SS_ uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr,
+				uint8_t aStrLen, uint8_t *mic)
 {
-	u8 tmpMic[AES_BLOCK_SIZE_LOCAL];
+	uint8_t tmpMic[AES_BLOCK_SIZE_LOCAL];
 
 	/* The vendor library returns 0xff, not RET_ERROR, from every failure path
 	 * here. */
@@ -269,7 +269,7 @@ _CODE_SS_ u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLe
 		return 0xffU;
 	}
 
-	for (u8 i = 0; i < micLen; i++) {
+	for (uint8_t i = 0; i < micLen; i++) {
 		if (mic[i] != tmpMic[i]) {
 			return 0xffU;
 		}
@@ -278,10 +278,10 @@ _CODE_SS_ u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLe
 	return RET_OK;
 }
 
-_CODE_SS_ u8 ss_ccmDecryption(u8 *key, u8 *nonce, u8 nwkHdrLen, u8 *nwkHdr, u8 srcMsgLen,
-			      u8 *srcMsg)
+_CODE_SS_ uint8_t ss_ccmDecryption(uint8_t *key, uint8_t *nonce, uint8_t nwkHdrLen, uint8_t *nwkHdr, uint8_t srcMsgLen,
+			      uint8_t *srcMsg)
 {
-	u8 *mic = srcMsg + srcMsgLen - AES_CCM_MIC_LEN;
+	uint8_t *mic = srcMsg + srcMsgLen - AES_CCM_MIC_LEN;
 
 	srcMsgLen -= AES_CCM_MIC_LEN;
 	aes_ccmDecTran(AES_CCM_MIC_LEN, key, nonce, srcMsg, srcMsgLen, nwkHdr, nwkHdrLen, mic);

@@ -59,17 +59,17 @@ zcl_pollCtrl_attr_t gZclPollCtrlAttr = {
 
 /* Attribute record list */
 const zclAttrInfo_t pollCtrl_attrTbl[] = {
-    { ZCL_ATTRID_CHK_IN_INTERVAL,         ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&gZclPollCtrlAttr.chkInInterval },
-    { ZCL_ATTRID_LONG_POLL_INTERVAL,      ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (u8*)&gZclPollCtrlAttr.longPollInterval },
-    { ZCL_ATTRID_SHORT_POLL_INTERVAL,     ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (u8*)&gZclPollCtrlAttr.shortPollInterval },
-    { ZCL_ATTRID_FAST_POLL_TIMEOUT,       ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8*)&gZclPollCtrlAttr.fastPollTimeout },
-    { ZCL_ATTRID_CHK_IN_INTERVAL_MIN,     ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (u8*)&gZclPollCtrlAttr.chkInIntervalMin},
-    { ZCL_ATTRID_LONG_POLL_INTERVAL_MIN,  ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (u8*)&gZclPollCtrlAttr.longPollIntervalMin },
-    { ZCL_ATTRID_FAST_POLL_TIMEOUT_MAX,   ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (u8*)&gZclPollCtrlAttr.fastPollTimeoutMax },
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (u8*)&zcl_attr_global_clusterRevision },
+    { ZCL_ATTRID_CHK_IN_INTERVAL,         ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&gZclPollCtrlAttr.chkInInterval },
+    { ZCL_ATTRID_LONG_POLL_INTERVAL,      ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (uint8_t*)&gZclPollCtrlAttr.longPollInterval },
+    { ZCL_ATTRID_SHORT_POLL_INTERVAL,     ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (uint8_t*)&gZclPollCtrlAttr.shortPollInterval },
+    { ZCL_ATTRID_FAST_POLL_TIMEOUT,       ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t*)&gZclPollCtrlAttr.fastPollTimeout },
+    { ZCL_ATTRID_CHK_IN_INTERVAL_MIN,     ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (uint8_t*)&gZclPollCtrlAttr.chkInIntervalMin},
+    { ZCL_ATTRID_LONG_POLL_INTERVAL_MIN,  ZCL_DATA_TYPE_UINT32, ACCESS_CONTROL_READ,                        (uint8_t*)&gZclPollCtrlAttr.longPollIntervalMin },
+    { ZCL_ATTRID_FAST_POLL_TIMEOUT_MAX,   ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (uint8_t*)&gZclPollCtrlAttr.fastPollTimeoutMax },
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,                        (uint8_t*)&zcl_attr_global_clusterRevision },
 };
 
-const u8 zcl_pollCtrl_attrNum = (sizeof(pollCtrl_attrTbl) / sizeof(zclAttrInfo_t));
+const uint8_t zcl_pollCtrl_attrNum = (sizeof(pollCtrl_attrTbl) / sizeof(zclAttrInfo_t));
 
 #endif    /* ZCL_POLL_CTRL */
 #endif

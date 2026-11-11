@@ -51,24 +51,24 @@
 static status_t zcl_group_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_group_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_group_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_GROUPS, manuCode, attrNum, attrTbl, zcl_group_cmdHandler, cb);
 }
 
 
-_CODE_ZCL_ status_t zcl_group_add(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 *groupName)
+_CODE_ZCL_ status_t zcl_group_add(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t *groupName)
 {
-    u8 buf[20];
+    uint8_t buf[20];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(groupId);
     *pBuf++ = HI_UINT16(groupId);
     if (!groupName) {
         *pBuf++ = 0;
     } else {
-        u8 len = groupName[0];
+        uint8_t len = groupName[0];
         len = (len > 15) ? 15 : len;
         *pBuf++ = len;
         memcpy(pBuf, &groupName[1], len);
@@ -79,15 +79,15 @@ _CODE_ZCL_ status_t zcl_group_add(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefa
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_group_view(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId)
+_CODE_ZCL_ status_t zcl_group_view(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_GROUPS, ZCL_CMD_GROUP_VIEW_GROUP, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, (u8*)&groupId);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, (uint8_t*)&groupId);
 }
 
-_CODE_ZCL_ status_t zcl_group_getMembership(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 groupCnt, u16 *groupList)
+_CODE_ZCL_ status_t zcl_group_getMembership(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t groupCnt, uint16_t *groupList)
 {
-    u8 buf[2 * APS_GROUP_TABLE_NUM + 1];
+    uint8_t buf[2 * APS_GROUP_TABLE_NUM + 1];
 
     if (groupCnt > APS_GROUP_TABLE_NUM) {
         return ZCL_STA_INVALID_VALUE;
@@ -100,30 +100,30 @@ _CODE_ZCL_ status_t zcl_group_getMembership(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
                         ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, groupCnt * 2 + 1, buf);
 }
 
-_CODE_ZCL_ status_t zcl_group_remove(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId)
+_CODE_ZCL_ status_t zcl_group_remove(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_GROUPS, ZCL_CMD_GROUP_REMOVE_GROUP, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, (u8*)&groupId);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, (uint8_t*)&groupId);
 }
 
-_CODE_ZCL_ status_t zcl_group_removeAll(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_group_removeAll(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_GROUPS, ZCL_CMD_GROUP_REMOVE_ALL_GROUP, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_group_addIfIdentify(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 *groupName)
+_CODE_ZCL_ status_t zcl_group_addIfIdentify(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t *groupName)
 {
-    u8 buf[20];
+    uint8_t buf[20];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(groupId);
     *pBuf++ = HI_UINT16(groupId);
     if (!groupName) {
         *pBuf++ = 0;
     } else {
-        u8 len = groupName[0];
+        uint8_t len = groupName[0];
         len = (len > 15) ? 15 : len;
         *pBuf++ = len;
         memcpy(pBuf, &groupName[1], len);
@@ -136,9 +136,9 @@ _CODE_ZCL_ status_t zcl_group_addIfIdentify(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
 
 
 
-_CODE_ZCL_ status_t zcl_group_addGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 stauts)
+_CODE_ZCL_ status_t zcl_group_addGroupRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t stauts)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = stauts;
     buf[1] = LO_UINT16(groupId);
@@ -148,11 +148,11 @@ _CODE_ZCL_ status_t zcl_group_addGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_group_viewGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_viewGroupRsp_t *pViewGroupRsp)
+_CODE_ZCL_ status_t zcl_group_viewGroupRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_viewGroupRsp_t *pViewGroupRsp)
 {
-    u8 buf[20];
+    uint8_t buf[20];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pViewGroupRsp->status;
     *pBuf++ = LO_UINT16(pViewGroupRsp->groupId);
@@ -160,7 +160,7 @@ _CODE_ZCL_ status_t zcl_group_viewGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
     if (pViewGroupRsp->pGroupName == NULL) {
         *pBuf++ = 0;//group name length set to zero
     } else {
-        u8 len = pViewGroupRsp->pGroupName[0];
+        uint8_t len = pViewGroupRsp->pGroupName[0];
         len = (len > 15) ? 15 : len;
         *pBuf++ = len;
         memcpy(pBuf, &pViewGroupRsp->pGroupName[1], len);
@@ -171,18 +171,18 @@ _CODE_ZCL_ status_t zcl_group_viewGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_group_getGroupMembershipRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 capacity, u8 groupCnt, u16 *groupList)
+_CODE_ZCL_ status_t zcl_group_getGroupMembershipRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t capacity, uint8_t groupCnt, uint16_t *groupList)
 {
-    u8 *buf = (u8 *)groupList;
+    uint8_t *buf = (uint8_t *)groupList;
     buf[0] = capacity;
     buf[1] = groupCnt;
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_GROUPS, ZCL_CMD_GROUP_GET_MEMBERSHIP_RSP, TRUE,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, groupCnt * 2 + 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_group_removeGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 groupId, u8 stauts)
+_CODE_ZCL_ status_t zcl_group_removeGroupRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t groupId, uint8_t stauts)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = stauts;
     buf[1] = LO_UINT16(groupId);
@@ -194,9 +194,9 @@ _CODE_ZCL_ status_t zcl_group_removeGroupRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 
 
 _CODE_ZCL_ static status_t zcl_addGroupPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     aps_add_group_req_t addGroup;
 
@@ -214,7 +214,7 @@ _CODE_ZCL_ static status_t zcl_addGroupPrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -231,9 +231,9 @@ _CODE_ZCL_ static status_t zcl_addGroupPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_viewGroupPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (UNICAST_MSG(pApsdeInd)) {
         zcl_viewGroupRsp_t viewGroupRsp;
@@ -249,7 +249,7 @@ _CODE_ZCL_ static status_t zcl_viewGroupPrc(zclIncoming_t *pInMsg)
         viewGroupRsp.status = status;
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -266,22 +266,22 @@ _CODE_ZCL_ static status_t zcl_viewGroupPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_getGroupMembershipPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (UNICAST_MSG(pApsdeInd)) {
-        u8 *pBuf = pInMsg->pData;
-        u8 groupCnt = *pBuf++;
-        u16 groupListBuf[1+APS_GROUP_TABLE_NUM];
-        u16 *findGroupList = groupListBuf+1;
-        u8 findCnt = 0;
+        uint8_t *pBuf = pInMsg->pData;
+        uint8_t groupCnt = *pBuf++;
+        uint16_t groupListBuf[1+APS_GROUP_TABLE_NUM];
+        uint16_t *findGroupList = groupListBuf+1;
+        uint8_t findCnt = 0;
 
         if (groupCnt == 0) {
             aps_group_list_get(&findCnt, findGroupList);
         } else {
             while (groupCnt--) {
-                u16 groupId = BUILD_U16(pBuf[0], pBuf[1]);
+                uint16_t groupId = BUILD_U16(pBuf[0], pBuf[1]);
 
                 aps_group_tbl_ent_t *pEntry = aps_group_search(groupId, endpoint);
                 if (pEntry) {
@@ -295,7 +295,7 @@ _CODE_ZCL_ static status_t zcl_getGroupMembershipPrc(zclIncoming_t *pInMsg)
         }
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -313,9 +313,9 @@ _CODE_ZCL_ static status_t zcl_getGroupMembershipPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_removeGroupPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     aps_delete_group_req_t removeGroup;
     removeGroup.ep = endpoint;
@@ -334,7 +334,7 @@ _CODE_ZCL_ static status_t zcl_removeGroupPrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -351,17 +351,17 @@ _CODE_ZCL_ static status_t zcl_removeGroupPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_removeAllGroupPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
 #ifdef ZCL_SCENE
-    u8 groupCnt = 0;
-    u16 groupList[APS_GROUP_TABLE_NUM] = {0};
+    uint8_t groupCnt = 0;
+    uint16_t groupList[APS_GROUP_TABLE_NUM] = {0};
 
     aps_group_list_get(&groupCnt, groupList);
 
-    for (u8 i = 0; i < groupCnt; i++) {
+    for (uint8_t i = 0; i < groupCnt; i++) {
         zcl_scene_removeAllSceneEntry(endpoint, groupList[i], ((i >= groupCnt) ? TRUE : FALSE));
     }
 #endif
@@ -373,14 +373,14 @@ _CODE_ZCL_ static status_t zcl_removeAllGroupPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_addGroupIfIdentifyPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t *)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
-    u16 identifyTime = 0;
-    u16 len = 0;
+    uint16_t identifyTime = 0;
+    uint16_t len = 0;
 
-    if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_IDENTIFY, ZCL_ATTRID_IDENTIFY_TIME, &len, (u8 *)&identifyTime) == ZCL_STA_SUCCESS) {
+    if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_IDENTIFY, ZCL_ATTRID_IDENTIFY_TIME, &len, (uint8_t *)&identifyTime) == ZCL_STA_SUCCESS) {
         if (identifyTime) {
             aps_add_group_req_t addGroup;
 
@@ -403,8 +403,8 @@ _CODE_ZCL_ static status_t zcl_addGroupIfIdentifyPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_addGroupRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_addGroupRsp_t addGroupRsp;
@@ -419,8 +419,8 @@ _CODE_ZCL_ static status_t zcl_addGroupRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_viewGroupRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_viewGroupRsp_t viewGroupRsp;
@@ -441,8 +441,8 @@ _CODE_ZCL_ static status_t zcl_viewGroupRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_removeGroupRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_removeGroupRsp_t removeGroupRsp;
@@ -457,8 +457,8 @@ _CODE_ZCL_ static status_t zcl_removeGroupRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_getGroupMembershipRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb ){
         zcl_getGroupMembershipRsp_t getGroupMembershipRsp;
@@ -474,7 +474,7 @@ _CODE_ZCL_ static status_t zcl_getGroupMembershipRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_group_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GROUP_ADD_GROUP:
@@ -503,9 +503,9 @@ _CODE_ZCL_ static status_t zcl_group_clientCmdHandler(zclIncoming_t *pInMsg)
     return status;
 }
 
-_CODE_ZCL_ u8 zcl_group_serverCmdHandler(zclIncoming_t *pInMsg)
+_CODE_ZCL_ uint8_t zcl_group_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GROUP_ADD_GROUP_RSP:

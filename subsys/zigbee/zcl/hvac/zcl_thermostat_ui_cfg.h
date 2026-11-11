@@ -15,7 +15,7 @@
 #define ZCL_UI_CFG_DISPLAY_MODE_CELSIUS     0x00
 #define ZCL_UI_CFG_DISPLAY_MODE_FAHRENHEIT  0x01
 
-status_t zcl_thermostat_ui_cfg_register(u8 endpoint, u16 manuCode, u8 attrNum,
+status_t zcl_thermostat_ui_cfg_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum,
 					const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif /* ZCL_THERMOSTAT_UI_CFG_H */

@@ -44,7 +44,7 @@ LOG_MODULE_REGISTER(zigbee_nwk_router_bootstrap, CONFIG_ZIGBEE_LOG_LEVEL);
 #define NWK_ROUTER_MINIMAL_DEFAULT_CHANNEL  ZB_CHANNEL_INITIAL
 
 extern zdo_appIndCb_t *zdoAppIndCbLst;
-extern u8 zb_zdoSendDevAnnance(void);
+extern uint8_t zb_zdoSendDevAnnance(void);
 extern zdo_status_t zdo_nwkRouterStart(void);
 
 static bool nwk_router_started;
@@ -80,7 +80,7 @@ void zb_router_schedule_persistence_save(void)
 	 * PIB, but make sure the learned short address survives reboot.
 	 */
 	nwk_router_persist_save_evt =
-		TL_ZB_TIMER_SCHEDULE(nwk_router_bootstrap_deferred_save_timer, NULL, 60000U);
+		ZB_TIMER_SCHEDULE(nwk_router_bootstrap_deferred_save_timer, NULL, 60000U);
 }
 
 static void nwk_router_bootstrap_fill_nwk_key(uint8_t key[SEC_KEY_LEN])
@@ -177,7 +177,7 @@ static bool nwk_router_bootstrap_has_restored_state(void)
 
 /* zb_routerStart() now comes from the imported stack (zbapi/zb_api.c). */
 
-extern void tl_zbNwkBeaconPayloadUpdate(void);
+extern void zb_NwkBeaconPayloadUpdate(void);
 
 /*
  * Open this router as a PARENT so a new device can join THROUGH it.
@@ -185,18 +185,18 @@ extern void tl_zbNwkBeaconPayloadUpdate(void);
  * The application-facing parenting request is the point at which the
  * standard BDB post-join Mgmt_Permit_Joining policy is applied. It flips the
  * router into the parent-active state the vendor MAC expects:
- *   - devType!=0 + beaconPayloadLen!=0  -> tl_zbMacBeaconRequestCb TXes a beacon
+ *   - devType!=0 + beaconPayloadLen!=0  -> zb_MacBeaconRequestCb TXes a beacon
  *   - associationPermit=1               -> beacon superframe advertises permit
  *   - joinAccept=1                      -> NLME permit-join precondition
- *   - joined=1 (already) + !joined_pro  -> tl_zbMlmeCmdBeaconReqRecvd accepts
+ *   - joined=1 (already) + !joined_pro  -> zb_MlmeCmdBeaconReqRecvd accepts
  * BO/SO=15 marks a non-beacon-enabled (on-demand) network.
  *
- * tl_zbNwkBeaconPayloadUpdate() rebuilds the payload struct but does NOT set
+ * zb_NwkBeaconPayloadUpdate() rebuilds the payload struct but does NOT set
  * beaconPayloadLen, so we set it here. permit_duration==0 closes the window.
  */
-extern u8 linkStExpiry;
+extern uint8_t linkStExpiry;
 
-void zb_router_enable_parenting(u8 permit_duration)
+void zb_router_enable_parenting(uint8_t permit_duration)
 {
 	/*
 	 * A router must remain awake after every unicast TX so it can ACK
@@ -212,8 +212,8 @@ void zb_router_enable_parenting(u8 permit_duration)
 	g_zbMacPib.superframeOrder = 15U;
 	g_zbMacPib.associationPermit = (permit_duration != 0U) ? 1U : 0U;
 
-	tl_zbNwkBeaconPayloadUpdate();
-	g_zbMacPib.beaconPayloadLen = (u8)sizeof(g_zbMacPib.beaconPayload);
+	zb_NwkBeaconPayloadUpdate();
+	g_zbMacPib.beaconPayloadLen = (uint8_t)sizeof(g_zbMacPib.beaconPayload);
 
 	/*
 	 * Persistent restore does not pass through zdo_startup_complete(), so
@@ -234,6 +234,6 @@ void zb_router_enable_parenting(u8 permit_duration)
 	 * for a route for every command and ends up reporting an address conflict.
 	 */
 	if (g_zbNwkCtx.joined != 0U && linkStExpiry == 0U) {
-		tl_zbNwkLinkStatusStart();
+		zb_NwkLinkStatusStart();
 	}
 }

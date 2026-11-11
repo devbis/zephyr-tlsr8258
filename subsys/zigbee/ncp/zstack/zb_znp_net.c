@@ -155,7 +155,7 @@ void znp_net_reset(void)
  */
 static void network_key_set(const uint8_t *key, uint8_t seq)
 {
-	ss_zdoNwkKeyConfigure((u8 *)key, seq, TRUE);
+	ss_zdoNwkKeyConfigure((uint8_t *)key, seq, TRUE);
 	ss_zdoUseKey(seq);
 	ss_ib.preConfiguredKeyType = SS_PRECONFIGURED_NOKEY;
 }
@@ -205,13 +205,13 @@ void znp_net_apply_host(void)
 
 	channel = nib[ZNP_NIB_LOGICAL_CHANNEL];
 	pan = znp_get_u16(&nib[ZNP_NIB_PAN_ID]);
-	if (channel < TL_ZB_MAC_CHANNEL_START || channel > TL_ZB_MAC_CHANNEL_STOP || pan >= 0xFFFEU) {
+	if (channel < ZB_MAC_CHANNEL_START || channel > ZB_MAC_CHANNEL_STOP || pan >= 0xFFFEU) {
 		return;
 	}
 
 	LOG_INF("znp: applying host network ch %u pan 0x%04x", channel, pan);
 
-	tl_zbMacChannelSet(channel);
+	zb_MacChannelSet(channel);
 	g_zbMacPib.phyChannelCur = channel;
 	g_zbMacPib.panId = pan;
 	g_zbNIB.panId = pan;
@@ -237,7 +237,7 @@ void znp_net_apply_host(void)
 		}
 	}
 
-	tl_zbNwkBeaconPayloadUpdate();
+	zb_NwkBeaconPayloadUpdate();
 
 	/* The stack keeps what it was told only once it has written it down. */
 	zb_info_save(NULL);

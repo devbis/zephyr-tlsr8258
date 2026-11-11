@@ -23,8 +23,8 @@ LOG_MODULE_REGISTER(zigbee_persist, CONFIG_ZIGBEE_LOG_LEVEL);
 extern void zb_ed_runtime_reset(void);
 
 typedef struct {
-	u8 version;
-	u8 reserved[3];
+	uint8_t version;
+	uint8_t reserved[3];
 	zb_info_t zb_info;
 	nwk_ctx_t nwk_ctx;
 } zb_persist_blob_t;
@@ -80,7 +80,7 @@ int zb_platform_restore_persistent_state(void)
 	zb_persist_register_item_length();
 	memset(&blob, 0, sizeof(blob));
 
-	st = nv_flashReadNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
+	st = nv_flashReadNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (uint8_t *)&blob);
 	if (st != NV_SUCC) {
 		LOG_WRN("Zigbee persistence restore failed: item unavailable (%d)", st);
 		return -ENOENT;
@@ -249,7 +249,7 @@ void zb_info_save(void *arg)
 	}
 	zdo_ssInfoSaveToFlash();
 
-	st = nv_flashWriteNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (u8 *)&blob);
+	st = nv_flashWriteNew(1, NV_MODULE_ZB_INFO, NV_ITEM_ZB_INFO, sizeof(blob), (uint8_t *)&blob);
 	if (st != NV_SUCC) {
 		LOG_WRN("Zigbee persistence save failed: %d", st);
 	}

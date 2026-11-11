@@ -11,15 +11,15 @@
 extern void *associationReqOrigBuffer;
 
 void mac_pendingWaitTimerCancel(void);
-void tl_zbMacAssociateRequestStatusCheck(void *arg, u8 status);
-void tl_zbMacAssociateRequestHandler(void *arg);
+void zb_MacAssociateRequestStatusCheck(void *arg, uint8_t status);
+void zb_MacAssociateRequestHandler(void *arg);
 #if defined(ZB_ROUTER_ROLE)
-void tl_zbMacAssociateResponseHandler(void *arg);
+void zb_MacAssociateResponseHandler(void *arg);
 #endif
-void tl_zbMacDisassociateNotifyCmdConfirm(void *arg, u8 status);
-void tl_zbMacDisassociateRequestHandler(void *arg);
-void tl_zbMlmeCmdDisassociateNotifyRecvd(void *arg, void *raw);
-void tl_zbMacAssocPollConfirm(u8 status);
-void tl_zbMacAssociateRespReceived(void);
+void zb_MacDisassociateNotifyCmdConfirm(void *arg, uint8_t status);
+void zb_MacDisassociateRequestHandler(void *arg);
+void zb_MlmeCmdDisassociateNotifyRecvd(void *arg, void *raw);
+void zb_MacAssocPollConfirm(uint8_t status);
+void zb_MacAssociateRespReceived(void);
 
 #endif

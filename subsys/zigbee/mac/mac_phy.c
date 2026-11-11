@@ -57,28 +57,28 @@ typedef enum {
 /**********************************************************************
  * GLOBAL VARIABLES
  */
-u8 g_zb_txPowerSet = ZB_DEFAULT_TX_POWER_IDX;
+uint8_t g_zb_txPowerSet = ZB_DEFAULT_TX_POWER_IDX;
 
 /**********************************************************************
  * LOCAL VARIABLES
  */
-_attribute_aligned_(4) u8 rf_tx_buf[ZB_RADIO_TX_HDR_LEN + 127];
-_attribute_aligned_(4) u8 rf_ack_buf[ZB_RADIO_TX_HDR_LEN + 7];
+_attribute_aligned_(4) uint8_t rf_tx_buf[ZB_RADIO_TX_HDR_LEN + 127];
+_attribute_aligned_(4) uint8_t rf_ack_buf[ZB_RADIO_TX_HDR_LEN + 7];
 
-u8 *rf_rxBuf = NULL;
-u8 rfMode = RF_STATE_TX;
-volatile u8 rf_busyFlag = 0;
+uint8_t *rf_rxBuf = NULL;
+uint8_t rfMode = RF_STATE_TX;
+volatile uint8_t rf_busyFlag = 0;
 
-volatile s8 soft_rssi;
-volatile s32 sum_rssi, cnt_rssi = 1;
+volatile int8_t soft_rssi;
+volatile int32_t sum_rssi, cnt_rssi = 1;
 
-u8 fPaEn = 0;
-u32 rf_pa_txen_pin = 0;
-u32 rf_pa_rxen_pin = 0;
+uint8_t fPaEn = 0;
+uint32_t rf_pa_txen_pin = 0;
+uint32_t rf_pa_rxen_pin = 0;
 
-u8 fPtaEn = 0;
-u32 rf_pta_priority_pin = 0;
-u32 rf_pta_active_pin = 0;
+uint8_t fPtaEn = 0;
+uint32_t rf_pta_priority_pin = 0;
+uint32_t rf_pta_active_pin = 0;
 
 static bool isWLANActive(void);
 
@@ -160,7 +160,7 @@ static bool isWLANActive(void);
                                     } \
                                 }while(0)
 
-_attribute_ram_code_ u32 mac_currentTickGet(void)
+_attribute_ram_code_ uint32_t mac_currentTickGet(void)
 {
      return clock_time();
 }
@@ -191,7 +191,7 @@ void rf_reset(void)
     if (rf_rxBuf) {
         rf_setRxBuf(rf_rxBuf);
     } else {
-        rf_setRxBuf(tl_getRxBuf());
+        rf_setRxBuf(zb_getRxBuf());
     }
 
     ZB_RADIO_TRX_CFG(RF_PKT_BUFF_LEN);
@@ -203,7 +203,7 @@ void rf_reset(void)
 
 static void rf_edDetect(void)
 {
-    s8 rssi;
+    int8_t rssi;
     rssi = ZB_RADIO_RSSI_GET();
 
     //soft_rssi = rssi;//(rssi + soft_rssi)/2;
@@ -255,7 +255,7 @@ void zb_mac_phy_init(void)
  *
  * @return  none
  */
-void rf_setRxBuf(u8 *pBuf)
+void rf_setRxBuf(uint8_t *pBuf)
 {
     rf_rxBuf = pBuf;
     ZB_RADIO_RX_BUF_CLEAR(rf_rxBuf);
@@ -271,7 +271,7 @@ void rf_setRxBuf(u8 *pBuf)
  *
  * @return  state
  */
-u8 rf_TrxStateGet(void)
+uint8_t rf_TrxStateGet(void)
 {
     return rfMode;
 }
@@ -285,11 +285,11 @@ u8 rf_TrxStateGet(void)
  *
  * @return  none
  */
-void rf_setTrxState(u8 state)
+void rf_setTrxState(uint8_t state)
 {
 #ifndef WIN32
     if (RF_STATE_RX == state || RF_STATE_ED == state) {
-        if (TL_ZB_MAC_STATUS_GET() == ZB_MAC_STATE_ACTIVE_SCAN || RF_STATE_ED == state) {
+        if (ZB_MAC_STATUS_GET() == ZB_MAC_STATE_ACTIVE_SCAN || RF_STATE_ED == state) {
             ZB_RADIO_MODE_AUTO_GAIN();
         } else {
             ZB_RADIO_MODE_MAX_GAIN();
@@ -315,17 +315,17 @@ void rf_setTrxState(u8 state)
  *
  * @return  none
  */
-void rf_setChannel(u8 chn)
+void rf_setChannel(uint8_t chn)
 {
-    if ((chn < TL_ZB_MAC_CHANNEL_START) ||
-        (chn > TL_ZB_MAC_CHANNEL_STOP)) {
+    if ((chn < ZB_MAC_CHANNEL_START) ||
+        (chn > ZB_MAC_CHANNEL_STOP)) {
         return;
     }
     g_zbMacPib.phyChannelCur = chn;
 
-    u32 r = drv_disable_irq();
+    uint32_t r = drv_disable_irq();
 
-    u8 phySta = ZB_RADIO_TRX_STA_GET();
+    uint8_t phySta = ZB_RADIO_TRX_STA_GET();
     ZB_RADIO_TRX_SWITCH(phySta, LOGICCHANNEL_TO_PHYSICAL(chn));
     if (phySta == RF_MODE_RX || phySta == RF_MODE_AUTO) {
         rfMode = RF_STATE_RX;
@@ -353,7 +353,7 @@ void rf_setChannel(u8 chn)
  *
  * @return  chn
  */
-inline u8 rf_getChannel(void)
+inline uint8_t rf_getChannel(void)
 {
     return g_zbMacPib.phyChannelCur;
 }
@@ -367,7 +367,7 @@ inline u8 rf_getChannel(void)
  *
  * @return  none
  */
-void rf_setTxPower(u8 power)
+void rf_setTxPower(uint8_t power)
 {
     if (fPaEn) {
         ZB_RADIO_TX_POWER_SET(ZB_RADIO_TX_0DBM);
@@ -385,14 +385,14 @@ void rf_setTxPower(u8 power)
  *
  * @return  lqi result
  */
-u8 rf_getLqi(s8 rssi)
+uint8_t rf_getLqi(int8_t rssi)
 {
     rf_rxGainMode_t mode = RF_GAIN_MODE_MANU_MAX;
-    if (TL_ZB_MAC_STATUS_GET() == ZB_MAC_STATE_ACTIVE_SCAN) {
+    if (ZB_MAC_STATUS_GET() == ZB_MAC_STATE_ACTIVE_SCAN) {
         mode = RF_GAIN_MODE_AUTO;
     }
 
-    u8 lqi = 0;
+    uint8_t lqi = 0;
     ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi);
     return lqi;
 }
@@ -406,9 +406,9 @@ u8 rf_getLqi(s8 rssi)
  *
  * @return  cost
  */
-u8 rf_lqi2cost(u8 lqi)
+uint8_t rf_lqi2cost(uint8_t lqi)
 {
-    u8 cost = 0;
+    uint8_t cost = 0;
     ZB_LQI_TO_PATH_COST(lqi, cost);
     return cost;
 }
@@ -443,10 +443,10 @@ void rf_startEDScan(void)
  *
  * @return  ED result
  */
-u8 rf_stopEDScan(void)
+uint8_t rf_stopEDScan(void)
 {
 #ifndef WIN32
-    u8 ed;
+    uint8_t ed;
 
     if(cnt_rssi == 0) cnt_rssi = 1;
     soft_rssi = sum_rssi / cnt_rssi;
@@ -460,8 +460,8 @@ u8 rf_stopEDScan(void)
 #endif
 }
 
-volatile s8 T_rssiPeak = 0;
-u8 rf_performCCA(void)
+volatile int8_t T_rssiPeak = 0;
+uint8_t rf_performCCA(void)
 {
     /*
      * Zephyr port: mac_csmaStart() calls this with interrupts locked, and
@@ -477,7 +477,7 @@ u8 rf_performCCA(void)
     return PHY_CCA_IDLE;
 }
 
-void rf802154_tx_ready(u8 *buf, u8 len)
+void rf802154_tx_ready(uint8_t *buf, uint8_t len)
 {
     /* Fill the telink RF header */
     zb_radio_note_tx_frame(buf);
@@ -512,7 +512,7 @@ void rf802154_tx(void)
  *
  * @return  none
  */
-void rf_paInit(u32 TXEN_pin, u32 RXEN_pin)
+void rf_paInit(uint32_t TXEN_pin, uint32_t RXEN_pin)
 {
     rf_pa_txen_pin = TXEN_pin;
     rf_pa_rxen_pin = RXEN_pin;
@@ -540,7 +540,7 @@ _attribute_ram_code_ void rf_paShutDown(void)
 }
 
 #if PTA_ENABLE
-void rf_ptaInit(u32 ZB_priorityPin, u32 WLAN_activePin)
+void rf_ptaInit(uint32_t ZB_priorityPin, uint32_t WLAN_activePin)
 {
     rf_pta_priority_pin = ZB_priorityPin;
     rf_pta_active_pin = WLAN_activePin;
@@ -586,11 +586,11 @@ _attribute_ram_code_ bool isWLANActive(void)
 _attribute_ram_code_ __attribute__((optimize("-Os")))
 void rf_rx_irq_handler(void)
 {
-    u8 *p = rf_rxBuf;
-    u8 fAck = 0;
-    u8 fDrop = 0;
-    s32 txTime = 0;
-    s32 txDelayUs = 0;
+    uint8_t *p = rf_rxBuf;
+    uint8_t fAck = 0;
+    uint8_t fDrop = 0;
+    int32_t txTime = 0;
+    int32_t txDelayUs = 0;
 
     if (RF_DMA_BUSY()) {
     	return;
@@ -617,13 +617,13 @@ void rf_rx_irq_handler(void)
     }
 
     /* Parse necessary field to be used later */
-    u8 len = (u8)ZB_RADIO_ACTUAL_PAYLOAD_LEN(p);
-    u8 *macPld = p + ZB_RADIO_RX_HDR_LEN;
+    uint8_t len = (uint8_t)ZB_RADIO_ACTUAL_PAYLOAD_LEN(p);
+    uint8_t *macPld = p + ZB_RADIO_RX_HDR_LEN;
 
     /*----------------------------------------------------------
      *  Do the filter
      */
-    u8 *pSrcAddr = zb_macDataFilter(macPld, len, &fDrop, &fAck);
+    uint8_t *pSrcAddr = zb_macDataFilter(macPld, len, &fDrop, &fAck);
     if (fDrop) {
         /* Drop the packet and recover the DMA */
     	ZB_RADIO_RX_BUF_CLEAR(rf_rxBuf);
@@ -641,7 +641,7 @@ void rf_rx_irq_handler(void)
     }
 
     /* if don't have enough buffer, use current rxBuf, and drop it */
-    u8 *rxNextBuf = tl_getRxBuf();
+    uint8_t *rxNextBuf = zb_getRxBuf();
     if (!rxNextBuf) {
         if (macPld[0] & MAC_FCF_ACK_REQ_BIT) {
             ZB_SWITCH_TO_RXMODE();
@@ -671,22 +671,22 @@ void rf_rx_irq_handler(void)
         rf_ack_buf[ZB_RADIO_TX_HDR_LEN] = 0x02;
 
 #if defined ZB_COORDINATOR_ROLE || defined ZB_ROUTER_ROLE
-        u16 fcf = (macPld[1] << 8) | macPld[0];     // frame control
-        u8  pldOft = tl_zbMacHdrSize(fcf);
-        u8  frameType = (fcf & MAC_FCF_FRAME_TYPE_MASK) >> MAC_FCF_FRAME_TYPE_POS;
+        uint16_t fcf = (macPld[1] << 8) | macPld[0];     // frame control
+        uint8_t  pldOft = zb_MacHdrSize(fcf);
+        uint8_t  frameType = (fcf & MAC_FCF_FRAME_TYPE_MASK) >> MAC_FCF_FRAME_TYPE_POS;
 
         bool cmdDataReq = ((frameType == MAC_FRAME_COMMAND) && (macPld[pldOft] == MAC_CMD_DATA_REQUEST));
 
         /* if has pending data, set the pending bit as 1 */
-        u8 srcAddrMode = ZB_ADDR_NO_ADDR;
+        uint8_t srcAddrMode = ZB_ADDR_NO_ADDR;
         if ((macPld[1] & MAC_FCF_SRC_ADDR_BIT) == 0x80) {
             srcAddrMode = ZB_ADDR_16BIT_DEV_OR_BROADCAST;
         } else if ((macPld[1] & MAC_FCF_SRC_ADDR_BIT) == 0xc0) {
             srcAddrMode = ZB_ADDR_64BIT_DEV;
         }
         if (cmdDataReq && srcAddrMode) {
-            extern u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 send);
-            if (MAC_SUCCESS == tl_zbMacPendingDataCheck(srcAddrMode, pSrcAddr, 1)) {
+            extern uint8_t zb_MacPendingDataCheck(uint8_t addrMode, uint8_t *addr, uint8_t send);
+            if (MAC_SUCCESS == zb_MacPendingDataCheck(srcAddrMode, pSrcAddr, 1)) {
                 rf_ack_buf[ZB_RADIO_TX_HDR_LEN] |= (1 << 4);// (rf_framePending<<4 );
             }
         }
@@ -694,7 +694,7 @@ void rf_rx_irq_handler(void)
         (void)pSrcAddr;
 #endif
 
-        txDelayUs = (s32)clock_cycles_to_us((u32)(clock_time() - txTime));
+        txDelayUs = (int32_t)clock_cycles_to_us((uint32_t)(clock_time() - txTime));
         if (txDelayUs < ZB_TX_WAIT_US) {
             WaitUs(ZB_TX_WAIT_US - txDelayUs);
         }
@@ -708,7 +708,7 @@ void rf_rx_irq_handler(void)
         ZB_RADIO_TX_START(rf_ack_buf);//Manual Mode
 
         /* wait until tx done or timeout */
-        u32 cur_tick = clock_time();
+        uint32_t cur_tick = clock_time();
         while(!ZB_RADIO_TX_DONE && !clock_time_exceed(cur_tick, 1000));
 
         /* clear the tx done status */

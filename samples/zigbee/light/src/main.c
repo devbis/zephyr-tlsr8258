@@ -20,44 +20,44 @@
 /* Fixed-point (8.8) level arithmetic keeps slow transitions smooth. */
 #define LEVEL_FP_SHIFT 8
 
-static const u16 cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
+static const uint16_t cluster_rev = ZCL_ATTR_GLOBAL_CLUSTER_REVISION_DEFAULT;
 
 static bool onoff_state;
-static u8 level_current = ZCL_LEVEL_ATTR_MAX_LEVEL;
-static u8 level_min = ZCL_LEVEL_ATTR_MIN_LEVEL;
-static u8 level_max = ZCL_LEVEL_ATTR_MAX_LEVEL;
-static u16 level_remaining;
-static u16 level_onoff_transition = 0U;
-static u8 group_name_support;
+static uint8_t level_current = ZCL_LEVEL_ATTR_MAX_LEVEL;
+static uint8_t level_min = ZCL_LEVEL_ATTR_MIN_LEVEL;
+static uint8_t level_max = ZCL_LEVEL_ATTR_MAX_LEVEL;
+static uint16_t level_remaining;
+static uint16_t level_onoff_transition = 0U;
+static uint8_t group_name_support;
 
 static const zclAttrInfo_t group_attr_tbl[] = {
 	{ZCL_ATTRID_GROUP_NAME_SUPPORT, ZCL_DATA_TYPE_BITMAP8, ACCESS_CONTROL_READ,
 	 &group_name_support},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&cluster_rev},
+	 (uint8_t *)&cluster_rev},
 };
 
 static const zclAttrInfo_t onoff_attr_tbl[] = {
 	{ZCL_ATTRID_ONOFF, ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE,
-	 (u8 *)&onoff_state},
+	 (uint8_t *)&onoff_state},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&cluster_rev},
+	 (uint8_t *)&cluster_rev},
 };
 
 static const zclAttrInfo_t level_attr_tbl[] = {
 	{ZCL_ATTRID_LEVEL_CURRENT_LEVEL, ZCL_DATA_TYPE_UINT8,
 	 ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE, &level_current},
 	{ZCL_ATTRID_LEVEL_REMAINING_TIME, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&level_remaining},
+	 (uint8_t *)&level_remaining},
 	{ZCL_ATTRID_LEVEL_MIN_LEVEL, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ, &level_min},
 	{ZCL_ATTRID_LEVEL_MAX_LEVEL, ZCL_DATA_TYPE_UINT8, ACCESS_CONTROL_READ, &level_max},
 	{ZCL_ATTRID_LEVEL_ON_OFF_TRANSITION_TIME, ZCL_DATA_TYPE_UINT16,
-	 ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (u8 *)&level_onoff_transition},
+	 ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE, (uint8_t *)&level_onoff_transition},
 	{ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16, ACCESS_CONTROL_READ,
-	 (u8 *)&cluster_rev},
+	 (uint8_t *)&cluster_rev},
 };
 
-static u16 in_clusters[] = {
+static uint16_t in_clusters[] = {
 	ZCL_CLUSTER_GEN_BASIC,
 	ZCL_CLUSTER_GEN_IDENTIFY,
 	ZCL_CLUSTER_GEN_GROUPS,
@@ -94,18 +94,18 @@ static void light_update(void)
 static void onoff_set(bool on)
 {
 	onoff_state = on;
-	zcl_setAttrVal(APP_ENDPOINT, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, (u8 *)&onoff_state);
+	zcl_setAttrVal(APP_ENDPOINT, ZCL_CLUSTER_GEN_ON_OFF, ZCL_ATTRID_ONOFF, (uint8_t *)&onoff_state);
 	light_update();
 }
 
 static void level_publish(void)
 {
-	level_current = (u8)(level_fp >> LEVEL_FP_SHIFT);
+	level_current = (uint8_t)(level_fp >> LEVEL_FP_SHIFT);
 	level_remaining = level_ticks_left * (LEVEL_TICK_MS / 100);
 	zcl_setAttrVal(APP_ENDPOINT, ZCL_CLUSTER_GEN_LEVEL_CONTROL, ZCL_ATTRID_LEVEL_CURRENT_LEVEL,
 		       &level_current);
 	zcl_setAttrVal(APP_ENDPOINT, ZCL_CLUSTER_GEN_LEVEL_CONTROL,
-		       ZCL_ATTRID_LEVEL_REMAINING_TIME, (u8 *)&level_remaining);
+		       ZCL_ATTRID_LEVEL_REMAINING_TIME, (uint8_t *)&level_remaining);
 	light_update();
 }
 
@@ -149,7 +149,7 @@ static void level_stop(void)
 }
 
 /* Move to @target over @time_ds tenths of a second. */
-static void level_go(u8 target, u32 time_ds, bool with_onoff)
+static void level_go(uint8_t target, uint32_t time_ds, bool with_onoff)
 {
 	level_stop();
 
@@ -176,26 +176,26 @@ static void level_go(u8 target, u32 time_ds, bool with_onoff)
 		return;
 	}
 
-	level_ticks_left = (u16)time_ds * (100U / LEVEL_TICK_MS);
+	level_ticks_left = (uint16_t)time_ds * (100U / LEVEL_TICK_MS);
 	level_step_fp = (level_target_fp - level_fp) / (int32_t)level_ticks_left;
 	level_timer = ev_timer_taskPost(level_tick, NULL, LEVEL_TICK_MS);
 }
 
 /* Move at @rate levels per second until a limit is reached. */
-static void level_run(bool up, u8 rate, bool with_onoff)
+static void level_run(bool up, uint8_t rate, bool with_onoff)
 {
-	u32 span;
-	u8 target = up ? level_max : level_min;
+	uint32_t span;
+	uint8_t target = up ? level_max : level_min;
 
 	if (rate == 0U) {
 		return;
 	}
 
-	span = up ? (u32)(level_max - level_current) : (u32)(level_current - level_min);
+	span = up ? (uint32_t)(level_max - level_current) : (uint32_t)(level_current - level_min);
 	level_go(target, (span * 10U) / rate, with_onoff);
 }
 
-static status_t onoff_cb(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payload)
+static status_t onoff_cb(zclIncomingAddrInfo_t *addr_info, uint8_t cmd_id, void *payload)
 {
 	ARG_UNUSED(addr_info);
 	ARG_UNUSED(payload);
@@ -217,7 +217,7 @@ static status_t onoff_cb(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payl
 	return ZCL_STA_SUCCESS;
 }
 
-static status_t level_cb(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payload)
+static status_t level_cb(zclIncomingAddrInfo_t *addr_info, uint8_t cmd_id, void *payload)
 {
 	zcl_level_cmdPayload_t *p = payload;
 	bool with_onoff = cmd_id >= ZCL_CMD_LEVEL_MOVE_TO_LEVEL_WITH_ON_OFF;
@@ -243,7 +243,7 @@ static status_t level_cb(zclIncomingAddrInfo_t *addr_info, u8 cmd_id, void *payl
 			target -= p->step.stepSize;
 		}
 		target = CLAMP(target, level_min, level_max);
-		level_go((u8)target, p->step.transitionTime, with_onoff);
+		level_go((uint8_t)target, p->step.transitionTime, with_onoff);
 		break;
 	}
 	case ZCL_CMD_LEVEL_STOP:

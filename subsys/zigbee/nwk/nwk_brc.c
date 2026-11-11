@@ -14,12 +14,12 @@
 
 #if defined(ZB_ROUTER_ROLE)
 
-static u32 g_brcTransJitter = NWK_MAX_BROADCAST_JITTER;
-u8 g_brcTransTabCnt = 0;
+static uint32_t g_brcTransJitter = NWK_MAX_BROADCAST_JITTER;
+uint8_t g_brcTransTabCnt = 0;
 
 typedef struct _attribute_packed_ {
-	u8 payloadLen;
-	u8 *payload;
+	uint8_t payloadLen;
+	uint8_t *payload;
 	nwk_hdr_t hdr;
 } nwk_brc_delay_ctx_t;
 
@@ -31,24 +31,24 @@ static inline bool nwk_brc_entry_used(const nwk_brcTransRecordEntry_t *entry)
 int nwkBrcMsgAllDevicesCb(void *arg)
 {
 	nwk_brcTransRecordEntry_t *entry = (nwk_brcTransRecordEntry_t *)arg;
-	tl_zb_normal_neighbor_entry_t *child;
+	zb_normal_neighbor_entry_t *child;
 	nwk_txDataPendEntry_t *pend;
 	nwk_route_disc_cache_buf_t *cache;
 	nwk_hdr_t hdr;
-	u8 *payload;
-	u16 childAddr;
+	uint8_t *payload;
+	uint16_t childAddr;
 
 	if (entry == NULL || entry->entry == NULL) {
 		return -1;
 	}
 
-	child = tl_zbNeighborTabSearchForChildEndDev(entry->edEntry);
+	child = zb_NeighborTabSearchForChildEndDev(entry->edEntry);
 	entry->edEntry = child;
 	if (child == NULL) {
 		return -1;
 	}
 
-	childAddr = tl_zbshortAddrByIdx(child->addrmapIdx);
+	childAddr = zb_shortAddrByIdx(child->addrmapIdx);
 	if (childAddr == entry->srcAddr || child->rxOnWhileIdle == 0U) {
 		return -1;
 	}
@@ -77,7 +77,7 @@ void nwkMsgSendCb(void *arg)
 {
 	nwk_brc_delay_ctx_t *ctx = (nwk_brc_delay_ctx_t *)arg;
 	nwk_hdr_t hdr;
-	u8 *payload;
+	uint8_t *payload;
 
 	payload = ctx->payload;
 	memcpy(&hdr, &ctx->hdr, sizeof(hdr));
@@ -92,7 +92,7 @@ int nwkMsgSendCbDelay(void *arg)
 
 /* The vendor takes the jitter as an argument; callers pass NWK_BRC_JITTER, or
  * 1 when the broadcast must go out without additional delay. */
-void nwkBrcTransJitterSet(u32 jitter)
+void nwkBrcTransJitterSet(uint32_t jitter)
 {
 	g_brcTransJitter = jitter;
 }
@@ -104,7 +104,7 @@ void nwkBrcTransTabEntryRst(nwk_brcTransRecordEntry_t *entry)
 	}
 
 	if (entry->passiveAckAddr != NULL) {
-		ev_buf_free((u8 *)entry->passiveAckAddr);
+		ev_buf_free((uint8_t *)entry->passiveAckAddr);
 	}
 
 	memset(entry, 0, sizeof(*entry));
@@ -129,14 +129,14 @@ void nwkBrcTransTabEntryClear(nwk_brcTransRecordEntry_t *entry)
 
 void nwkBrcTransTabInit(void)
 {
-	for (u8 i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
 		nwkBrcTransTabEntryRst(brcTransRecordEntryGet(i));
 	}
 }
 
-nwk_brcTransRecordEntry_t *nwkBrcTransEntryFind(u16 srcAddr, u8 seqNum)
+nwk_brcTransRecordEntry_t *nwkBrcTransEntryFind(uint16_t srcAddr, uint8_t seqNum)
 {
-	for (u8 i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
 		nwk_brcTransRecordEntry_t *entry = brcTransRecordEntryGet(i);
 
 		if (nwk_brc_entry_used(entry) && entry->srcAddr == srcAddr &&
@@ -148,21 +148,21 @@ nwk_brcTransRecordEntry_t *nwkBrcTransEntryFind(u16 srcAddr, u8 seqNum)
 	return NULL;
 }
 
-nwk_brcTransRecordEntry_t *nwkBrcTransEntryCreate(nwk_txDataPendEntry_t *pend, u16 srcAddr,
-						  u8 seqNum)
+nwk_brcTransRecordEntry_t *nwkBrcTransEntryCreate(nwk_txDataPendEntry_t *pend, uint16_t srcAddr,
+						  uint8_t seqNum)
 {
 	nwk_brcTransRecordEntry_t *entry = NULL;
-	u16 *passiveAckAddr = NULL;
+	uint16_t *passiveAckAddr = NULL;
 
 	if (NWK_BRC_PASSIVE_ACK_ENABLE) {
 		passiveAckAddr =
-			(u16 *)ev_buf_allocate((u16)(sizeof(u16) * TL_ZB_NEIGHBOR_TABLE_SIZE));
+			(uint16_t *)ev_buf_allocate((uint16_t)(sizeof(uint16_t) * ZB_NEIGHBOR_TABLE_SIZE));
 		if (passiveAckAddr == NULL) {
 			return NULL;
 		}
 	}
 
-	for (u8 i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
 		nwk_brcTransRecordEntry_t *candidate = brcTransRecordEntryGet(i);
 
 		if (!candidate->used) {
@@ -173,7 +173,7 @@ nwk_brcTransRecordEntry_t *nwkBrcTransEntryCreate(nwk_txDataPendEntry_t *pend, u
 
 	if (entry == NULL) {
 		if (passiveAckAddr != NULL) {
-			ev_buf_free((u8 *)passiveAckAddr);
+			ev_buf_free((uint8_t *)passiveAckAddr);
 		}
 		return NULL;
 	}
@@ -183,7 +183,7 @@ nwk_brcTransRecordEntry_t *nwkBrcTransEntryCreate(nwk_txDataPendEntry_t *pend, u
 	entry->srcAddr = srcAddr;
 	entry->seqNum = seqNum;
 	entry->retries = 0;
-	entry->expirationTime = (u8)(g_zbNIB.nwkBroadcastDeliveryTime / 1000U + 1U);
+	entry->expirationTime = (uint8_t)(g_zbNIB.nwkBroadcastDeliveryTime / 1000U + 1U);
 	entry->status = 1;
 	entry->used = 1;
 	g_brcTransTabCnt++;
@@ -191,9 +191,9 @@ nwk_brcTransRecordEntry_t *nwkBrcTransEntryCreate(nwk_txDataPendEntry_t *pend, u
 	return entry;
 }
 
-u8 nwkBrcMsgAddSender(nwk_brcTransRecordEntry_t *entry, u16 shortAddr)
+uint8_t nwkBrcMsgAddSender(nwk_brcTransRecordEntry_t *entry, uint16_t shortAddr)
 {
-	tl_zb_normal_neighbor_entry_t *neighbor;
+	zb_normal_neighbor_entry_t *neighbor;
 
 	neighbor = nwk_neTblGetByShortAddr(shortAddr);
 	if (neighbor == NULL || (neighbor->rxOnWhileIdle + (neighbor->deviceType << 1)) == 4U ||
@@ -201,13 +201,13 @@ u8 nwkBrcMsgAddSender(nwk_brcTransRecordEntry_t *entry, u16 shortAddr)
 		return 0;
 	}
 
-	for (u8 i = 0; i < entry->activeNum; i++) {
+	for (uint8_t i = 0; i < entry->activeNum; i++) {
 		if (entry->passiveAckAddr[i] == shortAddr) {
 			return 0;
 		}
 	}
 
-	if (entry->activeNum >= TL_ZB_NEIGHBOR_TABLE_SIZE) {
+	if (entry->activeNum >= ZB_NEIGHBOR_TABLE_SIZE) {
 		return 0;
 	}
 
@@ -215,13 +215,13 @@ u8 nwkBrcMsgAddSender(nwk_brcTransRecordEntry_t *entry, u16 shortAddr)
 	return 1;
 }
 
-u8 nwkBrcAckFind(u16 shortAddr, nwk_brcTransRecordEntry_t *entry)
+uint8_t nwkBrcAckFind(uint16_t shortAddr, nwk_brcTransRecordEntry_t *entry)
 {
 	if (entry == NULL || entry->passiveAckAddr == NULL) {
 		return 0;
 	}
 
-	for (u8 i = 0;; i++) {
+	for (uint8_t i = 0;; i++) {
 		if (entry->passiveAckAddr[i] == shortAddr) {
 			return 1;
 		}
@@ -234,18 +234,18 @@ u8 nwkBrcAckFind(u16 shortAddr, nwk_brcTransRecordEntry_t *entry)
 	return 0;
 }
 
-u8 nwkBrcAllRelayed(nwk_brcTransRecordEntry_t *entry)
+uint8_t nwkBrcAllRelayed(nwk_brcTransRecordEntry_t *entry)
 {
-	u8 neighborCount = tl_zbNeighborTableNumGet();
+	uint8_t neighborCount = zb_NeighborTableNumGet();
 
 	if (neighborCount == 0U) {
 		return 1;
 	}
 
-	u16 dstAddr = entry->entry->dstAddr;
+	uint16_t dstAddr = entry->entry->dstAddr;
 
-	for (u8 i = 0; i < neighborCount; i++) {
-		tl_zb_normal_neighbor_entry_t *neighbor = tl_zbNeighborEntryGetFromIdx(i);
+	for (uint8_t i = 0; i < neighborCount; i++) {
+		zb_normal_neighbor_entry_t *neighbor = zb_NeighborEntryGetFromIdx(i);
 		bool eligible;
 
 		/* Vendor ASM treats only 0xffff as the all-devices broadcast.  Every
@@ -260,13 +260,13 @@ u8 nwkBrcAllRelayed(nwk_brcTransRecordEntry_t *entry)
 			continue;
 		}
 
-		u16 shortAddr = tl_zbshortAddrByIdx(neighbor->addrmapIdx);
+		uint16_t shortAddr = zb_shortAddrByIdx(neighbor->addrmapIdx);
 		if (entry->passiveAckAddr == NULL || entry->activeNum == 0U) {
 			return 0;
 		}
 
 		bool found = false;
-		for (u8 j = 0; j < entry->activeNum; j++) {
+		for (uint8_t j = 0; j < entry->activeNum; j++) {
 			if (entry->passiveAckAddr[j] == shortAddr) {
 				found = true;
 				break;
@@ -310,13 +310,13 @@ int nwkBrcMsgPassiveAckTimeoutCb(void *arg)
 		return 0;
 	}
 
-	tl_zbTaskPost(nwkMsgSendCb, cache);
+	zb_TaskPost(nwkMsgSendCb, cache);
 	entry->retryTimer = NULL;
 	return -1;
 
 cleanup:
 	if (entry->passiveAckAddr != NULL) {
-		ev_buf_free((u8 *)entry->passiveAckAddr);
+		ev_buf_free((uint8_t *)entry->passiveAckAddr);
 		entry->passiveAckAddr = NULL;
 	}
 
@@ -347,10 +347,10 @@ void nwkBrcMsgAllEndDevStart(nwk_brcTransRecordEntry_t *entry)
 		return;
 	}
 
-	entry->edEntry = tl_zbNeighborTabSearchForChildEndDev(NULL);
+	entry->edEntry = zb_NeighborTabSearchForChildEndDev(NULL);
 	if (entry->edEntry != NULL) {
 		ev_timer_taskPost(nwkBrcMsgAllDevicesCb, entry,
-				  g_zbNIB.passiveAckTimeout / TL_ZB_NEIGHBOR_TABLE_SIZE / 1000U);
+				  g_zbNIB.passiveAckTimeout / ZB_NEIGHBOR_TABLE_SIZE / 1000U);
 	}
 }
 
@@ -360,10 +360,10 @@ void nwkBrcMsgAllEndDevStart(nwk_brcTransRecordEntry_t *entry)
  * to the receive path as soon as this returns; the payload pointer is re-based
  * onto the copy so that nwkMsgSendCb can replay it unchanged.
  */
-u8 nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen)
+uint8_t nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload, uint8_t payloadLen)
 {
 	zb_buf_t *copy;
-	u8 *copyPayload;
+	uint8_t *copyPayload;
 	nwk_brc_delay_ctx_t *ctx;
 
 	if (!ev_timer_enough()) {
@@ -378,7 +378,7 @@ u8 nwkBrcTimerStart(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLe
 	}
 
 	/* ZB_BUF_SIZE payload bytes plus the id/handle/rssi of the buffer header. */
-	TL_COPY_BUF(copy, buf);
+	ZB_COPY_BUF(copy, buf);
 
 	copyPayload = zb_buf_rebase(buf, copy, payload);
 	if (copyPayload == NULL) {
@@ -404,7 +404,7 @@ int nwkBrcPeriodic(void *arg)
 		return 0;
 	}
 
-	for (u8 i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_BRC_TRANSTBL_SIZE; i++) {
 		nwk_brcTransRecordEntry_t *entry = brcTransRecordEntryGet(i);
 
 		if (!nwk_brc_entry_used(entry)) {
@@ -423,7 +423,7 @@ int nwkBrcPeriodic(void *arg)
 	return 0;
 }
 
-u8 nwkBrcCheckDevMatch(u16 dstAddr)
+uint8_t nwkBrcCheckDevMatch(uint16_t dstAddr)
 {
 	if (dstAddr == NWK_BROADCAST_RX_ON_WHEN_IDLE) {
 		return ZB_PIB_RX_ON_WHEN_IDLE() ? 1U : 0U;
@@ -445,7 +445,7 @@ u8 nwkBrcCheckDevMatch(u16 dstAddr)
 
 #else
 
-u8 nwkBrcCheckDevMatch(u16 dstAddr)
+uint8_t nwkBrcCheckDevMatch(uint16_t dstAddr)
 {
 	if (dstAddr == NWK_BROADCAST_RX_ON_WHEN_IDLE) {
 		return ZB_PIB_RX_ON_WHEN_IDLE() ? 1U : 0U;

@@ -27,15 +27,15 @@
 #include <zephyr/zigbee/zb_types.h>
 
 typedef struct {
-    u16 year;
-    u8 month;
-    u8 day;
-    u8 hour;
-    u8 min;
-    u8 sec;
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t hour;
+    uint8_t min;
+    uint8_t sec;
 } utcTime_t;
 
-void ev_rtc_update(u32 updateTime);
+void ev_rtc_update(uint32_t updateTime);
 
 extern UTCTime ev_rtc_utc2Second(utcTime_t *time);
 extern void ev_rtc_secondsSet(UTCTime seconds);

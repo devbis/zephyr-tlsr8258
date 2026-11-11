@@ -168,6 +168,6 @@ const gp_transCfg_t g_gpTransCfgList[] = {
     },
 };
 
-u8 GP_TRANS_CFG_LIST_NUM = (sizeof(g_gpTransCfgList) / sizeof(g_gpTransCfgList[0]));
+uint8_t GP_TRANS_CFG_LIST_NUM = (sizeof(g_gpTransCfgList) / sizeof(g_gpTransCfgList[0]));
 
 #endif	/* GP_SUPPORT_ENABLE */

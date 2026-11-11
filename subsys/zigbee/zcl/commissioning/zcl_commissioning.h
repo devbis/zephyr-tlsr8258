@@ -110,10 +110,10 @@
 /**
  *  @brief  Definition for commissioning command callback format
  */
-typedef void (*zcl_restartDeviceCb_t)(u8 options, u8 delay, u8 jitter);
-typedef void (*zcl_saveStartupParamsCb_t)(u8 options, u8 index);
-typedef void (*zcl_restoreStartupParamsCb_t)(u8 options, u8 index);
-typedef void (*zcl_resetStartupParamsCb_t)(u8 options, u8 index);
+typedef void (*zcl_restartDeviceCb_t)(uint8_t options, uint8_t delay, uint8_t jitter);
+typedef void (*zcl_saveStartupParamsCb_t)(uint8_t options, uint8_t index);
+typedef void (*zcl_restoreStartupParamsCb_t)(uint8_t options, uint8_t index);
+typedef void (*zcl_resetStartupParamsCb_t)(uint8_t options, uint8_t index);
 
 /**
  *  @brief  Structure definition for commands callback functions in commissioning cluster
@@ -138,41 +138,41 @@ typedef struct {
 
 /* Startup attributes set*/
 /* General startup attributes */
-extern u16 zcl_attr_short_address;
+extern uint16_t zcl_attr_short_address;
 extern extPANId_t zcl_attr_extended_PAN_id;
-extern u16 zcl_attr_PAN_id;
-extern u32 zcl_attr_channel_mask;
-extern u8 zcl_attr_protocol_version;
-extern u8 zcl_attr_stack_profile;
-extern u8 zcl_attr_startup_control;
+extern uint16_t zcl_attr_PAN_id;
+extern uint32_t zcl_attr_channel_mask;
+extern uint8_t zcl_attr_protocol_version;
+extern uint8_t zcl_attr_stack_profile;
+extern uint8_t zcl_attr_startup_control;
 
 /* Security attributes */
 extern addrExt_t zcl_attr_trust_center_address;
-extern u8 zcl_attr_trust_center_master_key[16];
-extern u8 zcl_attr_network_key[16];
-extern u8 zcl_attr_use_insecure_join;
-extern u8 zcl_attr_preconfigured_link_key[16];
-extern u8 zcl_attr_network_key_sequence_number;
-extern u8 zcl_attr_network_key_type;
-extern u16 zcl_attr_network_manager_address;
+extern uint8_t zcl_attr_trust_center_master_key[16];
+extern uint8_t zcl_attr_network_key[16];
+extern uint8_t zcl_attr_use_insecure_join;
+extern uint8_t zcl_attr_preconfigured_link_key[16];
+extern uint8_t zcl_attr_network_key_sequence_number;
+extern uint8_t zcl_attr_network_key_type;
+extern uint16_t zcl_attr_network_manager_address;
 
-extern u8 zcl_attr_scan_attempts;
-extern u16 zcl_attr_time_between_scans;
-extern u16 zcl_attr_rejoin_interval;
-extern u16 zcl_attr_max_rejoin_interval;
+extern uint8_t zcl_attr_scan_attempts;
+extern uint16_t zcl_attr_time_between_scans;
+extern uint16_t zcl_attr_rejoin_interval;
+extern uint16_t zcl_attr_max_rejoin_interval;
 
-extern u16 indirect_poll_rate;
-extern u8 zcl_attr_parent_retry_threshold;
+extern uint16_t indirect_poll_rate;
+extern uint8_t zcl_attr_parent_retry_threshold;
 
-extern u8 zcl_attr_concentrator_flag;
-extern u8 zcl_attr_concentrator_radius;
-extern u8 zcl_attr_concentrator_discovery_time;
+extern uint8_t zcl_attr_concentrator_flag;
+extern uint8_t zcl_attr_concentrator_radius;
+extern uint8_t zcl_attr_concentrator_discovery_time;
 /**
  *  @brief  External variable for commissioning Attribute Table
  */
 extern const zclAttrInfo_t commissioning_attrTbl[];
 
-extern const u8 zcl_commissioning_attrNum;
+extern const uint8_t zcl_commissioning_attrNum;
 #endif
 
 
@@ -183,9 +183,9 @@ extern const u8 zcl_commissioning_attrNum;
 #define ZCL_RESTART_OPTIONS_GET_IMMEDIATE(options)      (options & (1 << 3))
 
 typedef struct {
-    u8 options;
-    u8 delay;
-    u8 jitter;
+    uint8_t options;
+    uint8_t delay;
+    uint8_t jitter;
 } zcl_restartDevice_t;
 
 
@@ -205,7 +205,7 @@ typedef struct {
  *
  * @return      Status
  */
-status_t zcl_commissioning_register(u8 endpoint, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_commissioning_register(uint8_t endpoint, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 void zcl_initialize_startup_attributes();
 

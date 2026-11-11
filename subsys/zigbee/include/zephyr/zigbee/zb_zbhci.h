@@ -22,7 +22,7 @@
 
 #include <zephyr/device.h>
 
-/** Frame delimiters (0x55 <type:u16 BE> <len:u16 BE> <crc8> <payload> 0xAA). */
+/** Frame delimiters (0x55 <type:uint16_t BE> <len:uint16_t BE> <crc8> <payload> 0xAA). */
 #define ZBHCI_MSG_START_FLAG 0x55U
 #define ZBHCI_MSG_END_FLAG   0xAAU
 
@@ -86,7 +86,7 @@ void zb_zbhci_send(uint16_t msg_type, uint16_t len, const uint8_t *payload);
 
 /**
  * Dispatch one fully-framed inbound command. Implemented in zb_zbhci_cmd.c.
- * Called on the Zigbee thread (posted there via tl_zbTaskPost by the UART
+ * Called on the Zigbee thread (posted there via zb_TaskPost by the UART
  * transport), never directly from the UART RX ISR.
  */
 void zb_zbhci_cmd_handle(uint16_t msg_type, uint16_t len, const uint8_t *payload);

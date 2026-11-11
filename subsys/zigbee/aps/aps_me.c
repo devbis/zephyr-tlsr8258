@@ -7,11 +7,11 @@
 #include "aps_me.h"
 #include "zb_task_queue.h"
 
-u8 APS_BINDING_TABLE_SIZE_V1 = APS_BINDING_TABLE_NUM_V1;
-u16 APS_OLD_BINDING_TBL_SIZE_MAX = sizeof(aps_binding_table_t);
-static inline u16 aps_binding_table_bytes(void)
+uint8_t APS_BINDING_TABLE_SIZE_V1 = APS_BINDING_TABLE_NUM_V1;
+uint16_t APS_OLD_BINDING_TBL_SIZE_MAX = sizeof(aps_binding_table_t);
+static inline uint16_t aps_binding_table_bytes(void)
 {
-	return (u16)(APS_BINDING_TABLE_SIZE * sizeof(aps_binding_entry_t));
+	return (uint16_t)(APS_BINDING_TABLE_SIZE * sizeof(aps_binding_entry_t));
 }
 
 static inline bool aps_binding_used(const aps_binding_entry_t *entry)
@@ -19,26 +19,26 @@ static inline bool aps_binding_used(const aps_binding_entry_t *entry)
 	return entry->used == 1U;
 }
 
-void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum);
+void aps_bindingTblRestore(void *oldTbl, uint16_t tblSize, uint16_t eleNum);
 
-u8 aps_oldBindingTblRecover(void)
+uint8_t aps_oldBindingTblRecover(void)
 {
-	u16 oldSize = 0;
-	u8 status = nv_flashSingleItemSizeGet(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE, &oldSize);
-	u16 payloadSize;
-	u8 elementCount;
+	uint16_t oldSize = 0;
+	uint8_t status = nv_flashSingleItemSizeGet(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE, &oldSize);
+	uint16_t payloadSize;
+	uint8_t elementCount;
 
 	if (status != NV_SUCC || oldSize > APS_OLD_BINDING_TBL_SIZE_MAX) {
 		return status;
 	}
 
-	payloadSize = (u16)(oldSize - 4U);
+	payloadSize = (uint16_t)(oldSize - 4U);
 	if (payloadSize < 22U) {
 		return status;
 	}
 
 	for (elementCount = 1U; elementCount <= APS_BINDING_TABLE_NUM_V1; elementCount++) {
-		u16 expected = (u16)(2U * elementCount * (elementCount + 10U));
+		uint16_t expected = (uint16_t)(2U * elementCount * (elementCount + 10U));
 
 		if (payloadSize == expected) {
 			break;
@@ -51,7 +51,7 @@ u8 aps_oldBindingTblRecover(void)
 
 	APS_BINDING_TABLE_SIZE_V1 = elementCount;
 
-	u8 *oldTbl = ev_buf_allocate(oldSize);
+	uint8_t *oldTbl = ev_buf_allocate(oldSize);
 	if (oldTbl == NULL) {
 		return status;
 	}
@@ -65,9 +65,9 @@ u8 aps_oldBindingTblRecover(void)
 	return status;
 }
 
-void aps_userBindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
+void aps_userBindingTblRestore(void *oldTbl, uint16_t tblSize, uint16_t eleNum)
 {
-	u16 storedSize = 0;
+	uint16_t storedSize = 0;
 
 	if (nv_flashSingleItemSizeGet(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE, &storedSize) !=
 		    NV_SUCC ||
@@ -76,18 +76,18 @@ void aps_userBindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
 	}
 
 	if (nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE, storedSize,
-			    (u8 *)oldTbl) == NV_SUCC) {
+			    (uint8_t *)oldTbl) == NV_SUCC) {
 		aps_bindingTblRestore(oldTbl, storedSize, eleNum);
 	}
 }
 
-void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
+void aps_bindingTblRestore(void *oldTbl, uint16_t tblSize, uint16_t eleNum)
 {
-	u8 infoBuf[10] = {0};
-	u8 addrBuf[10]; /* 16-bit binding mask followed by the 8-byte IEEE address */
-	u16 mappedIdx = 0;
+	uint8_t infoBuf[10] = {0};
+	uint8_t addrBuf[10]; /* 16-bit binding mask followed by the 8-byte IEEE address */
+	uint16_t mappedIdx = 0;
 	itemIfno_t *info = (itemIfno_t *)infoBuf;
-	u8 *oldBytes = (u8 *)oldTbl;
+	uint8_t *oldBytes = (uint8_t *)oldTbl;
 	aps_binding_table_t *legacyTable = (aps_binding_table_t *)oldTbl;
 	aps_binding_entry_t *newTbl = bindTblEntryGet();
 
@@ -95,26 +95,26 @@ void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
 
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(infoBuf),
 			    infoBuf) == NV_SUCC) {
-		for (u16 i = 0; i <= info->opIndex; i++) {
-			u8 readStatus = nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
+		for (uint16_t i = 0; i <= info->opIndex; i++) {
+			uint8_t readStatus = nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
 							    NV_ITEM_ADDRESS_FOR_BIND, info->opSect,
 							    i, sizeof(addrBuf), addrBuf);
 			if (readStatus == 3U) {
 				continue;
 			}
 
-			if (tl_idxByExtAddr(&mappedIdx, &addrBuf[2]) != RET_OK) {
-				(void)tl_zbNwkAddrMapAdd(ZB_UNKNOWN_SHORT_ADDR, &addrBuf[2],
+			if (zb_idxByExtAddr(&mappedIdx, &addrBuf[2]) != RET_OK) {
+				(void)zb_NwkAddrMapAdd(ZB_UNKNOWN_SHORT_ADDR, &addrBuf[2],
 							 &mappedIdx);
-				tl_addrMappingForBind(1, mappedIdx);
+				zb_addrMappingForBind(1, mappedIdx);
 			}
 
 			if (eleNum != 0U) {
-				u16 mask;
+				uint16_t mask;
 
 				COPY_BUFFERTOU16(mask, addrBuf);
-				for (u16 j = 0; j < eleNum; j++) {
-					if ((mask & (u16)(1U << j)) != 0U) {
+				for (uint16_t j = 0; j < eleNum; j++) {
+					if ((mask & (uint16_t)(1U << j)) != 0U) {
 						legacyTable->table[j].dst_table.group_addr =
 							mappedIdx;
 					}
@@ -123,30 +123,30 @@ void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
 		}
 	}
 
-	if (tl_idxByExtAddr(&mappedIdx, g_zbInfo.nwkNib.ieeeAddr) != RET_OK) {
-		(void)tl_zbNwkAddrMapAdd(ZB_UNKNOWN_SHORT_ADDR, g_zbInfo.nwkNib.ieeeAddr,
+	if (zb_idxByExtAddr(&mappedIdx, g_zbInfo.nwkNib.ieeeAddr) != RET_OK) {
+		(void)zb_NwkAddrMapAdd(ZB_UNKNOWN_SHORT_ADDR, g_zbInfo.nwkNib.ieeeAddr,
 					 &mappedIdx);
-		tl_addrMappingForBind(1, mappedIdx);
+		zb_addrMappingForBind(1, mappedIdx);
 	}
 
 	if (oldBytes[2] == 0U) {
 		goto write_new_table;
 	}
 
-	for (u16 i = 0; i < eleNum && i < oldBytes[0]; i++) {
-		u8 *src = oldBytes + 4U + (i * sizeof(aps_bind_tbl_t));
+	for (uint16_t i = 0; i < eleNum && i < oldBytes[0]; i++) {
+		uint8_t *src = oldBytes + 4U + (i * sizeof(aps_bind_tbl_t));
 		if (src[13] == 1U) {
 			COPY_U16TOBUFFER(src + 10U, mappedIdx);
 		}
 	}
 
-	u8 boundCount = oldBytes[2];
-	u8 restored = 0;
-	u8 *map = oldBytes + 4U + (eleNum * sizeof(aps_bind_tbl_t));
+	uint8_t boundCount = oldBytes[2];
+	uint8_t restored = 0;
+	uint8_t *map = oldBytes + 4U + (eleNum * sizeof(aps_bind_tbl_t));
 
-	for (u8 i = 0; i < boundCount && restored < APS_BINDING_TABLE_SIZE; i++) {
-		u8 srcIdx = map[0];
-		u8 dstIdx = map[1];
+	for (uint8_t i = 0; i < boundCount && restored < APS_BINDING_TABLE_SIZE; i++) {
+		uint8_t srcIdx = map[0];
+		uint8_t dstIdx = map[1];
 		map += sizeof(boundTblMapList_t);
 
 		if (srcIdx >= eleNum || dstIdx >= eleNum) {
@@ -166,7 +166,7 @@ void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
 			entry->groupAddr = dst->dst_table.group_addr;
 		} else {
 			entry->dstAddrMode = APS_LONG_DSTADDR_WITHEP;
-			tl_zbExtAddrByIdx(dst->dst_table.long_addr.dst_addr,
+			zb_ExtAddrByIdx(dst->dst_table.long_addr.dst_addr,
 					  entry->dstExtAddrInfo.extAddr);
 			entry->dstExtAddrInfo.dstEp = dst->dst_table.long_addr.dst_end;
 		}
@@ -174,12 +174,12 @@ void aps_bindingTblRestore(void *oldTbl, u16 tblSize, u16 eleNum)
 
 write_new_table:
 	if (nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE_V2,
-			     aps_binding_table_bytes(), (u8 *)newTbl) != NV_SUCC) {
+			     aps_binding_table_bytes(), (uint8_t *)newTbl) != NV_SUCC) {
 		nv_flashSingleItemRemove(NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE, tblSize);
 
 		if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE, sizeof(infoBuf),
 				    infoBuf) == NV_SUCC) {
-			for (u16 i = 0; i <= info->opIndex; i++) {
+			for (uint16_t i = 0; i <= info->opIndex; i++) {
 				if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
 							NV_ITEM_ADDRESS_FOR_BIND, info->opSect, i,
 							sizeof(addrBuf), addrBuf) != 3U) {
@@ -201,16 +201,16 @@ void aps_bindingTblSave2Flash(void *arg)
 {
 	(void)arg;
 	nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE_V2, aps_binding_table_bytes(),
-			 (u8 *)bindTblEntryGet());
+			 (uint8_t *)bindTblEntryGet());
 }
 
-u8 aps_bindingTblNvInit(void)
+uint8_t aps_bindingTblNvInit(void)
 {
 	nv_itemLengthCheckAdd(NV_ITEM_APS_BINDING_TABLE_V2, aps_binding_table_bytes());
 
 	/* the whole table, as aps_bindingTblSave2Flash() writes it */
-	u8 ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE_V2,
-				 aps_binding_table_bytes(), (u8 *)bindTblEntryGet());
+	uint8_t ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_BINDING_TABLE_V2,
+				 aps_binding_table_bytes(), (uint8_t *)bindTblEntryGet());
 	if (ret != NV_SUCC) {
 		aps_oldBindingTblRecover();
 	}
@@ -230,12 +230,12 @@ aps_binding_entry_t *aps_bindingTblEntryGet(void)
 	return bindTblEntryGet();
 }
 
-u8 aps_bindingTblEntryNum(void)
+uint8_t aps_bindingTblEntryNum(void)
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
-	u8 count = 0;
+	uint8_t count = 0;
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		if (aps_binding_used(&table[i])) {
 			count++;
 		}
@@ -244,11 +244,11 @@ u8 aps_bindingTblEntryNum(void)
 	return count;
 }
 
-bool aps_bindingTblMatched(u16 clusterId, u8 srcEp)
+bool aps_bindingTblMatched(uint16_t clusterId, uint8_t srcEp)
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		if (!aps_binding_used(&table[i])) {
 			continue;
 		}
@@ -261,11 +261,11 @@ bool aps_bindingTblMatched(u16 clusterId, u8 srcEp)
 	return false;
 }
 
-u8 aps_bindingTblExist(addrExt_t extAddr)
+uint8_t aps_bindingTblExist(addrExt_t extAddr)
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		if (!aps_binding_used(&table[i])) {
 			continue;
 		}
@@ -282,15 +282,15 @@ u8 aps_bindingTblExist(addrExt_t extAddr)
 	return 0;
 }
 
-aps_binding_entry_t *aps_bindingTblMatch(u16 clusterId, u8 srcEp, u8 dstAddrMode, u8 *dstAddrInfo)
+aps_binding_entry_t *aps_bindingTblMatch(uint16_t clusterId, uint8_t srcEp, uint8_t dstAddrMode, uint8_t *dstAddrInfo)
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		aps_binding_entry_t *entry = &table[i];
 
 		if (dstAddrMode == APS_SHORT_GROUPADDR_NOEP) {
-			u16 groupAddr;
+			uint16_t groupAddr;
 
 			COPY_BUFFERTOU16(groupAddr, dstAddrInfo);
 			if (entry->groupAddr == groupAddr) {
@@ -328,11 +328,11 @@ aps_binding_entry_t *aps_bindingTblMatch(u16 clusterId, u8 srcEp, u8 dstAddrMode
 	return NULL;
 }
 
-u8 aps_bindingTblEntryAdd(u16 clusterId, u8 srcEp, u8 dstAddrMode, u8 *dstAddrInfo)
+uint8_t aps_bindingTblEntryAdd(uint16_t clusterId, uint8_t srcEp, uint8_t dstAddrMode, uint8_t *dstAddrInfo)
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		aps_binding_entry_t *entry = &table[i];
 
 		if (aps_binding_used(entry)) {
@@ -345,7 +345,7 @@ u8 aps_bindingTblEntryAdd(u16 clusterId, u8 srcEp, u8 dstAddrMode, u8 *dstAddrIn
 		entry->dstAddrMode = dstAddrMode;
 
 		if (dstAddrMode == APS_SHORT_GROUPADDR_NOEP) {
-			entry->groupAddr = (u16)dstAddrInfo[0] | ((u16)dstAddrInfo[1] << 8);
+			entry->groupAddr = (uint16_t)dstAddrInfo[0] | ((uint16_t)dstAddrInfo[1] << 8);
 			return 1;
 		}
 
@@ -364,7 +364,7 @@ u8 aps_bindingTblEntryAdd(u16 clusterId, u8 srcEp, u8 dstAddrMode, u8 *dstAddrIn
 
 void aps_bindingTblEntryDel(aps_binding_entry_t *entry)
 {
-	u8 usedCount = aps_bindingTblEntryNum();
+	uint8_t usedCount = aps_bindingTblEntryNum();
 	aps_binding_entry_t *table = bindTblEntryGet();
 
 	if (entry == NULL) {
@@ -377,8 +377,8 @@ void aps_bindingTblEntryDel(aps_binding_entry_t *entry)
 		return;
 	}
 
-	u8 index = (u8)(entry - table);
-	if (index < (u8)(usedCount - 1U)) {
+	uint8_t index = (uint8_t)(entry - table);
+	if (index < (uint8_t)(usedCount - 1U)) {
 		memcpy(entry, entry + 1, (usedCount - 1U - index) * sizeof(aps_binding_entry_t));
 	}
 
@@ -390,7 +390,7 @@ void aps_bindingTblEntryDelByDstExtAddr(addrExt_t extAddr)
 	aps_binding_entry_t *table = bindTblEntryGet();
 	bool deleted = FALSE;
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		aps_binding_entry_t *entry = &table[i];
 
 		if (!aps_binding_used(entry) || entry->dstAddrMode != APS_LONG_DSTADDR_WITHEP) {
@@ -406,7 +406,7 @@ void aps_bindingTblEntryDelByDstExtAddr(addrExt_t extAddr)
 	}
 
 	if (deleted) {
-		tl_zbTaskPost(aps_bindingTblSave2Flash, NULL);
+		zb_TaskPost(aps_bindingTblSave2Flash, NULL);
 	}
 }
 
@@ -414,9 +414,9 @@ aps_status_t aps_search_dst_from_bind_tbl(aps_data_req_t *apsreq, bind_dst_list_
 {
 	aps_binding_entry_t *table = bindTblEntryGet();
 	bind_dst_list *out = bindList->list;
-	u8 total = 0;
+	uint8_t total = 0;
 
-	for (u8 i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_BINDING_TABLE_SIZE; i++) {
 		aps_binding_entry_t *entry = &table[i];
 
 		if (!aps_binding_used(entry)) {
@@ -449,8 +449,8 @@ aps_status_t aps_search_dst_from_bind_tbl(aps_data_req_t *apsreq, bind_dst_list_
 
 aps_status_t aps_me_bind_req(aps_me_bind_req_t *amr)
 {
-	u16 clusterId = (u16)amr->cid16_l | ((u16)amr->cid16_h << 8);
-	u8 *dstInfo = (u8 *)&amr->dst_group_addr;
+	uint16_t clusterId = (uint16_t)amr->cid16_l | ((uint16_t)amr->cid16_h << 8);
+	uint8_t *dstInfo = (uint8_t *)&amr->dst_group_addr;
 
 	if (aps_bindingTblEntryNum() == APS_BINDING_TABLE_SIZE) {
 		return APS_STATUS_TABLE_FULL;
@@ -464,21 +464,21 @@ aps_status_t aps_me_bind_req(aps_me_bind_req_t *amr)
 		return APS_STATUS_INVALID_PARAMETER;
 	}
 
-	tl_zbTaskPost(aps_bindingTblSave2Flash, NULL);
+	zb_TaskPost(aps_bindingTblSave2Flash, NULL);
 	return APS_STATUS_SUCCESS;
 }
 
 aps_status_t aps_me_unbind_req(aps_me_unbind_req_t *amr)
 {
-	u16 clusterId = (u16)amr->cid16_l | ((u16)amr->cid16_h << 8);
+	uint16_t clusterId = (uint16_t)amr->cid16_l | ((uint16_t)amr->cid16_h << 8);
 	aps_binding_entry_t *entry = aps_bindingTblMatch(clusterId, amr->src_ep, amr->dst_addr_mode,
-							 (u8 *)&amr->dst_group_addr);
+							 (uint8_t *)&amr->dst_group_addr);
 	if (entry == NULL) {
 		return APS_STATUS_INVALID_BINDING;
 	}
 
 	aps_bindingTblEntryDel(entry);
-	tl_zbTaskPost(aps_bindingTblSave2Flash, NULL);
+	zb_TaskPost(aps_bindingTblSave2Flash, NULL);
 	return APS_STATUS_SUCCESS;
 }
 
@@ -506,7 +506,7 @@ void aps_me_init(void)
 	aps_ib.aps_fragment_payload_size = APS_FRAGMEMT_PAYLOAD_SIZE;
 }
 
-aps_status_t apsSetChnMsk(u32 chnMask)
+aps_status_t apsSetChnMsk(uint32_t chnMask)
 {
 	if ((chnMask & ~ZB_TRANSCEIVER_ALL_CHANNELS_MASK) != 0U) {
 		return APS_STATUS_INVALID_PARAMETER;
@@ -516,7 +516,7 @@ aps_status_t apsSetChnMsk(u32 chnMask)
 	return APS_STATUS_SUCCESS;
 }
 
-void tl_zbApsPibSet(u8 attribute, u8 length, const void *value)
+void zb_ApsPibSet(uint8_t attribute, uint8_t length, const void *value)
 {
 	if (attribute == 1U) {
 		memcpy(&aps_ib, value, length);

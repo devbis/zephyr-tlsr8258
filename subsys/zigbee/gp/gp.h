@@ -167,10 +167,10 @@ b20	  ||  Compact attribute reporting                                           
 *  @brief	Define for GP Channel request command
 */
 typedef union {
-    u8 chTogglingBehavior;
+    uint8_t chTogglingBehavior;
     struct {
-        u8 rxChNext:4;
-        u8 rxChSecondNext:4;
+        uint8_t rxChNext:4;
+        uint8_t rxChSecondNext:4;
     } bits;
 } gpd_channelRequestCmd_payload_t;
 
@@ -178,11 +178,11 @@ typedef union {
 *  @brief	Define for GP Response
 */
 typedef union {
-    u8 channel;
+    uint8_t channel;
     struct {
-        u8 operationChannel:4;
-        u8 basic:1;
-        u8 reserved:3;
+        uint8_t operationChannel:4;
+        uint8_t basic:1;
+        uint8_t reserved:3;
     } bits;
 } gpd_channelConfigurationCmd_payload_t;
 
@@ -190,66 +190,66 @@ typedef union {
 * @brief	Define for commissioning command payload
 */
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 macSeqNumCap:1;
-        u8 rxOnCap:1;
-        u8 appInfoPresent:1;
-        u8 reserved:1;
-        u8 panIdReq:1;
-        u8 gpSecKeyReq:1;
-        u8 fixedLocation:1;
-        u8 extOpPresent:1;
+        uint8_t macSeqNumCap:1;
+        uint8_t rxOnCap:1;
+        uint8_t appInfoPresent:1;
+        uint8_t reserved:1;
+        uint8_t panIdReq:1;
+        uint8_t gpSecKeyReq:1;
+        uint8_t fixedLocation:1;
+        uint8_t extOpPresent:1;
     } bits;
 } gpCommissioningOpt_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 secLevelCap:2;
-        u8 keyType:3;
-        u8 gpdKeyPresent:1;
-        u8 gpdKeyEncrypt:1;
-        u8 outgoingCounterPresent:1;
+        uint8_t secLevelCap:2;
+        uint8_t keyType:3;
+        uint8_t gpdKeyPresent:1;
+        uint8_t gpdKeyEncrypt:1;
+        uint8_t outgoingCounterPresent:1;
     } bits;
 } gpCommissioningExtOpt_t;
 
 typedef struct {
-    u8 *commandList;
-    u8 *clusterList;
-    u8 payloadLen;
-    u8 deviceId;
+    uint8_t *commandList;
+    uint8_t *clusterList;
+    uint8_t payloadLen;
+    uint8_t deviceId;
     gpCommissioningOpt_t options;
     gpCommissioningExtOpt_t extOptions;
-    u8 gpdSecKey[SEC_KEY_LEN];
-    u32 gpdMIC;
-    u32 gpdOutGoingCounter;
-    u16 manuId;
-    u16 modelId;
+    uint8_t gpdSecKey[SEC_KEY_LEN];
+    uint32_t gpdMIC;
+    uint32_t gpdOutGoingCounter;
+    uint16_t manuId;
+    uint16_t modelId;
     gpSwitchInfo_t switchInfo;
     gpAppInfo_t appInfo;
-    u8 gpdCmdNum;
+    uint8_t gpdCmdNum;
 } gpd_commissioning_payload_t;
 
 /***************************************************************************
 *  @brief	Define for GP commissioning reply
 */
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 panIdPresent:1;
-        u8 gpdSecKeyPresent:1;
-        u8 gpdKeyEncrypt:1;
-        u8 securityLevel:2;
-        u8  keyType:3;
+        uint8_t panIdPresent:1;
+        uint8_t gpdSecKeyPresent:1;
+        uint8_t gpdKeyEncrypt:1;
+        uint8_t securityLevel:2;
+        uint8_t  keyType:3;
     } bits;
 } gpCommissioningReplyOpt_t;
 
 typedef struct {
-    u8  key[16];
-    u32 keyMIC;
-    u32 frameCounter;
-    u16 panId;
+    uint8_t  key[16];
+    uint32_t keyMIC;
+    uint32_t frameCounter;
+    uint16_t panId;
     gpCommissioningReplyOpt_t options;
 } gpd_commissioningReply_payload_t;
 
@@ -257,59 +257,59 @@ typedef struct {
 *  @brief	Define for GP Application Description
 */
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 timeoutPeriodPresent:1;
-        u8 resv:7;
+        uint8_t timeoutPeriodPresent:1;
+        uint8_t resv:7;
     } bits;
 } gpReportOpt_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 numOfRecords:3;
-        u8 side:1;
-        u8 manuIdPresent:1;
-        u8 resv:3;
+        uint8_t numOfRecords:3;
+        uint8_t side:1;
+        uint8_t manuIdPresent:1;
+        uint8_t resv:3;
     } bits;
 } gpDataPointOpt_t;
 
 typedef union {
-    u8 opts;
+    uint8_t opts;
     struct {
-        u8 remainingLen:4;
-        u8 reported:1;
-        u8 attrValuePresent:1;
-        u8 resv:2;
+        uint8_t remainingLen:4;
+        uint8_t reported:1;
+        uint8_t attrValuePresent:1;
+        uint8_t resv:2;
     } bits;
 } gpAttrOpt_t;
 
 typedef struct {
-    u16 attrId;
-    u8 attrDataType;
+    uint16_t attrId;
+    uint8_t attrDataType;
     gpAttrOpt_t attrOption;
-    u8 attrOffsetWithinReport;
-    u8 attrValue[8];
+    uint8_t attrOffsetWithinReport;
+    uint8_t attrValue[8];
 } gpAttrRecord_t;
 
 typedef struct {
-    u16 clusterId;
-    u16 manuId;
+    uint16_t clusterId;
+    uint16_t manuId;
     gpDataPointOpt_t dataPointOpt;
     gpAttrRecord_t attrRecord[];
 } gpDataPointDesc_t;
 
 typedef struct {
-    u16 timeoutPeriod;
-    u8 reportId;
+    uint16_t timeoutPeriod;
+    uint8_t reportId;
     gpReportOpt_t reportOpt;
-    u8 remainingLen;
+    uint8_t remainingLen;
     gpDataPointDesc_t dataPointDesc[];
 } gpReportDesc_t;
 
 typedef struct {
-    u8 totalNumReport;
-    u8 numOfReport;
+    uint8_t totalNumReport;
+    uint8_t numOfReport;
     gpReportDesc_t reportDesc[];
 } gpd_appDesc_payload_t;
 
@@ -346,24 +346,24 @@ typedef struct {
 /**
  *  @brief  External variable for GP Attribute
  */
-extern u8 zclGpAttr_gpsMaxSinkTabEntries;
-extern u8 zclGpAttr_sinkTabEntry[];
-extern u8 zclGpAttr_gpsCommMode;
-extern u8 zclGpAttr_gpsCommExitMode;
-extern u16 zclGpAttr_gpsCommWindow;
-extern u8 zclGpAttr_gpsSecLevel;
-extern u8 zclGpAttr_gpsFunc[];
-extern u8 zclGpAttr_gpsActiveFunc[];
-extern u8 zclGpAttr_gppMaxProxyTabEntries;
-extern u16 zclGpAttr_clusterRev;
-extern u8 zclGpAttr_proxyTabEntry[];
-extern u8 zclGpAttr_gppFunc[];
-extern u8 zclGpAttr_gppActiveFunc[];
-extern u8 zclGpAttr_gpSharedSecKeyType;
-extern u8 zclGpAttr_gpSharedSecKey[];
-extern u8 zclGpAttr_gpLinkKey[];
+extern uint8_t zclGpAttr_gpsMaxSinkTabEntries;
+extern uint8_t zclGpAttr_sinkTabEntry[];
+extern uint8_t zclGpAttr_gpsCommMode;
+extern uint8_t zclGpAttr_gpsCommExitMode;
+extern uint16_t zclGpAttr_gpsCommWindow;
+extern uint8_t zclGpAttr_gpsSecLevel;
+extern uint8_t zclGpAttr_gpsFunc[];
+extern uint8_t zclGpAttr_gpsActiveFunc[];
+extern uint8_t zclGpAttr_gppMaxProxyTabEntries;
+extern uint16_t zclGpAttr_clusterRev;
+extern uint8_t zclGpAttr_proxyTabEntry[];
+extern uint8_t zclGpAttr_gppFunc[];
+extern uint8_t zclGpAttr_gppActiveFunc[];
+extern uint8_t zclGpAttr_gpSharedSecKeyType;
+extern uint8_t zclGpAttr_gpSharedSecKey[];
+extern uint8_t zclGpAttr_gpLinkKey[];
 
-extern u8 GP_CB_CLUSTER_NUM;
+extern uint8_t GP_CB_CLUSTER_NUM;
 extern const zcl_specClusterInfo_t g_gpClusterList[];
 extern const af_simple_descriptor_t gp_simpleDesc;
 extern gp_appCb_t *gpAppCb;
@@ -373,11 +373,11 @@ void gpDataCnfPrc(gp_data_cnf_t *pGpDataCnf);
 void gpDataIndPrc(void *arg);
 void gpSecReqPrc(void *arg);
 
-void gp_init(u8 endpoint);
+void gp_init(uint8_t endpoint);
 void gp_registerAppCb(gp_appCb_t *cb);
-status_t zcl_gpCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload);
+status_t zcl_gpCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload);
 
-bool gpDevAnnceCheckCb(u16 ailasNwkAddr, addrExt_t ailasIeeeAddr);
+bool gpDevAnnceCheckCb(uint16_t ailasNwkAddr, addrExt_t ailasIeeeAddr);
 bool gpChangleChannelReqCb(void);
 void gpCommissioningModeCb(bool isInCommMode);
 void gpCommissioningNotificationCmdFromLocalCb(zcl_gp_commissioningNotificationCmd_t *pCmd);

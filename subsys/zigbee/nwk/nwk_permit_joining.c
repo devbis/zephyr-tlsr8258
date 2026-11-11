@@ -23,14 +23,14 @@ int nwk_permitJoinTimeout(void *arg)
 	return -1;
 }
 
-void tl_zbNwkNlmePermitJoiningRequestHandler(void *arg)
+void zb_NwkNlmePermitJoiningRequestHandler(void *arg)
 {
 	nlme_permitJoining_req_t *req = (nlme_permitJoining_req_t *)arg;
 	nlme_permitJoining_cnf_t *cnf = (nlme_permitJoining_cnf_t *)arg;
 
 	if (!g_zbNIB.capabilityInfo.devType || !g_zbNwkCtx.joined || !g_zbNwkCtx.joinAccept) {
 		cnf->status = NWK_STATUS_INVALID_REQUEST;
-		tl_zbTaskPost(zdo_nlmePermitJoinCnf, arg);
+		zb_TaskPost(zdo_nlmePermitJoinCnf, arg);
 		return;
 	}
 
@@ -45,13 +45,13 @@ void tl_zbNwkNlmePermitJoiningRequestHandler(void *arg)
 	} else if (req->permitDuration != 0xffU) {
 		g_zbMacPib.associationPermit = 1;
 		permitJoinTimerEvt = ev_timer_taskPost(nwk_permitJoinTimeout, NULL,
-						       (u32)req->permitDuration * 1000U);
+						       (uint32_t)req->permitDuration * 1000U);
 	} else {
 		g_zbMacPib.associationPermit = 1;
 	}
 
-	tl_zbNwkBeaconPayloadUpdate();
+	zb_NwkBeaconPayloadUpdate();
 	cnf->status = NWK_STATUS_SUCCESS;
-	tl_zbTaskPost(zdo_nlmePermitJoinCnf, arg);
+	zb_TaskPost(zdo_nlmePermitJoinCnf, arg);
 }
 #endif

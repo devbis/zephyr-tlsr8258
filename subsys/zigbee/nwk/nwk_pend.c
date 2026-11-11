@@ -39,7 +39,7 @@ STATIC_ASSERT(OFFSETOF(nwk_route_disc_cache_buf_t, savedHandle) ==
 	      OFFSETOF(zb_buf_t, hdr) + OFFSETOF(zb_buf_hdr_t, handle));
 
 nwk_txDataPendEntry_t g_txDataPendTab[NWK_TX_DATA_PEND_TABLE_SIZE];
-u8 g_txDataPendTabCnt = 0;
+uint8_t g_txDataPendTabCnt = 0;
 
 static inline bool nwk_tx_data_pend_used(const nwk_txDataPendEntry_t *entry)
 {
@@ -71,14 +71,14 @@ void nwkTxDataPendTabEntryClear(nwk_txDataPendEntry_t *entry)
 
 void nwkTxDataPendTabInit(void)
 {
-	for (u8 i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
 		nwkTxDataPendTabEntryRst(&g_txDataPendTab[i]);
 	}
 }
 
-nwk_txDataPendEntry_t *nwkTxDataPendTabEntryFind(u16 srcAddr, u16 dstAddr, u8 handle, u8 seqNum)
+nwk_txDataPendEntry_t *nwkTxDataPendTabEntryFind(uint16_t srcAddr, uint16_t dstAddr, uint8_t handle, uint8_t seqNum)
 {
-	for (u8 i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
 		nwk_txDataPendEntry_t *entry = &g_txDataPendTab[i];
 
 		if (nwk_tx_data_pend_used(entry) && entry->srcAddr == srcAddr &&
@@ -91,9 +91,9 @@ nwk_txDataPendEntry_t *nwkTxDataPendTabEntryFind(u16 srcAddr, u16 dstAddr, u8 ha
 	return NULL;
 }
 
-nwk_txDataPendEntry_t *nwkTxDataPendTabEntryRtDiscFind(u16 dstAddr, u8 routeReqId)
+nwk_txDataPendEntry_t *nwkTxDataPendTabEntryRtDiscFind(uint16_t dstAddr, uint8_t routeReqId)
 {
-	for (u8 i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
 		nwk_txDataPendEntry_t *entry = &g_txDataPendTab[i];
 
 		if (nwk_tx_data_pend_used(entry) && entry->needRouteDisc != 0U &&
@@ -105,12 +105,12 @@ nwk_txDataPendEntry_t *nwkTxDataPendTabEntryRtDiscFind(u16 dstAddr, u8 routeReqI
 	return NULL;
 }
 
-nwk_txDataPendEntry_t *nwkTxDataPendTabEntryCreate(void *srcBuf, u16 srcAddr, u16 dstAddr,
-						   u8 handle, u8 seqNum)
+nwk_txDataPendEntry_t *nwkTxDataPendTabEntryCreate(void *srcBuf, uint16_t srcAddr, uint16_t dstAddr,
+						   uint8_t handle, uint8_t seqNum)
 {
 	nwk_txDataPendEntry_t *entry = NULL;
 
-	for (u8 i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
 		if (!g_txDataPendTab[i].used) {
 			entry = &g_txDataPendTab[i];
 			break;
@@ -135,13 +135,13 @@ nwk_txDataPendEntry_t *nwkTxDataPendTabEntryCreate(void *srcBuf, u16 srcAddr, u1
 	return entry;
 }
 
-u8 *nwkTxDataCachePacketCopy(zb_buf_t *buf)
+uint8_t *nwkTxDataCachePacketCopy(zb_buf_t *buf)
 {
 	zb_buf_t *copy;
 	nwk_route_disc_cache_buf_t *srcCache;
 	nwk_route_disc_cache_buf_t *dstCache;
-	u8 *payload;
-	u8 *relayList;
+	uint8_t *payload;
+	uint8_t *relayList;
 
 	if (buf == NULL) {
 		return NULL;
@@ -169,11 +169,11 @@ u8 *nwkTxDataCachePacketCopy(zb_buf_t *buf)
 		nwk_route_disc_cache_relay_list_set(dstCache, copy->buf + (relayList - buf->buf));
 	}
 
-	return (u8 *)copy;
+	return (uint8_t *)copy;
 }
 
-nwk_txDataPendEntry_t *nwkTxDataPendTabEntryAdd(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload,
-						u8 payloadLen, u8 handle)
+nwk_txDataPendEntry_t *nwkTxDataPendTabEntryAdd(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload,
+						uint8_t payloadLen, uint8_t handle)
 {
 	nwk_txDataPendEntry_t *entry;
 	zb_buf_t *cachedBuf;
@@ -212,7 +212,7 @@ void nwkDataPendPeriodic(void)
 		return;
 	}
 
-	for (u8 i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_TX_DATA_PEND_TABLE_SIZE; i++) {
 		nwk_txDataPendEntry_t *entry = &g_txDataPendTab[i];
 
 		if (!nwk_tx_data_pend_used(entry)) {

@@ -7,10 +7,10 @@
 #include "zb_nwk_addr_map.h"
 #include "zb_nwk_address_assign.h"
 
-u16 tl_zbNwkStochasticAddrCal(void)
+uint16_t zb_NwkStochasticAddrCal(void)
 {
 	while (1) {
-		u16 candidate = (u16)drv_u32Rand();
+		uint16_t candidate = (uint16_t)drv_u32Rand();
 
 		if (candidate == 0U || candidate >= 0xFFF7U) {
 			continue;
@@ -22,12 +22,12 @@ u16 tl_zbNwkStochasticAddrCal(void)
 
 		addrExt_t extAddr;
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-		u16 addrMapIdx;
-		u16 *addrMapIdxPtr = &addrMapIdx;
+		uint16_t addrMapIdx;
+		uint16_t *addrMapIdxPtr = &addrMapIdx;
 #else
-		u16 *addrMapIdxPtr = NULL;
+		uint16_t *addrMapIdxPtr = NULL;
 #endif
-		if (tl_zbExtAddrByShortAddr(candidate, extAddr, addrMapIdxPtr) == RET_OK) {
+		if (zb_ExtAddrByShortAddr(candidate, extAddr, addrMapIdxPtr) == RET_OK) {
 			continue;
 		}
 

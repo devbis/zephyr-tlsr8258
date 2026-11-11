@@ -50,14 +50,14 @@ zcl_sceneTable_t g_zcl_sceneTab[ZCL_SCENE_TABLE_NUM];
  */
 void zcl_scene_sceneTabClear(void);
 nv_sts_t zcl_scenesRestore(void);
-nv_sts_t zcl_scenesSave(u8 endpoint);
-void zcl_scene_updateSceneCntAttr(u8 endpoint);
+nv_sts_t zcl_scenesSave(uint8_t endpoint);
+void zcl_scene_updateSceneCntAttr(uint8_t endpoint);
 static status_t zcl_scene_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_scene_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_scene_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (zcl_scenesRestore() != NV_SUCC) {
     	zcl_scene_sceneTabClear();
@@ -73,7 +73,7 @@ _CODE_ZCL_ status_t zcl_scene_register(u8 endpoint, u16 manuCode, u8 attrNum, co
 }
 
 
-_CODE_ZCL_ nv_sts_t zcl_scenesSave(u8 endpoint)
+_CODE_ZCL_ nv_sts_t zcl_scenesSave(uint8_t endpoint)
 {
     zcl_scene_updateSceneCntAttr(endpoint);
 
@@ -90,13 +90,13 @@ _CODE_ZCL_ void zcl_scene_clearEntry(zcl_sceneTable_t *pSceneTab)
     if (pSceneTab ){
         pSceneTab->used = 0;
         pSceneTab->endpoint = 0xfe;
-        memset((u8 *)&pSceneTab->scene, 0, sizeof(zcl_sceneEntry_t));
+        memset((uint8_t *)&pSceneTab->scene, 0, sizeof(zcl_sceneEntry_t));
     }
 }
 
 _CODE_ZCL_ void zcl_scene_sceneTabClear(void)
 {
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
     	zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
     	zcl_scene_clearEntry(pSceneTab);
@@ -105,7 +105,7 @@ _CODE_ZCL_ void zcl_scene_sceneTabClear(void)
 
 _CODE_ZCL_ zcl_sceneTable_t *zcl_scene_getFreeEntry(void)
 {
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
     	zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
         if (!pSceneTab->used) {
@@ -115,9 +115,9 @@ _CODE_ZCL_ zcl_sceneTable_t *zcl_scene_getFreeEntry(void)
     return NULL;
 }
 
-_CODE_ZCL_ zcl_sceneTable_t *zcl_scene_findEntry(u8 endpoint, u16 groupId, u8 sceneId)
+_CODE_ZCL_ zcl_sceneTable_t *zcl_scene_findEntry(uint8_t endpoint, uint16_t groupId, uint8_t sceneId)
 {
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
     	zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
         if (pSceneTab->used && (pSceneTab->endpoint == endpoint)) {
@@ -129,11 +129,11 @@ _CODE_ZCL_ zcl_sceneTable_t *zcl_scene_findEntry(u8 endpoint, u16 groupId, u8 sc
     return NULL;
 }
 
-_CODE_ZCL_ u8 zcl_scene_getSceneUsedNum(void)
+_CODE_ZCL_ uint8_t zcl_scene_getSceneUsedNum(void)
 {
-    u8 cnt = 0;
+    uint8_t cnt = 0;
 
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
     	zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
     	if (pSceneTab->used) {
@@ -144,23 +144,23 @@ _CODE_ZCL_ u8 zcl_scene_getSceneUsedNum(void)
     return cnt;
 }
 
-_CODE_ZCL_ void zcl_scene_updateSceneCntAttr(u8 endpoint)
+_CODE_ZCL_ void zcl_scene_updateSceneCntAttr(uint8_t endpoint)
 {
-    u16 attrLen = 0;
-    u8 sceneCnt = 0;
+    uint16_t attrLen = 0;
+    uint8_t sceneCnt = 0;
 
-    if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_COUNT, &attrLen, (u8 *)&sceneCnt) == ZCL_STA_SUCCESS) {
+    if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_COUNT, &attrLen, (uint8_t *)&sceneCnt) == ZCL_STA_SUCCESS) {
         sceneCnt = zcl_scene_getSceneUsedNum();
 
-        zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_COUNT, (u8 *)&sceneCnt);
+        zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_COUNT, (uint8_t *)&sceneCnt);
     }
 }
 
-_CODE_ZCL_ u8 zcl_scene_findAllSceneByGroup(u8 endpoint, u16 groupId, u8 *sceneList)
+_CODE_ZCL_ uint8_t zcl_scene_findAllSceneByGroup(uint8_t endpoint, uint16_t groupId, uint8_t *sceneList)
 {
-    u8 cnt = 0;
+    uint8_t cnt = 0;
 
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
         zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
         if (pSceneTab->used && (pSceneTab->endpoint == endpoint) && (pSceneTab->scene.groupId == groupId)) {
@@ -171,7 +171,7 @@ _CODE_ZCL_ u8 zcl_scene_findAllSceneByGroup(u8 endpoint, u16 groupId, u8 *sceneL
     return cnt;
 }
 
-_CODE_ZCL_ status_t zcl_scene_addSceneEntry(u8 endpoint, zcl_sceneEntry_t *pScene)
+_CODE_ZCL_ status_t zcl_scene_addSceneEntry(uint8_t endpoint, zcl_sceneEntry_t *pScene)
 {
     zcl_sceneTable_t *pSceneEntry = zcl_scene_findEntry(endpoint, pScene->groupId, pScene->sceneId);
     if (!pSceneEntry) {
@@ -185,7 +185,7 @@ _CODE_ZCL_ status_t zcl_scene_addSceneEntry(u8 endpoint, zcl_sceneEntry_t *pScen
     /* update or add new */
     pSceneEntry->used = 1;
     pSceneEntry->endpoint = endpoint;
-    memcpy((u8 *)&pSceneEntry->scene, (u8 *)pScene, sizeof(zcl_sceneEntry_t));
+    memcpy((uint8_t *)&pSceneEntry->scene, (uint8_t *)pScene, sizeof(zcl_sceneEntry_t));
 
     /* scenes save */
     zcl_scenesSave(endpoint);
@@ -193,7 +193,7 @@ _CODE_ZCL_ status_t zcl_scene_addSceneEntry(u8 endpoint, zcl_sceneEntry_t *pScen
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_scene_removeSceneEntry(u8 endpoint, u16 groupId, u8 sceneId)
+_CODE_ZCL_ status_t zcl_scene_removeSceneEntry(uint8_t endpoint, uint16_t groupId, uint8_t sceneId)
 {
     zcl_sceneTable_t *pSceneEntry = zcl_scene_findEntry(endpoint, groupId, sceneId);
     if (pSceneEntry) {
@@ -208,10 +208,10 @@ _CODE_ZCL_ status_t zcl_scene_removeSceneEntry(u8 endpoint, u16 groupId, u8 scen
     }
 }
 
-_CODE_ZCL_ void zcl_scene_removeAllSceneEntry(u8 endpoint, u16 groupId, bool updateNV)
+_CODE_ZCL_ void zcl_scene_removeAllSceneEntry(uint8_t endpoint, uint16_t groupId, bool updateNV)
 {
     bool find = FALSE;
-    for (u8 i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_SCENE_TABLE_NUM; i++) {
         zcl_sceneTable_t *pSceneTab = &g_zcl_sceneTab[i];
 
         if (pSceneTab->used && (pSceneTab->endpoint == endpoint) && (pSceneTab->scene.groupId == groupId)) {
@@ -227,10 +227,10 @@ _CODE_ZCL_ void zcl_scene_removeAllSceneEntry(u8 endpoint, u16 groupId, bool upd
     }
 }
 
-_CODE_ZCL_ status_t zcl_scene_copySceneEntry(u8 endpoint, copyScene_t *pCopyScene)
+_CODE_ZCL_ status_t zcl_scene_copySceneEntry(uint8_t endpoint, copyScene_t *pCopyScene)
 {
-    u8 sceneCnt = 0;
-    u8 sceneList[ZCL_SCENE_TABLE_NUM] = {0};
+    uint8_t sceneCnt = 0;
+    uint8_t sceneList[ZCL_SCENE_TABLE_NUM] = {0};
     zcl_sceneTable_t *pSceneEntry = NULL;
     zcl_sceneTable_t *pSceneToEntry = NULL;
 
@@ -251,8 +251,8 @@ _CODE_ZCL_ status_t zcl_scene_copySceneEntry(u8 endpoint, copyScene_t *pCopyScen
         }
     }
 
-    u8 i = 0;
-    u8 addCnt = 0;
+    uint8_t i = 0;
+    uint8_t addCnt = 0;
 
     for (i = 0; i < sceneCnt; i++) {
         if (zcl_scene_findEntry(endpoint, pCopyScene->groupIdTo, sceneList[i]) == NULL) {
@@ -270,7 +270,7 @@ _CODE_ZCL_ status_t zcl_scene_copySceneEntry(u8 endpoint, copyScene_t *pCopyScen
         /* find source scene */
         pSceneEntry = zcl_scene_findEntry(endpoint, pCopyScene->groupIdFrom, sceneList[i]);
         if (pSceneEntry) {
-            u8 addSceneId = ZB_SCENE_CLUSTER_COPY_SCENE_MODE_ALL(pCopyScene->mode) ? sceneList[i] : pCopyScene->sceneIdTo;
+            uint8_t addSceneId = ZB_SCENE_CLUSTER_COPY_SCENE_MODE_ALL(pCopyScene->mode) ? sceneList[i] : pCopyScene->sceneIdTo;
 
             pSceneToEntry = zcl_scene_findEntry(endpoint, pCopyScene->groupIdTo, addSceneId);
             if (!pSceneToEntry) {
@@ -283,7 +283,7 @@ _CODE_ZCL_ status_t zcl_scene_copySceneEntry(u8 endpoint, copyScene_t *pCopyScen
             /* add or update */
             pSceneToEntry->used = 1;
             pSceneToEntry->endpoint = endpoint;
-            memcpy((u8 *)&pSceneToEntry->scene, (u8 *)&pSceneEntry->scene, sizeof(zcl_sceneEntry_t));
+            memcpy((uint8_t *)&pSceneToEntry->scene, (uint8_t *)&pSceneEntry->scene, sizeof(zcl_sceneEntry_t));
             pSceneToEntry->scene.sceneId = addSceneId;             //re-write scene id
             pSceneToEntry->scene.groupId = pCopyScene->groupIdTo;  //re-write group id
         }
@@ -295,18 +295,18 @@ _CODE_ZCL_ status_t zcl_scene_copySceneEntry(u8 endpoint, copyScene_t *pCopyScen
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_scene_addScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, addScene_t *pAddScene)
+_CODE_ZCL_ status_t zcl_scene_addScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, addScene_t *pAddScene)
 {
-    u8 len = 5;//group id + scene id + transition time
+    uint8_t len = 5;//group id + scene id + transition time
     len += (1 + pAddScene->scene.sceneName[0]);
     len += pAddScene->scene.extFieldLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pAddScene->scene.groupId);
     *pBuf++ = HI_UINT16(pAddScene->scene.groupId);
@@ -329,9 +329,9 @@ _CODE_ZCL_ status_t zcl_scene_addScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disabl
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_scene_viewScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, viewScene_t *pViewScene)
+_CODE_ZCL_ status_t zcl_scene_viewScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, viewScene_t *pViewScene)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = LO_UINT16(pViewScene->groupId);
     buf[1] = HI_UINT16(pViewScene->groupId);
@@ -341,9 +341,9 @@ _CODE_ZCL_ status_t zcl_scene_viewScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disab
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_removeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, removeScene_t *pRemoveScene)
+_CODE_ZCL_ status_t zcl_scene_removeScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, removeScene_t *pRemoveScene)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = LO_UINT16(pRemoveScene->groupId);
     buf[1] = HI_UINT16(pRemoveScene->groupId);
@@ -353,9 +353,9 @@ _CODE_ZCL_ status_t zcl_scene_removeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_removeAllScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, removeAllScene_t *pRemoveAllScene)
+_CODE_ZCL_ status_t zcl_scene_removeAllScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, removeAllScene_t *pRemoveAllScene)
 {
-    u8 buf[2];
+    uint8_t buf[2];
 
     buf[0] = LO_UINT16(pRemoveAllScene->groupId);
     buf[1] = HI_UINT16(pRemoveAllScene->groupId);
@@ -364,9 +364,9 @@ _CODE_ZCL_ status_t zcl_scene_removeAllScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_storeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, storeScene_t *pStoreScene)
+_CODE_ZCL_ status_t zcl_scene_storeScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, storeScene_t *pStoreScene)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = LO_UINT16(pStoreScene->groupId);
     buf[1] = HI_UINT16(pStoreScene->groupId);
@@ -376,11 +376,11 @@ _CODE_ZCL_ status_t zcl_scene_storeScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_recallScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, recallScene_t *pRecallScene)
+_CODE_ZCL_ status_t zcl_scene_recallScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, recallScene_t *pRecallScene)
 {
-    u8 buf[5];
+    uint8_t buf[5];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pRecallScene->groupId);
     *pBuf++ = HI_UINT16(pRecallScene->groupId);
@@ -394,9 +394,9 @@ _CODE_ZCL_ status_t zcl_scene_recallScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 dis
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_getSceneMemship(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getSceneMemship_t *pGetMembership)
+_CODE_ZCL_ status_t zcl_scene_getSceneMemship(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getSceneMemship_t *pGetMembership)
 {
-    u8 buf[2];
+    uint8_t buf[2];
 
     buf[0] = LO_UINT16(pGetMembership->groupId);
     buf[1] = HI_UINT16(pGetMembership->groupId);
@@ -405,9 +405,9 @@ _CODE_ZCL_ status_t zcl_scene_getSceneMemship(u8 srcEp, epInfo_t *pDstEpInfo, u8
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 2, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_copyScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, copyScene_t *pCopyScene)
+_CODE_ZCL_ status_t zcl_scene_copyScene(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, copyScene_t *pCopyScene)
 {
-    u8 buf[7];
+    uint8_t buf[7];
 
     /* If source and destination are same, don't send the command */
     if ((pCopyScene->groupIdFrom == pCopyScene->groupIdTo) && (pCopyScene->sceneIdFrom == pCopyScene->sceneIdTo)) {
@@ -426,11 +426,11 @@ _CODE_ZCL_ status_t zcl_scene_copyScene(u8 srcEp, epInfo_t *pDstEpInfo, u8 disab
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 7, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_sceneRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, u8 status, u16 groupId, u8 sceneId)
+_CODE_ZCL_ status_t zcl_scene_sceneRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, uint8_t status, uint16_t groupId, uint8_t sceneId)
 {
-    u8 buf[4];
+    uint8_t buf[4];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = status;
     *pBuf++ = LO_UINT16(groupId);
@@ -443,10 +443,10 @@ _CODE_ZCL_ status_t zcl_scene_sceneRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disabl
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_scene_viewSceneRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo,
-                                           u8 cmdId, u8 status, u16 groupId, u8 sceneId, zcl_sceneEntry_t *pEntry)
+_CODE_ZCL_ status_t zcl_scene_viewSceneRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo,
+                                           uint8_t cmdId, uint8_t status, uint16_t groupId, uint8_t sceneId, zcl_sceneEntry_t *pEntry)
 {
-    u8 len = 4;
+    uint8_t len = 4;
 
     if (status == ZCL_STA_SUCCESS) {
         if (!pEntry) {
@@ -458,19 +458,19 @@ _CODE_ZCL_ status_t zcl_scene_viewSceneRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
         len += pEntry->extFieldLen;
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = status;
     *pBuf++ = LO_UINT16(groupId);
     *pBuf++ = HI_UINT16(groupId);
     *pBuf++ = sceneId;
     if (status == ZCL_STA_SUCCESS) {
-        u16 transTime = pEntry->transTime;
+        uint16_t transTime = pEntry->transTime;
         if (cmdId == ZCL_CMD_SCENE_ENHANCED_VIEW_SCENE_RSP) {
             transTime *= 10;
             transTime += pEntry->transTime100ms;
@@ -492,21 +492,21 @@ _CODE_ZCL_ status_t zcl_scene_viewSceneRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_scene_getSceneMembershipRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getSceneMemRsp_t *pGetSceneMembershipRsp)
+_CODE_ZCL_ status_t zcl_scene_getSceneMembershipRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getSceneMemRsp_t *pGetSceneMembershipRsp)
 {
-    u8 len = 4;
+    uint8_t len = 4;
 
     if (pGetSceneMembershipRsp->status == ZCL_STA_SUCCESS) {
         len++;//scene count;
         len += pGetSceneMembershipRsp->sceneCnt;
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pGetSceneMembershipRsp->status;
     *pBuf++ = pGetSceneMembershipRsp->capacity;
@@ -526,9 +526,9 @@ _CODE_ZCL_ status_t zcl_scene_getSceneMembershipRsp(u8 srcEp, epInfo_t *pDstEpIn
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ static void zcl_addSceneParse(u8 endpoint, u8 *pData, u16 dataLen, addScene_t *pCmd)
+_CODE_ZCL_ static void zcl_addSceneParse(uint8_t endpoint, uint8_t *pData, uint16_t dataLen, addScene_t *pCmd)
 {
-    u8 *ptr = pData;
+    uint8_t *ptr = pData;
 
     pCmd->scene.groupId = BUILD_U16(pData[0], pData[1]);
     pData += 2;
@@ -536,11 +536,11 @@ _CODE_ZCL_ static void zcl_addSceneParse(u8 endpoint, u8 *pData, u16 dataLen, ad
     pCmd->scene.transTime = BUILD_U16(pData[0], pData[1]);
     pData += 2;
 
-    u8 nameLen = *pData++;
+    uint8_t nameLen = *pData++;
 
     bool nameSupport = FALSE;
-    u16 attrLen = 0;
-    zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_NAME_SUPPORT, &attrLen, (u8 *)&nameSupport);
+    uint16_t attrLen = 0;
+    zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_NAME_SUPPORT, &attrLen, (uint8_t *)&nameSupport);
 
     if (nameSupport) {
         pCmd->scene.sceneName[0] = (nameLen > (ZCL_MAX_SCENE_NAME_LEN - 1)) ? (ZCL_MAX_SCENE_NAME_LEN - 1) : nameLen;
@@ -557,9 +557,9 @@ _CODE_ZCL_ static void zcl_addSceneParse(u8 endpoint, u8 *pData, u16 dataLen, ad
     }
 }
 
-_CODE_ZCL_ static void zcl_viewSceneRspParse(u8 *pData, u16 dataLen, viewSceneRsp_t *pCmd)
+_CODE_ZCL_ static void zcl_viewSceneRspParse(uint8_t *pData, uint16_t dataLen, viewSceneRsp_t *pCmd)
 {
-    u8 *ptr = pData;
+    uint8_t *ptr = pData;
 
     pCmd->status = *pData++;
     pCmd->scene.groupId = BUILD_U16(pData[0], pData[1]);
@@ -568,7 +568,7 @@ _CODE_ZCL_ static void zcl_viewSceneRspParse(u8 *pData, u16 dataLen, viewSceneRs
     if (pCmd->status == ZCL_STA_SUCCESS) {
         pCmd->scene.transTime = BUILD_U16(pData[0], pData[1]);
         pData += 2;
-        u8 nameLen = *pData++;
+        uint8_t nameLen = *pData++;
         pCmd->scene.sceneName[0] = (nameLen > (ZCL_MAX_SCENE_NAME_LEN - 1)) ? (ZCL_MAX_SCENE_NAME_LEN - 1) : nameLen;
         memcpy(&pCmd->scene.sceneName[1], pData, pCmd->scene.sceneName[0]);
 
@@ -583,7 +583,7 @@ _CODE_ZCL_ static void zcl_viewSceneRspParse(u8 *pData, u16 dataLen, viewSceneRs
     }
 }
 
-_CODE_ZCL_ static void zcl_getSceneMembershipRspParse(u8 *pData, getSceneMemRsp_t *pCmd)
+_CODE_ZCL_ static void zcl_getSceneMembershipRspParse(uint8_t *pData, getSceneMemRsp_t *pCmd)
 {
     pCmd->status = *pData++;
     pCmd->capacity = *pData++;
@@ -597,13 +597,13 @@ _CODE_ZCL_ static void zcl_getSceneMembershipRspParse(u8 *pData, getSceneMemRsp_
 
 _CODE_ZCL_ static status_t zcl_addScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 cmdId = pInMsg->hdr.cmd;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t cmdId = pInMsg->hdr.cmd;
 
     addScene_t addScene;
-    TL_SETSTRUCTCONTENT(addScene, 0);
+    ZB_SETSTRUCTCONTENT(addScene, 0);
 
     zcl_addSceneParse(endpoint, pInMsg->pData, pInMsg->dataLen, &addScene);
 
@@ -621,7 +621,7 @@ _CODE_ZCL_ static status_t zcl_addScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -638,11 +638,11 @@ _CODE_ZCL_ static status_t zcl_addScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_viewScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 cmdId = pInMsg->hdr.cmd;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t cmdId = pInMsg->hdr.cmd;
+    uint8_t *pData = pInMsg->pData;
 
     viewScene_t viewScene;
     viewScene.groupId = BUILD_U16(pData[0], pData[1]);
@@ -663,7 +663,7 @@ _CODE_ZCL_ static status_t zcl_viewScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -682,10 +682,10 @@ _CODE_ZCL_ static status_t zcl_viewScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_removeScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t *pData = pInMsg->pData;
 
     removeScene_t removeScene;
     removeScene.groupId = BUILD_U16(pData[0], pData[1]);
@@ -702,7 +702,7 @@ _CODE_ZCL_ static status_t zcl_removeScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -719,9 +719,9 @@ _CODE_ZCL_ static status_t zcl_removeScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_removeAllScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     removeAllScene_t removeAllScene;
     removeAllScene.groupId = BUILD_U16(pInMsg->pData[0], pInMsg->pData[1]);
@@ -734,7 +734,7 @@ _CODE_ZCL_ static status_t zcl_removeAllScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -751,10 +751,10 @@ _CODE_ZCL_ static status_t zcl_removeAllScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_storeScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t *pData = pInMsg->pData;
 
     storeScene_t storeScene;
     storeScene.groupId = BUILD_U16(pData[0], pData[1]);
@@ -783,23 +783,23 @@ _CODE_ZCL_ static status_t zcl_storeScenePrc(zclIncoming_t *pInMsg)
                 pSceneEntry->scene.sceneId = storeScene.sceneId;
 
                 /* update scene attributes */
-                u16 attrLen = 0;
-                u8 currentScene = 0;
-                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, &attrLen, (u8 *)&currentScene) == ZCL_STA_SUCCESS) {
+                uint16_t attrLen = 0;
+                uint8_t currentScene = 0;
+                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, &attrLen, (uint8_t *)&currentScene) == ZCL_STA_SUCCESS) {
                     currentScene = storeScene.sceneId;
-                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, (u8 *)&currentScene);
+                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, (uint8_t *)&currentScene);
                 }
 
-                u16 currentGroup = 0;
-                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, &attrLen, (u8 *)&currentGroup) == ZCL_STA_SUCCESS) {
+                uint16_t currentGroup = 0;
+                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, &attrLen, (uint8_t *)&currentGroup) == ZCL_STA_SUCCESS) {
                     currentGroup = storeScene.groupId;
-                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, (u8 *)&currentGroup);
+                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, (uint8_t *)&currentGroup);
                 }
 
-                u8 sceneValid = 0;
-                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (u8 *)&sceneValid) == ZCL_STA_SUCCESS) {
+                uint8_t sceneValid = 0;
+                if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (uint8_t *)&sceneValid) == ZCL_STA_SUCCESS) {
                     sceneValid = 1;
-                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (u8 *)&sceneValid);
+                    zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (uint8_t *)&sceneValid);
                 }
 
                 /* scenes save */
@@ -814,7 +814,7 @@ _CODE_ZCL_ static status_t zcl_storeScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -831,13 +831,13 @@ _CODE_ZCL_ static status_t zcl_storeScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_recallScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t *pData = pInMsg->pData;
 
     recallScene_t recallScene;
-    TL_SETSTRUCTCONTENT(recallScene, 0);
+    ZB_SETSTRUCTCONTENT(recallScene, 0);
 
     recallScene.groupId = BUILD_U16(pData[0], pData[1]);
     pData += 2;
@@ -852,8 +852,8 @@ _CODE_ZCL_ static status_t zcl_recallScenePrc(zclIncoming_t *pInMsg)
     if (pSceneEntry) {
         if (pInMsg->clusterAppCb) {
             /* store transTime */
-            u16 transTime = pSceneEntry->scene.transTime;
-            u16 transTime100ms = pSceneEntry->scene.transTime100ms;
+            uint16_t transTime = pSceneEntry->scene.transTime;
+            uint16_t transTime100ms = pSceneEntry->scene.transTime100ms;
             if (recallScene.transTime != 0xFFFF) {
                 pSceneEntry->scene.transTime = recallScene.transTime / 10;
                 pSceneEntry->scene.transTime100ms = recallScene.transTime % 10;
@@ -866,23 +866,23 @@ _CODE_ZCL_ static status_t zcl_recallScenePrc(zclIncoming_t *pInMsg)
             pSceneEntry->scene.transTime100ms = transTime100ms;
 
             /* update scene attributes */
-            u16 attrLen = 0;
-            u8 currentScene = 0;
-            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, &attrLen, (u8 *)&currentScene) == ZCL_STA_SUCCESS) {
+            uint16_t attrLen = 0;
+            uint8_t currentScene = 0;
+            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, &attrLen, (uint8_t *)&currentScene) == ZCL_STA_SUCCESS) {
                 currentScene = recallScene.sceneId;
-                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, (u8 *)&currentScene);
+                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_SCENE, (uint8_t *)&currentScene);
             }
 
-            u16 currentGroup = 0;
-            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, &attrLen, (u8 *)&currentGroup) == ZCL_STA_SUCCESS) {
+            uint16_t currentGroup = 0;
+            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, &attrLen, (uint8_t *)&currentGroup) == ZCL_STA_SUCCESS) {
                 currentGroup = recallScene.groupId;
-                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, (u8 *)&currentGroup);
+                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_CURRENT_GROUP, (uint8_t *)&currentGroup);
             }
 
-            u8 sceneValid = 0;
-            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (u8 *)&sceneValid) == ZCL_STA_SUCCESS) {
+            uint8_t sceneValid = 0;
+            if (zcl_getAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, &attrLen, (uint8_t *)&sceneValid) == ZCL_STA_SUCCESS) {
                 sceneValid = 1;
-                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (u8 *)&sceneValid);
+                zcl_setAttrVal(endpoint, ZCL_CLUSTER_GEN_SCENES, ZCL_ATTRID_SCENE_SCENE_VALID, (uint8_t *)&sceneValid);
             }
         }
     }
@@ -892,15 +892,15 @@ _CODE_ZCL_ static status_t zcl_recallScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_getSceneMembershipPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     getSceneMemship_t getSceneMembership;
     getSceneMembership.groupId = BUILD_U16(pInMsg->pData[0], pInMsg->pData[1]);
 
-    u8 sceneCnt = 0;
-    u8 sceneList[ZCL_SCENE_TABLE_NUM] = {0};
+    uint8_t sceneCnt = 0;
+    uint8_t sceneList[ZCL_SCENE_TABLE_NUM] = {0};
 
     if ((getSceneMembership.groupId == 0) || aps_group_search(getSceneMembership.groupId, endpoint)) {
         sceneCnt = zcl_scene_findAllSceneByGroup(endpoint, getSceneMembership.groupId, sceneList);
@@ -910,7 +910,7 @@ _CODE_ZCL_ static status_t zcl_getSceneMembershipPrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         getSceneMemRsp_t getSceneMembershipRsp;
         getSceneMembershipRsp.status = status;
@@ -934,10 +934,10 @@ _CODE_ZCL_ static status_t zcl_getSceneMembershipPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_copyScenePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
-    u8 *pData = pInMsg->pData;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t *pData = pInMsg->pData;
 
     copyScene_t copyScene;
     copyScene.mode = *pData++;
@@ -957,7 +957,7 @@ _CODE_ZCL_ static status_t zcl_copyScenePrc(zclIncoming_t *pInMsg)
 
     if (UNICAST_MSG(pApsdeInd)) {
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -974,7 +974,7 @@ _CODE_ZCL_ static status_t zcl_copyScenePrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_scene_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_SCENE_ADD_SCENE:
@@ -1013,11 +1013,11 @@ _CODE_ZCL_ static status_t zcl_scene_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_scene_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     zcl_scene_cmdPayload_t cmdPayload;
-    memset((u8 *)&cmdPayload, 0, sizeof(zcl_scene_cmdPayload_t));
+    memset((uint8_t *)&cmdPayload, 0, sizeof(zcl_scene_cmdPayload_t));
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_SCENE_ADD_SCENE_RSP:

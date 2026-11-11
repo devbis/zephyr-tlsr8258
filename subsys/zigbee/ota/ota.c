@@ -48,9 +48,9 @@
  */
 typedef struct _attribute_packed_ {
     addrExt_t extAddr;
-    u16 profileId;
-    u8 endpoint;
-    u8 txOptions;
+    uint16_t profileId;
+    uint8_t endpoint;
+    uint8_t txOptions;
 } ota_serverAddr_t;
 
 typedef struct _attribute_packed_ {
@@ -59,16 +59,16 @@ typedef struct _attribute_packed_ {
 } ota_updateInfo_t;
 
 #if 0
-u8 ota_imageNotifyHandler(apsdeDataInd_t *pInd, ota_imageNotify_t *pImageNotify);
-u8 ota_queryNextImageReqHandler(apsdeDataInd_t *pInd, ota_queryNextImageReq_t *pQueryNextImageReq);
-u8 ota_queryNextImageRspHandler(apsdeDataInd_t *pInd, ota_queryNextImageRsp_t *pQueryNextImageRsp);
-u8 ota_imageBlockReqHandler(apsdeDataInd_t *pInd, ota_imageBlockReq_t *pImageBlockReq);
-u8 ota_imagePageReqHandler(apsdeDataInd_t *pInd, ota_imagePageReq_t *pImagePageReq);
-u8 ota_imageBlockRspHandler(apsdeDataInd_t *pInd, ota_imageBlockRsp_t *pImageBlockRsp);
-u8 ota_upgradeEndReqHandler(apsdeDataInd_t *pInd, ota_upgradeEndReq_t *pUpgradeEndReq);
-u8 ota_upgradeEndRspHandler(apsdeDataInd_t *pInd, ota_upgradeEndRsp_t *pUpgradeEndRsp);
-u8 ota_queryDevSpecFileReqHandler(apsdeDataInd_t *pInd, ota_querySpecFileReq_t *pQueryDevSpecFileReq);
-u8 ota_queryDevSpecFileRspHandler(apsdeDataInd_t *pInd, ota_querySpecFileRsp_t *pQueryDevSpecFileRsp);
+uint8_t ota_imageNotifyHandler(apsdeDataInd_t *pInd, ota_imageNotify_t *pImageNotify);
+uint8_t ota_queryNextImageReqHandler(apsdeDataInd_t *pInd, ota_queryNextImageReq_t *pQueryNextImageReq);
+uint8_t ota_queryNextImageRspHandler(apsdeDataInd_t *pInd, ota_queryNextImageRsp_t *pQueryNextImageRsp);
+uint8_t ota_imageBlockReqHandler(apsdeDataInd_t *pInd, ota_imageBlockReq_t *pImageBlockReq);
+uint8_t ota_imagePageReqHandler(apsdeDataInd_t *pInd, ota_imagePageReq_t *pImagePageReq);
+uint8_t ota_imageBlockRspHandler(apsdeDataInd_t *pInd, ota_imageBlockRsp_t *pImageBlockRsp);
+uint8_t ota_upgradeEndReqHandler(apsdeDataInd_t *pInd, ota_upgradeEndReq_t *pUpgradeEndReq);
+uint8_t ota_upgradeEndRspHandler(apsdeDataInd_t *pInd, ota_upgradeEndRsp_t *pUpgradeEndRsp);
+uint8_t ota_queryDevSpecFileReqHandler(apsdeDataInd_t *pInd, ota_querySpecFileReq_t *pQueryDevSpecFileReq);
+uint8_t ota_queryDevSpecFileRspHandler(apsdeDataInd_t *pInd, ota_querySpecFileRsp_t *pQueryDevSpecFileRsp);
 
 zcl_ota_AppCallbacks_t zcl_otaCb = {
     ota_imageNotifyHandler,
@@ -88,11 +88,11 @@ zcl_ota_AppCallbacks_t zcl_otaCb = {
  * GLOBAL VARIABLES
  */
 
-const u8 otaHdrMagic[] = {
+const uint8_t otaHdrMagic[] = {
     0x1e, 0xf1, 0xee, 0x0b
 };
 
-const u8 otaAesKey[16] = {
+const uint8_t otaAesKey[16] = {
     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
     0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff
 };
@@ -119,12 +119,12 @@ ev_timer_event_t otaTimer;
 /**********************************************************************
  * FUNCTIONS
  */
-void ota_queryNextImageReq(u8 dstEp, u16 dstAddr, u16 profileId);
-void ota_imageBlockReq(u8 dstEp, u16 dstAddr, u16 profileId);
+void ota_queryNextImageReq(uint8_t dstEp, uint16_t dstAddr, uint16_t profileId);
+void ota_imageBlockReq(uint8_t dstEp, uint16_t dstAddr, uint16_t profileId);
 void ota_sendImageBlockReq(void *arg);
 void ota_upgradeEndReqSend(ota_upgradeEndReq_t *req);
-void ota_upgradeWait(u32 seconds);
-void ota_upgradeComplete(u8 status);
+void ota_upgradeWait(uint32_t seconds);
+void ota_upgradeComplete(uint8_t status);
 
 static const struct flash_area *ota_slotArea(void)
 {
@@ -138,7 +138,7 @@ static const struct flash_area *ota_slotArea(void)
 }
 
 /* Erase size of the first sector of the slot, 0 if it cannot be determined. */
-static u32 ota_slotSectorSize(void)
+static uint32_t ota_slotSectorSize(void)
 {
     const struct flash_area *fa = ota_slotArea();
     struct flash_sector sector;
@@ -159,9 +159,9 @@ static u32 ota_slotSectorSize(void)
 }
 
 /* Largest image the slot takes, 0 if the flash geometry is unknown. */
-static u32 ota_slotImageMaxSize(void)
+static uint32_t ota_slotImageMaxSize(void)
 {
-    u32 sectorSize = ota_slotSectorSize();
+    uint32_t sectorSize = ota_slotSectorSize();
 
     if (sectorSize == 0) {
         return 0;
@@ -171,7 +171,7 @@ static u32 ota_slotImageMaxSize(void)
 }
 
 /* Reads the slot; an unreadable range reads as erased flash. */
-static void ota_slotRead(u32 pos, u32 len, u8 *buf)
+static void ota_slotRead(uint32_t pos, uint32_t len, uint8_t *buf)
 {
     const struct flash_area *fa = ota_slotArea();
 
@@ -180,12 +180,12 @@ static void ota_slotRead(u32 pos, u32 len, u8 *buf)
     }
 }
 
-static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
+static bool ota_slotWrite(uint32_t pos, const uint8_t *data, uint32_t len)
 {
     const struct flash_area *fa = ota_slotArea();
-    u32 sectorSize = ota_slotSectorSize();
-    u8 check[32];
-    u32 end = pos + len;
+    uint32_t sectorSize = ota_slotSectorSize();
+    uint8_t check[32];
+    uint32_t end = pos + len;
 
     if (fa == NULL || sectorSize == 0 || end > ota_slotImageMaxSize() || !zb_flash_vdd_ok()) {
         return FALSE;
@@ -193,7 +193,7 @@ static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
 
     if (pos == 0) {
         /* leave the swap trailer area of the slot erased for MCUboot */
-        for (u32 i = OTA_SLOT_TRAILER_SECTORS; i > 0; i--) {
+        for (uint32_t i = OTA_SLOT_TRAILER_SECTORS; i > 0; i--) {
             if (flash_area_erase(fa, OTA_SLOT_SIZE - i * sectorSize, sectorSize) != 0) {
                 return FALSE;
             }
@@ -201,7 +201,7 @@ static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
     }
 
     /* erase each sector right before the first byte lands in it */
-    for (u32 sector = ROUND_UP(pos, sectorSize); sector < end; sector += sectorSize) {
+    for (uint32_t sector = ROUND_UP(pos, sectorSize); sector < end; sector += sectorSize) {
         if (flash_area_erase(fa, sector, sectorSize) != 0) {
             return FALSE;
         }
@@ -211,8 +211,8 @@ static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
         return FALSE;
     }
 
-    for (u32 off = 0; off < len; off += sizeof(check)) {
-        u32 n = MIN(len - off, sizeof(check));
+    for (uint32_t off = 0; off < len; off += sizeof(check)) {
+        uint32_t n = MIN(len - off, sizeof(check));
 
         ota_slotRead(pos + off, n, check);
         if (memcmp(check, data + off, n) != 0) {
@@ -226,9 +226,9 @@ static bool ota_slotWrite(u32 pos, const u8 *data, u32 len)
 /* The downloaded slot must hold an MCUboot image header that fits the slot. */
 static bool ota_slotImageValid(void)
 {
-    u32 hdr[4];
+    uint32_t hdr[4];
 
-    ota_slotRead(0, sizeof(hdr), (u8 *)hdr);
+    ota_slotRead(0, sizeof(hdr), (uint8_t *)hdr);
     if (hdr[0] != OTA_MCUBOOT_IMAGE_MAGIC) {
         return FALSE;
     }
@@ -266,7 +266,7 @@ static ev_timer_event_t otaConfirmTimer;
  * @brief		server IEEE address preprogrammed for application
  *
  */
-void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, u8 srvEndPoint)
+void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, uint8_t srvEndPoint)
 {
     if (ZB_IEEE_ADDR_IS_INVALID(zcl_attr_upgradeServerID)) {
         g_otaCtx.otaServerEpInfo.dstEp = srvEndPoint;
@@ -274,13 +274,13 @@ void ota_serverAddrPerprogrammed(addrExt_t ieeeAddr, u8 srvEndPoint)
     }
 }
 
-u8 ota_loadImageInfo(ota_hdrFields_t *oh)
+uint8_t ota_loadImageInfo(ota_hdrFields_t *oh)
 {
     ota_hdrFields_t *lh = oh;
     ota_hdrFields_t hdr;
     if (!lh) {
         lh = &hdr;
-        ota_slotRead(0, sizeof(hdr), (u8 *)&hdr);
+        ota_slotRead(0, sizeof(hdr), (uint8_t *)&hdr);
     }
     if (lh->otaUpgradeFileID == OTA_UPGRADE_FILE_ID) {
         otaServerBinInfo.fileVer = lh->fileVer;
@@ -298,10 +298,10 @@ void ota_clientInfoRecover(void)
     //TODO: read the download code OTA file header
     ota_updateInfo_t *pInfo = (ota_updateInfo_t *)ev_buf_allocate(sizeof(ota_updateInfo_t));
     if (pInfo) {
-        if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (u8 *)pInfo) == NV_SUCC) {
+        if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (uint8_t *)pInfo) == NV_SUCC) {
             if (pInfo->hdrInfo.otaUpgradeFileID == OTA_UPGRADE_FILE_ID) {
-                if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE, sizeof(ota_clientInfo_t), (u8 *)&otaClientInfo) != NV_SUCC) {
-                    ev_buf_free((u8 *)pInfo);
+                if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE, sizeof(ota_clientInfo_t), (uint8_t *)&otaClientInfo) != NV_SUCC) {
+                    ev_buf_free((uint8_t *)pInfo);
                     return;
                 }
 
@@ -320,7 +320,7 @@ void ota_clientInfoRecover(void)
             }
         }
 
-        ev_buf_free((u8 *)pInfo);
+        ev_buf_free((uint8_t *)pInfo);
     }
 }
 
@@ -332,9 +332,9 @@ void ota_init(ota_type_e type, af_simple_descriptor_t *simpleDesc, ota_preamble_
 {
     otaCb = cb;
 
-    memset((u8 *)&g_otaCtx, 0, sizeof(g_otaCtx));
-    memset((u8 *)&otaClientInfo, 0, sizeof(otaClientInfo));
-    memset((u8 *)&otaServerBinInfo, 0, sizeof(otaServerBinInfo));
+    memset((uint8_t *)&g_otaCtx, 0, sizeof(g_otaCtx));
+    memset((uint8_t *)&otaClientInfo, 0, sizeof(otaClientInfo));
+    memset((uint8_t *)&otaServerBinInfo, 0, sizeof(otaServerBinInfo));
 
     g_otaCtx.isOtaServer = (type == OTA_TYPE_SERVER) ? TRUE : FALSE;
     g_otaCtx.simpleDesc = simpleDesc;
@@ -366,7 +366,7 @@ void ota_init(ota_type_e type, af_simple_descriptor_t *simpleDesc, ota_preamble_
 }
 
 #ifdef ZCL_WWAH
-void ota_wwah_useTrustCenter(u8 endpoint)
+void ota_wwah_useTrustCenter(uint8_t endpoint)
 {
     if (!ZB_IEEE_ADDR_CMP(zcl_attr_upgradeServerID, ss_ib.trust_center_address)) {
         ZB_IEEE_ADDR_INVALID(zcl_attr_upgradeServerID);
@@ -380,23 +380,23 @@ void ota_wwah_useTrustCenter(u8 endpoint)
 
     ota_updateInfo_t *pInfo = (ota_updateInfo_t *)ev_buf_allocate(sizeof(ota_updateInfo_t));
     if (pInfo) {
-        if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (u8 *)pInfo) == NV_SUCC) {
+        if (nv_flashReadNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (uint8_t *)pInfo) == NV_SUCC) {
             if (ZB_IEEE_ADDR_CMP(pInfo->otaServerAddrInfo.extAddr, ss_ib.trust_center_address) &&
                (pInfo->otaServerAddrInfo.endpoint == endpoint)) {
-                ev_buf_free((u8 *)pInfo);
+                ev_buf_free((uint8_t *)pInfo);
                 return;
             }
         }
 
-        memset((u8 *)pInfo, 0, sizeof(ota_updateInfo_t));
+        memset((uint8_t *)pInfo, 0, sizeof(ota_updateInfo_t));
 
         pInfo->otaServerAddrInfo.endpoint = endpoint;
         pInfo->otaServerAddrInfo.profileId = HA_PROFILE_ID;
         ZB_IEEE_ADDR_COPY(pInfo->otaServerAddrInfo.extAddr, ss_ib.trust_center_address);
 
-        nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (u8 *)pInfo);
+        nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (uint8_t *)pInfo);
 
-        ev_buf_free((u8 *)pInfo);
+        ev_buf_free((uint8_t *)pInfo);
     }
 }
 #endif
@@ -431,19 +431,19 @@ static void ota_ieeeAddrRspCb(void *arg)
     }
 }
 
-static void ota_ieeeAddrReq(u16 dstAddr)
+static void ota_ieeeAddrReq(uint16_t dstAddr)
 {
     zdo_ieee_addr_req_t pReq;
-    u8 sn = 0;
+    uint8_t sn = 0;
     pReq.nwk_addr_interest = dstAddr;
     pReq.req_type = ZDO_ADDR_REQ_SINGLE_RESP;
     pReq.start_index = 0;
     zb_zdoIeeeAddrReq(dstAddr, &pReq, &sn, ota_ieeeAddrRspCb);
 }
 
-static s32 ota_ieeeAddrRspWait(void *arg)
+static int32_t ota_ieeeAddrRspWait(void *arg)
 {
-    static u8 cnt = 0;
+    static uint8_t cnt = 0;
 
     if (++cnt >= OTA_IEEE_ADDR_REQ_RETRIES) {
         cnt = 0;
@@ -468,7 +468,7 @@ static void ota_ieeeAddrReqSend(void *arg)
     ev_on_timer(&otaTimer, OTA_IEEE_ADDR_RSP_WAIT_TIME * 1000);
 }
 
-static s32 ota_queryNextImageReqDelay(void *arg)
+static int32_t ota_queryNextImageReqDelay(void *arg)
 {
     ota_queryNextImageReq(g_otaCtx.otaServerEpInfo.dstEp, g_otaCtx.otaServerEpInfo.dstAddr.shortAddr, g_otaCtx.otaServerEpInfo.profileId);
     return -1;
@@ -489,12 +489,12 @@ static void ota_matchDescRspCb(void *arg)
         ota_ieeeAddrReq(g_otaCtx.otaServerEpInfo.dstAddr.shortAddr);   //ota_ieeeAddrReqSend(NULL);
 
         if (otaClientInfo.clientOtaFlg == OTA_FLAG_INIT_DONE) {
-            TL_ZB_TIMER_SCHEDULE(ota_queryNextImageReqDelay, NULL, 500);
+            ZB_TIMER_SCHEDULE(ota_queryNextImageReqDelay, NULL, 500);
         }
     }
 }
 
-static void ota_clusterMatchReq(u16 dstAddr)
+static void ota_clusterMatchReq(uint16_t dstAddr)
 {
     zdo_match_descriptor_req_t *pReq = (zdo_match_descriptor_req_t *)ev_buf_allocate(6+2);
     if (pReq) {
@@ -504,10 +504,10 @@ static void ota_clusterMatchReq(u16 dstAddr)
         pReq->num_out_clusters = 0;
         pReq->cluster_list[0] = ZCL_CLUSTER_OTA;
 
-        u8 sn = 0;
+        uint8_t sn = 0;
         zb_zdoMatchDescReq(dstAddr, pReq, &sn, ota_matchDescRspCb);
 
-        ev_buf_free((u8 *)pReq);
+        ev_buf_free((uint8_t *)pReq);
     }
 }
 
@@ -535,7 +535,7 @@ static void ota_nwkAddrReqCb(void *arg)
 
 static void ota_nwkAddrReq(addrExt_t extAddr)
 {
-    u8 sn = 0;
+    uint8_t sn = 0;
     zdo_nwk_addr_req_t req;
     ZB_IEEE_ADDR_COPY(req.ieee_addr_interest, extAddr);
     req.req_type = ZDO_ADDR_REQ_SINGLE_RESP;
@@ -543,17 +543,17 @@ static void ota_nwkAddrReq(addrExt_t extAddr)
     zb_zdoNwkAddrReq(NWK_BROADCAST_ROUTER_COORDINATOR, &req, &sn, ota_nwkAddrReqCb);
 }
 
-s32 ota_periodicQueryServerCb(void *arg)
+int32_t ota_periodicQueryServerCb(void *arg)
 {
-    u16 seconds = ((u32)arg) & 0xffff;
+    uint16_t seconds = ((uint32_t)arg) & 0xffff;
 
     if (otaClientInfo.clientOtaFlg == OTA_FLAG_INIT_DONE) {
         if (ZB_IEEE_ADDR_IS_INVALID(zcl_attr_upgradeServerID)) {
             //Match descriptor request cmd
             ota_clusterMatchReq(NWK_BROADCAST_RX_ON_WHEN_IDLE);
         } else {
-            u16 dstAddr = NWK_BROADCAST_RESERVED;
-            u8 ret = zb_getNwkAddrByExtAddr(zcl_attr_upgradeServerID, &dstAddr);
+            uint16_t dstAddr = NWK_BROADCAST_RESERVED;
+            uint8_t ret = zb_getNwkAddrByExtAddr(zcl_attr_upgradeServerID, &dstAddr);
 
             if ((ret == SUCCESS) && (dstAddr == g_otaCtx.otaServerEpInfo.dstAddr.shortAddr)) {
                 ota_queryNextImageReq(g_otaCtx.otaServerEpInfo.dstEp, g_otaCtx.otaServerEpInfo.dstAddr.shortAddr, g_otaCtx.otaServerEpInfo.profileId);
@@ -581,14 +581,14 @@ s32 ota_periodicQueryServerCb(void *arg)
  * @param		period - in seconds
  *
  */
-void ota_queryStart(u16 seconds)
+void ota_queryStart(uint16_t seconds)
 {
     if (!g_otaCtx.isOtaServer) {
         if (!ev_timer_exist(&otaTimer)) {
             otaTimer.cb = ota_periodicQueryServerCb;
-            otaTimer.data = (void *)((u32)seconds);
+            otaTimer.data = (void *)((uint32_t)seconds);
 
-            u16 jitter = 0;
+            uint16_t jitter = 0;
             do {
                 jitter = zb_random() % OTA_QUERY_START_JITTER;
             } while (jitter == 0);
@@ -598,11 +598,11 @@ void ota_queryStart(u16 seconds)
     }
 }
 
-void ota_upgradeComplete(u8 status)
+void ota_upgradeComplete(uint8_t status)
 {
     /* shall free this buffer */
     if (pOtaUpdateInfo) {
-        ev_buf_free((u8 *)pOtaUpdateInfo);
+        ev_buf_free((uint8_t *)pOtaUpdateInfo);
         pOtaUpdateInfo = NULL;
     }
 
@@ -626,7 +626,7 @@ void ota_upgradeComplete(u8 status)
         if (status == ZCL_STA_INVALID_IMAGE) {
             nv_resetModule(NV_MODULE_OTA);
 
-            memset((u8 *)&otaClientInfo, 0, sizeof(otaClientInfo));
+            memset((uint8_t *)&otaClientInfo, 0, sizeof(otaClientInfo));
             otaClientInfo.clientOtaFlg = OTA_FLAG_INIT_DONE;
             otaClientInfo.crcValue = 0xffffffff;
 
@@ -651,7 +651,7 @@ void ota_upgradeAbort(void)
     ota_upgradeComplete(ZCL_STA_ABORT);
 }
 
-s32 ota_imageBlockRspWait(void *arg)
+int32_t ota_imageBlockRspWait(void *arg)
 {
     if (++g_otaCtx.imageBlockRetry >= OTA_MAX_IMAGE_BLOCK_RETRIES) {
         //send a failed upgrade end req
@@ -665,16 +665,16 @@ s32 ota_imageBlockRspWait(void *arg)
         ota_upgradeEndReqSend(&req);
 
         /*
-         * Notes: must not call ota_upgradeComplete directly, use TL_SCHEDULE_TASK() to achieve it
+         * Notes: must not call ota_upgradeComplete directly, use ZB_SCHEDULE_TASK() to achieve it
          * The function "ota_imageBlockRspWait" is the callback of the timer event otaTimer,
          * so that the timer event(otaTimer) modified via otaCb->processMsgCbFunc():ota_queryStart()
          * will be killed when it returns -1.
          *
          * */
-        TL_SCHEDULE_TASK(ota_imageBlockRspTimeout, NULL);  //ota_upgradeComplete(ZCL_STA_ABORT);
+        ZB_SCHEDULE_TASK(ota_imageBlockRspTimeout, NULL);  //ota_upgradeComplete(ZCL_STA_ABORT);
     } else {
         //send another image block req
-        TL_SCHEDULE_TASK(ota_sendImageBlockReq, NULL);
+        ZB_SCHEDULE_TASK(ota_sendImageBlockReq, NULL);
     }
 
     return -1;
@@ -690,9 +690,9 @@ void sendImageBlockReq(void *arg)
     ev_on_timer(&otaTimer, OTA_MAX_IMAGE_BLOCK_RSP_WAIT_TIME * 1000);
 }
 
-s32 ota_sendImageBlockReqDelay(void *arg)
+int32_t ota_sendImageBlockReqDelay(void *arg)
 {
-    TL_SCHEDULE_TASK(sendImageBlockReq, NULL);
+    ZB_SCHEDULE_TASK(sendImageBlockReq, NULL);
     return -1;
 }
 
@@ -710,16 +710,16 @@ void ota_sendImageBlockReq(void *arg)
     }
 }
 
-s32 ota_imageBlockWaitCb(void *arg)
+int32_t ota_imageBlockWaitCb(void *arg)
 {
     if (zcl_attr_imageUpgradeStatus == IMAGE_UPGRADE_STATUS_DOWNLOAD_IN_PROGRESS) {
-        TL_SCHEDULE_TASK(sendImageBlockReq, NULL);
+        ZB_SCHEDULE_TASK(sendImageBlockReq, NULL);
     }
 
     return -1;
 }
 
-void ota_imageBlockWait(u32 seconds)
+void ota_imageBlockWait(uint32_t seconds)
 {
     if (seconds) {
         otaTimer.cb = ota_imageBlockWaitCb;
@@ -742,7 +742,7 @@ void ota_upgradeWithWait(void *arg)
     ota_upgradeEndReqSend(&req);
 
     //restart the timer for another hour
-    u32 time = (u32)arg;
+    uint32_t time = (uint32_t)arg;
     ota_upgradeWait(time);
 }
 
@@ -752,7 +752,7 @@ void ota_upgrade(void)
         if (++g_otaCtx.upgradeEndRetry >= OTA_MAX_UPGRADE_END_REQ_RETRIES) {
             ota_upgradeComplete(ZCL_STA_SUCCESS);
         } else {
-            TL_SCHEDULE_TASK(ota_upgradeWithWait, (void *)OTA_MAX_IMAGE_BLOCK_RSP_WAIT_TIME);
+            ZB_SCHEDULE_TASK(ota_upgradeWithWait, (void *)OTA_MAX_IMAGE_BLOCK_RSP_WAIT_TIME);
         }
     } else if (zcl_attr_imageUpgradeStatus == IMAGE_UPGRADE_STATUS_COUNT_DOWN) {
         ota_upgradeComplete(ZCL_STA_SUCCESS);
@@ -761,18 +761,18 @@ void ota_upgrade(void)
             ota_upgradeComplete(ZCL_STA_SUCCESS);
         } else {
             //send another upgrade end req
-            TL_SCHEDULE_TASK(ota_upgradeWithWait, (void *)3600);
+            ZB_SCHEDULE_TASK(ota_upgradeWithWait, (void *)3600);
         }
     }
 }
 
-s32 ota_upgradeWaitCb(void *arg)
+int32_t ota_upgradeWaitCb(void *arg)
 {
     ota_upgrade();
     return -1;
 }
 
-void ota_upgradeWait(u32 seconds)
+void ota_upgradeWait(uint32_t seconds)
 {
     if (seconds) {
         otaTimer.cb = ota_upgradeWaitCb;
@@ -783,7 +783,7 @@ void ota_upgradeWait(u32 seconds)
     }
 }
 
-bool ota_fileIdCmp(u16 currManuCode, u16 newManuCode, u16 currImageType, u16 newImageType, u32 currFileVer, u32 newFileVer)
+bool ota_fileIdCmp(uint16_t currManuCode, uint16_t newManuCode, uint16_t currImageType, uint16_t newImageType, uint32_t currFileVer, uint32_t newFileVer)
 {
     if ((currManuCode == 0xFFFF) || (newManuCode == 0xFFFF) || (currManuCode == newManuCode)) {
         if ((currImageType == 0xFFFF) || (newImageType == 0xFFFF) || (currImageType == newImageType)) {
@@ -798,16 +798,16 @@ bool ota_fileIdCmp(u16 currManuCode, u16 newManuCode, u16 currImageType, u16 new
 
 void ota_saveUpdateInfo2NV(void *arg)
 {
-    static u8 cnt = 0;
+    static uint8_t cnt = 0;
 
     if ((++cnt >= FLASH_WRITE_COUNT_GET(g_otaCtx.downloadImageSize) ||
         (zcl_attr_imageUpgradeStatus == IMAGE_UPGRADE_STATUS_DOWNLOAD_COMPLETE))) {
         cnt = 0;
-        nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE, sizeof(ota_clientInfo_t), (u8 *)&otaClientInfo);
+        nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_CODE, sizeof(ota_clientInfo_t), (uint8_t *)&otaClientInfo);
     }
 }
 
-u8 ota_imageDataProcess(u8 len, u8 *pData)
+uint8_t ota_imageDataProcess(uint8_t len, uint8_t *pData)
 {
     bool validChecked = 0;
 
@@ -818,7 +818,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
         return ZCL_STA_INVALID_IMAGE;
     }
 
-    for (u8 i = 0; i < len; i++) {
+    for (uint8_t i = 0; i < len; i++) {
         switch (otaClientInfo.clientOtaFlg) {
         case OTA_FLAG_IMAGE_MAGIC_0:
             if (pData[i] != otaHdrMagic[i] || !pOtaUpdateInfo) {
@@ -832,7 +832,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (pData[i] != otaHdrMagic[i]|| !pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             } else {
-                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((u32)pData[i] << 8) & 0xff00;
+                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((uint32_t)pData[i] << 8) & 0xff00;
             }
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_MAGIC_2;
             break;
@@ -840,7 +840,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (pData[i] != otaHdrMagic[i]|| !pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             } else {
-                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((u32)pData[i] << 16) & 0xff0000;
+                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((uint32_t)pData[i] << 16) & 0xff0000;
             }
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_MAGIC_3;
             break;
@@ -851,7 +851,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
                 if (!pOtaUpdateInfo) {
                     return ZCL_STA_INVALID_IMAGE;
                 }
-                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((u32)pData[i] << 24) & 0xff000000;
+                pOtaUpdateInfo->hdrInfo.otaUpgradeFileID |= ((uint32_t)pData[i] << 24) & 0xff000000;
             }
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_HDR_VER1;
             break;
@@ -866,7 +866,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.otaHdrVer |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.otaHdrVer |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_HDR_LEN1;
             break;
         case OTA_FLAG_IMAGE_HDR_LEN1:
@@ -883,7 +883,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.otaHdrLen |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.otaHdrLen |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_HDR_FC1;
             break;
         case OTA_FLAG_IMAGE_HDR_FC1:
@@ -897,7 +897,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.otaHdrFC |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.otaHdrFC |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_MANU_CODE1;
             break;
         case OTA_FLAG_IMAGE_MANU_CODE1:
@@ -911,7 +911,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.manufacturerCode |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.manufacturerCode |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_TYPE1;
             break;
         case OTA_FLAG_IMAGE_TYPE1:
@@ -925,7 +925,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.imageType |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.imageType |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_FILE_VER1;
             break;
         case OTA_FLAG_IMAGE_FILE_VER1:
@@ -939,21 +939,21 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.fileVer |= ((u32)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.fileVer |= ((uint32_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_FILE_VER3;
             break;
         case OTA_FLAG_IMAGE_FILE_VER3:
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.fileVer |= ((u32)pData[i] << 16) & 0xff0000;
+            pOtaUpdateInfo->hdrInfo.fileVer |= ((uint32_t)pData[i] << 16) & 0xff0000;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_FILE_VER4;
             break;
         case OTA_FLAG_IMAGE_FILE_VER4:
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.fileVer |= ((u32)pData[i] << 24) & 0xff000000;
+            pOtaUpdateInfo->hdrInfo.fileVer |= ((uint32_t)pData[i] << 24) & 0xff000000;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_STACK_VER1;
             break;
         case OTA_FLAG_IMAGE_STACK_VER1:
@@ -970,7 +970,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (!pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            pOtaUpdateInfo->hdrInfo.zbStackVer |= ((u16)pData[i] << 8) & 0xff00;
+            pOtaUpdateInfo->hdrInfo.zbStackVer |= ((uint16_t)pData[i] << 8) & 0xff00;
             if (pOtaUpdateInfo->hdrInfo.zbStackVer != ZB_STACKVER_PRO) {
                 return ZCL_STA_INVALID_IMAGE;
             } else {
@@ -983,7 +983,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             if (zcl_attr_fileOffset >= sizeof(ota_hdrFields_t) || !pOtaUpdateInfo) {
                 return ZCL_STA_INVALID_IMAGE;
             }
-            memcpy((u8 *)&(pOtaUpdateInfo->hdrInfo) + zcl_attr_fileOffset, &pData[i], 1);
+            memcpy((uint8_t *)&(pOtaUpdateInfo->hdrInfo) + zcl_attr_fileOffset, &pData[i], 1);
             if (zcl_attr_fileOffset == pOtaUpdateInfo->hdrInfo.otaHdrLen - 1) {
                 //TODO: save ota header to flash
 
@@ -992,10 +992,10 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
                 pOtaUpdateInfo->otaServerAddrInfo.endpoint = g_otaCtx.otaServerEpInfo.dstEp;
                 pOtaUpdateInfo->otaServerAddrInfo.txOptions = g_otaCtx.otaServerEpInfo.txOptions;
 
-                if (nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (u8 *)pOtaUpdateInfo) != NV_SUCC) {
+                if (nv_flashWriteNew(1, NV_MODULE_OTA, NV_ITEM_OTA_HDR_SERVERINFO, sizeof(ota_updateInfo_t), (uint8_t *)pOtaUpdateInfo) != NV_SUCC) {
                     return ZCL_STA_INVALID_IMAGE;
                 }
-                ev_buf_free((u8 *)pOtaUpdateInfo);
+                ev_buf_free((uint8_t *)pOtaUpdateInfo);
                 pOtaUpdateInfo = NULL;
 
                 otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_TAG1;
@@ -1006,7 +1006,7 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_TAG2;
             break;
         case OTA_FLAG_IMAGE_ELEM_TAG2:
-            otaClientInfo.otaElementTag |= ((u16)pData[i] << 8) & 0xff00;
+            otaClientInfo.otaElementTag |= ((uint16_t)pData[i] << 8) & 0xff00;
             otaClientInfo.otaElementPos = 0;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_LEN1;
             break;
@@ -1015,15 +1015,15 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_LEN2;
             break;
         case OTA_FLAG_IMAGE_ELEM_LEN2:
-            otaClientInfo.otaElementLen |= ((u32)pData[i] << 8) & 0xff00;
+            otaClientInfo.otaElementLen |= ((uint32_t)pData[i] << 8) & 0xff00;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_LEN3;
             break;
         case OTA_FLAG_IMAGE_ELEM_LEN3:
-            otaClientInfo.otaElementLen |= ((u32)pData[i] << 16) & 0xff0000;
+            otaClientInfo.otaElementLen |= ((uint32_t)pData[i] << 16) & 0xff0000;
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_ELEM_LEN4;
             break;
         case OTA_FLAG_IMAGE_ELEM_LEN4:
-            otaClientInfo.otaElementLen |= ((u32)pData[i] << 24) & 0xff000000;
+            otaClientInfo.otaElementLen |= ((uint32_t)pData[i] << 24) & 0xff000000;
             otaClientInfo.clientOtaFlg = (otaClientInfo.otaElementTag == OTA_UPGRADE_IMAGE_AES_TAG_ID) ? OTA_FLAG_IMAGE_ELEM_INFO1
                                                                                                        : OTA_FLAG_IMAGE_ELEMENT;
 
@@ -1055,19 +1055,19 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
                     return ZCL_STA_INVALID_IMAGE;
                 }
 
-                u8 dataSize = len - i;
+                uint8_t dataSize = len - i;
 
-                u8 copyLen = dataSize;
+                uint8_t copyLen = dataSize;
                 if (otaClientInfo.otaElementLen - otaClientInfo.otaElementPos < dataSize) {
                     copyLen = otaClientInfo.otaElementLen - otaClientInfo.otaElementPos;
                 }
 
                 if (otaClientInfo.otaElementTag == OTA_UPGRADE_IMAGE_AES_TAG_ID) {
-                    u8 tmpBuf[16];
-                    for (u8 j = 0; j < copyLen; j += 16) {
+                    uint8_t tmpBuf[16];
+                    for (uint8_t j = 0; j < copyLen; j += 16) {
                         memset(tmpBuf, 0xff, 16);
                         memcpy(tmpBuf, &pData[i + j], 16);
-                        zb_aes_decrypt((u8 *)otaAesKey, tmpBuf, &pData[i + j]);
+                        zb_aes_decrypt((uint8_t *)otaAesKey, tmpBuf, &pData[i + j]);
                     }
                 }
 
@@ -1120,17 +1120,17 @@ u8 ota_imageDataProcess(u8 len, u8 *pData)
     return ZCL_STA_SUCCESS;
 }
 
-void ota_queryNextImageReq(u8 dstEp, u16 dstAddr, u16 profileId)
+void ota_queryNextImageReq(uint8_t dstEp, uint16_t dstAddr, uint16_t profileId)
 {
     ota_queryNextImageReq_t req;
-    memset((u8 *)&req, 0, sizeof(req));
+    memset((uint8_t *)&req, 0, sizeof(req));
     req.fc = 0;
     req.manuCode = g_otaCtx.pOtaPreamble->manufacturerCode;
     req.imageType = g_otaCtx.pOtaPreamble->imageType;
     req.curFileVer = zcl_attr_currFileVer;
 
     epInfo_t dstEpInfo;
-    memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+    memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = dstAddr;
     dstEpInfo.dstEp = dstEp;
@@ -1141,10 +1141,10 @@ void ota_queryNextImageReq(u8 dstEp, u16 dstAddr, u16 profileId)
     zcl_ota_queryNextImageReqCmdSend(g_otaCtx.simpleDesc->endpoint, &dstEpInfo, FALSE, &req);
 }
 
-void ota_imageBlockReq(u8 dstEp, u16 dstAddr, u16 profileId)
+void ota_imageBlockReq(uint8_t dstEp, uint16_t dstAddr, uint16_t profileId)
 {
     ota_imageBlockReq_t req;
-    memset((u8 *)&req, 0, sizeof(req));
+    memset((uint8_t *)&req, 0, sizeof(req));
     req.fc = OTA_IMAGE_BLOCK_FC;
     req.manuCode = g_otaCtx.pOtaPreamble->manufacturerCode;
     req.imageType = g_otaCtx.pOtaPreamble->imageType;
@@ -1162,7 +1162,7 @@ void ota_imageBlockReq(u8 dstEp, u16 dstAddr, u16 profileId)
     }
 
     epInfo_t dstEpInfo;
-    memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+    memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = dstAddr;
     dstEpInfo.dstEp = dstEp;
@@ -1176,7 +1176,7 @@ void ota_imageBlockReq(u8 dstEp, u16 dstAddr, u16 profileId)
 void ota_upgradeEndReqSend(ota_upgradeEndReq_t *req)
 {
     epInfo_t dstEpInfo;
-    memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+    memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = g_otaCtx.otaServerEpInfo.dstAddr.shortAddr;
     dstEpInfo.dstEp = g_otaCtx.otaServerEpInfo.dstEp;
@@ -1189,7 +1189,7 @@ void ota_upgradeEndReqSend(ota_upgradeEndReq_t *req)
 
 static status_t ota_queryNextImageReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_queryNextImageReq_t *pQueryNextImageReq)
 {
-    u8 status = ZCL_STA_NO_IMAGE_AVAILABLE;
+    uint8_t status = ZCL_STA_NO_IMAGE_AVAILABLE;
     ota_queryNextImageRsp_t rsp;
 
     if ((otaServerBinInfo.manufacturerCode == pQueryNextImageReq->manuCode) &&
@@ -1205,7 +1205,7 @@ static status_t ota_queryNextImageReqHandler(zclIncomingAddrInfo_t *pAddrInfo, o
     rsp.imageSize = otaServerBinInfo.totalImageSize;
 
     epInfo_t dstEpInfo;
-    memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+    memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
     dstEpInfo.dstEp = pAddrInfo->srcEp;
@@ -1225,7 +1225,7 @@ static status_t ota_imageBlockReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
         return ZCL_STA_NO_IMAGE_AVAILABLE;
     }
 
-    u8 *buf = NULL;
+    uint8_t *buf = NULL;
     ota_imageBlockRsp_t rsp;
 
     if ((pImageBlockReq->fc & BLOCK_FC_BITMASK_MIN_PERIOD_PRESENT) && (pImageBlockReq->blockReqDelay != zcl_attr_minBlockPeriod)) {
@@ -1234,8 +1234,8 @@ static status_t ota_imageBlockReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
         rsp.rsp.wait.reqTime = 0;
         rsp.rsp.wait.blockReqDelay = zcl_attr_minBlockPeriod;
     } else {
-        u8 len = (pImageBlockReq->maxDataSize > OTA_IMAGE_MAX_DATA_SIZE) ? OTA_IMAGE_MAX_DATA_SIZE : pImageBlockReq->maxDataSize;
-        buf = (u8 *)ev_buf_allocate(len);
+        uint8_t len = (pImageBlockReq->maxDataSize > OTA_IMAGE_MAX_DATA_SIZE) ? OTA_IMAGE_MAX_DATA_SIZE : pImageBlockReq->maxDataSize;
+        buf = (uint8_t *)ev_buf_allocate(len);
         if (!buf) {
             rsp.st = ZCL_STA_WAIT_FOR_DATA;
             rsp.rsp.wait.currTime = 0;
@@ -1254,7 +1254,7 @@ static status_t ota_imageBlockReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
     }
 
     epInfo_t dstEpInfo;
-    memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+    memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
     dstEpInfo.dstEp = pAddrInfo->srcEp;
@@ -1276,7 +1276,7 @@ static status_t ota_imagePageReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_im
 
 static status_t ota_upgradeEndReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_upgradeEndReq_t *pUpgradeEndReq)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pUpgradeEndReq->st == ZCL_STA_SUCCESS) {
         ota_upgradeEndRsp_t rsp;
@@ -1288,7 +1288,7 @@ static status_t ota_upgradeEndReqHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_u
         rsp.upgradeTime = 60;
 
         epInfo_t dstEpInfo;
-        memset((u8 *)&dstEpInfo, 0, sizeof(dstEpInfo));
+        memset((uint8_t *)&dstEpInfo, 0, sizeof(dstEpInfo));
         dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
         dstEpInfo.dstEp = pAddrInfo->srcEp;
@@ -1310,7 +1310,7 @@ static status_t ota_queryDevSpecFileReqHandler(zclIncomingAddrInfo_t *pAddrInfo,
 static status_t ota_imageNotifyHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_imageNotify_t *pImageNotify)
 {
     if (!ZB_IEEE_ADDR_IS_INVALID(zcl_attr_upgradeServerID)) {
-        addrExt_t *pExtAddr = tl_zbExtAddrPtrByShortAddr(pAddrInfo->srcAddr);
+        addrExt_t *pExtAddr = zb_ExtAddrPtrByShortAddr(pAddrInfo->srcAddr);
         if (pExtAddr && !ZB_IEEE_ADDR_CMP(zcl_attr_upgradeServerID, pExtAddr)) {
             return ZCL_STA_CMD_HAS_RESP;
         }
@@ -1342,7 +1342,7 @@ static status_t ota_imageNotifyHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_ima
     if (pAddrInfo->apsSec) {
         g_otaCtx.otaServerEpInfo.txOptions |= APS_TX_OPT_SECURITY_ENABLED;
     } else {
-        g_otaCtx.otaServerEpInfo.txOptions &= (u8)(~(u16)APS_TX_OPT_SECURITY_ENABLED);
+        g_otaCtx.otaServerEpInfo.txOptions &= (uint8_t)(~(uint16_t)APS_TX_OPT_SECURITY_ENABLED);
     }
 
     ota_queryNextImageReq(pAddrInfo->srcEp, pAddrInfo->srcAddr, pAddrInfo->profileId);
@@ -1370,9 +1370,9 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
 
 #ifdef ZCL_WWAH
         bool disable = FALSE;
-        u16 len;
+        uint16_t len;
 
-        if (zcl_getAttrVal(pAddrInfo->dstEp, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_DISABLE_OTA_DOWNGRADES, &len, (u8 *)&disable) == ZCL_STA_SUCCESS) {
+        if (zcl_getAttrVal(pAddrInfo->dstEp, ZCL_CLUSTER_WWAH, ZCL_ATTRID_WWAH_DISABLE_OTA_DOWNGRADES, &len, (uint8_t *)&disable) == ZCL_STA_SUCCESS) {
             if (disable && (pQueryNextImageRsp->fileVer < g_otaCtx.pOtaPreamble->fileVer)) {
                 ota_upgradeEndReq_t req;
 
@@ -1448,10 +1448,10 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
             return ZCL_STA_INSUFFICIENT_SPACE;
         }
 
-        memset((u8 *)pOtaUpdateInfo, 0, sizeof(ota_updateInfo_t));
+        memset((uint8_t *)pOtaUpdateInfo, 0, sizeof(ota_updateInfo_t));
 
         if (ZB_IEEE_ADDR_IS_INVALID(zcl_attr_upgradeServerID)) {
-            TL_SCHEDULE_TASK(ota_ieeeAddrReqSend, NULL);
+            ZB_SCHEDULE_TASK(ota_ieeeAddrReqSend, NULL);
         } else {
             ota_sendImageBlockReq(NULL);
             otaClientInfo.clientOtaFlg = OTA_FLAG_IMAGE_MAGIC_0;
@@ -1466,7 +1466,7 @@ static status_t ota_queryNextImageRspHandler(zclIncomingAddrInfo_t *pAddrInfo, o
 
 static status_t ota_imageBlockRspHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_imageBlockRsp_t *pImageBlockRsp)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     ota_upgradeEndReq_t req;
 
@@ -1494,7 +1494,7 @@ static status_t ota_imageBlockRspHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_i
 
             if (status == ZCL_STA_SUCCESS) {
                 //save download code info
-                TL_SCHEDULE_TASK(ota_saveUpdateInfo2NV, NULL);
+                ZB_SCHEDULE_TASK(ota_saveUpdateInfo2NV, NULL);
 
                 if (zcl_attr_imageUpgradeStatus == IMAGE_UPGRADE_STATUS_DOWNLOAD_COMPLETE) {
                     req.st = ZCL_STA_SUCCESS;
@@ -1580,7 +1580,7 @@ static status_t ota_upgradeEndRspHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_u
 #if 0
         zcl_attr_imageUpgradeStatus = IMAGE_UPGRADE_STATUS_COUNT_DOWN;
 
-        u32 jitter = zb_random();
+        uint32_t jitter = zb_random();
         while (1) {
             if ((jitter >= 5) && (jitter <= 10)) {
                 break;
@@ -1592,7 +1592,7 @@ static status_t ota_upgradeEndRspHandler(zclIncomingAddrInfo_t *pAddrInfo, ota_u
         ota_upgradeWait(jitter);
 #else
         if (pUpgradeEndRsp->upgradeTime != 0xFFFFFFFF) {
-            u32 notifyDelay = 0;
+            uint32_t notifyDelay = 0;
             if (pUpgradeEndRsp->upgradeTime > pUpgradeEndRsp->currentTime) {
                 //time to wait before notification
                 notifyDelay = pUpgradeEndRsp->upgradeTime - pUpgradeEndRsp->currentTime;
@@ -1625,7 +1625,7 @@ static status_t ota_queryDevSpecFileRspHandler(zclIncomingAddrInfo_t *pAddrInfo,
     return ZCL_STA_UNSUP_CLUSTER_COMMAND;
 }
 
-status_t zcl_otaCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload)
+status_t zcl_otaCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload)
 {
     status_t status = ZCL_STA_SUCCESS;
 

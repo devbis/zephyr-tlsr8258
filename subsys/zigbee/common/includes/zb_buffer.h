@@ -24,49 +24,49 @@ zb_buf_t *zb_buf_allocate(void);
 void zb_buf_free(zb_buf_t *buf);
 void zb_buf_clear(zb_buf_t *p);
 bool is_zb_buf(void *p);
-void *tl_bufInitalloc(zb_buf_t *p, u8 size);
+void *zb_bufInitalloc(zb_buf_t *p, uint8_t size);
 
-#define TL_BUF_INITIAL_ALLOC(p, size, ptr, type)                                                   \
+#define ZB_BUF_INITIAL_ALLOC(p, size, ptr, type)                                                   \
 	do {                                                                                       \
-		(ptr) = (type)tl_bufInitalloc((p), (size));                                        \
+		(ptr) = (type)zb_bufInitalloc((p), (size));                                        \
 	} while (0)
 
-#define TL_COPY_BUF(dst, src)                                                                      \
+#define ZB_COPY_BUF(dst, src)                                                                      \
 	do {                                                                                       \
 		memcpy((dst), (src), ZB_BUF_SIZE + sizeof(zb_buf_hdr_t) - 1);                      \
 		zb_buf_rx_snapshot_copy((zb_buf_t *)(dst), (const zb_buf_t *)(src));               \
 	} while (0)
 
-void tl_zbBufferInit(void);
-u8 *tl_phyRxBufTozbBuf(u8 *p);
-u8 *tl_zbBufToPhyRxBuf(u8 *p);
-u8 *tl_getRxBuf(void);
+void zb_BufferInit(void);
+uint8_t *zb_phyRxBufTozbBuf(uint8_t *p);
+uint8_t *zb_BufToPhyRxBuf(uint8_t *p);
+uint8_t *zb_getRxBuf(void);
 
-#define TL_RXBUF_TO_INBUF(p) tl_phyRxBufTozbBuf(p)
-#define TL_INBUF_TO_RXBUF(p) tl_zbBufToPhyRxBuf(p)
+#define ZB_RXBUF_TO_INBUF(p) zb_phyRxBufTozbBuf(p)
+#define ZB_INBUF_TO_RXBUF(p) zb_BufToPhyRxBuf(p)
 
 /*
  * Buffer references keep the vendor's compact pool-index ABI; the Zephyr
  * buffer adapter owns the index mapping, so no pool object is exposed.
  */
 zb_buf_t *zb_buf_owner_of(const void *payload);
-zb_buf_t *zb_buf_from_ref(u8 ref);
-u8 zb_buf_to_ref(zb_buf_t *buf);
+zb_buf_t *zb_buf_from_ref(uint8_t ref);
+uint8_t zb_buf_to_ref(zb_buf_t *buf);
 
 #define ZB_BUF_FROM_REF(ref) zb_buf_from_ref(ref)
 #define ZB_REF_FROM_BUF(p)   zb_buf_to_ref(p)
 
-u8 zb_buf_rx_free_count(void);
-u8 *zb_buf_rx_payload_capture(zb_buf_t *buf, const u8 *data, u8 len);
+uint8_t zb_buf_rx_free_count(void);
+uint8_t *zb_buf_rx_payload_capture(zb_buf_t *buf, const uint8_t *data, uint8_t len);
 /* Copy the received frame captured behind src, see zb_buf_rx_payload_capture(). */
 void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src);
 /**
  * Pointer into dst that corresponds to p, a pointer into src, after
- * TL_COPY_BUF(dst, src). p may point into the buffer or into the received
+ * ZB_COPY_BUF(dst, src). p may point into the buffer or into the received
  * frame it holds.
  *
  * @return The pointer in dst, or NULL when dst has no copy of the frame.
  */
-u8 *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const u8 *p);
+uint8_t *zb_buf_rebase(const zb_buf_t *src, zb_buf_t *dst, const uint8_t *p);
 
 #endif /* ZEPHYR_SUBSYS_ZIGBEE_COMMON_INCLUDES_ZB_BUFFER_H_ */

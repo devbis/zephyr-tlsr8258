@@ -38,7 +38,7 @@
 /**********************************************************************
  * GLOBAL VARIABLES
  */
-const u8 g_gpSharedKey[SEC_KEY_LEN] = GP_SHARED_KEY;
+const uint8_t g_gpSharedKey[SEC_KEY_LEN] = GP_SHARED_KEY;
 
 gp_appCb_t *gpAppCb = NULL;
 
@@ -77,7 +77,7 @@ gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb = gpDevAnnceCheckCb;
  *
  * @return  None
  */
-void gp_init(u8 endpoint)
+void gp_init(uint8_t endpoint)
 {
     /* Initialize GP Stub */
     gpStubCbInit((gp_stubCb_t *)&gpStubCbList);
@@ -143,7 +143,7 @@ void gpCommissioningNotificationCmdFromLocalCb(zcl_gp_commissioningNotificationC
 #endif
 }
 
-static s32 gpAliasConflictTimeoutCb(void *arg)
+static int32_t gpAliasConflictTimeoutCb(void *arg)
 {
     gpDevAnnceAliasSend(g_gppCtx.gpAliasConflictAddr);
 
@@ -156,11 +156,11 @@ static s32 gpAliasConflictTimeoutCb(void *arg)
 static void gpAliansConflictTimeoutEvtStop(void)
 {
     if (g_gppCtx.aliasConflictTimeoutEvt) {
-        TL_ZB_TIMER_CANCEL(&g_gppCtx.aliasConflictTimeoutEvt);
+        ZB_TIMER_CANCEL(&g_gppCtx.aliasConflictTimeoutEvt);
     }
 }
 
-bool gpDevAnnceCheckCb(u16 aliasNwkAddr, addrExt_t aliasIeeeAddr)
+bool gpDevAnnceCheckCb(uint16_t aliasNwkAddr, addrExt_t aliasIeeeAddr)
 {
     //printf("gpDevAnnceChk: aliasNwkAddr = %x\n", aliasNwkAddr);
 
@@ -180,9 +180,9 @@ bool gpDevAnnceCheckCb(u16 aliasNwkAddr, addrExt_t aliasIeeeAddr)
 
 #if GP_BASIC_COMBO
         if (!sendDevAnnce && gp_getSinkTabEntryTotalNum()) {
-            for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+            for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
                 if (g_gpSinkTab.gpSinkTab[i].used) {
-                    u16 addr = 0xFFFF;
+                    uint16_t addr = 0xFFFF;
 
                     if (!g_gpSinkTab.gpSinkTab[i].options.bits.assignedAlias) {
                         addr = gpAliasSrcAddrDerived(g_gpSinkTab.gpSinkTab[i].options.bits.appId,
@@ -201,9 +201,9 @@ bool gpDevAnnceCheckCb(u16 aliasNwkAddr, addrExt_t aliasIeeeAddr)
         }
 #endif
         if (!sendDevAnnce && gp_getProxyTabEntryTotalNum()) {
-            for (u8 i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
+            for (uint8_t i = 0; i < zclGpAttr_gppMaxProxyTabEntries; i++) {
                 if (g_gpProxyTab.gpProxyTab[i].used) {
-                    for (u8 j = 0; j < g_gpProxyTab.gpProxyTab[i].lwSinkCnt; j++) {
+                    for (uint8_t j = 0; j < g_gpProxyTab.gpProxyTab[i].lwSinkCnt; j++) {
                         if (ZB_IEEE_ADDR_CMP(g_gpProxyTab.gpProxyTab[i].lightweightSinkAddrList[j].sinkIeeeAddr, aliasIeeeAddr)) {
                             g_gpProxyTab.gpProxyTab[i].lightweightSinkAddrList[j].sinkNwkAddr = aliasNwkAddr;
                         }
@@ -211,7 +211,7 @@ bool gpDevAnnceCheckCb(u16 aliasNwkAddr, addrExt_t aliasIeeeAddr)
 
                     if ((aliasNwkAddr == gpAliasSrcAddrDerived(g_gpProxyTab.gpProxyTab[i].options.bits.appId, g_gpProxyTab.gpProxyTab[i].gpdId)) ||
                         (aliasNwkAddr == g_gpProxyTab.gpProxyTab[i].gpdAssignedAlias)) {
-                        tl_zbNwkAddrConflictStatusSend(NWK_BROADCAST_RX_ON_WHEN_IDLE, aliasNwkAddr, TRUE);
+                        zb_NwkAddrConflictStatusSend(NWK_BROADCAST_RX_ON_WHEN_IDLE, aliasNwkAddr, TRUE);
 
                         g_gppCtx.gpAliasConflictAddr = aliasNwkAddr;
                         sendDevAnnce = TRUE;
@@ -223,8 +223,8 @@ bool gpDevAnnceCheckCb(u16 aliasNwkAddr, addrExt_t aliasIeeeAddr)
 
         if (sendDevAnnce) {
             //A.3.6.3.1, between Dmin and Dmax ms
-            u16 devAnnceDelay = (zb_random() / 650) + 5;
-            g_gppCtx.aliasConflictTimeoutEvt = TL_ZB_TIMER_SCHEDULE(gpAliasConflictTimeoutCb, NULL, devAnnceDelay);
+            uint16_t devAnnceDelay = (zb_random() / 650) + 5;
+            g_gppCtx.aliasConflictTimeoutEvt = ZB_TIMER_SCHEDULE(gpAliasConflictTimeoutCb, NULL, devAnnceDelay);
             return TRUE;
         }
     }
@@ -308,15 +308,15 @@ void gpSecReqPrc(void *arg)
     //       pGpSecReq->gpdSecFrameCnt, pGpSecReq->dgpStubHandle);
 
     gp_sec_req_t gpSecReq;
-    memcpy((u8 *)&gpSecReq, pGpSecReq, sizeof(*pGpSecReq));
+    memcpy((uint8_t *)&gpSecReq, pGpSecReq, sizeof(*pGpSecReq));
 
     gp_sec_rsp_t *pGpSecRsp = (gp_sec_rsp_t *)arg;
-    memset((u8 *)pGpSecRsp, 0, sizeof(gp_sec_rsp_t));
+    memset((uint8_t *)pGpSecRsp, 0, sizeof(gp_sec_rsp_t));
 
     pGpSecRsp->appId = gpSecReq.appId;
     pGpSecRsp->dgpStubHandle = gpSecReq.dgpStubHandle;
     pGpSecRsp->endpoint = gpSecReq.endpoint;
-    memcpy((u8 *)&(pGpSecRsp->gpdId), (u8 *)&gpSecReq.gpdId, sizeof(gpdId_t));
+    memcpy((uint8_t *)&(pGpSecRsp->gpdId), (uint8_t *)&gpSecReq.gpdId, sizeof(gpdId_t));
     pGpSecRsp->gpdfSecurityLevel = gpSecReq.gpdfSecurityLevel;
     pGpSecRsp->gpdSecFrameCnt = gpSecReq.gpdSecFrameCnt;
 
@@ -328,7 +328,7 @@ void gpSecReqPrc(void *arg)
                                                gpSecReq.gpdfSecurityLevel, gpSecReq.gpdfKeyType,
                                                &pGpSecRsp->gpdfKeyType, pGpSecRsp->gpdKey);
 
-        TL_SCHEDULE_TASK(gpSecRsp, arg);
+        ZB_SCHEDULE_TASK(gpSecRsp, arg);
 
         return;
     }
@@ -339,7 +339,7 @@ void gpSecReqPrc(void *arg)
                                             gpSecReq.gpdfSecurityLevel, gpSecReq.gpdfKeyType,
                                             &pGpSecRsp->gpdfKeyType, pGpSecRsp->gpdKey);
 
-    TL_SCHEDULE_TASK(gpSecRsp, arg);
+    ZB_SCHEDULE_TASK(gpSecRsp, arg);
 }
 
 /*********************************************************************
@@ -353,7 +353,7 @@ void gpSecReqPrc(void *arg)
  *
  * @return  status_t
  */
-status_t zcl_gpCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload)
+status_t zcl_gpCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload)
 {
     status_t status = ZCL_STA_SUCCESS;
 

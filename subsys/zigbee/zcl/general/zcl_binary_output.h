@@ -63,25 +63,25 @@ typedef struct {
 
 #if 0
 #ifdef ZCL_BINARY_OUTPUT_ATTR_ACTIVE_TEXT_ENABLE
-extern u8 zcl_attr_binOutput_activeText[];
+extern uint8_t zcl_attr_binOutput_activeText[];
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_DESCRIPTIONT_ENABLE
-extern u8 zcl_attr_binOutput_description[];
+extern uint8_t zcl_attr_binOutput_description[];
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_INACTIVE_TEXT_ENABLE
-extern u8 zcl_attr_binOutput_inactiveText[];
+extern uint8_t zcl_attr_binOutput_inactiveText[];
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_MIN_OFF_TIME_ENABLE
-extern u32 zcl_attr_binOutput_minOffTime;
+extern uint32_t zcl_attr_binOutput_minOffTime;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_MIN_ON_TIME_ENABLE
-extern u32 zcl_attr_binOutput_minOnTime;
+extern uint32_t zcl_attr_binOutput_minOnTime;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_OUT_OF_SERVICE_ENABLE
 extern bool zcl_attrr_binOutput_outOfService;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_POLARITY_ENABLE
-extern u8 zcl_attr_binOutput_polarity;
+extern uint8_t zcl_attr_binOutput_polarity;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_PRESENT_VALUE_ENABLE
 extern bool zcl_attr_binOutput_presentValue;
@@ -90,23 +90,23 @@ extern bool zcl_attr_binOutput_presentValue;
 extern zcl_binOutput_priorityArray_t zcl_attr_binOutput_priorityArray[];
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_RELIABILITY_ENABLE
-extern u8 zcl_attr_binOutput_reliability;
+extern uint8_t zcl_attr_binOutput_reliability;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_RELINQUISH_DEFAULT_ENABLE
 extern bool zcl_attr_binOutput_relinquishDefault;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_STATUS_FLAGS_ENABLE
-extern u8 zcl_attr_binOutput_statusFlags;
+extern uint8_t zcl_attr_binOutput_statusFlags;
 #endif
 #ifdef ZCL_BINARY_OUTPUT_ATTR_APP_TYPE_ENABLE
-extern u32 zcl_attr_binOutput_appType;
+extern uint32_t zcl_attr_binOutput_appType;
 #endif
 
 extern const zclAttrInfo_t binary_output_attrTbl[];
-extern const u8 zcl_binary_output_attrNum;
+extern const uint8_t zcl_binary_output_attrNum;
 #endif
 
 
-status_t zcl_binary_output_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_binary_output_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_BINARY_OUTPUT_H */

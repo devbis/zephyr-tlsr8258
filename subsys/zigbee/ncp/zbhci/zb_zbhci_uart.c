@@ -107,7 +107,7 @@ static void zbhci_rx_feed_byte(struct zbhci_rx_parser *p, uint8_t byte)
 	case ZBHCI_RX_WAIT_END:
 		if (byte == ZBHCI_MSG_END_FLAG) {
 			/*
-			 * Called directly (not deferred via tl_zbTaskPost):
+			 * Called directly (not deferred via zb_TaskPost):
 			 * zb_zbhci_uart_poll() -- and therefore this whole
 			 * byte-feed path -- only ever runs from the Zigbee
 			 * thread's own main loop (see zb_main.c), never from

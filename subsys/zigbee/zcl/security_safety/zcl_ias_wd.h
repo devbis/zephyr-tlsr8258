@@ -45,11 +45,11 @@
  */
 
 typedef union {
-    u8 byte;
+    uint8_t byte;
     struct {
-        u8 warningMode:4;
-        u8 strobe:2;
-        u8 sirenLevel:2;
+        uint8_t warningMode:4;
+        uint8_t strobe:2;
+        uint8_t sirenLevel:2;
     } bits;
 } warning_t;
 
@@ -57,22 +57,22 @@ typedef union {
  *  @brief  Structure definition for start warning command
  */
 typedef struct {
-    u16 warningDuration;
+    uint16_t warningDuration;
     warning_t warning;
-    u8 strobeDutyCycle;
-    u8 strobeLevel;
+    uint8_t strobeDutyCycle;
+    uint8_t strobeLevel;
 } startWarning_t;
 
 /**
  *  @brief  Structure definition for squawk command
  */
 typedef union {
-    u8 byte;
+    uint8_t byte;
     struct {
-        u8 squawk:4;
-        u8 strobe:1;
-        u8 reserved:1;
-        u8 squawkLevel:2;
+        uint8_t squawk:4;
+        uint8_t strobe:1;
+        uint8_t reserved:1;
+        uint8_t squawkLevel:2;
     } bits;
 } squawk_t;
 
@@ -90,21 +90,21 @@ typedef struct {
 } zcl_iasWd_AppCallbacks_t;
 
 
-extern u16 zcl_attr_MaxDuration;
+extern uint16_t zcl_attr_MaxDuration;
 
 extern const zclAttrInfo_t iasWD_attrTbl[];
 
-extern const u8 zcl_iasWD_attrNum;
+extern const uint8_t zcl_iasWD_attrNum;
 #endif
 
 
-status_t zcl_iasWd_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_iasWd_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
-status_t zcl_iasWd_startWarning(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, startWarning_t *pStartWarning);
+status_t zcl_iasWd_startWarning(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, startWarning_t *pStartWarning);
 #define zcl_iasWd_startWarningCmd(a,b,c,d)      (zcl_iasWd_startWarning((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_iasWd_squawk(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, squawk_t *pSquawk);
+status_t zcl_iasWd_squawk(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, squawk_t *pSquawk);
 #define zcl_iasWd_squawkCmd(a,b,c,d)            (zcl_iasWd_squawk((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 #endif	/* ZCL_IAS_WD_H */

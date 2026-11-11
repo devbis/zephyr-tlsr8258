@@ -9,14 +9,14 @@
  * for the common MAC/NWK/APS stack.
  *
  * The libzigbee runtime exchanges layer-to-layer primitives through
- * tl_zbPrimitivePost(layerQ, primitive, buf). Each post stamps the
+ * zb_PrimitivePost(layerQ, primitive, buf). Each post stamps the
  * primitive opcode into buf->hdr.id and enqueues onto a per-layer
- * ring. The receiver — tl_zbNwkTaskProc() in nwk.c — pops the next
+ * ring. The receiver — zb_NwkTaskProc() in nwk.c — pops the next
  * entry, reads buf->hdr.id, and dispatches to the matching
- * tl_zbMac… / tl_zbNwk… handler.
+ * zb_Mac… / zb_Nwk… handler.
  *
  * The vendor backing store is g_zbTaskQ[]: a static array of
- * tl_zb_task_t with wptr/rptr cursors. The Zephyr port replaces it
+ * zb_task_t with wptr/rptr cursors. The Zephyr port replaces it
  * with one k_msgq per layer; semantics match (FIFO, fixed depth,
  * non-blocking try-put / try-get).
  */
@@ -28,7 +28,7 @@
 extern void zb_buf_free(zb_buf_t *buf);
 
 /*
- * One queue per layer id from the TL_Q_* enum in zb_common.h. Received frames
+ * One queue per layer id from the ZB_Q_* enum in zb_common.h. Received frames
  * are posted from the radio receive path faster than the Zigbee thread drains
  * them under permit-join load, so the queues are deeper than the vendor's 8.
  */
@@ -46,26 +46,26 @@ extern void zb_buf_free(zb_buf_t *buf);
  */
 #define ZB_HIGH2NWK_TASKQ_DEPTH CONFIG_ZIGBEE_TASKQ_RX_DEPTH
 
-K_MSGQ_DEFINE(zb_taskq_ev_task, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_mac2nwk, sizeof(tl_zb_task_t), ZB_MAC2NWK_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_nwk2mac, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_high2nwk, sizeof(tl_zb_task_t), ZB_HIGH2NWK_TASKQ_DEPTH, 4);
-K_MSGQ_DEFINE(zb_taskq_nwk2high, sizeof(tl_zb_task_t), ZB_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_ev_task, sizeof(zb_task_t), ZB_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_mac2nwk, sizeof(zb_task_t), ZB_MAC2NWK_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_nwk2mac, sizeof(zb_task_t), ZB_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_high2nwk, sizeof(zb_task_t), ZB_HIGH2NWK_TASKQ_DEPTH, 4);
+K_MSGQ_DEFINE(zb_taskq_nwk2high, sizeof(zb_task_t), ZB_TASKQ_DEPTH, 4);
 
-static struct k_msgq *const zb_taskq_per_layer[TL_Q_TYPE_MAX] = {
-	[TL_Q_EV_TASK] = &zb_taskq_ev_task,   [TL_Q_MAC2NWK] = &zb_taskq_mac2nwk,
-	[TL_Q_NWK2MAC] = &zb_taskq_nwk2mac,   [TL_Q_HIGH2NWK] = &zb_taskq_high2nwk,
-	[TL_Q_NWK2HIGH] = &zb_taskq_nwk2high,
+static struct k_msgq *const zb_taskq_per_layer[ZB_Q_TYPE_MAX] = {
+	[ZB_Q_EV_TASK] = &zb_taskq_ev_task,   [ZB_Q_MAC2NWK] = &zb_taskq_mac2nwk,
+	[ZB_Q_NWK2MAC] = &zb_taskq_nwk2mac,   [ZB_Q_HIGH2NWK] = &zb_taskq_high2nwk,
+	[ZB_Q_NWK2HIGH] = &zb_taskq_nwk2high,
 };
 
-u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
+uint8_t zb_PrimitivePost(uint8_t layerQ, uint8_t primitive, void *arg)
 {
-	tl_zb_task_t task = {
+	zb_task_t task = {
 		.tlCb = NULL,
 		.data = arg,
 	};
 
-	if (layerQ >= TL_Q_TYPE_MAX || zb_taskq_per_layer[layerQ] == NULL) {
+	if (layerQ >= ZB_Q_TYPE_MAX || zb_taskq_per_layer[layerQ] == NULL) {
 		return 0xff;
 	}
 
@@ -75,8 +75,8 @@ u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
 
 	/*
 	 * Stamp the primitive opcode into buf->hdr.id where
-	 * tl_zbNwkTaskProc() reads it back. Mirrors the vendor's
-	 * ((u8 *)arg)[ZB_BUF_HDR_PRIMITIVE_OFFSET] = primitive.
+	 * zb_NwkTaskProc() reads it back. Mirrors the vendor's
+	 * ((uint8_t *)arg)[ZB_BUF_HDR_PRIMITIVE_OFFSET] = primitive.
 	 */
 	((zb_buf_t *)arg)->hdr.id = primitive;
 
@@ -85,7 +85,7 @@ u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
 		 * Queue full — drop MAC indications, the vendor frees
 		 * the carrier buffer in this case.
 		 */
-		if (layerQ == TL_Q_MAC2NWK) {
+		if (layerQ == ZB_Q_MAC2NWK) {
 			zb_buf_free((zb_buf_t *)arg);
 		}
 		return 0xff;
@@ -94,9 +94,9 @@ u8 tl_zbPrimitivePost(u8 layerQ, u8 primitive, void *arg)
 	return RET_OK;
 }
 
-tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
+zb_task_t *zb_TaskQPop(uint8_t idx, zb_task_t *taskInfo)
 {
-	if (idx >= TL_Q_TYPE_MAX || zb_taskq_per_layer[idx] == NULL || taskInfo == NULL) {
+	if (idx >= ZB_Q_TYPE_MAX || zb_taskq_per_layer[idx] == NULL || taskInfo == NULL) {
 		return NULL;
 	}
 
@@ -112,9 +112,9 @@ tl_zb_task_t *tl_zbTaskQPop(u8 idx, tl_zb_task_t *taskInfo)
  * libzigbee MAC RX path uses this to back-pressure incoming radio
  * frames when the NWK side falls behind.
  */
-u8 tl_zbUserTaskQNum(void)
+uint8_t zb_UserTaskQNum(void)
 {
-	return (u8)k_msgq_num_used_get(&zb_taskq_high2nwk);
+	return (uint8_t)k_msgq_num_used_get(&zb_taskq_high2nwk);
 }
 
 bool zb_taskq_layer_queues_empty(void)
@@ -129,11 +129,11 @@ bool zb_taskq_layer_queues_empty(void)
 }
 
 /*
- * Vendor zb_task_queue.c also defines tl_zbTaskPost (a single-shot
- * callback enqueue) and tl_zbTaskProcedure (drain loop). The
- * Zephyr build keeps the existing Zephyr-flavoured tl_zbTaskPost in
+ * Vendor zb_task_queue.c also defines zb_TaskPost (a single-shot
+ * callback enqueue) and zb_TaskProcedure (drain loop). The
+ * Zephyr build keeps the existing Zephyr-flavoured zb_TaskPost in
  * platform/zephyr/zb_task_queue_zephyr.c — that one is wired into
  * a k_work-driven worker thread and is shared with the ED build.
- * tl_zbNwkTaskProc() in libzigbee nwk.c handles the per-layer
+ * zb_NwkTaskProc() in libzigbee nwk.c handles the per-layer
  * drain on every zb_thread tick.
  */

@@ -31,8 +31,8 @@ typedef struct {
 
 static ev_timer_ctrl_t ev_timer_ctrl;
 static ev_timer_event_pool_t ev_timer_pool;
-static u32 prev_sys_tick;
-static u32 rem_sys_tick_us;
+static uint32_t prev_sys_tick;
+static uint32_t rem_sys_tick_us;
 
 /*
  * Upper bound on armed timers: the pool plus the timers the stack owns
@@ -40,7 +40,7 @@ static u32 rem_sys_tick_us;
  */
 #define EV_TIMER_LIST_MAX (TIMER_EVENT_NUM + 40U)
 
-__attribute__((weak)) void ev_rtc_update(u32 update_time_ms)
+__attribute__((weak)) void ev_rtc_update(uint32_t update_time_ms)
 {
 	ARG_UNUSED(update_time_ms);
 }
@@ -50,7 +50,7 @@ static void ev_timer_nearest_update(void)
 	ev_timer_event_t *timer_evt = ev_timer_ctrl.timer_head;
 
 	ev_timer_ctrl.timer_nearest = ev_timer_ctrl.timer_head;
-	for (u32 walk = 0U; timer_evt != NULL; walk++) {
+	for (uint32_t walk = 0U; timer_evt != NULL; walk++) {
 		__ASSERT(walk < EV_TIMER_LIST_MAX, "ev_timer list is cyclic");
 		if (ev_timer_ctrl.timer_nearest == NULL ||
 		    timer_evt->timeout < ev_timer_ctrl.timer_nearest->timeout) {
@@ -110,7 +110,7 @@ static void ev_timer_execute_cb(void)
 
 	while (timer_evt != NULL) {
 		if (timer_evt->timeout == 0U) {
-			s32 next_timeout;
+			int32_t next_timeout;
 
 			timer_evt->isBusy = 1U;
 			next_timeout = timer_evt->cb(timer_evt->data);
@@ -139,7 +139,7 @@ static void ev_timer_execute_cb(void)
 			} else if (next_timeout == 0) {
 				timer_evt->timeout = timer_evt->period;
 			} else {
-				timer_evt->period = (u32)next_timeout;
+				timer_evt->period = (uint32_t)next_timeout;
 				timer_evt->timeout = timer_evt->period;
 			}
 			timer_evt->isBusy = 0U;
@@ -166,7 +166,7 @@ void ev_timer_init(void)
 	rem_sys_tick_us = 0U;
 }
 
-void ev_timer_setPrevSysTick(u32 tick)
+void ev_timer_setPrevSysTick(uint32_t tick)
 {
 	prev_sys_tick = tick;
 	rem_sys_tick_us = 0U;
@@ -181,7 +181,7 @@ bool ev_timer_has_other_than(const ev_timer_event_t *allowed)
 {
 	ev_timer_event_t *timer_evt;
 	bool found = false;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	irq_state = drv_disable_irq();
 	for (timer_evt = ev_timer_ctrl.timer_head; timer_evt != NULL;
@@ -196,7 +196,7 @@ bool ev_timer_has_other_than(const ev_timer_event_t *allowed)
 	return found;
 }
 
-u32 ev_timer_timeout_get(const ev_timer_event_t *allowed)
+uint32_t ev_timer_timeout_get(const ev_timer_event_t *allowed)
 {
 	if ((allowed == NULL) || !ev_timer_exist((ev_timer_event_t *)allowed)) {
 		return 0U;
@@ -205,11 +205,11 @@ u32 ev_timer_timeout_get(const ev_timer_event_t *allowed)
 	return allowed->timeout;
 }
 
-bool ev_timer_expire_in(ev_timer_event_t *evt, u32 remaining_ms)
+bool ev_timer_expire_in(ev_timer_event_t *evt, uint32_t remaining_ms)
 {
 	ev_timer_event_t *existing = NULL;
 	bool changed = false;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	if (evt == NULL) {
 		return false;
@@ -239,7 +239,7 @@ bool ev_timer_enough(void)
 bool ev_timer_exist(ev_timer_event_t *evt)
 {
 	ev_timer_event_t *existing = NULL;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	irq_state = drv_disable_irq();
 	LIST_EXIST(ev_timer_ctrl.timer_head, evt, existing);
@@ -248,10 +248,10 @@ bool ev_timer_exist(ev_timer_event_t *evt)
 	return existing != NULL;
 }
 
-void ev_on_timer(ev_timer_event_t *evt, u32 timeout)
+void ev_on_timer(ev_timer_event_t *evt, uint32_t timeout)
 {
 	ev_timer_event_t *existing = NULL;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	if (evt == NULL) {
 		return;
@@ -277,7 +277,7 @@ void ev_on_timer(ev_timer_event_t *evt, u32 timeout)
 void ev_unon_timer(ev_timer_event_t *evt)
 {
 	ev_timer_event_t *existing = NULL;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	if (evt == NULL) {
 		return;
@@ -300,7 +300,7 @@ void ev_unon_timer(ev_timer_event_t *evt)
 	drv_restore_irq(irq_state);
 }
 
-ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_ms)
+ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, uint32_t t_ms)
 {
 	ev_timer_event_t *timer_evt = ev_timer_pool_alloc();
 
@@ -315,7 +315,7 @@ ev_timer_event_t *ev_timer_taskPost(ev_timer_callback_t func, void *arg, u32 t_m
 	return timer_evt;
 }
 
-u8 ev_timer_taskCancel(ev_timer_event_t **evt)
+uint8_t ev_timer_taskCancel(ev_timer_event_t **evt)
 {
 	ev_timer_event_t *timer_evt;
 
@@ -340,10 +340,10 @@ u8 ev_timer_taskCancel(ev_timer_event_t **evt)
 	return SUCCESS;
 }
 
-void ev_timer_update(u32 update_time_ms)
+void ev_timer_update(uint32_t update_time_ms)
 {
 	ev_timer_event_t *timer_evt;
-	u32 irq_state;
+	uint32_t irq_state;
 
 	if (update_time_ms == 0U) {
 		return;
@@ -352,17 +352,17 @@ void ev_timer_update(u32 update_time_ms)
 	irq_state = drv_disable_irq();
 	ev_rtc_update(update_time_ms);
 	timer_evt = ev_timer_ctrl.timer_head;
-	for (u32 walk = 0U; timer_evt != NULL; walk++) {
-		u32 elapsed_ms;
+	for (uint32_t walk = 0U; timer_evt != NULL; walk++) {
+		uint32_t elapsed_ms;
 
 		__ASSERT(walk < EV_TIMER_LIST_MAX, "ev_timer list is cyclic");
 
 		if (timer_evt->isRunning) {
 			elapsed_ms = update_time_ms;
 		} else {
-			u32 cur_sys_tick = clock_time();
-			u32 elapsed_us =
-				clock_cycles_to_us((u32)(cur_sys_tick - timer_evt->curSysTick));
+			uint32_t cur_sys_tick = clock_time();
+			uint32_t elapsed_us =
+				clock_cycles_to_us((uint32_t)(cur_sys_tick - timer_evt->curSysTick));
 
 			elapsed_ms = elapsed_us / 1000U;
 			timer_evt->isRunning = 1U;
@@ -381,15 +381,15 @@ void ev_timer_update(u32 update_time_ms)
 
 void ev_timer_process(void)
 {
-	u32 curr_sys_tick = clock_time();
-	u32 elapsed_us;
-	u32 update_time_ms;
+	uint32_t curr_sys_tick = clock_time();
+	uint32_t elapsed_us;
+	uint32_t update_time_ms;
 
 	if (curr_sys_tick == prev_sys_tick) {
 		return;
 	}
 
-	elapsed_us = clock_cycles_to_us((u32)(curr_sys_tick - prev_sys_tick));
+	elapsed_us = clock_cycles_to_us((uint32_t)(curr_sys_tick - prev_sys_tick));
 	prev_sys_tick = curr_sys_tick;
 	update_time_ms = elapsed_us / 1000U;
 	rem_sys_tick_us += elapsed_us % 1000U;

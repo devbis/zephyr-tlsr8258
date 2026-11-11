@@ -7,11 +7,11 @@
 #include "zb_common.h"
 
 int nwk_addrConflictCb(void *arg);
-void tl_zbNwkNeighborAddrConflictHandle(zb_buf_t *buf, tl_zb_normal_neighbor_entry_t *neighbor);
-void tl_zbNwkAddrConflictStatusSend(u16 dstAddr, u16 statusAddr, u8 forceSeqNum);
-void tl_zbNwkAddrConflictHandle(zb_buf_t *buf, u16 nwkAddr,
-				tl_zb_normal_neighbor_entry_t *neighbor);
-bool tl_zbNwkAddrConflictDetect(void *arg, u16 nwkAddr, addrExt_t ieeeAddr);
-void tl_zbNwkStatusAddrConflictInd(void *arg);
+void zb_NwkNeighborAddrConflictHandle(zb_buf_t *buf, zb_normal_neighbor_entry_t *neighbor);
+void zb_NwkAddrConflictStatusSend(uint16_t dstAddr, uint16_t statusAddr, uint8_t forceSeqNum);
+void zb_NwkAddrConflictHandle(zb_buf_t *buf, uint16_t nwkAddr,
+				zb_normal_neighbor_entry_t *neighbor);
+bool zb_NwkAddrConflictDetect(void *arg, uint16_t nwkAddr, addrExt_t ieeeAddr);
+void zb_NwkStatusAddrConflictInd(void *arg);
 
 #endif

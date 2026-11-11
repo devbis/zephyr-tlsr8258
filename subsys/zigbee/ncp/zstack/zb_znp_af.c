@@ -91,7 +91,7 @@ static void znp_ep_cnf(void *arg)
 		}
 	}
 
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }
 
 /* An application frame for a host endpoint. */
@@ -121,7 +121,7 @@ static void znp_ep_rx(void *arg)
 	*p++ = 0U; /* radius */
 
 	znp_areq(ZNP_SUBSYS_AF, ZNP_AF_INCOMING_MSG, out, (size_t)(p - out));
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }
 
 static void af_register(const uint8_t *d, uint8_t len)
@@ -206,9 +206,9 @@ static uint16_t src_profile(uint8_t ep)
  * Send an application frame through the APS layer, which tracks its
  * acknowledgement and retries, and confirms it to the source endpoint.
  */
-static u8 aps_send(uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep, uint8_t src_ep,
+static uint8_t aps_send(uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep, uint8_t src_ep,
 		   uint16_t cluster, uint8_t options, uint8_t radius, const uint8_t *data,
-		   uint16_t data_len, u8 *aps_cnt)
+		   uint16_t data_len, uint8_t *aps_cnt)
 {
 	aps_data_req_t req;
 
@@ -242,15 +242,15 @@ static u8 aps_send(uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep, uint8
 	if (data_len > aps_ib.aps_fragment_payload_size &&
 	    req.dst_addr_mode != APS_SHORT_GROUPADDR_NOEP) {
 		req.tx_options |= APS_TX_OPT_ACK_TX;
-		return apsDataFragmentRequest(&req, (u8 *)data, data_len);
+		return apsDataFragmentRequest(&req, (uint8_t *)data, data_len);
 	}
 
-	return apsDataRequest(&req, (u8 *)data, (u8)data_len);
+	return apsDataRequest(&req, (uint8_t *)data, (uint8_t)data_len);
 }
 
 /* A ZDO frame has no APS acknowledgement to track, so it is sent directly. */
-static u8 zdo_frame_send(uint16_t dst, uint16_t cluster, uint8_t radius, const uint8_t *data,
-			 uint16_t data_len, u8 *aps_cnt)
+static uint8_t zdo_frame_send(uint16_t dst, uint16_t cluster, uint8_t radius, const uint8_t *data,
+			 uint16_t data_len, uint8_t *aps_cnt)
 {
 	epInfo_t ep;
 
@@ -261,15 +261,15 @@ static u8 zdo_frame_send(uint16_t dst, uint16_t cluster, uint8_t radius, const u
 	ep.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
 	ep.radius = radius;
 
-	return af_dataSend(ZDO_EP, &ep, cluster, data_len, (u8 *)data, aps_cnt);
+	return af_dataSend(ZDO_EP, &ep, cluster, data_len, (uint8_t *)data, aps_cnt);
 }
 
 static void data_request(uint8_t cmd, uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep,
 			 uint8_t src_ep, uint16_t cluster, uint8_t tsn, uint8_t options,
 			 uint8_t radius, const uint8_t *data, uint16_t data_len)
 {
-	u8 aps_cnt = 0U;
-	u8 status;
+	uint8_t aps_cnt = 0U;
+	uint8_t status;
 
 	if (dst_ep == ZDO_EP && addr_mode != ZNP_ADDR_MODE_GROUP) {
 		status = zdo_frame_send(znp_get_u16(addr), cluster, radius, data, data_len,

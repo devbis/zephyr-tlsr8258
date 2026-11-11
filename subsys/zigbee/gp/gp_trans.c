@@ -43,16 +43,16 @@ gp_translationTab_t g_gpTransTab;
 void gp_transTabSave2Flash(void *arg)
 {
 #if NV_ENABLE
-    nv_flashWriteNew(1, NV_MODULE_APP, NV_ITEM_APP_GP_TRANS_TABLE, sizeof(gp_translationTab_t), (u8 *)&g_gpTransTab);
+    nv_flashWriteNew(1, NV_MODULE_APP, NV_ITEM_APP_GP_TRANS_TABLE, sizeof(gp_translationTab_t), (uint8_t *)&g_gpTransTab);
 #endif
 }
 
 nv_sts_t gp_transTabRestoreFromFlash(void)
 {
-    u8 ret = NV_SUCC;
+    uint8_t ret = NV_SUCC;
 
 #if NV_ENABLE
-    ret = nv_flashReadNew(1, NV_MODULE_APP,  NV_ITEM_APP_GP_TRANS_TABLE, sizeof(gp_translationTab_t), (u8 *)&g_gpTransTab);
+    ret = nv_flashReadNew(1, NV_MODULE_APP,  NV_ITEM_APP_GP_TRANS_TABLE, sizeof(gp_translationTab_t), (uint8_t *)&g_gpTransTab);
 #endif
 
     return ret;
@@ -60,17 +60,17 @@ nv_sts_t gp_transTabRestoreFromFlash(void)
 
 void gp_transTabNvUpdate(void)
 {
-    TL_SCHEDULE_TASK(gp_transTabSave2Flash, NULL);
+    ZB_SCHEDULE_TASK(gp_transTabSave2Flash, NULL);
 }
 
 void gp_transTabInit(void)
 {
     if (gp_transTabRestoreFromFlash() != NV_SUCC) {
-        memset((u8 *)&g_gpTransTab, 0, sizeof(g_gpTransTab));
+        memset((uint8_t *)&g_gpTransTab, 0, sizeof(g_gpTransTab));
     }
 }
 
-u8 gp_transTabNumGet(void)
+uint8_t gp_transTabNumGet(void)
 {
     return g_gpTransTab.transTabNum;
 }
@@ -80,16 +80,16 @@ void gp_transTabEntryClear(transTabEntry_t *pTransEntry)
     if (pTransEntry && pTransEntry->used) {
         //printf("transClr: gpdCmd = %x, zbCmd = %x\n", pTransEntry->gpdCommand, pTransEntry->zbCommandId);
 
-        memset((u8 *)pTransEntry, 0, sizeof(transTabEntry_t));
+        memset((uint8_t *)pTransEntry, 0, sizeof(transTabEntry_t));
         g_gpTransTab.transTabNum--;
 
         //printf("transTabNum = %d\n", g_gpTransTab.transTabNum);
     }
 }
 
-u8 gp_transTabEntryLenGet(transTabEntry_t *pTransEntry)
+uint8_t gp_transTabEntryLenGet(transTabEntry_t *pTransEntry)
 {
-    u8 entryLen = 0;
+    uint8_t entryLen = 0;
 
     if (pTransEntry->options.bits.appId == GP_APP_ID_SRC_ID) {
         entryLen += 4;
@@ -137,9 +137,9 @@ u8 gp_transTabEntryLenGet(transTabEntry_t *pTransEntry)
     return entryLen;
 }
 
-u8 gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, u8 *pBuf)
+uint8_t gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, uint8_t *pBuf)
 {
-    u8 *ptr = pBuf;
+    uint8_t *ptr = pBuf;
 
     if (pTransEntry->options.bits.appId == GP_APP_ID_SRC_ID) {
         *ptr++ = U32_BYTE0(pTransEntry->gpdId.srcId);
@@ -170,7 +170,7 @@ u8 gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, u8 *pBuf)
     }
 
     if (pTransEntry->options.bits.addInfoPresent) {
-        u8 *pAddInfoLen = ptr;
+        uint8_t *pAddInfoLen = ptr;
         ptr++;
 
         if ((pTransEntry->gpdCommand == GPDF_CMD_ID_ANY_SENSOR_REPORT_COMMAND) ||
@@ -201,7 +201,7 @@ u8 gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, u8 *pBuf)
             }
         }
 
-        *pAddInfoLen = (u8)(ptr - pAddInfoLen) - 1;
+        *pAddInfoLen = (uint8_t)(ptr - pAddInfoLen) - 1;
     }
 
     return (ptr - pBuf);
@@ -215,7 +215,7 @@ transTabEntry_t *gp_transTabEntryFreeGet(void)
         return NULL;
     }
 
-    for (u8 i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
+    for (uint8_t i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
         pTransEntry = &g_gpTransTab.transTab[i];
         if (!pTransEntry->used) {
             memset(pTransEntry, 0, sizeof(transTabEntry_t));
@@ -226,10 +226,10 @@ transTabEntry_t *gp_transTabEntryFreeGet(void)
     return NULL;
 }
 
-transTabEntry_t *gp_transTabEntryFind(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                      u8 gpdCommand, u8 zbEndpoint,
-                                      u16 clusterId, u16 profileId,
-                                      u8 reportId, u16 attrId)
+transTabEntry_t *gp_transTabEntryFind(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                      uint8_t gpdCommand, uint8_t zbEndpoint,
+                                      uint16_t clusterId, uint16_t profileId,
+                                      uint8_t reportId, uint16_t attrId)
 {
     transTabEntry_t *pTransEntry = NULL;
 
@@ -237,7 +237,7 @@ transTabEntry_t *gp_transTabEntryFind(u8 appId, gpdId_t gpdId, u8 endpoint,
         return NULL;
     }
 
-    for (u8 i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
+    for (uint8_t i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
         pTransEntry = &g_gpTransTab.transTab[i];
         if (pTransEntry->used) {
             bool gpdMatch = 0;
@@ -281,7 +281,7 @@ transTabEntry_t *gp_transTabEntryFind(u8 appId, gpdId_t gpdId, u8 endpoint,
     return NULL;
 }
 
-void gp_transTabEntryRemove(u8 appId, gpdId_t gpdId, u8 endpoint)
+void gp_transTabEntryRemove(uint8_t appId, gpdId_t gpdId, uint8_t endpoint)
 {
     transTabEntry_t *pTransEntry = NULL;
 
@@ -297,7 +297,7 @@ void gp_transTabEntryRemove(u8 appId, gpdId_t gpdId, u8 endpoint)
 
     bool nvUpdate = 0;
 
-    for (u8 i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
+    for (uint8_t i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
         pTransEntry = &g_gpTransTab.transTab[i];
         if (pTransEntry->used && (pTransEntry->options.bits.appId == appId)) {
             bool findEntry = 0;
@@ -324,9 +324,9 @@ void gp_transTabEntryRemove(u8 appId, gpdId_t gpdId, u8 endpoint)
     }
 }
 
-transTabEntry_t *gp_transTabReportUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                         u8 reportId, bool side,
-                                         u16 clusterId, u16 manuId,
+transTabEntry_t *gp_transTabReportUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                         uint8_t reportId, bool side,
+                                         uint16_t clusterId, uint16_t manuId,
                                          gpAttrRecord_t *pAttrRecord)
 {
     //printf("transTabReportUpdate: reportId = %x, clusterId = %x, attrId = %x, manuId = %x\n",
@@ -336,7 +336,7 @@ transTabEntry_t *gp_transTabReportUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
 
     af_endpoint_descriptor_t *aed = af_epDescriptorGet();
 
-    for (u8 i = 0; i < af_availableEpNumGet(); i++) {
+    for (uint8_t i = 0; i < af_availableEpNumGet(); i++) {
         if (af_clsuterIdMatched(clusterId, aed[i].correspond_simple_desc)) {
             clusterIdFind = TRUE;
             break;
@@ -401,7 +401,7 @@ transTabEntry_t *gp_transTabReportUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
     return pTransEntry;
 }
 
-transTabEntry_t *gp_transTabGenSwitchUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
+transTabEntry_t *gp_transTabGenSwitchUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
                                             gpSwitchInfo_t *pSwitchInfo)
 {
     if (!pSwitchInfo->switchCfg.bits.contactNum) {
@@ -441,7 +441,7 @@ transTabEntry_t *gp_transTabGenSwitchUpdate(u8 appId, gpdId_t gpdId, u8 endpoint
     pTransEntry->optRecord.vectorCmd.switchCfg.cfg = pSwitchInfo->switchCfg.cfg;
 
     pTransEntry->optRecord.vectorCmd.cmd.contactStatus = pSwitchInfo->contactStatus;
-    for (u8 i = 0; i < pSwitchInfo->switchCfg.bits.contactNum; i++) {
+    for (uint8_t i = 0; i < pSwitchInfo->switchCfg.bits.contactNum; i++) {
         pTransEntry->optRecord.vectorCmd.cmd.contactBitmask |= BIT(i);
     }
     pTransEntry->optRecord.vectorCmd.optSelector.bits.optId = 0;
@@ -452,7 +452,7 @@ transTabEntry_t *gp_transTabGenSwitchUpdate(u8 appId, gpdId_t gpdId, u8 endpoint
     return pTransEntry;
 }
 
-transTabEntry_t *gpTransTabUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
+transTabEntry_t *gpTransTabUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
                                   transTabEntry_t *pTransTabEntry,
                                   gpTranslation_t *pTranslation)
 {
@@ -499,7 +499,7 @@ transTabEntry_t *gpTransTabUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
     if (pTranslation->addInfoLen && pTranslation->pAdditionalInfo) {
         pTransEntry->optRecordUsed = 1;
 
-        u8 *pData = pTranslation->pAdditionalInfo;
+        uint8_t *pData = pTranslation->pAdditionalInfo;
 
         if (pTranslation->gpdCmdId == GPDF_CMD_ID_COMPACT_ATTR_REPORT) {
             pTransEntry->optRecord.compactReport.optSelector.opt = *pData++;
@@ -528,23 +528,23 @@ transTabEntry_t *gpTransTabUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
     return pTransEntry;
 }
 
-void gp_transTabUpdateWithCfg(u8 appId, gpdId_t gpdId, u8 endpoint,
-                              u8 devId, u8 numOfCmd,
-                              u8 *pCmdList, u8 *pClusterList)
+void gp_transTabUpdateWithCfg(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                              uint8_t devId, uint8_t numOfCmd,
+                              uint8_t *pCmdList, uint8_t *pClusterList)
 {
     //printf("transUpdateDevID: devId = %x, cmdNum = %d, pCmd = %x, pCluster = %x\n",
     //       devId, numOfCmd, pCmdList, pClusterList);
 
     gpTranslation_t translation;
-    TL_SETSTRUCTCONTENT(translation, 0);
+    ZB_SETSTRUCTCONTENT(translation, 0);
 
     gp_transCfg_t *pTransCfg = NULL;
     transTabEntry_t *pTransEntry = NULL;
 
     if (pClusterList || pCmdList) {
-        u16 clusterId = 0xFFFF;
-        s8 clusterNum = 0;
-        u8 *pClusterData = NULL;
+        uint16_t clusterId = 0xFFFF;
+        int8_t clusterNum = 0;
+        uint8_t *pClusterData = NULL;
 
         if (pClusterList) {
             pClusterData = pClusterList;
@@ -558,10 +558,10 @@ void gp_transTabUpdateWithCfg(u8 appId, gpdId_t gpdId, u8 endpoint,
                 pClusterData += 2;
             }
 
-            for (u8 cmdCnt = 0; cmdCnt < numOfCmd; cmdCnt++) {
-                u8 cmdId = pCmdList[cmdCnt];
+            for (uint8_t cmdCnt = 0; cmdCnt < numOfCmd; cmdCnt++) {
+                uint8_t cmdId = pCmdList[cmdCnt];
 
-                for (u8 listCnt = 0; listCnt < GP_TRANS_CFG_LIST_NUM; listCnt++) {
+                for (uint8_t listCnt = 0; listCnt < GP_TRANS_CFG_LIST_NUM; listCnt++) {
                     pTransCfg = (gp_transCfg_t *)&g_gpTransCfgList[listCnt];
 
                     if (((pTransCfg->gpdDevId == devId) || (devId == GPD_DEV_ID_NOT_SPECIFIC_FUNCTION)) &&
@@ -592,7 +592,7 @@ void gp_transTabUpdateWithCfg(u8 appId, gpdId_t gpdId, u8 endpoint,
             }
         } while (clusterNum);
     } else {
-        for (u8 i = 0; i < GP_TRANS_CFG_LIST_NUM; i++) {
+        for (uint8_t i = 0; i < GP_TRANS_CFG_LIST_NUM; i++) {
             pTransCfg = (gp_transCfg_t *)&g_gpTransCfgList[i];
 
             if (devId == pTransCfg->gpdDevId) {
@@ -619,8 +619,8 @@ void gp_transTabUpdateWithCfg(u8 appId, gpdId_t gpdId, u8 endpoint,
     }
 }
 
-void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
-                      u8 gpdCmdId, u8 dataLen, u8 *pData)
+void gp_gpdfTranslate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                      uint8_t gpdCmdId, uint8_t dataLen, uint8_t *pData)
 {
     //printf("gpdfTranslate: gpdCmd = %x\n", gpdCmdId);
 
@@ -638,7 +638,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     //printf("ZB_CMD = [0x%x]\n", pTransEntry->zbCommandId);
 
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_GROUPADDR_NOEP;
     dstEpInfo.dstAddr.shortAddr = 0x0001;//TODO: group id
@@ -664,7 +664,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     case GPDF_CMD_ID_LEVEL_MOVE_DOWN:
         {
             move_t move;
-            TL_SETSTRUCTCONTENT(move, 0);
+            ZB_SETSTRUCTCONTENT(move, 0);
 
             move.moveMode = pTransEntry->zbCmdPayload[0];
             move.rate = pTransEntry->zbCmdPayload[1];
@@ -676,7 +676,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     case GPDF_CMD_ID_LEVEL_STEP_DOWN:
         {
             step_t step;
-            TL_SETSTRUCTCONTENT(step, 0);
+            ZB_SETSTRUCTCONTENT(step, 0);
 
             step.stepMode = pTransEntry->zbCmdPayload[0];
             step.stepSize = pTransEntry->zbCmdPayload[1];
@@ -688,7 +688,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     case GPDF_CMD_ID_LEVEL_STOP:
         {
             stop_t stop;
-            TL_SETSTRUCTCONTENT(stop, 0);
+            ZB_SETSTRUCTCONTENT(stop, 0);
 
             zcl_level_stopCmd(pTransEntry->endpoint, &dstEpInfo, FALSE, &stop);
         }
@@ -697,7 +697,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     case GPDF_CMD_ID_LEVEL_MOVE_DOWN_WITH_ONOFF:
         {
             move_t move;
-            TL_SETSTRUCTCONTENT(move, 0);
+            ZB_SETSTRUCTCONTENT(move, 0);
 
             move.moveMode = pTransEntry->zbCmdPayload[0];
             move.rate = pTransEntry->zbCmdPayload[1];
@@ -709,7 +709,7 @@ void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
     case GPDF_CMD_ID_LEVEL_STEP_DOWN_WITH_ONOFF:
         {
             step_t step;
-            TL_SETSTRUCTCONTENT(step, 0);
+            ZB_SETSTRUCTCONTENT(step, 0);
 
             step.stepMode = pTransEntry->zbCmdPayload[0];
             step.stepSize = pTransEntry->zbCmdPayload[1];

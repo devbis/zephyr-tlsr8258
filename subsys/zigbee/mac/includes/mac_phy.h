@@ -106,34 +106,34 @@ typedef enum {
  *  @brief  Definition for Telink RX packet format
  */
 typedef struct {
-    u32 dmaLen;
-    u8  rssi;
-    u8  rseverd[7];
-    u8  payloadLen;
-    u8  payload[1];
+    uint32_t dmaLen;
+    uint8_t  rssi;
+    uint8_t  rseverd[7];
+    uint8_t  payloadLen;
+    uint8_t  payload[1];
 } rf_recvPkt_t;
 
 /**
  *  @brief  Definition for Telink TX packet format
  */
 typedef struct {
-    u32 dmaLen;
-    u8  rfLen;
-    u8  payload[1];
+    uint32_t dmaLen;
+    uint8_t  rfLen;
+    uint8_t  payload[1];
 } rf_sendPkt_t;
 
 /*
  * Definition for RF Rx buffer format
  */
 typedef struct {
-    u8	*psdu;
-    u32 timeStamp;
-    s8  rssi;
-    u8  psduLen;
+    uint8_t	*psdu;
+    uint32_t timeStamp;
+    int8_t  rssi;
+    uint8_t  psduLen;
 } rx_buf_t;
 
 
-extern u8 g_zb_txPowerSet;
+extern uint8_t g_zb_txPowerSet;
 
 
 /*********************************************************************
@@ -174,7 +174,7 @@ void zb_mac_phy_init(void);
  *
  * @return  none
  */
-void rf_setRxBuf(u8 *pBuf);
+void rf_setRxBuf(uint8_t *pBuf);
 
 /*********************************************************************
  * @fn      rf_TrxStateGet
@@ -185,7 +185,7 @@ void rf_setRxBuf(u8 *pBuf);
  *
  * @return  state
  */
-u8 rf_TrxStateGet(void);
+uint8_t rf_TrxStateGet(void);
 
 /*********************************************************************
  * @fn      rf_setTrxState
@@ -196,7 +196,7 @@ u8 rf_TrxStateGet(void);
  *
  * @return  none
  */
-void rf_setTrxState(u8 state);
+void rf_setTrxState(uint8_t state);
 
 /*********************************************************************
  * @fn      rf_setChannel
@@ -207,7 +207,7 @@ void rf_setTrxState(u8 state);
  *
  * @return  none
  */
-void rf_setChannel(u8 chn);
+void rf_setChannel(uint8_t chn);
 
 /*********************************************************************
  * @fn      rf_getChannel
@@ -218,7 +218,7 @@ void rf_setChannel(u8 chn);
  *
  * @return  chn
  */
-u8 rf_getChannel(void);
+uint8_t rf_getChannel(void);
 
 /*********************************************************************
  * @fn      rf_setTxPower
@@ -229,7 +229,7 @@ u8 rf_getChannel(void);
  *
  * @return  none
  */
-void rf_setTxPower(u8 txPower);
+void rf_setTxPower(uint8_t txPower);
 
 /*********************************************************************
  * @fn      rf_getLqi
@@ -240,7 +240,7 @@ void rf_setTxPower(u8 txPower);
  *
  * @return  lqi result
  */
-u8 rf_getLqi(s8 rssi);
+uint8_t rf_getLqi(int8_t rssi);
 
 /*********************************************************************
  * @fn      rf_lqi2cost
@@ -251,7 +251,7 @@ u8 rf_getLqi(s8 rssi);
  *
  * @return  cost
  */
-u8 rf_lqi2cost(u8 lqi);
+uint8_t rf_lqi2cost(uint8_t lqi);
 
 /*********************************************************************
  * @fn      rf_startEDScan
@@ -273,7 +273,7 @@ void rf_startEDScan(void);
  *
  * @return  ED result
  */
-u8 rf_stopEDScan(void);
+uint8_t rf_stopEDScan(void);
 
 /*********************************************************************
  * @fn      rf_performCCA
@@ -284,9 +284,9 @@ u8 rf_stopEDScan(void);
  *
  * @return  phy_ccaSts_t
  */
-u8 rf_performCCA(void);
+uint8_t rf_performCCA(void);
 
-void rf802154_tx_ready(u8 *buf, u8 len);
+void rf802154_tx_ready(uint8_t *buf, uint8_t len);
 void rf802154_tx(void);
 
 /*********************************************************************
@@ -300,11 +300,11 @@ void rf802154_tx(void);
  *
  * @return  none
  */
-void rf_paInit(u32 TXEN_pin, u32 RXEN_pin);
+void rf_paInit(uint32_t TXEN_pin, uint32_t RXEN_pin);
 void rf_paShutDown(void);
 
-void rf_ptaInit(u32 ZB_priorityPin, u32 WLAN_activePin);
+void rf_ptaInit(uint32_t ZB_priorityPin, uint32_t WLAN_activePin);
 
-_attribute_ram_code_ u32 mac_currentTickGet(void);
+_attribute_ram_code_ uint32_t mac_currentTickGet(void);
 
 #endif  /* MAC_PHY_H */
