@@ -22,14 +22,6 @@
 #include "drv_nv.h"
 
 /*
- * Vendor factory-address globals remain part of the public driver ABI. The
- * Zephyr NV backend resolves storage through fixed partitions instead of
- * these absolute addresses, but the libzigbee headers still reference them.
- */
-u32 g_u32MacFlashAddr;
-u32 g_u32CfgFlashAddr;
-
-/*
  * The Zigbee NVS volume owns its whole partition. storage_partition is only
  * a fallback for boards without a zigbee_nv_partition, and only when no
  * other storage backend claims it.

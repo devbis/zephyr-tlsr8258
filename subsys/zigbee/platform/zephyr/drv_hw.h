@@ -57,8 +57,6 @@ void drv_generateRandomData(u8 *pData, u8 len);
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);
 
-void flash_read(u32 addr, u32 len, u8 *buf);
-void flash_write(u32 addr, u32 len, u8 *buf);
 bool drv_get_primary_ieee_addr(u8 *addr);
 
 /* True when VDD is high enough for a flash write or erase. */

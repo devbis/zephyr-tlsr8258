@@ -40,6 +40,19 @@ void zb_platform_app_start_commissioning(void);
 bool zb_platform_app_get_fixed_join_target(struct zb_platform_bdb_fixed_target *target);
 bool zb_platform_app_get_join_profile(struct zb_platform_bdb_join_profile *profile);
 void zb_platform_app_apply_runtime_ieee_addr(void);
+
+/**
+ * @brief Application hook: the install code pre-installed in this device.
+ *
+ * The default implementation reports none, so the device joins with the
+ * default link key.
+ *
+ * @param code Destination for the 16 byte install code, without its CRC.
+ *
+ * @retval true @p code holds the install code.
+ * @retval false The device has no install code.
+ */
+bool zb_platform_app_install_code_get(uint8_t code[16]);
 const uint8_t *zb_platform_runtime_ieee_addr_get(void);
 
 /*
