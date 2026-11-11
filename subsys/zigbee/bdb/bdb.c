@@ -2077,9 +2077,8 @@ _CODE_BDB_ u8 bdb_preInstallCodeLoad(u8 *keyType, u8 derivedKey[])
     };
     u8 installCode[SEC_KEY_LEN];
 
-    flash_read(CFG_PRE_INSTALL_CODE, SEC_KEY_LEN, (u8 *)installCode);
-
-    if (!memcmp((u8 *)installCode, (u8 *)invalidInstallCode, SEC_KEY_LEN)) {
+    if (!zb_platform_app_install_code_get(installCode) ||
+        !memcmp((u8 *)installCode, (u8 *)invalidInstallCode, SEC_KEY_LEN)) {
         return RET_NOT_FOUND;
     }
 

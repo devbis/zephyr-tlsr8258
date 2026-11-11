@@ -8,7 +8,7 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/random/random.h>
 #include <zephyr/drivers/hwinfo.h>
-#include <zephyr/storage/flash_map.h>
+#include <zephyr/drivers/flash.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_types.h>
 #include "zb_common.h"
@@ -27,14 +27,6 @@
 #if defined(CONFIG_ADC_TLSR8258)
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/adc/adc_tlsr8258.h>
-#endif
-
-#if FIXED_PARTITION_EXISTS(zigbee_nv_partition)
-#define ZB_NV_PARTITION DT_NODELABEL(zigbee_nv_partition)
-#elif FIXED_PARTITION_EXISTS(storage_partition)
-#define ZB_NV_PARTITION DT_NODELABEL(storage_partition)
-#else
-#error "Zigbee requires a fixed partition labeled zigbee_nv_partition or storage_partition"
 #endif
 
 LOG_MODULE_REGISTER(zigbee_drv_hw, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -127,7 +119,10 @@ static void zb_calibrate_adc_vref(void)
 	uint16_t vref;
 	int8_t offset;
 
-	flash_read(ZB_CFG_ADC_CALIBRATION, sizeof(cal), cal);
+	if (flash_read(DEVICE_DT_GET(DT_CHOSEN(zephyr_flash)), ZB_CFG_ADC_CALIBRATION, cal,
+		       sizeof(cal)) != 0) {
+		return;
+	}
 
 	if ((cal[4] <= 127u) && (((cal[6] << 8) + cal[5]) >= 47u) &&
 	    (((cal[6] << 8) + cal[5]) <= 300u)) {
@@ -276,147 +271,6 @@ SYS_INIT(zb_platform_hw_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 
 void drv_vbusWatchdogClose(void)
 {
-}
-
-struct flash_lookup_ctx {
-	u32 addr;
-	const struct flash_area *fa;
-};
-
-static void flash_area_find_cb(const struct flash_area *fa, void *user_data)
-{
-	struct flash_lookup_ctx *ctx = user_data;
-	uint64_t area_start;
-	uint64_t area_end;
-
-	if (ctx->fa != NULL) {
-		return;
-	}
-
-	area_start = (uint64_t)fa->fa_off;
-	area_end = area_start + (uint64_t)fa->fa_size;
-
-	if ((uint64_t)ctx->addr >= area_start && (uint64_t)ctx->addr < area_end) {
-		ctx->fa = fa;
-	}
-}
-
-static int flash_area_for_addr(u32 addr, const struct flash_area **fa, off_t *off, size_t *max_len)
-{
-	struct flash_lookup_ctx ctx = {
-		.addr = addr,
-		.fa = NULL,
-	};
-	size_t area_off;
-
-	flash_area_foreach(flash_area_find_cb, &ctx);
-	if ((ctx.fa == NULL) || !flash_area_device_is_ready(ctx.fa)) {
-		return -ENODEV;
-	}
-
-	area_off = (size_t)((uint64_t)addr - (uint64_t)ctx.fa->fa_off);
-	*fa = ctx.fa;
-	*off = (off_t)area_off;
-	*max_len = ctx.fa->fa_size - area_off;
-
-	return 0;
-}
-
-static bool flash_area_write_allowed(const struct flash_area *fa)
-{
-	if (fa == NULL) {
-		return false;
-	}
-
-	if (fa->fa_id == DT_FIXED_PARTITION_ID(ZB_NV_PARTITION)) {
-		return true;
-	}
-#if FIXED_PARTITION_EXISTS(slot1_partition)
-	if (fa->fa_id == DT_FIXED_PARTITION_ID(DT_NODELABEL(slot1_partition))) {
-		return true;
-	}
-#endif
-
-	return false;
-}
-
-void flash_read(u32 addr, u32 len, u8 *buf)
-{
-	u32 cur_addr = addr;
-	u32 remaining = len;
-	u8 *dst = buf;
-
-	if ((buf == NULL) || (len == 0U)) {
-		return;
-	}
-
-	while (remaining > 0U) {
-		const struct flash_area *fa;
-		off_t off;
-		size_t max_len;
-		size_t chunk;
-
-		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
-			LOG_ERR("%s: invalid addr 0x%08x len=%u", __func__, cur_addr, remaining);
-			memset(dst, 0xFF, remaining);
-			return;
-		}
-
-		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
-		if (flash_area_read(fa, off, dst, chunk) < 0) {
-			LOG_ERR("%s: backend failed addr=0x%08x len=%u", __func__, cur_addr,
-				(u32)chunk);
-			memset(dst, 0xFF, remaining);
-			return;
-		}
-
-		cur_addr += (u32)chunk;
-		remaining -= (u32)chunk;
-		dst += chunk;
-	}
-}
-
-void flash_write(u32 addr, u32 len, u8 *buf)
-{
-	u32 cur_addr = addr;
-	u32 remaining = len;
-	u8 *src = buf;
-
-	if ((buf == NULL) || (len == 0U)) {
-		return;
-	}
-	if (!zb_flash_vdd_ok()) {
-		LOG_ERR("%s: VDD below %u mV, write refused", __func__, BATTERY_SAFETY_THRESHOLD);
-		return;
-	}
-
-	while (remaining > 0U) {
-		const struct flash_area *fa;
-		off_t off;
-		size_t max_len;
-		size_t chunk;
-
-		if (flash_area_for_addr(cur_addr, &fa, &off, &max_len) < 0 || (max_len == 0U)) {
-			LOG_ERR("%s: invalid addr 0x%08x len=%u", __func__, cur_addr, remaining);
-			return;
-		}
-		if (!flash_area_write_allowed(fa)) {
-			LOG_ERR("%s: denied partition id=%u addr=0x%08x", __func__, fa->fa_id,
-				cur_addr);
-			return;
-		}
-
-		chunk = (remaining < max_len) ? (size_t)remaining : max_len;
-		if (flash_area_write(fa, off, src, chunk) < 0) {
-			LOG_ERR("%s: backend failed addr=0x%08x len=%u", __func__, cur_addr,
-				(u32)chunk);
-			return;
-		}
-
-		cur_addr += (u32)chunk;
-		remaining -= (u32)chunk;
-		src += chunk;
-	}
 }
 
 bool drv_get_primary_ieee_addr(u8 *addr)
