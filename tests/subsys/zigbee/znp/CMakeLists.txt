@@ -8,11 +8,12 @@ project(znp)
 
 target_sources(testbinary PRIVATE
   main.c
-  ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_nv.c
-  ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_keys.c
-  ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr/zb_znp_frame.c
+  ${ZEPHYR_BASE}/subsys/zigbee/ncp/zstack/zb_znp_nv.c
+  ${ZEPHYR_BASE}/subsys/zigbee/ncp/zstack/zb_znp_keys.c
+  ${ZEPHYR_BASE}/subsys/zigbee/ncp/zstack/zb_znp_frame.c
 )
 
 target_include_directories(testbinary PRIVATE
+  ${ZEPHYR_BASE}/subsys/zigbee/ncp/zstack
   ${ZEPHYR_BASE}/subsys/zigbee/platform/zephyr
 )
