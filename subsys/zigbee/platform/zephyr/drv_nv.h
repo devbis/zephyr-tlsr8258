@@ -92,15 +92,6 @@
  * #endif
  */
 
-/* Flash Base Address define */
-#if defined(MCU_CORE_826x) || defined(MCU_CORE_8258) || defined(MCU_CORE_8278)
-    #define FLASH_TLNK_FLAG_OFFSET      8
-#elif defined(MCU_CORE_B91) || defined(MCU_CORE_B92) || defined(MCU_CORE_TL721X) || defined(MCU_CORE_TL321X)
-    #define FLASH_TLNK_FLAG_OFFSET      32
-#endif
-
-
-
 /************************************************************************
  * Flash address of factory setting parameters,
  * where are stored the MAC ADDRESS and CALIBRATION information.
