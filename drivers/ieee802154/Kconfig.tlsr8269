@@ -5,6 +5,8 @@ menuconfig IEEE802154_TELINK_TLSR8269
 	bool "Telink TLSR8269 IEEE 802.15.4 RF driver"
 	default y
 	depends on DT_HAS_TELINK_TLSR8269_ZB_ENABLED
+	select ZIGBEE_RADIO_ACK_FP_UNKNOWN if ZIGBEE
+	select ZIGBEE_RADIO_PORT_RX_POLLED if ZIGBEE && !IEEE802154_TLSR8269_RX_THREAD
 	help
 	  Enable the IEEE 802.15.4 RF driver for the Telink TLSR8269 (2.4 GHz
 	  O-QPSK, 250 kbit/s). ACK, frame filtering and CCA are not implemented.
