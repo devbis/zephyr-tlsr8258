@@ -30,10 +30,10 @@
 /**
  *  @brief Definition for timer event
  */
-#if defined(CONFIG_ZIGBEE_RADIO_PORT_TLSR8269)
-/* 32 KB SRAM part: fewer software timers. */
-#define TIMER_EVENT_NUM         (16)
+#ifdef CONFIG_ZIGBEE_TIMER_EVENT_NUM
+#define TIMER_EVENT_NUM         (CONFIG_ZIGBEE_TIMER_EVENT_NUM)
 #else
+/* Unit tests build the sources without the subsystem's Kconfig. */
 #define TIMER_EVENT_NUM         (24)
 #endif
 #define TIMER_EVENT_ENOUGH_NUM  (TIMER_EVENT_NUM - 4)
