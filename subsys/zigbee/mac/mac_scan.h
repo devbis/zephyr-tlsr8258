@@ -8,9 +8,9 @@
 
 #include "zb_common.h"
 
-void tl_zbMacScanRequestHandler(zb_mac_mlme_scan_req_t *req);
-u8 tl_zbMacMlmeBeaconRequestCmdSend(void);
-void tl_zbMacActiveScanListAdd(void);
-void tl_zbMacOrphanScanStatusUpdate(void);
+void zb_MacScanRequestHandler(zb_mac_mlme_scan_req_t *req);
+uint8_t zb_MacMlmeBeaconRequestCmdSend(void);
+void zb_MacActiveScanListAdd(void);
+void zb_MacOrphanScanStatusUpdate(void);
 
 #endif

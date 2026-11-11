@@ -37,7 +37,7 @@ const addrExt_t g_zero_addr = {0};
 static const addrExt_t known_ieee = {0xaf, 0x5f, 0x93, 0x0c, 0x74, 0x38, 0xc1, 0xa4};
 
 /* The address map: one device */
-u8 zb_address_ieee_by_short(u16 short_addr, addrExt_t ieee_address)
+uint8_t zb_address_ieee_by_short(uint16_t short_addr, addrExt_t ieee_address)
 {
 	if (short_addr != KNOWN_SHORT) {
 		return 0xffU;
@@ -69,7 +69,7 @@ ZTEST(nwk_leave_cnf, test_own_leave_is_confirmed_with_the_null_address)
 
 ZTEST(nwk_leave_cnf, test_every_broadcast_address_is_the_null_address)
 {
-	static const u16 dst[] = {0xfff8, 0xfffb, 0xfffc, 0xfffd, 0xfffe, 0xffff};
+	static const uint16_t dst[] = {0xfff8, 0xfffb, 0xfffc, 0xfffd, 0xfffe, 0xffff};
 	addrExt_t addr;
 
 	for (size_t i = 0; i < ARRAY_SIZE(dst); i++) {

@@ -61,42 +61,42 @@
 */
 typedef struct {
 #ifdef ZB_ROUTER_ROLE
-    u32 passiveAckTimeout;
+    uint32_t passiveAckTimeout;
 
-    u8 linkStatusPeriod;
-    u8 maxBroadcastRetries;
-    u8 maxChildren;
-    u8 maxRouters;
+    uint8_t linkStatusPeriod;
+    uint8_t maxBroadcastRetries;
+    uint8_t maxChildren;
+    uint8_t maxRouters;
 
-    u8 maxSourceRoute;
-    u8 concentratorRadius;
-    u8 concentratorDiscoveryTime;
-    u8 routerAgeLimit;
+    uint8_t maxSourceRoute;
+    uint8_t concentratorRadius;
+    uint8_t concentratorDiscoveryTime;
+    uint8_t routerAgeLimit;
 #endif
-    u32 nwkBroadcastDeliveryTime;
+    uint32_t nwkBroadcastDeliveryTime;
 
     extPANId_t extPANId;
 
-    u16 panId;
-    u16 nwkAddr;
+    uint16_t panId;
+    uint16_t nwkAddr;
 
-    u16 managerAddr;
-    u16 txTotal;
+    uint16_t managerAddr;
+    uint16_t txTotal;
 
-    u16 txFail;
-    u16 transactionPersistenceTime;
+    uint16_t txFail;
+    uint16_t transactionPersistenceTime;
 
-    u8 seqNum;
-    u8 depth;
+    uint8_t seqNum;
+    uint8_t depth;
     capability_info_t capabilityInfo;
-    u8 addrAlloc;
+    uint8_t addrAlloc;
 
-    u8 updateId;
-    u8 stackProfile;
-    u8 allFresh;
-    u8 secAllFrames;
+    uint8_t updateId;
+    uint8_t stackProfile;
+    uint8_t allFresh;
+    uint8_t secAllFrames;
 
-    u8 maxDepth;
+    uint8_t maxDepth;
     bool reportConstantCost:1;
     bool symLink:1;
     bool useTreeRouting:1;
@@ -105,13 +105,13 @@ typedef struct {
     bool uniqueAddr:1;
     bool timeStamp:1;
     bool leaveReqAllowed:1;
-    u8 parentInfo; //the behavior depends upon whether the device is an FFD or RFD.
-    u8 endDevTimeoutDefault;
+    uint8_t parentInfo; //the behavior depends upon whether the device is an FFD or RFD.
+    uint8_t endDevTimeoutDefault;
 
     addrExt_t ieeeAddr;
 
     bool leaveReqWithoutRejoinAllowed;
-    u8 resv[3];
+    uint8_t resv[3];
 } nwk_nib_t; //60-bytes
 
 

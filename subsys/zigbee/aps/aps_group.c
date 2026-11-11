@@ -29,21 +29,21 @@
 #define APS_INVALID_GRP_ADDR    0xffff
 
 
-static u8 aps_group_entry_num = 0;  //number of group entry items in group table
+static uint8_t aps_group_entry_num = 0;  //number of group entry items in group table
 
 _CODE_APS_ void aps_groupTblSave2Flash(void *arg)
 {
 #if NV_ENABLE
-    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE, APS_GROUP_TABLE_SIZE * sizeof(aps_group_tbl_ent_t), (u8 *)aps_group_tbl);
+    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE, APS_GROUP_TABLE_SIZE * sizeof(aps_group_tbl_ent_t), (uint8_t *)aps_group_tbl);
 #endif
 }
 
-_CODE_APS_ u8 aps_groupTblNvInit(void)
+_CODE_APS_ uint8_t aps_groupTblNvInit(void)
 {
-    u8 ret = NV_ITEM_NOT_FOUND;
+    uint8_t ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
     nv_itemLengthCheckAdd(NV_ITEM_APS_GROUP_TABLE, APS_GROUP_TABLE_SIZE * sizeof(aps_group_tbl_ent_t));
-    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE, sizeof(aps_group_tbl_ent_t), (u8 *)aps_group_tbl);
+    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_GROUP_TABLE, sizeof(aps_group_tbl_ent_t), (uint8_t *)aps_group_tbl);
 #endif
     return ret;
 }
@@ -51,8 +51,8 @@ _CODE_APS_ u8 aps_groupTblNvInit(void)
 static void aps_groupEntryDel(aps_group_tbl_ent_t *p)
 {
     aps_group_tbl_ent_t *p0 = &aps_group_tbl[0];
-    u8 sn = p - p0;
-    u8 num = aps_group_entry_num;
+    uint8_t sn = p - p0;
+    uint8_t num = aps_group_entry_num;
 
     if (p) {
         p->group_addr = APS_INVALID_GRP_ADDR;
@@ -60,24 +60,24 @@ static void aps_groupEntryDel(aps_group_tbl_ent_t *p)
 
 #if 1  //fill the invalid entry with the valid one
         if (sn < (num - 1)) {
-            memcpy((u8 *)p, (u8 *)(p+1), (num - 1 - sn) * sizeof(aps_group_tbl_ent_t));
+            memcpy((uint8_t *)p, (uint8_t *)(p+1), (num - 1 - sn) * sizeof(aps_group_tbl_ent_t));
         }
 
         p0 += (num - 1);
         p0->group_addr = APS_INVALID_GRP_ADDR;
         p0->n_endpoints = 0;
-        for (u8 j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
+        for (uint8_t j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
             p0->endpoints[j] = APS_GROUP_EP_INVALID;
         }
 #endif
     }
 }
 
-_CODE_APS_ aps_group_tbl_ent_t *aps_group_search_by_addr(u16 group_addr)
+_CODE_APS_ aps_group_tbl_ent_t *aps_group_search_by_addr(uint16_t group_addr)
 {
-    u8 i = 0;
-    u8 index = 0;
-    u8 findEmpty = FALSE;
+    uint8_t i = 0;
+    uint8_t index = 0;
+    uint8_t findEmpty = FALSE;
 
     if (group_addr == APS_INVALID_GRP_ADDR) {
         findEmpty = TRUE;
@@ -110,7 +110,7 @@ _CODE_APS_ aps_group_tbl_ent_t *aps_group_search_by_addr(u16 group_addr)
     return NULL;
 }
 
-_CODE_APS_ u8 *aps_group_ep_info_get(u16 group_addr, u8 *epNum)
+_CODE_APS_ uint8_t *aps_group_ep_info_get(uint16_t group_addr, uint8_t *epNum)
 {
     aps_group_tbl_ent_t *ent = aps_group_search_by_addr(group_addr);
     if (ent) {
@@ -121,11 +121,11 @@ _CODE_APS_ u8 *aps_group_ep_info_get(u16 group_addr, u8 *epNum)
     return NULL;
 }
 
-_CODE_APS_ u8 *aps_group_ep_find(aps_group_tbl_ent_t *entry, u8 endpoint)
+_CODE_APS_ uint8_t *aps_group_ep_find(aps_group_tbl_ent_t *entry, uint8_t endpoint)
 {
-    u8 i = 0;
-    u8 index = 0;
-    u8 findEmpty = FALSE;
+    uint8_t i = 0;
+    uint8_t index = 0;
+    uint8_t findEmpty = FALSE;
 
     if (endpoint == APS_GROUP_EP_INVALID) {
         findEmpty = TRUE;
@@ -159,10 +159,10 @@ _CODE_APS_ u8 *aps_group_ep_find(aps_group_tbl_ent_t *entry, u8 endpoint)
     return NULL;
 }
 
-_CODE_APS_ aps_group_tbl_ent_t *aps_group_search(u16 groupAddr, u8 endpoint)
+_CODE_APS_ aps_group_tbl_ent_t *aps_group_search(uint16_t groupAddr, uint8_t endpoint)
 {
     aps_group_tbl_ent_t *pEntry;
-    u8 *pEndpoint;
+    uint8_t *pEndpoint;
 
     pEntry = aps_group_search_by_addr(groupAddr);
     if (pEntry == NULL) {
@@ -188,7 +188,7 @@ _CODE_APS_ aps_status_t aps_me_group_add_req(aps_add_group_req_t *req)
 {
     aps_status_t status = APS_STATUS_SUCCESS;
     aps_group_tbl_ent_t *pEntry;
-    u8 *pEndpoint;
+    uint8_t *pEndpoint;
     if ((req->ep < 0x01) || (req->ep > 0xfe)) {
         status = APS_STATUS_INVALID_PARAMETER;
         return status;
@@ -214,7 +214,7 @@ _CODE_APS_ aps_status_t aps_me_group_add_req(aps_add_group_req_t *req)
             return APS_STATUS_TABLE_FULL;
         }
         //clear previous info
-        for (u8 j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
+        for (uint8_t j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
             pEntry->endpoints[j] = APS_GROUP_EP_INVALID;
         }
         memset(pEntry->group_name, 0, APS_GROUP_NAME_LEN);
@@ -226,7 +226,7 @@ _CODE_APS_ aps_status_t aps_me_group_add_req(aps_add_group_req_t *req)
     }//end if(pEntry)
 
     if (APS_STATUS_SUCCESS == status) {
-        TL_SCHEDULE_TASK(aps_groupTblSave2Flash,NULL);
+        ZB_SCHEDULE_TASK(aps_groupTblSave2Flash,NULL);
     }
 
     return status;
@@ -236,7 +236,7 @@ _CODE_APS_ aps_status_t aps_me_group_delete_req(aps_delete_group_req_t *req)
 {
     aps_status_t status = APS_STATUS_SUCCESS;
     aps_group_tbl_ent_t *pEntry;
-    u8 *pEndpoint;
+    uint8_t *pEndpoint;
 
     if ((req->ep < 0x01) || (req->ep > 0xfe)) {
         status = APS_STATUS_INVALID_PARAMETER;
@@ -260,10 +260,10 @@ _CODE_APS_ aps_status_t aps_me_group_delete_req(aps_delete_group_req_t *req)
         //pEntry->group_addr = APS_INVALID_GRP_ADDR;
     } else {
         //move the valid data to the first positions
-        u8 validEp[APS_EP_NUM_IN_GROUP_TBL];
+        uint8_t validEp[APS_EP_NUM_IN_GROUP_TBL];
         memset(validEp, APS_GROUP_EP_INVALID, APS_EP_NUM_IN_GROUP_TBL);
-        u8 validCnt = 0;
-        for (u8 m = 0; m < APS_EP_NUM_IN_GROUP_TBL; m++) {
+        uint8_t validCnt = 0;
+        for (uint8_t m = 0; m < APS_EP_NUM_IN_GROUP_TBL; m++) {
             if (pEntry->endpoints[m] != APS_GROUP_EP_INVALID) {
                 validEp[validCnt++] = pEntry->endpoints[m];
             }
@@ -272,7 +272,7 @@ _CODE_APS_ aps_status_t aps_me_group_delete_req(aps_delete_group_req_t *req)
     }
 
     if (APS_STATUS_SUCCESS == status) {
-        TL_SCHEDULE_TASK(aps_groupTblSave2Flash, NULL);
+        ZB_SCHEDULE_TASK(aps_groupTblSave2Flash, NULL);
     }
 
     return status;
@@ -281,24 +281,24 @@ _CODE_APS_ aps_status_t aps_me_group_delete_req(aps_delete_group_req_t *req)
 _CODE_APS_ void aps_groupTblReset(void)
 {
     aps_group_entry_num = 0;
-    for (u8 i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
+    for (uint8_t i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
         aps_group_tbl[i].group_addr = APS_INVALID_GRP_ADDR;
         aps_group_tbl[i].n_endpoints = 0;
-        for (u8 j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
+        for (uint8_t j = 0; j < APS_EP_NUM_IN_GROUP_TBL; j++) {
             aps_group_tbl[i].endpoints[j] = APS_GROUP_EP_INVALID;
         }
     }
 }
 
-_CODE_APS_ aps_status_t aps_me_group_delete_all_req(u8 ep)
+_CODE_APS_ aps_status_t aps_me_group_delete_all_req(uint8_t ep)
 {
     aps_status_t status = APS_STATUS_SUCCESS;
     aps_group_tbl_ent_t *pEntry;
-    u8 *pEndpoint;
-    u8 i = 0;
-    u8 index = 0;
-    u8 group_num = aps_group_entry_num;
-    u8 delete_group_entry = 0;
+    uint8_t *pEndpoint;
+    uint8_t i = 0;
+    uint8_t index = 0;
+    uint8_t group_num = aps_group_entry_num;
+    uint8_t delete_group_entry = 0;
 
     if ((ep < 0x01) || (ep > 0xfe)) {
         status = APS_STATUS_INVALID_PARAMETER;
@@ -326,10 +326,10 @@ _CODE_APS_ aps_status_t aps_me_group_delete_all_req(u8 ep)
                 delete_group_entry = 1;
             } else {
                 //move the valid data to the first positions
-                u8 validEp[APS_EP_NUM_IN_GROUP_TBL];
+                uint8_t validEp[APS_EP_NUM_IN_GROUP_TBL];
                 memset(validEp, APS_GROUP_EP_INVALID, APS_EP_NUM_IN_GROUP_TBL);
-                u8 validCnt = 0;
-                for (u8 m = 0; m < APS_EP_NUM_IN_GROUP_TBL; m++) {
+                uint8_t validCnt = 0;
+                for (uint8_t m = 0; m < APS_EP_NUM_IN_GROUP_TBL; m++) {
                     if (pEntry->endpoints[m] != APS_GROUP_EP_INVALID) {
                         validEp[validCnt++] = pEntry->endpoints[m];
                     }
@@ -348,19 +348,19 @@ _CODE_APS_ aps_status_t aps_me_group_delete_all_req(u8 ep)
     }//end while
 
 //    aps_groupTblReset();
-    TL_SCHEDULE_TASK(aps_groupTblSave2Flash, NULL);
+    ZB_SCHEDULE_TASK(aps_groupTblSave2Flash, NULL);
 
     return status;
 }
 
-_CODE_APS_ u8 aps_group_entry_num_get(void)
+_CODE_APS_ uint8_t aps_group_entry_num_get(void)
 {
     return aps_group_entry_num;
 }
 
-_CODE_APS_ void aps_group_list_get(u8 *counter, u16 *group_list)
+_CODE_APS_ void aps_group_list_get(uint8_t *counter, uint16_t *group_list)
 {
-    u8 i = 0;
+    uint8_t i = 0;
 
     if (!counter || !group_list) {
         return;
@@ -376,7 +376,7 @@ _CODE_APS_ void aps_group_list_get(u8 *counter, u16 *group_list)
 
 _CODE_APS_ void aps_init_group_num_set(void)
 {
-    for (u8 i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
+    for (uint8_t i = 0; i < APS_GROUP_TABLE_SIZE; i++) {
         if (aps_group_tbl[i].group_addr != APS_INVALID_GRP_ADDR) {
             aps_group_entry_num++;
         }

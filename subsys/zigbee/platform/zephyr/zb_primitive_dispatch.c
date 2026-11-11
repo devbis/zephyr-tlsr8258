@@ -6,12 +6,12 @@
  * Layer-queue primitive dispatch shim and AF callback bridge.
  *
  * The Zigbee SDK / libzigbee runtime moves MLME / NLDE / NLME
- * primitives between layers via tl_zbPrimitivePost(layerQ, primitive,
+ * primitives between layers via zb_PrimitivePost(layerQ, primitive,
  * arg). The vendor implementation (libzigbee/src/zb_task_queue.c)
  * funnels everything through a static per-layer queue (g_zbTaskQ[])
- * polled by ev_main() / tl_zbTaskProcedure().
+ * polled by ev_main() / zb_TaskProcedure().
  *
- * The Zephyr port uses tl_zbTaskPost() (a single Zephyr work queue)
+ * The Zephyr port uses zb_TaskPost() (a single Zephyr work queue)
  * for callbacks. This TU provides the platform dispatch boundary for
  * primitives that are not represented by a dedicated Zephyr work item,
  * while the vendor-derived MAC/NWK/APS/ZDO handlers remain authoritative.
@@ -44,12 +44,12 @@
 gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb __attribute__((weak)) = NULL;
 
 /*
- * tl_zbPrimitivePost / tl_zbTaskQPop / tl_zbUserTaskQNum live in
+ * zb_PrimitivePost / zb_TaskQPop / zb_UserTaskQNum live in
  * platform/zephyr/zb_task_queue_router.c backed by
  * a per-layer k_msgq.
  *
- * zb_buf_allocate / zb_buf_free / tl_bufInitalloc / zb_buf_clear /
- * is_zb_buf / tl_phyRxBufTozbBuf live in
+ * zb_buf_allocate / zb_buf_free / zb_bufInitalloc / zb_buf_clear /
+ * is_zb_buf / zb_phyRxBufTozbBuf live in
  * platform/zephyr/zb_buffer_zephyr.c backed by a
  * K_MEM_SLAB_DEFINE_STATIC pool of zb_buf_t.
  *
@@ -69,7 +69,7 @@ void af_dataCnfHandler(void *arg)
 	apsdeDataConf_t *cnf = (apsdeDataConf_t *)arg;
 	af_endpoint_descriptor_t *zdo_ep = af_zdoSimpleDescriptorGet();
 	af_endpoint_descriptor_t *ep_list = af_epDescriptorGet();
-	u8 ep_num = af_availableEpNumGet();
+	uint8_t ep_num = af_availableEpNumGet();
 
 	if (cnf == NULL) {
 		return;
@@ -78,13 +78,13 @@ void af_dataCnfHandler(void *arg)
 		zdo_ep->cb_cnf(arg);
 		return;
 	}
-	for (u8 i = 0; i < ep_num; i++) {
+	for (uint8_t i = 0; i < ep_num; i++) {
 		if (ep_list[i].cb_cnf != NULL && ep_list[i].ep == cnf->srcEndpoint) {
 			ep_list[i].cb_cnf(arg);
 			return;
 		}
 	}
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }
 
 /*
@@ -108,7 +108,7 @@ void af_dataCnfHandler(void *arg)
 #include "zdo/zdp.h"
 
 extern af_endpoint_descriptor_t *af_epDescriptorGet(void);
-extern u8 af_availableEpNumGet(void);
+extern uint8_t af_availableEpNumGet(void);
 extern af_endpoint_descriptor_t *af_zdoSimpleDescriptorGet(void);
 
 void af_aps_data_entry(void *arg)
@@ -138,9 +138,9 @@ void af_aps_data_entry(void *arg)
 
 	/* Application endpoint — find descriptor by ep, invoke cb_rx. */
 	af_endpoint_descriptor_t *epList = af_epDescriptorGet();
-	u8 epNum = af_availableEpNumGet();
+	uint8_t epNum = af_availableEpNumGet();
 
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		apsdeDataInd_t *ind;
 
 		if (epList[i].ep != ad->dst_ep || epList[i].cb_rx == NULL) {
@@ -153,7 +153,7 @@ void af_aps_data_entry(void *arg)
 		 * behind the indication, and release it themselves.
 		 */
 		ind = (apsdeDataInd_t *)ev_buf_allocate(
-			(u16)(sizeof(*ind) + ad->asduLength));
+			(uint16_t)(sizeof(*ind) + ad->asduLength));
 		if (ind == NULL) {
 			break;
 		}

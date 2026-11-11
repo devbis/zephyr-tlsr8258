@@ -34,35 +34,35 @@
 
 
 typedef union {
-    u8 opt;
+    uint8_t opt;
     struct {
-        u8 optLen:4;
-        u8 optId:4;
+        uint8_t optLen:4;
+        uint8_t optId:4;
     } bits;
 } optSelector_t;
 
 typedef union {
-    u8 opt;
+    uint8_t opt;
     struct {
-        u8 side:1;
-        u8 manuIdPresent:1;
-        u8 resv:6;
+        uint8_t side:1;
+        uint8_t manuIdPresent:1;
+        uint8_t resv:6;
     } bits;
 } attrOpt_t;
 
 typedef struct {
-    u8 contactStatus;
-    u8 contactBitmask;
+    uint8_t contactStatus;
+    uint8_t contactBitmask;
 } genSwitchCmd_t;
 
 typedef struct _attribute_packed_ {
-    u8 reportId;
-    u8 attrOffsetWithinReport;
-    u16 clusterId;
-    u16 attrId;
-    u8 attrDataType;
+    uint8_t reportId;
+    uint8_t attrOffsetWithinReport;
+    uint16_t clusterId;
+    uint16_t attrId;
+    uint8_t attrDataType;
     attrOpt_t attrOpt;
-    u16 manuId;
+    uint16_t manuId;
 } compactAttrReport_t;
 
 typedef struct _attribute_packed_ {
@@ -87,16 +87,16 @@ typedef union _attribute_packed_ {
 typedef struct _attribute_packed_ {
     gpdId_t gpdId;
     transOpt_t options;
-    u8 gpdEndpoint;
-    u8 gpdCommand;
-    u8 endpoint;
-    u16 profileId;
-    u16 clusterId;
-    u8 zbCommandId;
-    u8 zbCmdPayloadLen;
-    u8 optRecordUsed;
-    u8 used;                                    //20-bytes
-    u8 zbCmdPayload[ZB_CMD_PAYLOAD_LEN_MAX];    //8-bytes
+    uint8_t gpdEndpoint;
+    uint8_t gpdCommand;
+    uint8_t endpoint;
+    uint16_t profileId;
+    uint16_t clusterId;
+    uint8_t zbCommandId;
+    uint8_t zbCmdPayloadLen;
+    uint8_t optRecordUsed;
+    uint8_t used;                                    //20-bytes
+    uint8_t zbCmdPayload[ZB_CMD_PAYLOAD_LEN_MAX];    //8-bytes
     optRecord_t optRecord;
 } transTabEntry_t; //39-bytes
 
@@ -104,12 +104,12 @@ typedef struct _attribute_packed_ {
  *  @brief	Sink translation configuration
  */
 typedef struct {
-    u8 gpdDevId;
-    u8 gpdCmdId;
-    u16 zbClusterId;
-    u8 zbCmdId;
-    u8 zbCmdPayloadLen;
-    u8 zbCmdPayload[ZB_CMD_PAYLOAD_LEN_MAX];
+    uint8_t gpdDevId;
+    uint8_t gpdCmdId;
+    uint16_t zbClusterId;
+    uint8_t zbCmdId;
+    uint8_t zbCmdPayloadLen;
+    uint8_t zbCmdPayload[ZB_CMD_PAYLOAD_LEN_MAX];
 } gp_transCfg_t;
 
 /***************************************************************************
@@ -117,38 +117,38 @@ typedef struct {
 */
 typedef struct _attribute_packed_ {
     transTabEntry_t transTab[GPS_MAX_TRANS_TABLE_ENTRIES];
-    u8 transTabNum;
+    uint8_t transTabNum;
 } gp_translationTab_t;
 
-extern u8 GP_TRANS_CFG_LIST_NUM;
+extern uint8_t GP_TRANS_CFG_LIST_NUM;
 extern const gp_transCfg_t g_gpTransCfgList[];
 extern gp_translationTab_t g_gpTransTab;
 
 
 void gp_transTabInit(void);
 void gp_transTabNvUpdate(void);
-u8 gp_transTabNumGet(void);
-u8 gp_transTabEntryLenGet(transTabEntry_t *pTransEntry);
-u8 gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, u8 *pBuf);
+uint8_t gp_transTabNumGet(void);
+uint8_t gp_transTabEntryLenGet(transTabEntry_t *pTransEntry);
+uint8_t gp_buildTransTabEntryFormat(transTabEntry_t *pTransEntry, uint8_t *pBuf);
 void gp_transTabEntryClear(transTabEntry_t *pTransEntry);
-void gp_transTabEntryRemove(u8 appId, gpdId_t gpdId, u8 endpoint);
-transTabEntry_t *gp_transTabReportUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                         u8 reportId, bool side,
-                                         u16 clusterId, u16 manuId,
+void gp_transTabEntryRemove(uint8_t appId, gpdId_t gpdId, uint8_t endpoint);
+transTabEntry_t *gp_transTabReportUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                         uint8_t reportId, bool side,
+                                         uint16_t clusterId, uint16_t manuId,
                                          gpAttrRecord_t *pAttrRecord);
-transTabEntry_t *gp_transTabGenSwitchUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
+transTabEntry_t *gp_transTabGenSwitchUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
                                             gpSwitchInfo_t *pSwitchInfo);
-transTabEntry_t *gp_transTabEntryFind(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                      u8 gpdCommand, u8 zbEndpoint,
-                                      u16 clusterId, u16 profileId,
-                                      u8 reportId, u16 attrId);
-transTabEntry_t *gpTransTabUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
+transTabEntry_t *gp_transTabEntryFind(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                      uint8_t gpdCommand, uint8_t zbEndpoint,
+                                      uint16_t clusterId, uint16_t profileId,
+                                      uint8_t reportId, uint16_t attrId);
+transTabEntry_t *gpTransTabUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
                                   transTabEntry_t *pTransTabEntry,
                                   gpTranslation_t *pTransLation);
-void gp_transTabUpdateWithCfg(u8 appId, gpdId_t gpdId, u8 endpoint,
-                              u8 devId, u8 numOfCmd,
-                              u8 *pCmdList, u8 *pClusterList);
-void gp_gpdfTranslate(u8 appId, gpdId_t gpdId, u8 endpoint,
-                      u8 gpdCmdId, u8 dataLen, u8 *pData);
+void gp_transTabUpdateWithCfg(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                              uint8_t devId, uint8_t numOfCmd,
+                              uint8_t *pCmdList, uint8_t *pClusterList);
+void gp_gpdfTranslate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                      uint8_t gpdCmdId, uint8_t dataLen, uint8_t *pData);
 
 #endif	/* GP_TRANS_H */

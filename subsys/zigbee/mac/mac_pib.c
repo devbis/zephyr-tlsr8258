@@ -30,45 +30,45 @@
 
 /* PIB access and min/max table type */
 typedef struct {
-    u8 offset;
-    u8 len;
-    u8 min;
-    u8 max;
+    uint8_t offset;
+    uint8_t len;
+    uint8_t min;
+    uint8_t max;
 } mac_pibTbl_t;
 
 const mac_pibTbl_t g_zbMacPibTbl[] = {
-    {OFFSETOF(tl_zb_mac_pib_t, ackWaitDuration),        sizeof(u8), 54, 54},            /* MAC_ACK_WAIT_DURATION */
-    {OFFSETOF(tl_zb_mac_pib_t, associationPermit),      sizeof(bool), FALSE, TRUE},     /* MAC_ASSOCIATION_PERMIT */
-    {OFFSETOF(tl_zb_mac_pib_t, autoReq),                sizeof(bool), FALSE, TRUE},     /* MAC_AUTO_REQUEST */
-    {OFFSETOF(tl_zb_mac_pib_t, battLifeExt),            sizeof(bool), FALSE, TRUE},     /* MAC_BATT_LIFE_EXT */
-    {OFFSETOF(tl_zb_mac_pib_t, battLifeExtPeriods),     sizeof(u8), 6, 6},              /* MAC_BATT_LIFE_EXT_PERIODS */
-    {OFFSETOF(tl_zb_mac_pib_t, beaconPayload),          sizeof(zb_mac_beacon_payload_t), 0, 0}, /* MAC_BEACON_PAYLOAD */
-    {OFFSETOF(tl_zb_mac_pib_t, beaconPayloadLen),       sizeof(u8), 0, 52},             /* MAC_BEACON_PAYLOAD_LENGTH */
-    {OFFSETOF(tl_zb_mac_pib_t, beaconOrder),            sizeof(u8), 0, 15},             /* MAC_BEACON_ORDER */
-    {OFFSETOF(tl_zb_mac_pib_t, beaconTxTime),           sizeof(u32), 1, 1},             /* MAC_BEACON_TX_TIME */
-    {OFFSETOF(tl_zb_mac_pib_t, beaconSeqNum),           sizeof(u8), 0x00, 0xFF},        /* MAC_BSN */
-    {OFFSETOF(tl_zb_mac_pib_t, coordExtAddress),        sizeof(addrExt_t), 0, 0},       /* MAC_COORD_EXTENDED_ADDRESS */
-    {OFFSETOF(tl_zb_mac_pib_t, coordShortAddress),      sizeof(u16), 0, 0},             /* MAC_COORD_SHORT_ADDRESS */
-    {OFFSETOF(tl_zb_mac_pib_t, seqNum),                 sizeof(u8), 0x00, 0xFF},        /* MAC_DSN */
-    {OFFSETOF(tl_zb_mac_pib_t, gtsPermit),              sizeof(bool), FALSE, TRUE},     /* MAC_GTS_PERMIT */
-    {OFFSETOF(tl_zb_mac_pib_t, maxCsmaBackoffs),        sizeof(u8), 0, 254},            /* MAC_MAX_CSMA_BACKOFFS */
-    {OFFSETOF(tl_zb_mac_pib_t, minBe),                  sizeof(u8), 0, 8},              /* MAC_MIN_BE */
-    {OFFSETOF(tl_zb_mac_pib_t, panId),                  sizeof(u16), 0, 0},             /* MAC_PAN_ID */
-    {OFFSETOF(tl_zb_mac_pib_t, promiscuousMode),        sizeof(bool), FALSE, TRUE},     /* MAC_PROMISCUOUS_MODE */
-    {OFFSETOF(tl_zb_mac_pib_t, rxOnWhenIdle),           sizeof(bool), FALSE, TRUE},     /* MAC_RX_ON_WHEN_IDLE */
-    {OFFSETOF(tl_zb_mac_pib_t, shortAddress),           sizeof(u16), 0, 0},             /* MAC_SHORT_ADDRESS */
-    {OFFSETOF(tl_zb_mac_pib_t, superframeOrder),        sizeof(u8), 0, 15},             /* MAC_SUPERFRAME_ORDER */
-    {OFFSETOF(tl_zb_mac_pib_t, transactionPersistenceTime), sizeof(u16), 0, 0},         /* MAC_TRANSACTION_PERSISTENCE_TIME */
-    {OFFSETOF(tl_zb_mac_pib_t, associatedPanCoord),     sizeof(bool), FALSE, TRUE},     /* MAC_ASSOCIATED_PAN_COORD */
-    {OFFSETOF(tl_zb_mac_pib_t, maxBe),                  sizeof(u8), 0, 8},              /* MAC_MAX_BE */
-    {OFFSETOF(tl_zb_mac_pib_t, frameTotalWaitTime),     sizeof(u16), 0x00, 0xFF},       /* MAC_MAX_FRAME_RESPONSE_TIME */
-    {OFFSETOF(tl_zb_mac_pib_t, frameRetryNum),          sizeof(u8), 0, 7},              /* MAC_MAX_FRAME_RETRIES */
-    {OFFSETOF(tl_zb_mac_pib_t, respWaitTime),           sizeof(u8), 2, 64},             /* MAC_RESPONSE_WAIT_TIME */
-    {OFFSETOF(tl_zb_mac_pib_t, syncSymbolOffset),       sizeof(u8), 0, 0},              /* MAC_SYNC_SYMBOL_OFFSET */
-    {OFFSETOF(tl_zb_mac_pib_t, timeStampSupported),     sizeof(bool), FALSE, TRUE},     /* MAC_TIMESTAMP_SUPPORTED */
-    {OFFSETOF(tl_zb_mac_pib_t, securityEnabled),        sizeof(bool), FALSE, TRUE},     /* MAC_SECURITY_ENABLED */
-    {OFFSETOF(tl_zb_mac_pib_t, extAddress),             sizeof(addrExt_t), FALSE, TRUE},/* MAC_SECURITY_ENABLED */
-    {OFFSETOF(tl_zb_mac_pib_t, txPower),                sizeof(u8), 0, 11},             /* MAC_SECURITY_ENABLED */
+    {OFFSETOF(zb_mac_pib_t, ackWaitDuration),        sizeof(uint8_t), 54, 54},            /* MAC_ACK_WAIT_DURATION */
+    {OFFSETOF(zb_mac_pib_t, associationPermit),      sizeof(bool), FALSE, TRUE},     /* MAC_ASSOCIATION_PERMIT */
+    {OFFSETOF(zb_mac_pib_t, autoReq),                sizeof(bool), FALSE, TRUE},     /* MAC_AUTO_REQUEST */
+    {OFFSETOF(zb_mac_pib_t, battLifeExt),            sizeof(bool), FALSE, TRUE},     /* MAC_BATT_LIFE_EXT */
+    {OFFSETOF(zb_mac_pib_t, battLifeExtPeriods),     sizeof(uint8_t), 6, 6},              /* MAC_BATT_LIFE_EXT_PERIODS */
+    {OFFSETOF(zb_mac_pib_t, beaconPayload),          sizeof(zb_mac_beacon_payload_t), 0, 0}, /* MAC_BEACON_PAYLOAD */
+    {OFFSETOF(zb_mac_pib_t, beaconPayloadLen),       sizeof(uint8_t), 0, 52},             /* MAC_BEACON_PAYLOAD_LENGTH */
+    {OFFSETOF(zb_mac_pib_t, beaconOrder),            sizeof(uint8_t), 0, 15},             /* MAC_BEACON_ORDER */
+    {OFFSETOF(zb_mac_pib_t, beaconTxTime),           sizeof(uint32_t), 1, 1},             /* MAC_BEACON_TX_TIME */
+    {OFFSETOF(zb_mac_pib_t, beaconSeqNum),           sizeof(uint8_t), 0x00, 0xFF},        /* MAC_BSN */
+    {OFFSETOF(zb_mac_pib_t, coordExtAddress),        sizeof(addrExt_t), 0, 0},       /* MAC_COORD_EXTENDED_ADDRESS */
+    {OFFSETOF(zb_mac_pib_t, coordShortAddress),      sizeof(uint16_t), 0, 0},             /* MAC_COORD_SHORT_ADDRESS */
+    {OFFSETOF(zb_mac_pib_t, seqNum),                 sizeof(uint8_t), 0x00, 0xFF},        /* MAC_DSN */
+    {OFFSETOF(zb_mac_pib_t, gtsPermit),              sizeof(bool), FALSE, TRUE},     /* MAC_GTS_PERMIT */
+    {OFFSETOF(zb_mac_pib_t, maxCsmaBackoffs),        sizeof(uint8_t), 0, 254},            /* MAC_MAX_CSMA_BACKOFFS */
+    {OFFSETOF(zb_mac_pib_t, minBe),                  sizeof(uint8_t), 0, 8},              /* MAC_MIN_BE */
+    {OFFSETOF(zb_mac_pib_t, panId),                  sizeof(uint16_t), 0, 0},             /* MAC_PAN_ID */
+    {OFFSETOF(zb_mac_pib_t, promiscuousMode),        sizeof(bool), FALSE, TRUE},     /* MAC_PROMISCUOUS_MODE */
+    {OFFSETOF(zb_mac_pib_t, rxOnWhenIdle),           sizeof(bool), FALSE, TRUE},     /* MAC_RX_ON_WHEN_IDLE */
+    {OFFSETOF(zb_mac_pib_t, shortAddress),           sizeof(uint16_t), 0, 0},             /* MAC_SHORT_ADDRESS */
+    {OFFSETOF(zb_mac_pib_t, superframeOrder),        sizeof(uint8_t), 0, 15},             /* MAC_SUPERFRAME_ORDER */
+    {OFFSETOF(zb_mac_pib_t, transactionPersistenceTime), sizeof(uint16_t), 0, 0},         /* MAC_TRANSACTION_PERSISTENCE_TIME */
+    {OFFSETOF(zb_mac_pib_t, associatedPanCoord),     sizeof(bool), FALSE, TRUE},     /* MAC_ASSOCIATED_PAN_COORD */
+    {OFFSETOF(zb_mac_pib_t, maxBe),                  sizeof(uint8_t), 0, 8},              /* MAC_MAX_BE */
+    {OFFSETOF(zb_mac_pib_t, frameTotalWaitTime),     sizeof(uint16_t), 0x00, 0xFF},       /* MAC_MAX_FRAME_RESPONSE_TIME */
+    {OFFSETOF(zb_mac_pib_t, frameRetryNum),          sizeof(uint8_t), 0, 7},              /* MAC_MAX_FRAME_RETRIES */
+    {OFFSETOF(zb_mac_pib_t, respWaitTime),           sizeof(uint8_t), 2, 64},             /* MAC_RESPONSE_WAIT_TIME */
+    {OFFSETOF(zb_mac_pib_t, syncSymbolOffset),       sizeof(uint8_t), 0, 0},              /* MAC_SYNC_SYMBOL_OFFSET */
+    {OFFSETOF(zb_mac_pib_t, timeStampSupported),     sizeof(bool), FALSE, TRUE},     /* MAC_TIMESTAMP_SUPPORTED */
+    {OFFSETOF(zb_mac_pib_t, securityEnabled),        sizeof(bool), FALSE, TRUE},     /* MAC_SECURITY_ENABLED */
+    {OFFSETOF(zb_mac_pib_t, extAddress),             sizeof(addrExt_t), FALSE, TRUE},/* MAC_SECURITY_ENABLED */
+    {OFFSETOF(zb_mac_pib_t, txPower),                sizeof(uint8_t), 0, 11},             /* MAC_SECURITY_ENABLED */
 };
 
 /*
@@ -83,7 +83,7 @@ const mac_pibTbl_t g_zbMacPibTbl[] = {
  * @return MAC_SUCCESS if it's successful, or MAC_INVALID_PARAMETER
  *
  * */
-_CODE_MAC_ u8 tl_zbMacAttrSet(u8 attribute, u8 *value, u8 len)
+_CODE_MAC_ uint8_t zb_MacAttrSet(uint8_t attribute, uint8_t *value, uint8_t len)
 {
     if (attribute == MAC_TX_POWER) {
         if (*value > 11) {
@@ -104,7 +104,7 @@ _CODE_MAC_ u8 tl_zbMacAttrSet(u8 attribute, u8 *value, u8 len)
         return MAC_STA_INVALID_PARAMETER;
     }
 
-    memcpy((u8 *)&g_zbMacPib + g_zbMacPibTbl[attribute - MAC_PIB_ATTRIBUTE_START].offset, value, len);
+    memcpy((uint8_t *)&g_zbMacPib + g_zbMacPibTbl[attribute - MAC_PIB_ATTRIBUTE_START].offset, value, len);
 
     return MAC_SUCCESS;
 }
@@ -121,7 +121,7 @@ _CODE_MAC_ u8 tl_zbMacAttrSet(u8 attribute, u8 *value, u8 len)
  * @return MAC_SUCCESS if it's successful, or MAC_INVALID_PARAMETER
  *
  * */
-_CODE_MAC_ u8 tl_zbMacAttrGet(u8 attribute, u8 *value, u8 *len)
+_CODE_MAC_ uint8_t zb_MacAttrGet(uint8_t attribute, uint8_t *value, uint8_t *len)
 {
     if (attribute == MAC_PHY_ATTR_CURRENT_CHANNEL) {
         *value = g_zbMacPib.phyChannelCur;
@@ -133,7 +133,7 @@ _CODE_MAC_ u8 tl_zbMacAttrGet(u8 attribute, u8 *value, u8 *len)
     }
 
     *len = g_zbMacPibTbl[attribute - MAC_PIB_ATTRIBUTE_START].len;
-    memcpy(value, (u8 *)&g_zbMacPib + g_zbMacPibTbl[attribute - MAC_PIB_ATTRIBUTE_START].offset, *len);
+    memcpy(value, (uint8_t *)&g_zbMacPib + g_zbMacPibTbl[attribute - MAC_PIB_ATTRIBUTE_START].offset, *len);
 
     return MAC_SUCCESS;
 }
@@ -146,8 +146,8 @@ _CODE_MAC_ u8 tl_zbMacAttrGet(u8 attribute, u8 *value, u8 *len)
  */
 _CODE_MAC_ void generateIEEEAddr(void)
 {
-    u8 addr[8];
-    const u8 *radioAddr = zb_platform_runtime_ieee_addr_get();
+    uint8_t addr[8];
+    const uint8_t *radioAddr = zb_platform_runtime_ieee_addr_get();
 
     if (radioAddr != NULL) {
         memcpy(addr, radioAddr, sizeof(addr));

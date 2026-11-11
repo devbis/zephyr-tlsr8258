@@ -21,9 +21,9 @@ enum {
 	NWK_ROUTE_DISC_TABLE_SIZE = 10,
 };
 
-void nwkRouteDiscStatusCodeSend(zb_buf_t *buf, u16 srcAddr, u16 dstAddr, u8 status);
-u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req);
-void nwkRouteReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
+void nwkRouteDiscStatusCodeSend(zb_buf_t *buf, uint16_t srcAddr, uint16_t dstAddr, uint8_t status);
+uint8_t nwkRouteDiscStart(nlme_routeDisc_req_t *req);
+void nwkRouteReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle);
 zb_buf_t *nwkRouteDiscCachePacketCopy(zb_buf_t *src, nwk_hdr_t *pNwkHdr,
 				      const nwkCmd_routeReq_t *cmdTail);
 int nwkConcentDiscTimerCb(void *arg);
@@ -32,8 +32,8 @@ int nwkRouteReplySendDelay(void *arg);
 
 nwk_routeDiscEntry_t g_routeDiscTab[NWK_ROUTE_DISC_TABLE_SIZE];
 ev_timer_event_t *concentratorDiscoveryTimer = NULL;
-u8 g_routeReqId = 0;
-u8 g_routeDiscTabCnt = 0;
+uint8_t g_routeReqId = 0;
+uint8_t g_routeDiscTabCnt = 0;
 
 static inline bool nwk_route_disc_used(const nwk_routeDiscEntry_t *entry)
 {
@@ -45,17 +45,17 @@ enum {
 };
 
 typedef struct _attribute_packed_ {
-	u8 radius;
-	u8 routeReqId;
-	u16 originatorAddr;
-	u16 responderAddr;
-	u16 prevHop;
-	u8 linkCost;
+	uint8_t radius;
+	uint8_t routeReqId;
+	uint16_t originatorAddr;
+	uint16_t responderAddr;
+	uint16_t prevHop;
+	uint8_t linkCost;
 } nwk_route_reply_delay_t;
 
 STATIC_ASSERT(sizeof(nwk_route_reply_delay_t) == 9);
 
-static u8 nwkDiscDataPendSend(u16 dstAddr, u8 routeReqId)
+static uint8_t nwkDiscDataPendSend(uint16_t dstAddr, uint8_t routeReqId)
 {
 	nwk_txDataPendEntry_t *pend;
 
@@ -66,7 +66,7 @@ static u8 nwkDiscDataPendSend(u16 dstAddr, u8 routeReqId)
 			cache = (nwk_route_disc_cache_buf_t *)pend->srcBuf;
 			cache->savedHandle = pend->handle;
 			pend->needRouteDisc = 0;
-			tl_zbTaskPost(nwkMsgSendCb, cache);
+			zb_TaskPost(nwkMsgSendCb, cache);
 			pend->srcBuf = NULL;
 		}
 
@@ -76,7 +76,7 @@ static u8 nwkDiscDataPendSend(u16 dstAddr, u8 routeReqId)
 	return 0;
 }
 
-static void nwkDiscDataPendClear(u16 dstAddr, u8 routeReqId)
+static void nwkDiscDataPendClear(uint16_t dstAddr, uint8_t routeReqId)
 {
 	nwk_txDataPendEntry_t *pend;
 
@@ -126,14 +126,14 @@ void nwkRouteDiscTabEntryClear(nwk_routeDiscEntry_t *entry)
 
 void nwkRouteDiscTabInit(void)
 {
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		nwkRouteDiscTabEntryRst(&g_routeDiscTab[i]);
 	}
 }
 
-nwk_routeDiscEntry_t *nwkRouteDiscEntryFind(u16 srcAddr, u8 routeReqId)
+nwk_routeDiscEntry_t *nwkRouteDiscEntryFind(uint16_t srcAddr, uint8_t routeReqId)
 {
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		nwk_routeDiscEntry_t *entry = &g_routeDiscTab[i];
 
 		if (nwk_route_disc_used(entry) && entry->srcAddr == srcAddr &&
@@ -145,9 +145,9 @@ nwk_routeDiscEntry_t *nwkRouteDiscEntryFind(u16 srcAddr, u8 routeReqId)
 	return NULL;
 }
 
-nwk_routeDiscEntry_t *nwkRouteDiscEntryDstFind(u16 dstAddr)
+nwk_routeDiscEntry_t *nwkRouteDiscEntryDstFind(uint16_t dstAddr)
 {
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		nwk_routeDiscEntry_t *entry = &g_routeDiscTab[i];
 
 		if (nwk_route_disc_used(entry) && entry->dstAddr == dstAddr) {
@@ -164,7 +164,7 @@ nwk_routeDiscEntry_t *nwkManyToOneRouteDiscEntryInitFind(void)
 	 * used flag and additionally requires the entry to have been initiated
 	 * locally: the destination must be the
 	 * router/coordinator broadcast address and the source our own nwkAddr. */
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		nwk_routeDiscEntry_t *entry = &g_routeDiscTab[i];
 
 		if ((entry->dstAddr == NWK_BROADCAST_ROUTER_COORDINATOR) &&
@@ -176,12 +176,12 @@ nwk_routeDiscEntry_t *nwkManyToOneRouteDiscEntryInitFind(void)
 	return NULL;
 }
 
-nwk_routeDiscEntry_t *nwkRouteDiscEntryCreate(u16 srcAddr, u16 dstAddr, u16 senderAddr,
-					      u8 forwardCost, u8 lastCost, u8 routeReqId)
+nwk_routeDiscEntry_t *nwkRouteDiscEntryCreate(uint16_t srcAddr, uint16_t dstAddr, uint16_t senderAddr,
+					      uint8_t forwardCost, uint8_t lastCost, uint8_t routeReqId)
 {
 	nwk_routeDiscEntry_t *entry = NULL;
 
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		if (!g_routeDiscTab[i].used) {
 			entry = &g_routeDiscTab[i];
 			break;
@@ -214,15 +214,15 @@ nwk_routeDiscEntry_t *nwkRouteDiscEntryCreate(u16 srcAddr, u16 dstAddr, u16 send
  * and forwards it.  The reconstruction used to allocate and build all three
  * itself from a discovery-table entry.
  */
-void nwkRouteReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkRouteReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 len = cmd->rreq.options.dstIeeeAddr ? 14U : 6U;
-	u8 *payload;
+	uint8_t len = cmd->rreq.options.dstIeeeAddr ? 14U : 6U;
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, len, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, len, payload, uint8_t *);
 
 	payload[0] = cmd->cmdId;
-	payload[1] = *(u8 *)&cmd->rreq.options;
+	payload[1] = *(uint8_t *)&cmd->rreq.options;
 	payload[2] = cmd->rreq.routeReqId;
 	memcpy(payload + 3, &cmd->rreq.dstAddr, sizeof(cmd->rreq.dstAddr));
 	payload[5] = cmd->rreq.pathCost;
@@ -240,7 +240,7 @@ void nwkRouteReqCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 han
 static inline void nwk_route_disc_cache_load(const zb_buf_t *cached, nwk_hdr_t *hdr, nwkCmd_t *cmd)
 {
 	memcpy(hdr, cached, sizeof(*hdr));
-	memcpy(&cmd->rreq, (const u8 *)cached + sizeof(*hdr), sizeof(cmd->rreq));
+	memcpy(&cmd->rreq, (const uint8_t *)cached + sizeof(*hdr), sizeof(cmd->rreq));
 }
 
 static void nwk_route_req_cache_update(zb_buf_t *cache, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
@@ -250,14 +250,14 @@ static void nwk_route_req_cache_update(zb_buf_t *cache, nwk_hdr_t *pNwkHdr, nwkC
 	}
 
 	memcpy(cache, pNwkHdr, sizeof(*pNwkHdr));
-	memcpy((u8 *)cache + sizeof(*pNwkHdr), &cmd->rreq, sizeof(cmd->rreq));
+	memcpy((uint8_t *)cache + sizeof(*pNwkHdr), &cmd->rreq, sizeof(cmd->rreq));
 }
 
 static void nwk_route_req_cache_forward(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd,
 					nwk_routeDiscEntry_t *entry)
 {
 	zb_buf_t *cache;
-	u32 delay;
+	uint32_t delay;
 
 	if ((entry == NULL) || (pNwkHdr->radius == 0U) || !ev_timer_enough()) {
 		return;
@@ -274,21 +274,21 @@ static void nwk_route_req_cache_forward(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t 
 	if (delay <= 1U) {
 		delay = 2U;
 	}
-	entry->retryTimer = ev_timer_taskPost(nwkRouteReqRetry, entry, (u16)(delay << 1));
+	entry->retryTimer = ev_timer_taskPost(nwkRouteReqRetry, entry, (uint16_t)(delay << 1));
 }
 
 static void nwk_route_req_reply_schedule(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_routeReq_t *rreq,
-					 u16 prevHop, u8 linkCost)
+					 uint16_t prevHop, uint8_t linkCost)
 {
 	nwk_route_reply_delay_t *delay = (nwk_route_reply_delay_t *)arg;
 
-	delay->radius = (u8)(g_zbNIB.maxDepth << 1);
+	delay->radius = (uint8_t)(g_zbNIB.maxDepth << 1);
 	delay->routeReqId = rreq->routeReqId;
 	delay->originatorAddr = pNwkHdr->srcAddr;
 	delay->responderAddr = rreq->dstAddr;
 	delay->prevHop = prevHop;
 	delay->linkCost = linkCost;
-	tl_zbTaskPost((tl_zb_callback_t)nwkRouteReplySendDelay, arg);
+	zb_TaskPost((zb_callback_t)nwkRouteReplySendDelay, arg);
 }
 
 int nwkRouteReqRetry(void *arg)
@@ -296,7 +296,7 @@ int nwkRouteReqRetry(void *arg)
 	nwk_routeDiscEntry_t *entry = (nwk_routeDiscEntry_t *)arg;
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u8 retries;
+	uint8_t retries;
 	bool replay = FALSE;
 
 	memset(&cmd, 0, sizeof(cmd));
@@ -307,7 +307,7 @@ int nwkRouteReqRetry(void *arg)
 	}
 
 	retries = entry->retries;
-	entry->retries = (u8)(retries + 1U);
+	entry->retries = (uint8_t)(retries + 1U);
 
 	/* Give up only once the retry count is strictly greater than the limit. */
 	if (retries > NWKC_RREQ_RETRIES) {
@@ -339,10 +339,10 @@ int nwkRouteReqInitialRetry(void *arg)
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
 	zb_buf_t *buf;
-	u8 retries = entry->retries;
+	uint8_t retries = entry->retries;
 
 	memset(&cmd, 0, sizeof(cmd));
-	entry->retries = (u8)(retries + 1U);
+	entry->retries = (uint8_t)(retries + 1U);
 
 	if (retries >= NWKC_INITIAL_RREQ_RETRIES) {
 		if (entry->buf != NULL) {
@@ -375,27 +375,27 @@ int nwkRouteReqInitialRetry(void *arg)
 	return 0;
 }
 
-void nwkRouteReplyCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkRouteReplyCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 *payload;
-	u8 payloadLen;
+	uint8_t *payload;
+	uint8_t payloadLen;
 
-	payloadLen = ((*(u8 *)&cmd->rrep.options & BIT(4)) != 0U) ? 16U : 8U;
-	if ((*(u8 *)&cmd->rrep.options & BIT(5)) != 0U) {
-		payloadLen = (u8)(payloadLen + 8U);
+	payloadLen = ((*(uint8_t *)&cmd->rrep.options & BIT(4)) != 0U) ? 16U : 8U;
+	if ((*(uint8_t *)&cmd->rrep.options & BIT(5)) != 0U) {
+		payloadLen = (uint8_t)(payloadLen + 8U);
 	}
-	TL_BUF_INITIAL_ALLOC(buf, payloadLen, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, payloadLen, payload, uint8_t *);
 
 	payload[0] = cmd->cmdId;
-	payload[1] = *(u8 *)&cmd->rrep.options;
+	payload[1] = *(uint8_t *)&cmd->rrep.options;
 	payload[2] = cmd->rrep.routeReqId;
 	memcpy(payload + 3, &cmd->rrep.originatorAddr, sizeof(cmd->rrep.originatorAddr));
 	memcpy(payload + 5, &cmd->rrep.responderAddr, sizeof(cmd->rrep.responderAddr));
 	payload[7] = cmd->rrep.pathCost;
 
-	if ((*(u8 *)&cmd->rrep.options & BIT(4)) != 0U) {
+	if ((*(uint8_t *)&cmd->rrep.options & BIT(4)) != 0U) {
 		ZB_IEEE_ADDR_COPY(payload + 8, cmd->rrep.originatorIeeeAddr);
-	} else if ((*(u8 *)&cmd->rrep.options & BIT(5)) != 0U) {
+	} else if ((*(uint8_t *)&cmd->rrep.options & BIT(5)) != 0U) {
 		ZB_IEEE_ADDR_COPY(payload + 8, cmd->rrep.responderIeeeAddr);
 	}
 
@@ -403,17 +403,17 @@ void nwkRouteReplyCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 h
 	nwk_tx(buf, pNwkHdr, pNwkHdr->dstAddr, 0, payload, payloadLen);
 }
 
-void nwkRouteRecordCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+void nwkRouteRecordCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 payloadLen;
-	u8 *payload;
+	uint8_t payloadLen;
+	uint8_t *payload;
 
 	if (buf == NULL || pNwkHdr == NULL || cmd == NULL) {
 		return;
 	}
 
-	payloadLen = (u8)(2U + ((u16)cmd->rrec.relayCnt * sizeof(u16)));
-	TL_BUF_INITIAL_ALLOC(buf, payloadLen, payload, u8 *);
+	payloadLen = (uint8_t)(2U + ((uint16_t)cmd->rrec.relayCnt * sizeof(uint16_t)));
+	ZB_BUF_INITIAL_ALLOC(buf, payloadLen, payload, uint8_t *);
 	if (payload == NULL) {
 		return;
 	}
@@ -421,7 +421,7 @@ void nwkRouteRecordCmdSend(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 
 	payload[0] = cmd->cmdId;
 	payload[1] = cmd->rrec.relayCnt;
 	if (cmd->rrec.relayCnt != 0U && cmd->rrec.relayList != NULL) {
-		memcpy(payload + 2, cmd->rrec.relayList, (size_t)cmd->rrec.relayCnt * sizeof(u16));
+		memcpy(payload + 2, cmd->rrec.relayList, (size_t)cmd->rrec.relayCnt * sizeof(uint16_t));
 	}
 
 	buf->hdr.handle = handle;
@@ -439,7 +439,7 @@ zb_buf_t *nwkRouteDiscCachePacketCopy(zb_buf_t *src, nwk_hdr_t *pNwkHdr,
 	if (buf != NULL) {
 		memcpy(buf, src, NWK_ROUTE_DISC_CACHE_SIZE);
 		memcpy(buf, pNwkHdr, sizeof(*pNwkHdr));
-		memcpy((u8 *)buf + sizeof(*pNwkHdr), cmdTail, sizeof(*cmdTail));
+		memcpy((uint8_t *)buf + sizeof(*pNwkHdr), cmdTail, sizeof(*cmdTail));
 		buf->hdr.handle = NWK_INTERNAL_ROUTE_REQ_CMD_HANDLE;
 	}
 
@@ -456,8 +456,8 @@ void nwkRouteReqConcentInitiation(zb_buf_t *buf, nlme_routeDisc_req_t *req,
 {
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u8 security = 0;
-	u8 radius;
+	uint8_t security = 0;
+	uint8_t radius;
 
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&cmd, 0, sizeof(cmd));
@@ -477,7 +477,7 @@ void nwkRouteReqConcentInitiation(zb_buf_t *buf, nlme_routeDisc_req_t *req,
 	hdr.seqNum = g_zbNIB.seqNum++;
 
 	radius = (req->dstAddrMode != ADDR_MODE_NONE) ? req->radius : g_zbNIB.concentratorRadius;
-	hdr.radius = (radius != 0U) ? radius : (u8)(g_zbNIB.maxDepth << 1);
+	hdr.radius = (radius != 0U) ? radius : (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr.frameHdrLen = getNwkHdrSize(&hdr);
 
 	cmd.cmdId = NWK_CMD_ROUTE_REQUEST;
@@ -535,21 +535,21 @@ int nwkConcentDiscTimerCb(void *arg)
 	req.dstAddrMode = 0;
 	req.dstAddr = entry->dstAddr;
 	req.radius = g_zbNIB.concentratorRadius ? g_zbNIB.concentratorRadius
-						: (u8)(g_zbNIB.maxDepth << 1);
-	req.noRouteCache = (u8)(uintptr_t)arg;
+						: (uint8_t)(g_zbNIB.maxDepth << 1);
+	req.noRouteCache = (uint8_t)(uintptr_t)arg;
 
 	nwkRouteReqConcentInitiation(buf, &req, entry);
 
 	return 0;
 }
 
-void nwkRouteReplySend(void *arg, u8 radius, u8 routeReqId, u16 originatorAddr, u16 responderAddr,
-		       u16 dstAddr, u8 pathCost)
+void nwkRouteReplySend(void *arg, uint8_t radius, uint8_t routeReqId, uint16_t originatorAddr, uint16_t responderAddr,
+		       uint16_t dstAddr, uint8_t pathCost)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u8 security = 0;
+	uint8_t security = 0;
 
 	memset(&hdr, 0, sizeof(hdr));
 	memset(&cmd, 0, sizeof(cmd));
@@ -596,15 +596,15 @@ int nwkRouteReplySendDelay(void *arg)
  * and returns a status byte; the reconstruction used to take a buffer and a
  * caller-built header and return a discovery-table entry.
  */
-u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req)
+uint8_t nwkRouteDiscStart(nlme_routeDisc_req_t *req)
 {
 	zb_buf_t *buf;
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
 	nwk_routeDiscEntry_t *entry = NULL;
 	nwk_routingTabEntry_t *route;
-	u8 radius;
-	u8 security = 0;
+	uint8_t radius;
+	uint8_t security = 0;
 
 	g_sysDiags.routeDiscInitiated++;
 
@@ -634,7 +634,7 @@ u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req)
 	hdr.srcAddr = g_zbNIB.nwkAddr;
 	ZB_IEEE_ADDR_COPY(hdr.srcIeeeAddr, g_zbInfo.macPib.extAddress);
 	hdr.seqNum = g_zbNIB.seqNum++;
-	hdr.radius = (radius != 0U) ? radius : (u8)(g_zbNIB.maxDepth << 1);
+	hdr.radius = (radius != 0U) ? radius : (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr.frameHdrLen = getNwkHdrSize(&hdr);
 
 	cmd.cmdId = NWK_CMD_ROUTE_REQUEST;
@@ -671,7 +671,7 @@ u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req)
 		if (g_zbNIB.concentratorDiscoveryTime != 0U) {
 			concentratorDiscoveryTimer = ev_timer_taskPost(
 				nwkConcentDiscTimerCb, (void *)(uintptr_t)req->noRouteCache,
-				(u32)g_zbNIB.concentratorDiscoveryTime * 1000UL);
+				(uint32_t)g_zbNIB.concentratorDiscoveryTime * 1000UL);
 		}
 
 		return NWK_STATUS_SUCCESS;
@@ -714,7 +714,7 @@ u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req)
 		route->groupIdFlag = (req->dstAddrMode == ZB_ADDR_16BIT_GROUP);
 	}
 
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		if (g_routeDiscTab[i].dstAddr != req->dstAddr) {
 			continue;
 		}
@@ -772,12 +772,12 @@ u8 nwkRouteDiscStart(nlme_routeDisc_req_t *req)
 	return NWK_STATUS_SUCCESS;
 }
 
-void tl_zbNwkNlmeRouteDiscRequestHandler(void *arg)
+void zb_NwkNlmeRouteDiscRequestHandler(void *arg)
 {
 	nlme_routeDisc_req_t req;
 	nlme_routeDisc_cnf_t *cnf = (nlme_routeDisc_cnf_t *)arg;
-	u8 status;
-	u8 nwkStatusCode = 0;
+	uint8_t status;
+	uint8_t nwkStatusCode = 0;
 
 	memcpy(&req, arg, sizeof(req));
 
@@ -808,12 +808,12 @@ void tl_zbNwkNlmeRouteDiscRequestHandler(void *arg)
 
 	cnf->status = status;
 	cnf->nwkStatusCode = nwkStatusCode;
-	tl_zbTaskPost(zdo_routeDiscCnf, arg);
+	zb_TaskPost(zdo_routeDiscCnf, arg);
 }
 
-u8 nwkRouteReqDstChk(u16 dstAddr, u8 pathCost)
+uint8_t nwkRouteReqDstChk(uint16_t dstAddr, uint8_t pathCost)
 {
-	tl_zb_normal_neighbor_entry_t *entry;
+	zb_normal_neighbor_entry_t *entry;
 
 	(void)pathCost;
 
@@ -829,21 +829,21 @@ u8 nwkRouteReqDstChk(u16 dstAddr, u8 pathCost)
 	/* The vendor reads the packed capability byte at offset 0x26 and tests
 	 * bits 1..6 against 0x14.  NEG+ADC is TC32's logical-not idiom here, not
 	 * an absolute-difference calculation. */
-	return (u8)(entry->rxOnWhileIdle == 0U && entry->deviceType == NWK_DEVICE_TYPE_ED &&
+	return (uint8_t)(entry->rxOnWhileIdle == 0U && entry->deviceType == NWK_DEVICE_TYPE_ED &&
 		    entry->relationship == NEIGHBOR_IS_CHILD);
 }
 
 void nwkRouteReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	nwkCmd_routeReq_t *rreq = &cmd->rreq;
-	u16 prevHop = ((zb_mscp_data_ind_t *)arg)->srcAddr.addr.shortAddr;
-	tl_zb_normal_neighbor_entry_t *neighbor = nwk_neTblGetByShortAddr(prevHop);
+	uint16_t prevHop = ((zb_mscp_data_ind_t *)arg)->srcAddr.addr.shortAddr;
+	zb_normal_neighbor_entry_t *neighbor = nwk_neTblGetByShortAddr(prevHop);
 	nwk_routingTabEntry_t *route;
 	nwk_routingTabEntry_t *originRoute = NULL;
 	nwk_routeDiscEntry_t *entry;
-	u8 linkLqi = ((zb_mscp_data_ind_t *)arg)->mpduLinkQuality;
-	u8 linkCost;
-	u8 totalCost;
+	uint8_t linkLqi = ((zb_mscp_data_ind_t *)arg)->mpduLinkQuality;
+	uint8_t linkCost;
+	uint8_t totalCost;
 
 	if (neighbor != NULL) {
 		linkLqi = neighbor->lqi;
@@ -866,7 +866,7 @@ void nwkRouteReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		}
 	}
 
-	totalCost = (u8)(rreq->pathCost + linkCost);
+	totalCost = (uint8_t)(rreq->pathCost + linkCost);
 	route = NULL;
 
 	/* Many-to-one requests do not create/update the destination route here.
@@ -947,7 +947,7 @@ void nwkRouteReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 void nwkRouteReplyCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	nwkCmd_routeReply_t *rrep = &cmd->rrep;
-	u16 prevHop = ((zb_mscp_data_ind_t *)arg)->srcAddr.addr.shortAddr;
+	uint16_t prevHop = ((zb_mscp_data_ind_t *)arg)->srcAddr.addr.shortAddr;
 	nwk_routingTabEntry_t *route = nwkRoutingTabEntryDstFind(rrep->responderAddr);
 	nwk_routingTabEntry_t *reverseRoute;
 	nwk_routeDiscEntry_t *entry;
@@ -1018,7 +1018,7 @@ void nwkRouteReplyCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
 	/* The buffer is reused as the argument of nwkRouteReplySendDelay():
 	 * radius, routeReqId, originator, responder, sender, path cost. */
-	u8 *delayArg = (u8 *)arg;
+	uint8_t *delayArg = (uint8_t *)arg;
 
 	if (routeChanged && route->groupIdFlag != 0U) {
 		entry->expiry = (rrep->responderAddr == g_zbNIB.nwkAddr) ? 1U : 10U;
@@ -1029,8 +1029,8 @@ void nwkRouteReplyCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	memcpy(delayArg + 2, &rrep->originatorAddr, sizeof(rrep->originatorAddr));
 	memcpy(delayArg + 4, &rrep->responderAddr, sizeof(rrep->responderAddr));
 	memcpy(delayArg + 6, &entry->senderAddr, sizeof(entry->senderAddr));
-	delayArg[8] = (u8)(entry->lastCost + entry->residCost);
-	tl_zbTaskPost((tl_zb_callback_t)nwkRouteReplySendDelay, arg);
+	delayArg[8] = (uint8_t)(entry->lastCost + entry->residCost);
+	zb_TaskPost((zb_callback_t)nwkRouteReplySendDelay, arg);
 
 	if (g_zbNIB.symLink != 0U) {
 		reverseRoute = nwkRoutingTabEntryFind(rrep->originatorAddr);
@@ -1047,13 +1047,13 @@ void nwkRouteReplyCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 	return;
 }
 
-void nwkRouteRecordInitiation(u16 srcAddr, u16 dstAddr)
+void nwkRouteRecordInitiation(uint16_t srcAddr, uint16_t dstAddr)
 {
 	zb_buf_t *buf;
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u16 addrRef = 0;
-	u8 security = 0;
+	uint16_t addrRef = 0;
+	uint8_t security = 0;
 
 	buf = zb_buf_allocate();
 	memset(&hdr, 0, sizeof(hdr));
@@ -1068,14 +1068,14 @@ void nwkRouteRecordInitiation(u16 srcAddr, u16 dstAddr)
 	hdr.frameControl.security = security;
 	hdr.dstAddr = dstAddr;
 	hdr.srcAddr = srcAddr;
-	hdr.radius = (u8)(g_zbNIB.maxDepth << 1);
+	hdr.radius = (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr.seqNum = g_zbNIB.seqNum++;
 
-	if (tl_zbExtAddrByShortAddr(srcAddr, hdr.srcIeeeAddr, &addrRef) != RET_OK) {
+	if (zb_ExtAddrByShortAddr(srcAddr, hdr.srcIeeeAddr, &addrRef) != RET_OK) {
 		hdr.frameControl.srcIEEEAddr = 1;
 	}
 
-	if (tl_zbExtAddrByShortAddr(dstAddr, hdr.dstIeeeAddr, &addrRef) != RET_OK) {
+	if (zb_ExtAddrByShortAddr(dstAddr, hdr.dstIeeeAddr, &addrRef) != RET_OK) {
 		hdr.frameControl.dstIEEEAddr = 1;
 	}
 
@@ -1083,7 +1083,7 @@ void nwkRouteRecordInitiation(u16 srcAddr, u16 dstAddr)
 
 	cmd.cmdId = NWK_CMD_ROUTE_RECORD;
 	cmd.rrec.relayCnt = (srcAddr == g_zbNIB.nwkAddr) ? 0U : 1U;
-	cmd.rrec.relayList = (u8 *)&g_zbNIB.nwkAddr;
+	cmd.rrec.relayList = (uint8_t *)&g_zbNIB.nwkAddr;
 
 	nwkRouteRecordCmdSend(buf, &hdr, &cmd, NWK_INTERNAL_ROUTE_RECORD_CMD_HANDLE);
 }
@@ -1108,7 +1108,7 @@ void nwkRouteRecordCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		return;
 	}
 
-	memcpy(cmd->rrec.relayList + ((u16)cmd->rrec.relayCnt * sizeof(u16)), &g_zbNIB.nwkAddr,
+	memcpy(cmd->rrec.relayList + ((uint16_t)cmd->rrec.relayCnt * sizeof(uint16_t)), &g_zbNIB.nwkAddr,
 	       sizeof(g_zbNIB.nwkAddr));
 	cmd->rrec.relayCnt++;
 	nwkRouteRecordCmdSend(buf, pNwkHdr, cmd, NWK_INTERNAL_ROUTE_RECORD_CMD_HANDLE);
@@ -1116,7 +1116,7 @@ void nwkRouteRecordCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 
 /* Turns a frame that has no route into an NLME route-discovery request
  * (_router/nwk_route_disc.s:.text.nwkTxDataRouteDiscStart). */
-u8 nwkTxDataRouteDiscStart(nwk_hdr_t *pNwkHdr)
+uint8_t nwkTxDataRouteDiscStart(nwk_hdr_t *pNwkHdr)
 {
 	nlme_routeDisc_req_t req;
 
@@ -1129,11 +1129,11 @@ u8 nwkTxDataRouteDiscStart(nwk_hdr_t *pNwkHdr)
 	return nwkRouteDiscStart(&req);
 }
 
-void nwkRouteDiscStatusCodeSend(zb_buf_t *buf, u16 srcAddr, u16 dstAddr, u8 status)
+void nwkRouteDiscStatusCodeSend(zb_buf_t *buf, uint16_t srcAddr, uint16_t dstAddr, uint8_t status)
 {
 	nwk_hdr_t hdr;
 	nwkCmd_t cmd;
-	u8 security = 0;
+	uint8_t security = 0;
 
 	if (buf == NULL) {
 		return;
@@ -1153,14 +1153,14 @@ void nwkRouteDiscStatusCodeSend(zb_buf_t *buf, u16 srcAddr, u16 dstAddr, u8 stat
 	hdr.frameControl.security = security;
 	hdr.frameControl.srcIEEEAddr = 1;
 	ZB_IEEE_ADDR_COPY(hdr.srcIeeeAddr, g_zbInfo.macPib.extAddress);
-	hdr.radius = (u8)(g_zbNIB.maxDepth << 1);
+	hdr.radius = (uint8_t)(g_zbNIB.maxDepth << 1);
 	hdr.seqNum = g_zbNIB.seqNum++;
 
 	cmd.cmdId = NWK_CMD_NETWORK_STATUS;
 	cmd.nwkStatus.dstAddr = dstAddr;
 	cmd.nwkStatus.statusCode = status;
 	hdr.frameHdrLen = getNwkHdrSize(&hdr);
-	tl_zbNwkSendNwkStatusCmd(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
+	zb_NwkSendNwkStatusCmd(buf, &hdr, &cmd, NWK_INTERNAL_NETWORK_STATUS_CMD_HANDLE);
 }
 
 int nwkRouteDiscPeriodic(void *arg)
@@ -1171,7 +1171,7 @@ int nwkRouteDiscPeriodic(void *arg)
 		return 0;
 	}
 
-	for (u8 i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < NWK_ROUTE_DISC_TABLE_SIZE; i++) {
 		nwk_routeDiscEntry_t *entry = &g_routeDiscTab[i];
 
 		if (!nwk_route_disc_used(entry)) {

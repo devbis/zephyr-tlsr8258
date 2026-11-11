@@ -50,14 +50,14 @@
 static status_t zcl_gp_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_gp_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_gp_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_GREEN_POWER, manuCode, attrNum, attrTbl, zcl_gp_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_gp_notificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_notificationCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_notificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_notificationCmd_t *pCmd)
 {
-    u8 len = 11;//options + gpdSecCnt + cmdID + payloadLen + gppShortAddr + link
+    uint8_t len = 11;//options + gpdSecCnt + cmdID + payloadLen + gppShortAddr + link
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -67,12 +67,12 @@ _CODE_ZCL_ status_t zcl_gp_notificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
 
     len += pCmd->payloadLen;//cmd length
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = LO_UINT16(pCmd->options.opts);
@@ -116,9 +116,9 @@ _CODE_ZCL_ status_t zcl_gp_notificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_commissioningNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_commissioningNotificationCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_commissioningNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_commissioningNotificationCmd_t *pCmd)
 {
-    u8 len = 11;//options + gpdSecCnt + cmdID + payloadLen + gppShortAddr + link
+    uint8_t len = 11;//options + gpdSecCnt + cmdID + payloadLen + gppShortAddr + link
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -132,12 +132,12 @@ _CODE_ZCL_ status_t zcl_gp_commissioningNotificationCmd(u8 srcEp, epInfo_t *pDst
 
     len += pCmd->payloadLen;//cmd length
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = LO_UINT16(pCmd->options.opts);
@@ -186,9 +186,9 @@ _CODE_ZCL_ status_t zcl_gp_commissioningNotificationCmd(u8 srcEp, epInfo_t *pDst
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_sinkTabReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkTabReqCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_sinkTabReqCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkTabReqCmd_t *pCmd)
 {
-    u8 len = 1;//options
+    uint8_t len = 1;//options
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -199,12 +199,12 @@ _CODE_ZCL_ status_t zcl_gp_sinkTabReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
         len++;//index
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = pCmd->options.opts;
@@ -232,18 +232,18 @@ _CODE_ZCL_ status_t zcl_gp_sinkTabReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_proxyTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyTabRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_proxyTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyTabRspCmd_t *pCmd)
 {
-    u8 len = 4;//status + total number + start index + entries count
+    uint8_t len = 4;//status + total number + start index + entries count
 
     len += pCmd->entriesLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->status;
     *pBuf++ = pCmd->totalTabEntries;
@@ -261,9 +261,9 @@ _CODE_ZCL_ status_t zcl_gp_proxyTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_pairingCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_pairingCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_pairingCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_pairingCmd_t *pCmd)
 {
-    u8 len = 3;//options
+    uint8_t len = 3;//options
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -301,12 +301,12 @@ _CODE_ZCL_ status_t zcl_gp_pairingCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disable
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = U24_BYTE0(pCmd->options.opts);
@@ -373,9 +373,9 @@ _CODE_ZCL_ status_t zcl_gp_pairingCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disable
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_proxyCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_proxyCommissioningModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
 {
-    u8 len = 1;//options
+    uint8_t len = 1;//options
 
     if (pCmd->options.bits.action) {
         if (pCmd->options.bits.commWindowPresent) {
@@ -386,12 +386,12 @@ _CODE_ZCL_ status_t zcl_gp_proxyCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpI
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //Options
     *pBuf++ = pCmd->options.opts;
@@ -414,9 +414,9 @@ _CODE_ZCL_ status_t zcl_gp_proxyCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpI
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_responseCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_responseCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_responseCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_responseCmd_t *pCmd)
 {
-    u8 len = 1 + 2 + 1 + 1;//options + tempMasterShortAddr + tempMasterTxChannel + gpdCommandId
+    uint8_t len = 1 + 2 + 1 + 1;//options + tempMasterShortAddr + tempMasterTxChannel + gpdCommandId
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -430,12 +430,12 @@ _CODE_ZCL_ status_t zcl_gp_responseCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disabl
         len += pCmd->payloadLen;
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //Options
     *pBuf++ = pCmd->options.opts;
@@ -472,18 +472,18 @@ _CODE_ZCL_ status_t zcl_gp_responseCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disabl
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_sinkTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkTabRspCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_sinkTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkTabRspCmd_t *pCmd)
 {
-    u8 len = 4;//status + total number + start index + entries count
+    uint8_t len = 4;//status + total number + start index + entries count
 
     len += pCmd->entriesLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->status;
     *pBuf++ = pCmd->totalTabEntries;
@@ -501,18 +501,18 @@ _CODE_ZCL_ status_t zcl_gp_sinkTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 di
     return ZCL_STA_SUCCESS;
 }
 
-status_t zcl_gp_transTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_transTabRspCmd_t *pCmd)
+status_t zcl_gp_transTableRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_transTabRspCmd_t *pCmd)
 {
-    u8 len = 5;//status + options + totalNumOfEntries + startIdx + entriesCnt
+    uint8_t len = 5;//status + options + totalNumOfEntries + startIdx + entriesCnt
 
     len += pCmd->bufLen;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pCmd->status;
     *pBuf++ = pCmd->options.opts;
@@ -531,9 +531,9 @@ status_t zcl_gp_transTableRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefau
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_proxyTableReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_proxyTabReqCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_proxyTableReqCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_proxyTabReqCmd_t *pCmd)
 {
-    u8 len = 1;//options
+    uint8_t len = 1;//options
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -544,12 +544,12 @@ _CODE_ZCL_ status_t zcl_gp_proxyTableReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
         len++;//index
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = pCmd->options.opts;
@@ -577,16 +577,16 @@ _CODE_ZCL_ status_t zcl_gp_proxyTableReqCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_sinkCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_sinkCommissioningModeCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_sinkCommissioningModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_sinkCommissioningModeCmd_t *pCmd)
 {
-    u8 len = 1 + 2 + 2 + 1;//options + gpmAddrForSec + gpmAddrForPairing + sinkEndpoint;
+    uint8_t len = 1 + 2 + 2 + 1;//options + gpmAddrForSec + gpmAddrForPairing + sinkEndpoint;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = pCmd->options.opts;
@@ -607,9 +607,9 @@ _CODE_ZCL_ status_t zcl_gp_sinkCommissioningModeCmd(u8 srcEp, epInfo_t *pDstEpIn
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_gp_pairingConfigurationCmd_t *pCmd)
+_CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_gp_pairingConfigurationCmd_t *pCmd)
 {
-    u8 len = 6;//actions + options + deviceId + groupcastRadius + number of paired endpoints
+    uint8_t len = 6;//actions + options + deviceId + groupcastRadius + number of paired endpoints
 
     if (pCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
         len += 4;//srcID
@@ -626,7 +626,7 @@ _CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
         }
 
         if (pCmd->options.bits.assignedAlias) {
-            len += sizeof(u16);
+            len += sizeof(uint16_t);
         }
 
         if (pCmd->options.bits.secUse) {
@@ -660,7 +660,7 @@ _CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
             if (pCmd->appInfo.bits.clusterListPresent) {
                 len++;//length of cluster list
                 if (pCmd->pClusterList[0]) {
-                    len += ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(u16);
+                    len += ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(uint16_t);
                 }
             }
             if (pCmd->appInfo.bits.switchInfoPresent) {
@@ -674,12 +674,12 @@ _CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
         }
     }
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     //options
     *pBuf++ = pCmd->actions.acts;
@@ -776,7 +776,7 @@ _CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
             if (pCmd->appInfo.bits.clusterListPresent) {
                 *pBuf++ = pCmd->pClusterList[0];
                 if (pCmd->pClusterList[0]) {
-                    u8 clusterLen = ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(u16);
+                    uint8_t clusterLen = ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(uint16_t);
                     memcpy(pBuf, &pCmd->pClusterList[1], clusterLen);
                     pBuf += clusterLen;
                 }
@@ -803,7 +803,7 @@ _CODE_ZCL_ status_t zcl_gp_pairingCfgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ static void zcl_gp_notificationParse(u8 *pData, zcl_gp_notificationCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_notificationParse(uint8_t *pData, zcl_gp_notificationCmd_t *pCmd)
 {
     pCmd->options.opts = BUILD_U16(pData[0], pData[1]);
     pData += 2;
@@ -833,7 +833,7 @@ _CODE_ZCL_ static void zcl_gp_notificationParse(u8 *pData, zcl_gp_notificationCm
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_commNotificationParse(u8 *pData, zcl_gp_commissioningNotificationCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_commNotificationParse(uint8_t *pData, zcl_gp_commissioningNotificationCmd_t *pCmd)
 {
     pCmd->options.opts = BUILD_U16(pData[0], pData[1]);
     pData += 2;
@@ -868,7 +868,7 @@ _CODE_ZCL_ static void zcl_gp_commNotificationParse(u8 *pData, zcl_gp_commission
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_sinkCommModeParse(u8 *pData, zcl_gp_sinkCommissioningModeCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_sinkCommModeParse(uint8_t *pData, zcl_gp_sinkCommissioningModeCmd_t *pCmd)
 {
     pCmd->options.opts = *pData++;
 
@@ -881,9 +881,9 @@ _CODE_ZCL_ static void zcl_gp_sinkCommModeParse(u8 *pData, zcl_gp_sinkCommission
     pCmd->sinkEndpoint = *pData++;
 }
 
-_CODE_ZCL_ static void zcl_gp_pairingCfgParse(u8 *pData, u16 dataLen, zcl_gp_pairingConfigurationCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_pairingCfgParse(uint8_t *pData, uint16_t dataLen, zcl_gp_pairingConfigurationCmd_t *pCmd)
 {
-    u8 *pBuf = pData;
+    uint8_t *pBuf = pData;
 
     pCmd->actions.acts = *pBuf++;
 
@@ -901,7 +901,7 @@ _CODE_ZCL_ static void zcl_gp_pairingCfgParse(u8 *pData, u16 dataLen, zcl_gp_pai
 
     pCmd->deviceId = *pBuf++;
 
-    u8 len = 0;
+    uint8_t len = 0;
     if (pCmd->options.bits.commMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
         pCmd->pGroupList = pBuf;
         pBuf += 1;
@@ -961,7 +961,7 @@ _CODE_ZCL_ static void zcl_gp_pairingCfgParse(u8 *pData, u16 dataLen, zcl_gp_pai
             pCmd->pClusterList = pBuf;
             pBuf += 1;
             if (pCmd->pClusterList[0]) {
-                len = ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(u16);
+                len = ((pCmd->pClusterList[0] & 0x0f) + (pCmd->pClusterList[0] & 0xf0)) * sizeof(uint16_t);
                 pBuf += len;
             }
         }
@@ -985,7 +985,7 @@ _CODE_ZCL_ static void zcl_gp_pairingCfgParse(u8 *pData, u16 dataLen, zcl_gp_pai
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_sinkTabReqParse(u8 *pData, zcl_gp_sinkTabReqCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_sinkTabReqParse(uint8_t *pData, zcl_gp_sinkTabReqCmd_t *pCmd)
 {
     pCmd->options.opts = *pData++;
 
@@ -1003,9 +1003,9 @@ _CODE_ZCL_ static void zcl_gp_sinkTabReqParse(u8 *pData, zcl_gp_sinkTabReqCmd_t 
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_proxyTabRspParse(u8 *pData, u16 dataLen, zcl_gp_proxyTabRspCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_proxyTabRspParse(uint8_t *pData, uint16_t dataLen, zcl_gp_proxyTabRspCmd_t *pCmd)
 {
-    u8 *ptr = pData;
+    uint8_t *ptr = pData;
 
     pCmd->status = *pData++;
     pCmd->totalTabEntries = *pData++;
@@ -1017,9 +1017,9 @@ _CODE_ZCL_ static void zcl_gp_proxyTabRspParse(u8 *pData, u16 dataLen, zcl_gp_pr
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_transTabUpdateParse(u8 *pData, u16 dataLen, zcl_gp_transTabUpdateCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_transTabUpdateParse(uint8_t *pData, uint16_t dataLen, zcl_gp_transTabUpdateCmd_t *pCmd)
 {
-    u8 *ptr = pData;
+    uint8_t *ptr = pData;
 
     pCmd->options.opts = BUILD_U16(pData[0], pData[1]);
     pData += 2;
@@ -1039,7 +1039,7 @@ _CODE_ZCL_ static void zcl_gp_transTabUpdateParse(u8 *pData, u16 dataLen, zcl_gp
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_pairingParse(u8 *pData, zcl_gp_pairingCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_pairingParse(uint8_t *pData, zcl_gp_pairingCmd_t *pCmd)
 {
     //options
     pCmd->options.opts = BUILD_U24(pData[0], pData[1], pData[2]);
@@ -1096,7 +1096,7 @@ _CODE_ZCL_ static void zcl_gp_pairingParse(u8 *pData, zcl_gp_pairingCmd_t *pCmd)
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_sinkTabRspParse(u8 *pData, u16 dataLen, zcl_gp_sinkTabRspCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_sinkTabRspParse(uint8_t *pData, uint16_t dataLen, zcl_gp_sinkTabRspCmd_t *pCmd)
 {
     pCmd->status = *pData++;
     pCmd->totalTabEntries = *pData++;
@@ -1106,7 +1106,7 @@ _CODE_ZCL_ static void zcl_gp_sinkTabRspParse(u8 *pData, u16 dataLen, zcl_gp_sin
     pCmd->entriesLen = dataLen - 4;
 }
 
-_CODE_ZCL_ static void zcl_gp_proxyTabReqParse(u8 *pData, zcl_gp_proxyTabReqCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_proxyTabReqParse(uint8_t *pData, zcl_gp_proxyTabReqCmd_t *pCmd)
 {
     //options
     pCmd->options.opts = *pData++;
@@ -1125,7 +1125,7 @@ _CODE_ZCL_ static void zcl_gp_proxyTabReqParse(u8 *pData, zcl_gp_proxyTabReqCmd_
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_proxyCommModeParse(u8 *pData, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_proxyCommModeParse(uint8_t *pData, zcl_gp_proxyCommissioningModeCmd_t *pCmd)
 {
     //options
     pCmd->options.opts = *pData++;
@@ -1141,7 +1141,7 @@ _CODE_ZCL_ static void zcl_gp_proxyCommModeParse(u8 *pData, zcl_gp_proxyCommissi
     }
 }
 
-_CODE_ZCL_ static void zcl_gp_responseParse(u8 *pData, u16 dataLen, zcl_gp_responseCmd_t *pCmd)
+_CODE_ZCL_ static void zcl_gp_responseParse(uint8_t *pData, uint16_t dataLen, zcl_gp_responseCmd_t *pCmd)
 {
     //options
     pCmd->options.opts = *pData++;
@@ -1173,7 +1173,7 @@ _CODE_ZCL_ static status_t zcl_gp_notificationPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_notificationCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_notificationParse(pInMsg->pData, &cmd);
 
@@ -1191,7 +1191,7 @@ _CODE_ZCL_ static status_t zcl_gp_commissioningNotificationPrc(zclIncoming_t *pI
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_commissioningNotificationCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_commNotificationParse(pInMsg->pData, &cmd);
 
@@ -1209,7 +1209,7 @@ _CODE_ZCL_ static status_t zcl_gp_sinkCommissioningModePrc(zclIncoming_t *pInMsg
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_sinkCommissioningModeCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_sinkCommModeParse(pInMsg->pData, &cmd);
 
@@ -1227,7 +1227,7 @@ _CODE_ZCL_ static status_t zcl_gp_pairingCfgPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_pairingConfigurationCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_pairingCfgParse(pInMsg->pData, pInMsg->dataLen, &cmd);
 
@@ -1245,7 +1245,7 @@ _CODE_ZCL_ static status_t zcl_gp_sinkTabReqPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_sinkTabReqCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_sinkTabReqParse(pInMsg->pData, &cmd);
 
@@ -1263,7 +1263,7 @@ _CODE_ZCL_ static status_t zcl_gp_proxyTabRspPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_proxyTabRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_proxyTabRspParse(pInMsg->pData, pInMsg->dataLen, &cmd);
 
@@ -1281,7 +1281,7 @@ _CODE_ZCL_ static status_t zcl_gp_transTabReqPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_transTabReqCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         cmd.startIdx = pInMsg->pData[0];
 
@@ -1299,7 +1299,7 @@ _CODE_ZCL_ static status_t zcl_gp_transTabUpdatePrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_transTabUpdateCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_transTabUpdateParse(pInMsg->pData, pInMsg->dataLen, &cmd);
 
@@ -1317,7 +1317,7 @@ _CODE_ZCL_ static status_t zcl_gp_pairingPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_pairingCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_pairingParse(pInMsg->pData, &cmd);
 
@@ -1335,7 +1335,7 @@ _CODE_ZCL_ static status_t zcl_gp_proxyCommissioningModePrc(zclIncoming_t *pInMs
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_proxyCommissioningModeCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_proxyCommModeParse(pInMsg->pData, &cmd);
 
@@ -1353,7 +1353,7 @@ _CODE_ZCL_ static status_t zcl_gp_ResponsePrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_responseCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_responseParse(pInMsg->pData, pInMsg->dataLen, &cmd);
 
@@ -1371,7 +1371,7 @@ _CODE_ZCL_ static status_t zcl_gp_sinkTabRspPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_sinkTabRspCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_sinkTabRspParse(pInMsg->pData, pInMsg->dataLen, &cmd);
 
@@ -1389,7 +1389,7 @@ _CODE_ZCL_ static status_t zcl_gp_proxyTabReqPrc(zclIncoming_t *pInMsg)
 
     if (pInMsg->clusterAppCb) {
         zcl_gp_proxyTabReqCmd_t cmd;
-        TL_SETSTRUCTCONTENT(cmd, 0);
+        ZB_SETSTRUCTCONTENT(cmd, 0);
 
         zcl_gp_proxyTabReqParse(pInMsg->pData, &cmd);
 
@@ -1403,7 +1403,7 @@ _CODE_ZCL_ static status_t zcl_gp_proxyTabReqPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_gp_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GP_NOTIFICATION:
@@ -1440,7 +1440,7 @@ _CODE_ZCL_ static status_t zcl_gp_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_gp_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GP_PAIRING:

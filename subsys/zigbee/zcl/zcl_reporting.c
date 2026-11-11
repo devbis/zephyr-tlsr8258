@@ -35,8 +35,8 @@
  */
 typedef struct {
     reportCfgInfo_t *pEntry;
-    u16 seconds;
-    u8 minOrMax; //0 - min; 1 - max
+    uint16_t seconds;
+    uint8_t minOrMax; //0 - min; 1 - max
     ev_timer_event_t timer;
 } zcl_reportTimerEvt_t;
 
@@ -69,7 +69,7 @@ static void reportAttrTimerStop(zcl_reportTimerEvt_t *pTimerEvt);
 _CODE_ZCL_ void zcl_reportCfgInfoEntryClear(reportCfgInfo_t *pEntry)
 {
     if (pEntry) {
-        memset((u8 *)pEntry, 0, sizeof(reportCfgInfo_t));
+        memset((uint8_t *)pEntry, 0, sizeof(reportCfgInfo_t));
     }
 }
 
@@ -87,7 +87,7 @@ _CODE_ZCL_ void zcl_reportingTabInit(void)
     if (zcl_reportingTab_restore() != NV_SUCC) {
         reportingTab.reportNum = 0;
 
-        for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+        for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
             reportCfgInfo_t *pEntry = &reportingTab.reportCfgInfo[i];
 
             zcl_reportCfgInfoEntryClear(pEntry);
@@ -104,12 +104,12 @@ _CODE_ZCL_ void zcl_reportingTabInit(void)
  *
  * @return  Number of active reporting table
  */
-_CODE_ZCL_ u8 zcl_reportingEntryActiveNumGet(void)
+_CODE_ZCL_ uint8_t zcl_reportingEntryActiveNumGet(void)
 {
-    u8 cnt = 0;
+    uint8_t cnt = 0;
 
     if (reportingTab.reportNum) {
-        for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+        for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
             if (reportingTab.reportCfgInfo[i].used &&
                (reportingTab.reportCfgInfo[i].maxInterval != 0xFFFF)) {
                 cnt++;
@@ -131,9 +131,9 @@ _CODE_ZCL_ u8 zcl_reportingEntryActiveNumGet(void)
  *
  * @return  Reporting table entry
  */
-_CODE_ZCL_ reportCfgInfo_t *zcl_reportCfgInfoEntryFind(u8 endpoint, u16 clusterId, u16 attrID)
+_CODE_ZCL_ reportCfgInfo_t *zcl_reportCfgInfoEntryFind(uint8_t endpoint, uint16_t clusterId, uint16_t attrID)
 {
-    for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
         if (reportingTab.reportCfgInfo[i].used) {
             if ((reportingTab.reportCfgInfo[i].clusterID == clusterId) &&
                 (reportingTab.reportCfgInfo[i].attrID == attrID) &&
@@ -157,7 +157,7 @@ _CODE_ZCL_ reportCfgInfo_t *zcl_reportCfgInfoEntryFind(u8 endpoint, u16 clusterI
  */
 _CODE_ZCL_ reportCfgInfo_t *zcl_reportCfgInfoEntryFreeGet(void)
 {
-    for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
         if (reportingTab.reportCfgInfo[i].used == 0) {
             return &reportingTab.reportCfgInfo[i];
         }
@@ -184,7 +184,7 @@ _CODE_ZCL_ void zcl_reportCfgInfoEntryRst(reportCfgInfo_t *pEntry)
         pEntry->maxIntCnt = pEntry->maxIntDft;
         memset(pEntry->reportableChange, 0, REPORTABLE_CHANGE_MAX_ANALOG_SIZE);
 
-        for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+        for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
             zcl_reportTimerEvt_t *pTimerEvt = &reportTimer[i];
             if (pTimerEvt->pEntry == pEntry) {
                 reportAttrTimerStop(pTimerEvt);
@@ -209,7 +209,7 @@ _CODE_ZCL_ void zcl_reportCfgInfoEntryRst(reportCfgInfo_t *pEntry)
  *
  * @return  None
  */
-_CODE_ZCL_ void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, u8 endPoint, u16 profileId, u16 clusterId, zclCfgReportRec_t *pCfgReportRec)
+_CODE_ZCL_ void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, uint8_t endPoint, uint16_t profileId, uint16_t clusterId, zclCfgReportRec_t *pCfgReportRec)
 {
     if (!pEntry->used) {
         //add new
@@ -231,7 +231,7 @@ _CODE_ZCL_ void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, u8 endPoin
             //should not happen.
             ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_ZCL_ENTRY);
         }
-        //u8 len = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
+        //uint8_t len = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
         //memcpy(pEntry->prevData, pAttrEntry->data, len);
 
         pEntry->minIntCnt = pCfgReportRec->minReportInt;
@@ -263,16 +263,16 @@ _CODE_ZCL_ void zcl_reportCfgInfoEntryUpdate(reportCfgInfo_t *pEntry, u8 endPoin
  *
  * @return  TRUE or FALSE
  */
-_CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValue, u8 *reportableChange)
+_CODE_ZCL_ bool reportableChangeValueChk(uint8_t dataType, uint8_t *curValue, uint8_t *prevValue, uint8_t *reportableChange)
 {
     bool needReport = FALSE;
 
     switch (dataType) {
     case ZCL_DATA_TYPE_UINT8:
         {
-            u8 P = prevValue[0];
-            u8 C = curValue[0];
-            u8 R = reportableChange[0];
+            uint8_t P = prevValue[0];
+            uint8_t C = curValue[0];
+            uint8_t R = reportableChange[0];
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -282,9 +282,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_UINT16:
         {
-            u16 P = BUILD_U16(prevValue[0], prevValue[1]);
-            u16 C = BUILD_U16(curValue[0], curValue[1]);
-            u16 R = BUILD_U16(reportableChange[0], reportableChange[1]);
+            uint16_t P = BUILD_U16(prevValue[0], prevValue[1]);
+            uint16_t C = BUILD_U16(curValue[0], curValue[1]);
+            uint16_t R = BUILD_U16(reportableChange[0], reportableChange[1]);
 
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
@@ -295,9 +295,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_UINT24:
         {
-            u24 P = BUILD_U24(prevValue[0], prevValue[1], prevValue[2]);//*((u24 *)prevValue);
-            u24 C = BUILD_U24(curValue[0], curValue[1], curValue[2]);//*((u24 *)curValue);
-            u24 R = BUILD_U24(reportableChange[0], reportableChange[1], reportableChange[2]);//*((u24 *)reportableChange);
+            uint32_t P = BUILD_U24(prevValue[0], prevValue[1], prevValue[2]);//*((uint32_t *)prevValue);
+            uint32_t C = BUILD_U24(curValue[0], curValue[1], curValue[2]);//*((uint32_t *)curValue);
+            uint32_t R = BUILD_U24(reportableChange[0], reportableChange[1], reportableChange[2]);//*((uint32_t *)reportableChange);
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -307,9 +307,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_UINT32:
         {
-            u32 P = BUILD_U32(prevValue[0], prevValue[1], prevValue[2], prevValue[3]);//*((u32 *)prevValue);
-            u32 C = BUILD_U32(curValue[0], curValue[1], curValue[2], curValue[3]);//*((u32 *)curValue);
-            u32 R = BUILD_U32(reportableChange[0], reportableChange[1], reportableChange[2], reportableChange[3]);//*((u32 *)reportableChange);
+            uint32_t P = BUILD_U32(prevValue[0], prevValue[1], prevValue[2], prevValue[3]);//*((uint32_t *)prevValue);
+            uint32_t C = BUILD_U32(curValue[0], curValue[1], curValue[2], curValue[3]);//*((uint32_t *)curValue);
+            uint32_t R = BUILD_U32(reportableChange[0], reportableChange[1], reportableChange[2], reportableChange[3]);//*((uint32_t *)reportableChange);
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -319,9 +319,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_INT8:
         {
-            s8 P = (s8)prevValue[0];
-            s8 C = (s8)curValue[0];
-            s8 R = (s8)reportableChange[0];
+            int8_t P = (int8_t)prevValue[0];
+            int8_t C = (int8_t)curValue[0];
+            int8_t R = (int8_t)reportableChange[0];
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -331,9 +331,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_INT16:
         {
-            s16 P = BUILD_S16(prevValue[0], prevValue[1]);
-            s16 C = BUILD_S16(curValue[0], curValue[1]);
-            s16 R = BUILD_S16(reportableChange[0], reportableChange[1]);
+            int16_t P = BUILD_S16(prevValue[0], prevValue[1]);
+            int16_t C = BUILD_S16(curValue[0], curValue[1]);
+            int16_t R = BUILD_S16(reportableChange[0], reportableChange[1]);
 
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
@@ -344,9 +344,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_INT24:
         {
-            s24 P = BUILD_S24(prevValue[0], prevValue[1], prevValue[2]);//*((s24 *)prevValue);
-            s24 C = BUILD_S24(curValue[0], curValue[1], curValue[2]);//*((s24 *)curValue);
-            s24 R = BUILD_S24(reportableChange[0], reportableChange[1], reportableChange[2]);//*((s24 *)reportableChange);
+            int32_t P = BUILD_S24(prevValue[0], prevValue[1], prevValue[2]);//*((int32_t *)prevValue);
+            int32_t C = BUILD_S24(curValue[0], curValue[1], curValue[2]);//*((int32_t *)curValue);
+            int32_t R = BUILD_S24(reportableChange[0], reportableChange[1], reportableChange[2]);//*((int32_t *)reportableChange);
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -356,9 +356,9 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
         break;
     case ZCL_DATA_TYPE_INT32:
         {
-            s32 P = BUILD_S32(prevValue[0], prevValue[1], prevValue[2], prevValue[3]);//*((s32 *)prevValue);
-            s32 C = BUILD_S32(curValue[0], curValue[1], curValue[2], curValue[3]);//*((s32 *)curValue);
-            s32 R = BUILD_S32(reportableChange[0], reportableChange[1], reportableChange[2], reportableChange[3]);//*((s32 *)reportableChange);
+            int32_t P = BUILD_S32(prevValue[0], prevValue[1], prevValue[2], prevValue[3]);//*((int32_t *)prevValue);
+            int32_t C = BUILD_S32(curValue[0], curValue[1], curValue[2], curValue[3]);//*((int32_t *)curValue);
+            int32_t R = BUILD_S32(reportableChange[0], reportableChange[1], reportableChange[2], reportableChange[3]);//*((int32_t *)reportableChange);
             if (P > C) {
                 needReport = ((P - C) >= R) ? TRUE : FALSE;
             } else if (P < C) {
@@ -411,16 +411,16 @@ _CODE_ZCL_ bool reportableChangeValueChk(u8 dataType, u8 *curValue, u8 *prevValu
 _CODE_ZCL_ static void reportAttrs(void)
 {
     struct report_t {
-        u8 numAttr;
+        uint8_t numAttr;
         zclReport_t attr[2];
     };
 
     struct report_t report;
 
     bool again = 0;
-    u16 profileID = 0xFFFF;
-    u16 clusterID = 0xFFFF;
-    u8 endpoint = 0;
+    uint16_t profileID = 0xFFFF;
+    uint16_t clusterID = 0xFFFF;
+    uint8_t endpoint = 0;
     reportCfgInfo_t *pEntry = NULL;
     zclAttrInfo_t *pAttrEntry = NULL;
 
@@ -431,9 +431,9 @@ _CODE_ZCL_ static void reportAttrs(void)
         clusterID = 0xFFFF;
         endpoint = 0;
         again = 0;
-        memset((u8 *)&report, 0, sizeof(report));
+        memset((uint8_t *)&report, 0, sizeof(report));
 
-        for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+        for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
             pEntry = &reportingTab.reportCfgInfo[i];
 
             if (pEntry->used && (pEntry->maxInterval != 0xFFFF) &&
@@ -442,7 +442,7 @@ _CODE_ZCL_ static void reportAttrs(void)
                 if (pAttrEntry) {
                     bool valid = 0;
 
-                    u8 dataLen = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
+                    uint8_t dataLen = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
                     dataLen = (dataLen > REPORTABLE_CHANGE_MAX_ANALOG_SIZE) ? (REPORTABLE_CHANGE_MAX_ANALOG_SIZE) : (dataLen);
 
                     DEBUG(REPORT_DEBUG_ENABLE, "RP: cID = %x, aID = %x, min = %d, max = %d\n",
@@ -487,7 +487,7 @@ _CODE_ZCL_ static void reportAttrs(void)
 
         if (clusterID != 0xFFFF) {
             epInfo_t dstEpInfo;
-            TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+            ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
             dstEpInfo.dstAddrMode = APS_DSTADDR_EP_NOTPRESETNT;
             dstEpInfo.profileId = profileID;
@@ -497,7 +497,7 @@ _CODE_ZCL_ static void reportAttrs(void)
     } while (again);
 }
 
-_CODE_ZCL_ static s32 reportingTimerCb(void *arg)
+_CODE_ZCL_ static int32_t reportingTimerCb(void *arg)
 {
     reportAttrs();
 
@@ -522,11 +522,11 @@ _CODE_ZCL_ static void reportingTimerStart(void)
  *
  * @return  0 -- continue; -1 -- cancel
  */
-_CODE_ZCL_ static s32 reportAttrTimerCb(void *arg)
+_CODE_ZCL_ static int32_t reportAttrTimerCb(void *arg)
 {
     zcl_reportTimerEvt_t *pReportTimer = (zcl_reportTimerEvt_t *)arg;
 
-    DEBUG(REPORT_DEBUG_ENABLE, "reportAttrTimerCb: %x\n", (u32)pReportTimer);
+    DEBUG(REPORT_DEBUG_ENABLE, "reportAttrTimerCb: %x\n", (uint32_t)pReportTimer);
 
     if (pReportTimer->pEntry) {
         reportCfgInfo_t *pEntry = pReportTimer->pEntry;
@@ -595,17 +595,17 @@ _CODE_ZCL_ static void reportAttrTimerStop(zcl_reportTimerEvt_t *pTimerEvt)
  */
 _CODE_ZCL_ static void reportAttrTimerStart(void)
 {
-    for (u8 i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_REPORTING_TABLE_NUM; i++) {
         reportCfgInfo_t *pEntry = &reportingTab.reportCfgInfo[i];
         zcl_reportTimerEvt_t *pTimerEvt = &reportTimer[i];
 
         if (pEntry->used && (pEntry->maxInterval != 0xFFFF) &&
             zb_bindingTblSearched(pEntry->clusterID, pEntry->endPoint)) {
-            u16 seconds = 0;
-            u8 minOrMax = 1;
+            uint16_t seconds = 0;
+            uint8_t minOrMax = 1;
 
             zclAttrInfo_t *pAttrEntry = zcl_findAttribute(pEntry->endPoint, pEntry->clusterID, pEntry->attrID);
-            u8 dataLen = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
+            uint8_t dataLen = zcl_getAttrSize(pAttrEntry->type, pAttrEntry->data);
             dataLen = (dataLen > REPORTABLE_CHANGE_MAX_ANALOG_SIZE) ? (REPORTABLE_CHANGE_MAX_ANALOG_SIZE) : (dataLen);
 
             if ((!zcl_analogDataType(pAttrEntry->type) && memcmp(pEntry->prevData, pAttrEntry->data, dataLen)) ||

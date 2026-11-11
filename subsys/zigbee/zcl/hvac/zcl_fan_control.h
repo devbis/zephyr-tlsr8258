@@ -26,7 +26,7 @@
 #define ZCL_FAN_MODE_SEQ_LOW_HIGH_AUTO      0x03
 #define ZCL_FAN_MODE_SEQ_ON_AUTO            0x04
 
-status_t zcl_fan_control_register(u8 endpoint, u16 manuCode, u8 attrNum,
+status_t zcl_fan_control_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum,
 				  const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif /* ZCL_FAN_CONTROL_H */

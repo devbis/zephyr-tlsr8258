@@ -8,10 +8,10 @@
 
 #include <zephyr/zigbee/zb_types.h>
 
-u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len,
-			       const u8 *aad, u8 aad_len, u8 *msg, u8 msg_len, u8 *mic_out);
+uint8_t zb_minimal_ccm_encrypt_auth(const uint8_t *key, const uint8_t nonce[13], uint8_t mic_len,
+			       const uint8_t *aad, uint8_t aad_len, uint8_t *msg, uint8_t msg_len, uint8_t *mic_out);
 
-bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, u8 *cipher,
-				 u8 cipher_len, const u8 *aad, u8 aad_len, const u8 *mic);
+bool zb_minimal_ccm_decrypt_auth(const uint8_t *key, const uint8_t nonce[13], uint8_t mic_len, uint8_t *cipher,
+				 uint8_t cipher_len, const uint8_t *aad, uint8_t aad_len, const uint8_t *mic);
 
 #endif

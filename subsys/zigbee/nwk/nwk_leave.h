@@ -18,7 +18,7 @@
  * A unicast leave names the device by its short address; the invalid address stays when the
  * address map no longer knows it.
  */
-static inline void nwk_leaveCnfAddr(addrExt_t extAddr, u16 dstAddr)
+static inline void nwk_leaveCnfAddr(addrExt_t extAddr, uint16_t dstAddr)
 {
 	if (ZB_NWK_IS_ADDRESS_BROADCAST(dstAddr)) {
 		ZB_IEEE_ADDR_ZERO(extAddr);
@@ -29,7 +29,7 @@ static inline void nwk_leaveCnfAddr(addrExt_t extAddr, u16 dstAddr)
 	(void)zb_address_ieee_by_short(dstAddr, extAddr);
 }
 
-void nwk_leaveCmdSendCnf(void *arg, u16 dstAddr);
-int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
+void nwk_leaveCmdSendCnf(void *arg, uint16_t dstAddr);
+int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle);
 
 #endif

@@ -55,7 +55,7 @@ static void reset(void *fixture)
 
 ZTEST(task_post_queue, test_post_runs_callback_and_wakes_thread)
 {
-	zassert_equal(tl_zbTaskPost(record, INT_TO_POINTER(3)), RET_OK);
+	zassert_equal(zb_TaskPost(record, INT_TO_POINTER(3)), RET_OK);
 	zassert_equal(k_sem_count_get(&zb_ev_sem), 1U);
 	zb_taskq_process();
 	zassert_equal(ran, 1);
@@ -66,36 +66,36 @@ ZTEST(task_post_queue, test_post_runs_callback_and_wakes_thread)
 
 ZTEST(task_post_queue, test_null_callback_is_rejected)
 {
-	zassert_equal(tl_zbTaskPost(NULL, NULL), RET_INVALID_PARAMETER);
-	zassert_equal(tl_zbRxTaskPost(NULL, NULL), RET_INVALID_PARAMETER);
-	zassert_equal(tl_zbTxTaskPost(NULL, NULL), RET_INVALID_PARAMETER);
+	zassert_equal(zb_TaskPost(NULL, NULL), RET_INVALID_PARAMETER);
+	zassert_equal(zb_RxTaskPost(NULL, NULL), RET_INVALID_PARAMETER);
+	zassert_equal(zb_TxTaskPost(NULL, NULL), RET_INVALID_PARAMETER);
 	zassert_true(zb_taskq_is_empty());
 }
 
 ZTEST(task_post_queue, test_lanes_refuse_posts_when_full)
 {
 	for (int i = 0; i < POST_DEPTH; i++) {
-		zassert_equal(tl_zbTaskPost(record, INT_TO_POINTER(i)), RET_OK);
+		zassert_equal(zb_TaskPost(record, INT_TO_POINTER(i)), RET_OK);
 	}
-	zassert_equal(tl_zbTaskPost(record, NULL), RET_BUSY);
+	zassert_equal(zb_TaskPost(record, NULL), RET_BUSY);
 
 	for (int i = 0; i < RX_DEPTH; i++) {
-		zassert_equal(tl_zbRxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
+		zassert_equal(zb_RxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
 	}
-	zassert_equal(tl_zbRxTaskPost(record, NULL), RET_BUSY);
+	zassert_equal(zb_RxTaskPost(record, NULL), RET_BUSY);
 
 	for (int i = 0; i < TX_DEPTH; i++) {
-		zassert_equal(tl_zbTxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
+		zassert_equal(zb_TxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
 	}
-	zassert_equal(tl_zbTxTaskPost(record, NULL), RET_BUSY);
+	zassert_equal(zb_TxTaskPost(record, NULL), RET_BUSY);
 }
 
 ZTEST(task_post_queue, test_tx_before_rx_before_general)
 {
-	zassert_equal(tl_zbTaskPost(record, INT_TO_POINTER(1)), RET_OK);
-	zassert_equal(tl_zbRxTaskPost(record, INT_TO_POINTER(2)), RET_OK);
-	zassert_equal(tl_zbTxTaskPost(record, INT_TO_POINTER(3)), RET_OK);
-	zassert_equal(tl_zbRxTaskPost(record, INT_TO_POINTER(4)), RET_OK);
+	zassert_equal(zb_TaskPost(record, INT_TO_POINTER(1)), RET_OK);
+	zassert_equal(zb_RxTaskPost(record, INT_TO_POINTER(2)), RET_OK);
+	zassert_equal(zb_TxTaskPost(record, INT_TO_POINTER(3)), RET_OK);
+	zassert_equal(zb_RxTaskPost(record, INT_TO_POINTER(4)), RET_OK);
 
 	drain_all();
 	zassert_equal(ran, 4);
@@ -108,7 +108,7 @@ ZTEST(task_post_queue, test_tx_before_rx_before_general)
 ZTEST(task_post_queue, test_drain_is_bounded)
 {
 	for (int i = 0; i < POST_DEPTH; i++) {
-		zassert_equal(tl_zbTaskPost(record, INT_TO_POINTER(i)), RET_OK);
+		zassert_equal(zb_TaskPost(record, INT_TO_POINTER(i)), RET_OK);
 	}
 
 	zb_taskq_process();
@@ -126,7 +126,7 @@ ZTEST(task_post_queue, test_lane_wraps_around)
 {
 	for (int round = 0; round < 3; round++) {
 		for (int i = 0; i < TX_DEPTH; i++) {
-			zassert_equal(tl_zbTxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
+			zassert_equal(zb_TxTaskPost(record, INT_TO_POINTER(i)), RET_OK);
 		}
 		drain_all();
 	}

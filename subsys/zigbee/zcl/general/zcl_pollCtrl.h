@@ -55,21 +55,21 @@
  */
 typedef struct {
     bool startFastPolling;
-    u16 fastPollTimeout;
+    uint16_t fastPollTimeout;
 } zcl_chkInRsp_t;
 
 /**
  *  @brief  Set long poll interval command payload
  */
 typedef struct {
-    u32 newLongPollInterval;
+    uint32_t newLongPollInterval;
 } zcl_setLongPollInterval_t;
 
 /**
  *  @brief  Set short poll interval command payload
  */
 typedef struct {
-    u16 newShortPollInterval;
+    uint16_t newShortPollInterval;
 } zcl_setShortPollInterval_t;
 
 
@@ -81,7 +81,7 @@ typedef status_t (*zcl_pollCtrl_chkInRspCb_t)(apsdeDataInd_t *pApsdeInd, zcl_chk
 typedef status_t (*zcl_pollCtrl_fastPollStopCb_t)(apsdeDataInd_t *pApsdeInd);
 typedef status_t (*zcl_pollCtrl_setLongPollIntervalCb_t)(apsdeDataInd_t *pApsdeInd, zcl_setLongPollInterval_t *pCmd);
 typedef status_t (*zcl_pollCtrl_setShortPollIntervalCb_t)(apsdeDataInd_t *pApsdeInd, zcl_setShortPollInterval_t *pCmd);
-typedef status_t (*zcl_pollCtrl_chkInCb_t)(apsdeDataInd_t *pApsdeInd, u8 seqNum);
+typedef status_t (*zcl_pollCtrl_chkInCb_t)(apsdeDataInd_t *pApsdeInd, uint8_t seqNum);
 
 /**
  *  @brief  Structure definition for commands callback functions in pollCtrl cluster
@@ -99,13 +99,13 @@ typedef struct {
  *  @brief  Structure definition for poll control attribute
  */
 typedef struct {
-    u32 chkInInterval;
-    u32 longPollInterval;
-    u32 chkInIntervalMin;
-    u32 longPollIntervalMin;
-    u16 shortPollInterval;
-    u16 fastPollTimeout;
-    u16 fastPollTimeoutMax;
+    uint32_t chkInInterval;
+    uint32_t longPollInterval;
+    uint32_t chkInIntervalMin;
+    uint32_t longPollIntervalMin;
+    uint16_t shortPollInterval;
+    uint16_t fastPollTimeout;
+    uint16_t fastPollTimeoutMax;
 } zcl_pollCtrl_attr_t;
 
 /**
@@ -118,25 +118,25 @@ extern zcl_pollCtrl_attr_t gZclPollCtrlAttr;
  */
 extern const zclAttrInfo_t pollCtrl_attrTbl[];
 
-extern const u8 zcl_pollCtrl_attrNum;
+extern const uint8_t zcl_pollCtrl_attrNum;
 #endif
 
 
-status_t zcl_pollCtrl_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_pollCtrl_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_pollCtrl_chkIn(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_pollCtrl_chkIn(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_pollCtrl_checkInCmd(a,b,c)  (zcl_pollCtrl_chkIn((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_pollCtrl_chkInRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_chkInRsp_t *pCheckInRsp);
+status_t zcl_pollCtrl_chkInRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_chkInRsp_t *pCheckInRsp);
 #define zcl_pollCtrl_chkInRspCmd(a,b,c,d,e)     (zcl_pollCtrl_chkInRsp((a), (b), (c), (d), (e)))
 
-status_t zcl_pollCtrl_fastPollStop(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_pollCtrl_fastPollStop(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_pollCtrl_fastPollStopCmd(a,b,c)     (zcl_pollCtrl_fastPollStop((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_pollCtrl_setLongPollInterval(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_setLongPollInterval_t *pSetLongPollInterval);
+status_t zcl_pollCtrl_setLongPollInterval(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_setLongPollInterval_t *pSetLongPollInterval);
 #define zcl_pollCtrl_setLongPollIntervalCmd(a,b,c,d)    (zcl_pollCtrl_setLongPollInterval((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_pollCtrl_setShortPollInterval(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_setShortPollInterval_t *pSetShortPollInterval);
+status_t zcl_pollCtrl_setShortPollInterval(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_setShortPollInterval_t *pSetShortPollInterval);
 #define zcl_pollCtrl_setShortPollIntervalCmd(a,b,c,d)   (zcl_pollCtrl_setShortPollInterval((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
 #endif	/* ZCL_POLL_CTRL_H */

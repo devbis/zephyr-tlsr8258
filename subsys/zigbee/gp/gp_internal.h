@@ -10,8 +10,8 @@
 
 extern gp_data_req_pending_t gpTxQueue;
 extern gpDeviceAnnounceCheckCb_t g_gpDeviceAnnounceCheckCb;
-extern u8 zclGpAttr_gpSharedSecKeyType;
-extern u8 zclGpAttr_gpSharedSecKey[];
+extern uint8_t zclGpAttr_gpSharedSecKeyType;
+extern uint8_t zclGpAttr_gpSharedSecKey[];
 
 void cGpDataCnfHandler(void *arg);
 void dGp_dataInd(void *arg);

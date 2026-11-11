@@ -21,10 +21,10 @@ enum {
 	MAC_PENDING_STATE_EXPIRED,
 };
 
-static inline int mac_pending_addr_matches(const mac_pending_entry_t *entry, u8 addrMode,
-					   const u8 *addr)
+static inline int mac_pending_addr_matches(const mac_pending_entry_t *entry, uint8_t addrMode,
+					   const uint8_t *addr)
 {
-	u8 len = (addrMode == ADDR_MODE_EXT) ? EXT_ADDR_LEN : 2;
+	uint8_t len = (addrMode == ADDR_MODE_EXT) ? EXT_ADDR_LEN : 2;
 
 	if (entry->buf == NULL) {
 		return 0;
@@ -37,7 +37,7 @@ void macDataPendingListProc(void *arg)
 {
 	mac_pending_entry_t *entry = (mac_pending_entry_t *)arg;
 	void *buf;
-	u8 status;
+	uint8_t status;
 
 	if (entry == NULL) {
 		return;
@@ -56,16 +56,16 @@ void macDataPendingListProc(void *arg)
 	}
 
 	buf = entry->buf;
-	tl_zbMaxTxConfirmCb(buf, status);
+	zb_MaxTxConfirmCb(buf, status);
 	listRemove(macPendingQueue, entry);
-	ev_buf_free((u8 *)entry);
+	ev_buf_free((uint8_t *)entry);
 }
 
-u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode)
+uint8_t macDataPending(void *buf, uint32_t dstAddrLo, uint32_t dstAddrHi, uint8_t dstAddrMode)
 {
 	mac_pending_entry_t *entry;
-	u8 status = MAC_STA_TRANSACTION_OVERFLOW;
-	u8 match[9]; /* extended address bytes 0-7, then the address mode */
+	uint8_t status = MAC_STA_TRANSACTION_OVERFLOW;
+	uint8_t match[9]; /* extended address bytes 0-7, then the address mode */
 
 	if (listLength(macPendingQueue) >= ZB_MAC_PENDING_TRANS_QUEUE_SIZE) {
 		return status;
@@ -80,19 +80,19 @@ u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode)
 	listAdd(macPendingQueue, entry);
 	entry->buf = buf;
 
-	match[0] = (u8)dstAddrLo;
-	match[1] = (u8)(dstAddrLo >> 8);
-	match[2] = (u8)(dstAddrLo >> 16);
-	match[3] = (u8)(dstAddrLo >> 24);
-	match[4] = (u8)dstAddrHi;
-	match[5] = (u8)(dstAddrHi >> 8);
-	match[6] = (u8)(dstAddrHi >> 16);
-	match[7] = (u8)(dstAddrHi >> 24);
+	match[0] = (uint8_t)dstAddrLo;
+	match[1] = (uint8_t)(dstAddrLo >> 8);
+	match[2] = (uint8_t)(dstAddrLo >> 16);
+	match[3] = (uint8_t)(dstAddrLo >> 24);
+	match[4] = (uint8_t)dstAddrHi;
+	match[5] = (uint8_t)(dstAddrHi >> 8);
+	match[6] = (uint8_t)(dstAddrHi >> 16);
+	match[7] = (uint8_t)(dstAddrHi >> 24);
 	match[8] = dstAddrMode;
 	memcpy(entry->addr, match, sizeof(entry->addr));
 	entry->addrMode = match[8];
 
-	entry->timeout = (u8)(((((u32)g_zbInfo.macPib.transactionPersistenceTime << 4) -
+	entry->timeout = (uint8_t)(((((uint32_t)g_zbInfo.macPib.transactionPersistenceTime << 4) -
 				g_zbInfo.macPib.transactionPersistenceTime)
 			       << 10) /
 			      1000000U);
@@ -103,15 +103,15 @@ u8 macDataPending(void *buf, u32 dstAddrLo, u32 dstAddrHi, u8 dstAddrMode)
 	return status;
 }
 
-void macDataPendingListManage(void *arg, u8 status)
+void macDataPendingListManage(void *arg, uint8_t status)
 {
 	mac_pending_entry_t *entry = (mac_pending_entry_t *)arg;
 
 	entry->status = status;
-	tl_zbTaskPost(macDataPendingListProc, entry);
+	zb_TaskPost(macDataPendingListProc, entry);
 }
 
-_attribute_ram_code_ u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 update)
+_attribute_ram_code_ uint8_t zb_MacPendingDataCheck(uint8_t addrMode, uint8_t *addr, uint8_t update)
 {
 	mac_pending_entry_t *entry;
 
@@ -141,13 +141,13 @@ _attribute_ram_code_ u8 tl_zbMacPendingDataCheck(u8 addrMode, u8 *addr, u8 updat
 	return MAC_STA_OUT_OF_CAP;
 }
 
-_attribute_no_inline_ int tl_zbMacPendingDataSearch(u8 addrMode, u8 *addr)
+_attribute_no_inline_ int zb_MacPendingDataSearch(uint8_t addrMode, uint8_t *addr)
 {
 	mac_pending_entry_t *entry;
-	u8 count = 0;
+	uint8_t count = 0;
 
 	if (listLength(macPendingQueue) == 0) {
-		return (s8)count; /* Vendor returns the signed 8-bit count through the int ABI. */
+		return (int8_t)count; /* Vendor returns the signed 8-bit count through the int ABI. */
 	}
 
 	for (entry = (mac_pending_entry_t *)listHead(macPendingQueue); entry != NULL;
@@ -159,16 +159,16 @@ _attribute_no_inline_ int tl_zbMacPendingDataSearch(u8 addrMode, u8 *addr)
 		count++;
 	}
 
-	return (s8)count;
+	return (int8_t)count;
 }
 
-void tl_zbMacMlmeDataRequestCb(void *arg)
+void zb_MacMlmeDataRequestCb(void *arg)
 {
 	mac_phy_ind_meta_t *meta = (mac_phy_ind_meta_t *)arg;
-	u8 *req = (u8 *)arg;
-	u8 addrMode = meta->srcAddrMode;
-	u8 *addr = meta->srcAddr;
-	s8 pendingCnt = (s8)tl_zbMacPendingDataSearch(addrMode, addr);
+	uint8_t *req = (uint8_t *)arg;
+	uint8_t addrMode = meta->srcAddrMode;
+	uint8_t *addr = meta->srcAddr;
+	int8_t pendingCnt = (int8_t)zb_MacPendingDataSearch(addrMode, addr);
 	mac_pending_entry_t *entry;
 
 	if (listLength(macPendingQueue) == 0) {
@@ -178,8 +178,8 @@ void tl_zbMacMlmeDataRequestCb(void *arg)
 	for (entry = (mac_pending_entry_t *)listHead(macPendingQueue); entry != NULL;
 	     entry = entry->next) {
 		zb_buf_t *buf;
-		u8 *txData;
-		u8 txStatus;
+		uint8_t *txData;
+		uint8_t txStatus;
 
 		if (entry->state != MAC_PENDING_STATE_READY ||
 		    !mac_pending_addr_matches(entry, addrMode, addr)) {
@@ -192,7 +192,7 @@ void tl_zbMacMlmeDataRequestCb(void *arg)
 			txData[0] |= MAC_FCF_FRAME_PENDING_MASK;
 		}
 
-		txStatus = tl_zbMacTx(buf, txData, ((mac_pending_tx_ctx_t *)buf)->psduLen,
+		txStatus = zb_MacTx(buf, txData, ((mac_pending_tx_ctx_t *)buf)->psduLen,
 				      txData[0] & MAC_FCF_ACK_REQ_BIT, entry);
 		entry->state = (txStatus == MAC_SUCCESS) ? MAC_PENDING_STATE_SENT
 							 : MAC_PENDING_STATE_QUEUED;
@@ -201,19 +201,19 @@ void tl_zbMacMlmeDataRequestCb(void *arg)
 
 post_poll_ind:
 	if (listLength(macPendingQueue) == 0) {
-		u8 saved[9]; /* address bytes copied from addr, then reused in req */
+		uint8_t saved[9]; /* address bytes copied from addr, then reused in req */
 
 		/* Preserve the vendor stack/code shape even though req[0] does not alias addr. */
 		memcpy(saved, addr, sizeof(saved));
 		req[0] = addrMode;
 		ZB_IEEE_ADDR_COPY(req + 1, saved);
-		tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
 		return;
 	}
 
 	req[0] = addrMode;
 	ZB_IEEE_ADDR_COPY(req + 1, addr);
-	tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
+	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
 }
 
 int macIndirPeriodic(void *arg)
@@ -238,16 +238,16 @@ int macIndirPeriodic(void *arg)
 			continue;
 		}
 
-		if ((u8)(entry->state - MAC_PENDING_STATE_SENT) <= 1U) {
+		if ((uint8_t)(entry->state - MAC_PENDING_STATE_SENT) <= 1U) {
 			entry->state = MAC_PENDING_STATE_EXPIRED;
 			return 0;
 		}
 
 		if (entry->buf != NULL) {
-			tl_zbMaxTxConfirmCb(entry->buf, MAC_STA_TRANSACTION_EXPIRED);
+			zb_MaxTxConfirmCb(entry->buf, MAC_STA_TRANSACTION_EXPIRED);
 		}
 		listRemove(macPendingQueue, entry);
-		ev_buf_free((u8 *)entry);
+		ev_buf_free((uint8_t *)entry);
 		return 0;
 	}
 
@@ -255,13 +255,13 @@ int macIndirPeriodic(void *arg)
 }
 #endif
 
-void tl_zbMacDataRequestStatusCheck(zb_buf_t *buf, u8 status)
+void zb_MacDataRequestStatusCheck(zb_buf_t *buf, uint8_t status)
 {
-	u8 savedStatus = buf->hdr.handle;
+	uint8_t savedStatus = buf->hdr.handle;
 
 	if (savedStatus == MAC_STA_NO_ACK) {
 		zb_buf_free(buf);
-		tl_zbMacAssocPollConfirm(status);
+		zb_MacAssocPollConfirm(status);
 		return;
 	}
 
@@ -271,42 +271,42 @@ void tl_zbMacDataRequestStatusCheck(zb_buf_t *buf, u8 status)
 		}
 
 		((mac_mlme_poll_conf_t *)buf)->status = status;
-		tl_zbPrimitivePost(TL_Q_MAC2NWK, MAC_MLME_POLL_CNF, buf);
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_CNF, buf);
 		return;
 	}
 
 	zb_buf_free(buf);
 }
 
-u8 tl_zbMacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, u8 status)
+uint8_t zb_MacMlmeDataRequestCmdSend(zb_mlme_data_req_cmd_t *req, zb_buf_t *buf, uint8_t status)
 {
-	tl_zb_mac_mhr_t mhr;
-	u8 hdrSize;
-	u8 *payload;
-	u8 *frameStart;
-	u8 txStatus;
+	zb_mac_mhr_t mhr;
+	uint8_t hdrSize;
+	uint8_t *payload;
+	uint8_t *frameStart;
+	uint8_t txStatus;
 
 	memset(&mhr, 0, sizeof(mhr));
 	mhr.dstPanId = g_zbMacPib.panId;
 	memcpy(&mhr.dstAddr, &req->dstAddr, sizeof(mhr.dstAddr));
 	memcpy(&mhr.srcAddr, &req->srcAddr, sizeof(mhr.srcAddr));
 	mhr.frameCtrl = MAC_FRAME_TYPE_COMMAND | MAC_FCF_ACK_REQUEST_MASK | MAC_FCF_INTRA_PAN_MASK |
-			((u16)req->dstAddrMode << MAC_FCF_DST_ADDR_MODE_POS) |
-			((u16)req->srcAddrMode << MAC_FCF_SRC_ADDR_MODE_POS);
+			((uint16_t)req->dstAddrMode << MAC_FCF_DST_ADDR_MODE_POS) |
+			((uint16_t)req->srcAddrMode << MAC_FCF_SRC_ADDR_MODE_POS);
 
-	hdrSize = (u8)(tl_zbMacHdrSize(mhr.frameCtrl) + 1U);
-	TL_BUF_INITIAL_ALLOC(buf, hdrSize, payload, u8 *);
+	hdrSize = (uint8_t)(zb_MacHdrSize(mhr.frameCtrl) + 1U);
+	ZB_BUF_INITIAL_ALLOC(buf, hdrSize, payload, uint8_t *);
 	/* The queued frame is the
 	 * allocation, not the pointer the header builder returns. */
 	frameStart = payload;
-	payload = tl_zbMacHdrBuilder(payload, &mhr);
+	payload = zb_MacHdrBuilder(payload, &mhr);
 	payload[0] = MAC_CMD_DATA_REQUEST;
 
 	buf->hdr.handle = status;
 
-	txStatus = tl_zbMacTx(buf, frameStart, hdrSize, 1, NULL);
+	txStatus = zb_MacTx(buf, frameStart, hdrSize, 1, NULL);
 	if (txStatus != MAC_SUCCESS) {
-		tl_zbMacDataRequestStatusCheck(buf, txStatus);
+		zb_MacDataRequestStatusCheck(buf, txStatus);
 	}
 
 	return txStatus;

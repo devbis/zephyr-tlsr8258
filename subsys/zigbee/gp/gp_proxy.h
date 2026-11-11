@@ -38,33 +38,33 @@
  *  @brief	Proxy entry options
  */
 typedef union {
-    u16 opts;
+    uint16_t opts;
     struct {
-        u16 appId:3;
-        u16 entryActive:1;
-        u16 entryValid:1;
-        u16 seqNumCap:1;
-        u16 lightWeightUnicastGPS:1;
-        u16 derivedGroupGPS:1;
-        u16 commGroupGPS:1;
-        u16 firstToForward:1;
-        u16 inRange:1;
-        u16 gpdFixed:1;
-        u16 hasAllUnicastRoutes:1;
-        u16 assignedAlias:1;
-        u16 secUse:1;
-        u16 optsExtension:1;
+        uint16_t appId:3;
+        uint16_t entryActive:1;
+        uint16_t entryValid:1;
+        uint16_t seqNumCap:1;
+        uint16_t lightWeightUnicastGPS:1;
+        uint16_t derivedGroupGPS:1;
+        uint16_t commGroupGPS:1;
+        uint16_t firstToForward:1;
+        uint16_t inRange:1;
+        uint16_t gpdFixed:1;
+        uint16_t hasAllUnicastRoutes:1;
+        uint16_t assignedAlias:1;
+        uint16_t secUse:1;
+        uint16_t optsExtension:1;
     } bits;
 } gpProxyEntryOpt_t;
 
 typedef struct {
     addrExt_t sinkIeeeAddr;
-    u16 sinkNwkAddr;
+    uint16_t sinkNwkAddr;
 } gpLwSinkAddrListItem_t;
 
 typedef struct {
-    u16 fullUnicastGPS:1;
-    u16 reserved:15;
+    uint16_t fullUnicastGPS:1;
+    uint16_t reserved:15;
 } gpExtendedOpt_t;
 
 /**
@@ -73,19 +73,19 @@ typedef struct {
 typedef struct _attribute_packed_ {
     gpdId_t gpdId;              //8-bytes
     gpProxyEntryOpt_t options;
-    u16 gpdAssignedAlias;
+    uint16_t gpdAssignedAlias;
     gpSecOpt_t secOptions;
-    u8 endpoint;
-    u8 groupcastRadius;
-    u8 searchCnt;               //8-bytes
-    u8 gpdKey[16];              //16-bytes
-    u32 gpdSecFrameCnt;         //4-bytes
+    uint8_t endpoint;
+    uint8_t groupcastRadius;
+    uint8_t searchCnt;               //8-bytes
+    uint8_t gpdKey[16];              //16-bytes
+    uint32_t gpdSecFrameCnt;         //4-bytes
     gpLwSinkAddrListItem_t lightweightSinkAddrList[PROXY_LIGHTWEIGHT_SINK_ADDR_LIST_NUM]; //20-bytes
     gpSinkGroupListItem_t sinkGroupList[PROXY_SINK_GROUP_LIST_NUM];                       //8-bytes
-    u8 used:1;
-    u8 lwSinkCnt:2;
-    u8 sinkGroupCnt:2;
-    u8 reserved:3;
+    uint8_t used:1;
+    uint8_t lwSinkCnt:2;
+    uint8_t sinkGroupCnt:2;
+    uint8_t reserved:3;
 } gpProxyTabEntry_t; //65-bytes
 
 /***************************************************************************
@@ -93,7 +93,7 @@ typedef struct _attribute_packed_ {
 */
 typedef struct _attribute_packed_ {
     gpProxyTabEntry_t gpProxyTab[GPP_MAX_PROXY_TABLE_ENTRIES];
-    u8 gpProxyTabNum;
+    uint8_t gpProxyTabNum;
 } gp_proxyTab_t;
 
 /***************************************************************************
@@ -102,11 +102,11 @@ typedef struct _attribute_packed_ {
 typedef struct {
     ev_timer_event_t *aliasConflictTimeoutEvt;
     ev_timer_event_t *commissioningWindowTimeoutEvt;
-    u16 gpAliasConflictAddr;
-    u16 gpCommissionerAddr;     //addr to which send the notifications during commissioning mode
-    u16 gpCommissioningWindow;  //default value 180 seconds
+    uint16_t gpAliasConflictAddr;
+    uint16_t gpCommissionerAddr;     //addr to which send the notifications during commissioning mode
+    uint16_t gpCommissioningWindow;  //default value 180 seconds
     gpProxyCommModeOpt_t gpCommissioningModeOpt;//commissioning option copy from Commissioning Mode command
-    u8 gppInCommMode;           //global flag, in commissioning mode or in operational mode
+    uint8_t gppInCommMode;           //global flag, in commissioning mode or in operational mode
     bool firstToForward;
 } gpp_ctx_t;
 
@@ -115,10 +115,10 @@ typedef struct {
 extern gp_proxyTab_t g_gpProxyTab;
 extern gpp_ctx_t g_gppCtx;
 
-gpSecRsp_status_t gpProxySecOperation(u8 appId, gpdId_t gpdId,
-                                      u8 endpoint, u32 gpdSecFrameCnt,
-                                      u8 gpdfSecurityLevel, u8 gpdfKeyType,
-                                      u8 *pKeyType, u8 *pKey);
+gpSecRsp_status_t gpProxySecOperation(uint8_t appId, gpdId_t gpdId,
+                                      uint8_t endpoint, uint32_t gpdSecFrameCnt,
+                                      uint8_t gpdfSecurityLevel, uint8_t gpdfKeyType,
+                                      uint8_t *pKeyType, uint8_t *pKey);
 
 void gppGpDataIndProcess(gp_data_ind_t *pGpDataInd);
 
@@ -126,19 +126,19 @@ void gpProxyTabInit(void);
 void gpProxyTabUpdate(void);
 void gp_proxyInit(void);
 void gp_proxyTabEntryClear(gpProxyTabEntry_t *pEntry);
-u8 gp_getProxyTabEntryTotalNum(void);
-u8 gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry);
+uint8_t gp_getProxyTabEntryTotalNum(void);
+uint8_t gp_getProxyTabEntryLen(gpProxyTabEntry_t *pEntry);
 gpProxyTabEntry_t *gp_proxyTabEntryFreeGet(void);
-gpProxyTabEntry_t *gp_getProxyTabByGpdId(u8 appId, gpdId_t gpdId);
-u8 lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sinkNwkAddr);
-u8 lwSinkAddrListRemove(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, u16 sinkNwkAddr);
-u8 sinkGroupListAdd(gpProxyTabEntry_t *pEntry, u16 sinkGroupID, u16 alias);
-u8 sinkGroupListRemove(gpProxyTabEntry_t *pEntry, u16 sinkGroupID);
-u8 gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, u8 *pBuf);
+gpProxyTabEntry_t *gp_getProxyTabByGpdId(uint8_t appId, gpdId_t gpdId);
+uint8_t lwSinkAddrListAdd(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, uint16_t sinkNwkAddr);
+uint8_t lwSinkAddrListRemove(gpProxyTabEntry_t *pEntry, addrExt_t sinkIeeeAddr, uint16_t sinkNwkAddr);
+uint8_t sinkGroupListAdd(gpProxyTabEntry_t *pEntry, uint16_t sinkGroupID, uint16_t alias);
+uint8_t sinkGroupListRemove(gpProxyTabEntry_t *pEntry, uint16_t sinkGroupID);
+uint8_t gp_buildProxyTabEntryFormat(gpProxyTabEntry_t *pEntry, uint8_t *pBuf);
 
-void gpProxyCommissioningModeCmdProcess(u16 srcAddr, zcl_gp_proxyCommissioningModeCmd_t *pCmd);
+void gpProxyCommissioningModeCmdProcess(uint16_t srcAddr, zcl_gp_proxyCommissioningModeCmd_t *pCmd);
 void gpResponseCmdProcess(zcl_gp_responseCmd_t *pCmd);
 
-status_t zcl_gpServerCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload);
+status_t zcl_gpServerCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload);
 
 #endif	/* GP_PROXY_H */

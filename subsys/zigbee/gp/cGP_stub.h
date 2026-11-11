@@ -75,32 +75,32 @@ enum {
 * @brief	NWK frame control field of GPDF
 */
 typedef struct {
-    u8 frameType:2;
-    u8 protocolVer:4;
-    u8 autoCommissioning:1;
-    u8 nwkFrameCtrlExtension:1;
+    uint8_t frameType:2;
+    uint8_t protocolVer:4;
+    uint8_t autoCommissioning:1;
+    uint8_t nwkFrameCtrlExtension:1;
 } gp_nwkHdrFrameCtrl_t;
 
 /***************************************************************************
 * @brief	Extended NWK frame control field of GPDF
 */
 typedef struct {
-    u8 appId:3;
-    u8 securityLevel:2;
-    u8 securityKey:1;
-    u8 rxAfterTx:1;
-    u8 direction:1;
+    uint8_t appId:3;
+    uint8_t securityLevel:2;
+    uint8_t securityKey:1;
+    uint8_t rxAfterTx:1;
+    uint8_t direction:1;
 } gp_extNwkFrameCtrl_t;
 
 /***************************************************************************
 * @brief	GP stub NWK header
 */
 typedef struct {
-    u32 gpdSrcId;
-    u32 secFrameCnt;
+    uint32_t gpdSrcId;
+    uint32_t secFrameCnt;
     gp_nwkHdrFrameCtrl_t nwkFrameCtrl;
     gp_extNwkFrameCtrl_t extNwkFrameCtrl;
-    u8 endpoint;
+    uint8_t endpoint;
 } gp_nwkHdr_t;
 
 /************************************************************************************************
@@ -111,24 +111,24 @@ typedef struct {
 * @brief	CGP-DATA.request txOptions
 */
 typedef struct {
-    u8 useCSMACA:1;
-    u8 useMACACK:1;
-    u8 reserved:6;
+    uint8_t useCSMACA:1;
+    uint8_t useMACACK:1;
+    uint8_t reserved:6;
 } cgpDataReq_txOpt_t;
 
 /***************************************************************************
 * @brief	CGP-DATA.request
 */
 typedef struct {
-    u8 *gpMpdu;
-    u16 srcPanId;
-    u16 dstPanId;
-    tl_zb_addr_t srcAddr;
-    tl_zb_addr_t dstAddr;
-    u8 srcAddrMode;
-    u8 dstAddrMode;
-    u8 gpMpduLen;
-    u8 gpMpduHandle;
+    uint8_t *gpMpdu;
+    uint16_t srcPanId;
+    uint16_t dstPanId;
+    zb_addr_t srcAddr;
+    zb_addr_t dstAddr;
+    uint8_t srcAddrMode;
+    uint8_t dstAddrMode;
+    uint8_t gpMpduLen;
+    uint8_t gpMpduHandle;
     cgpDataReq_txOpt_t txOptions;
 } cgp_data_req_t;
 
@@ -136,11 +136,11 @@ typedef struct {
 * @brief	CGP-DATA.confirm
 */
 typedef struct {
-    u8 status;
-    u8 gpMpduHandle;
+    uint8_t status;
+    uint8_t gpMpduHandle;
 } cgp_data_cnf_t;
 
-s32 cGp_dataReq(void *arg);
+int32_t cGp_dataReq(void *arg);
 void cGp_dataCnf(void *arg);
 void cGp_mcpsDataInd(void *arg);
 

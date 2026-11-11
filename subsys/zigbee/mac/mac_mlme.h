@@ -8,15 +8,15 @@
 
 #include "zb_common.h"
 
-void tl_zbPhyMlmeIndicate(void *arg, u8 *raw, u8 len);
-void tl_zbMacResetRequestHandler(void *arg);
-void tl_zbMacPollRequestHandler(void *arg);
-void tl_zbMacStartRequestHandler(void *arg);
-void tl_zbMacStartReqConfirm(void *arg, u8 status);
+void zb_PhyMlmeIndicate(void *arg, uint8_t *raw, uint8_t len);
+void zb_MacResetRequestHandler(void *arg);
+void zb_MacPollRequestHandler(void *arg);
+void zb_MacStartRequestHandler(void *arg);
+void zb_MacStartReqConfirm(void *arg, uint8_t status);
 void zb_macTimerEventProc(void *arg);
-void tl_zbMacCommStatusSend(void *arg, u8 status);
+void zb_MacCommStatusSend(void *arg, uint8_t status);
 #if defined(ZB_COORDINATOR_ROLE)
-void tl_zbMacCmdPanIdConflictNotifySendCheck(void *arg, u8 status);
+void zb_MacCmdPanIdConflictNotifySendCheck(void *arg, uint8_t status);
 #endif
 
 #endif

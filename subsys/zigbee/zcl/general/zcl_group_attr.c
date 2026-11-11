@@ -46,17 +46,17 @@
  */
 #ifdef ZCL_GROUP
 
-u8 zcl_attr_group_nameSupport = 0;
+uint8_t zcl_attr_group_nameSupport = 0;
 
 /* Attribute record list */
 const zclAttrInfo_t group_attrTbl[] = {
 #ifdef ZCL_ATTR_GROUPS_NAME_SUPPORT_ENABLE
-    { ZCL_ATTRID_GROUP_NAME_SUPPORT,      ZCL_DATA_TYPE_BITMAP8, ACCESS_CONTROL_READ, (u8*)&zcl_attr_group_nameSupport },
+    { ZCL_ATTRID_GROUP_NAME_SUPPORT,      ZCL_DATA_TYPE_BITMAP8, ACCESS_CONTROL_READ, (uint8_t*)&zcl_attr_group_nameSupport },
 #endif
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (u8*)&zcl_attr_global_clusterRevision },
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (uint8_t*)&zcl_attr_global_clusterRevision },
 };
 
-const u8 zcl_group_attrNum = (sizeof(group_attrTbl) / sizeof(zclAttrInfo_t));
+const uint8_t zcl_group_attrNum = (sizeof(group_attrTbl) / sizeof(zclAttrInfo_t));
 
 #endif    /* ZCL_GROUP */
 #endif

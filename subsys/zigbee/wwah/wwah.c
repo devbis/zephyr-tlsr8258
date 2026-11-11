@@ -37,8 +37,8 @@
 typedef struct {
     ev_timer_event_t *periodicRouterCheckInEvt;
     epInfo_t dstEpInfo;
-    u16 manufCode;
-    u8 srcEp;
+    uint16_t manufCode;
+    uint8_t srcEp;
 } wwah_perRouterCheckInInfo_t;
 
 /**********************************************************************
@@ -59,14 +59,14 @@ static void wwah_attrsSave(void *arg)
 {
 #if NV_ENABLE
     nv_flashWriteNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_ATTRS, sizeof(g_zcl_wwahAttrs),
-                     (u8 *)&g_zcl_wwahAttrs);
+                     (uint8_t *)&g_zcl_wwahAttrs);
 #endif
 }
 
 /* Persist the attributes so that the configuration survives a reset. */
 static void wwah_attrsChanged(void)
 {
-    TL_SCHEDULE_TASK(wwah_attrsSave, NULL);
+    ZB_SCHEDULE_TASK(wwah_attrsSave, NULL);
 }
 
 /* Re-apply the stack settings that the attributes control. */
@@ -89,7 +89,7 @@ static void wwah_attrsRestore(void)
     zcl_wwahAttr_t saved;
 
     if (nv_flashReadNew(1, NV_MODULE_ZCL, NV_ITEM_ZCL_WWAH_ATTRS, sizeof(saved),
-                        (u8 *)&saved) == NV_SUCC) {
+                        (uint8_t *)&saved) == NV_SUCC) {
         g_zcl_wwahAttrs = saved;
         wwah_attrsApply();
     }
@@ -110,7 +110,7 @@ void wwah_init(wwah_type_e type, af_simple_descriptor_t *simpleDesc)
 static void zcl_wwah_reqNewApsLinkKey(void *arg)
 {
     ss_apsmeRequestKeyReq_t requestKey;
-    TL_SETSTRUCTCONTENT(requestKey, 0);
+    ZB_SETSTRUCTCONTENT(requestKey, 0);
 
     requestKey.keyType = SS_KEYREQ_TYPE_TCLK;
     requestKey.dstAddr.shortAddr = 0x0000;
@@ -124,16 +124,16 @@ static void zcl_wwah_rejoin(void *arg)
     zb_rejoinReq(zb_apsChannelMaskGet(), g_bdbAttrs.scanDuration);
 }
 
-static s32 periodicRouterCheckInCb(void *arg)
+static int32_t periodicRouterCheckInCb(void *arg)
 {
     if (!zcl_wwah_getRouterCheckedFlag()) {
-        TL_SCHEDULE_TASK(zcl_wwah_rejoin, NULL);
+        ZB_SCHEDULE_TASK(zcl_wwah_rejoin, NULL);
 
         g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt = NULL;
         return -1;
     }
 
-    zclReadCmd_t *pReadCmd = (zclReadCmd_t *)ev_buf_allocate(sizeof(zclReadCmd_t) + sizeof(u16));
+    zclReadCmd_t *pReadCmd = (zclReadCmd_t *)ev_buf_allocate(sizeof(zclReadCmd_t) + sizeof(uint16_t));
     if (pReadCmd) {
         pReadCmd->numAttr = 1;
         pReadCmd->attrID[0] = ZCL_ATTRID_GLOBAL_CLUSTER_REVISION;
@@ -142,7 +142,7 @@ static s32 periodicRouterCheckInCb(void *arg)
                                    ZCL_CLUSTER_GEN_BASIC, MANUFACTURER_CODE_AMAZON,
                                    FALSE, ZCL_FRAME_CLIENT_SERVER_DIR, pReadCmd);
 
-        ev_buf_free((u8 *)pReadCmd);
+        ev_buf_free((uint8_t *)pReadCmd);
 
         zcl_wwah_clearRouterCheckedFlag();
     }
@@ -152,12 +152,12 @@ static s32 periodicRouterCheckInCb(void *arg)
 
 static status_t wwah_requestNewApsLinkKeyHandler(void)
 {
-    TL_SCHEDULE_TASK(zcl_wwah_reqNewApsLinkKey, NULL);
+    ZB_SCHEDULE_TASK(zcl_wwah_reqNewApsLinkKey, NULL);
 
     return ZCL_STA_SUCCESS;
 }
 
-static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCheckInCmd)
+static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCheckInCmd)
 {
     status_t status = ZCL_STA_SUCCESS;
 
@@ -166,7 +166,7 @@ static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrI
             g_zcl_wwahAttrs.routerCheckInEnabled = TRUE;
 
             if (g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt) {
-                TL_ZB_TIMER_CANCEL(&g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt);
+                ZB_TIMER_CANCEL(&g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt);
             }
             if (pCheckInCmd->checkInInterval) {
                 g_zcl_perRouterCheckInInfo.srcEp = pAddrInfo->dstEp;
@@ -179,7 +179,7 @@ static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrI
                     g_zcl_perRouterCheckInInfo.dstEpInfo.txOptions |= APS_TX_OPT_SECURITY_ENABLED;
                 }
 
-                g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt = TL_ZB_TIMER_SCHEDULE(periodicRouterCheckInCb, NULL, pCheckInCmd->checkInInterval * 1000);
+                g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt = ZB_TIMER_SCHEDULE(periodicRouterCheckInCb, NULL, pCheckInCmd->checkInInterval * 1000);
             }
         } else {
             status = ZCL_STA_FAILURE;
@@ -188,7 +188,7 @@ static status_t wwah_periodicRouterCheckInsHandler(zclIncomingAddrInfo_t *pAddrI
         g_zcl_wwahAttrs.routerCheckInEnabled = FALSE;
 
         if (g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt) {
-            TL_ZB_TIMER_CANCEL(&g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt);
+            ZB_TIMER_CANCEL(&g_zcl_perRouterCheckInInfo.periodicRouterCheckInEvt);
         }
     }
 
@@ -212,7 +212,7 @@ static status_t wwah_setPendingNwkUpdateHandler(zclIncomingAddrInfo_t *pAddrInfo
     return ZCL_STA_SUCCESS;
 }
 
-static status_t wwah_cmdHandler(u8 cmdId)
+static status_t wwah_cmdHandler(uint8_t cmdId)
 {
     status_t status = ZCL_STA_SUCCESS;
 
@@ -260,7 +260,7 @@ static status_t wwah_cmdHandler(u8 cmdId)
 static status_t wwah_useTrustCenterForClusterHandler(zclIncomingAddrInfo_t *pAddrInfo, wwah_useTCForClusterInfo_t *pUseTCForCluster)
 {
 #ifdef ZCL_OTA
-    for (u8 i = 0; i < pUseTCForCluster->num; i++) {
+    for (uint8_t i = 0; i < pUseTCForCluster->num; i++) {
         if (pUseTCForCluster->clusterID[i] == ZCL_CLUSTER_OTA) {
             ota_wwah_useTrustCenter(pAddrInfo->srcEp);
         }
@@ -270,7 +270,7 @@ static status_t wwah_useTrustCenterForClusterHandler(zclIncomingAddrInfo_t *pAdd
     return ZCL_STA_SUCCESS;
 }
 
-status_t zcl_wwahCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload)
+status_t zcl_wwahCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload)
 {
     status_t status = ZCL_STA_SUCCESS;
 

@@ -42,15 +42,15 @@
 /**        
  *  @brief Definition for priority calculate function
  */
-typedef u32 (*ev_priFunc_t)(arg_t);
+typedef uint32_t (*ev_priFunc_t)(arg_t);
 
 /**        
  *  @brief Structure of an item in the EV Queue
  */
 typedef struct queue_item {
     struct queue_item *next;        //!<  Pointer to the next element
-    u32 idx;
-    u8 data[1];                     //!<  Pointer to the data
+    uint32_t idx;
+    uint8_t data[1];                     //!<  Pointer to the data
 } queue_item_t;
 
 
@@ -61,7 +61,7 @@ typedef struct priQueue {
     queue_item_t *head;             //!<  Pointer to the head item of the queue
     queue_item_t *tail;             //!<  Pointer to the tail item of the queue
     ev_priFunc_t priFunc;           //!<  Priority function, NULL means not use priority
-    u32 curNum;                     //!<  Current number of entries in the queue
+    uint32_t curNum;                     //!<  Current number of entries in the queue
 } ev_queue_t;
 
 /**
@@ -104,7 +104,7 @@ ev_queue_sts_t ev_queue_init(ev_queue_t *q, ev_priFunc_t priFunc);
   *
   * @return      Status
   */
-ev_queue_sts_t ev_queue_push(ev_queue_t *q, u8 *payload);
+ev_queue_sts_t ev_queue_push(ev_queue_t *q, uint8_t *payload);
 
 /**
  * @brief       Pop data part of the element from the specified queue.
@@ -113,7 +113,7 @@ ev_queue_sts_t ev_queue_push(ev_queue_t *q, u8 *payload);
  *
  * @return      Pointer to data part of the @ev_bufItem_t
  */
-u8 *ev_queue_pop(ev_queue_t *q);
+uint8_t *ev_queue_pop(ev_queue_t *q);
 
 /**
  * @brief       Delete an element from the queue
@@ -123,7 +123,7 @@ u8 *ev_queue_pop(ev_queue_t *q);
  *
  * @return      Status
  */
-ev_queue_sts_t ev_queue_delete(ev_queue_t *q, u8 *payload);
+ev_queue_sts_t ev_queue_delete(ev_queue_t *q, uint8_t *payload);
 
 /**
  * @brief       Free a queue. This also deallocates all buffers in the queue.

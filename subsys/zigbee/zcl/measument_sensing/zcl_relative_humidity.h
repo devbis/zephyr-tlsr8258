@@ -12,7 +12,7 @@
 #define ZCL_RELATIVE_HUMIDITY_ATTRID_MAXMEASUREDVALUE   0x0002
 #define ZCL_RELATIVE_HUMIDITY_ATTRID_TOLERANCE          0x0003
 
-status_t zcl_relative_humidity_register(u8 endpoint, u16 manuCode, u8 attrNum,
+status_t zcl_relative_humidity_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum,
 					const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif /* ZCL_RELATIVE_HUMIDITY_H */

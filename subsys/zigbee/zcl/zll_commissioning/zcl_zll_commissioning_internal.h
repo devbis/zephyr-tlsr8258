@@ -36,68 +36,68 @@ typedef struct {
     zcl_zllTouckLinkNetworkStartParams *networkStartInfo;
     ev_timer_event_t *transIdLifeTimer;
     ev_timer_event_t *runTimer;
-    u32 transId;
-    u32 respId;
-    u32 scanChanMask;
-    u8 touchLinkChan;
+    uint32_t transId;
+    uint32_t respId;
+    uint32_t scanChanMask;
+    uint8_t touchLinkChan;
     zll_tlZbInfo_t zbInfo;
     zll_tlZllInfo_t zllInfo;
-    u8 seqNo;
-    u8 scanListNum;
-    u8 opIdx;
+    uint8_t seqNo;
+    uint8_t scanListNum;
+    uint8_t opIdx;
     zcl_DeviceInfo dstDevInfo;
     zcl_DeviceInfo devInfo;
-    u8 state;
-    u8 status;
-    u8 workingChannelBackUp;
-    u8 lqiThreshold;
-    u8 commissionTxPower;
-    u8 keyType;
-    u8 vDoPrimaryScan:1;
-    u8 IsFirstChannel:1;
-    u8 startNetworkAllowed:1;
-    u8 resved:5;
+    uint8_t state;
+    uint8_t status;
+    uint8_t workingChannelBackUp;
+    uint8_t lqiThreshold;
+    uint8_t commissionTxPower;
+    uint8_t keyType;
+    uint8_t vDoPrimaryScan:1;
+    uint8_t IsFirstChannel:1;
+    uint8_t startNetworkAllowed:1;
+    uint8_t resved:5;
 } zcl_zllTouckLink_t;
 
 
 extern zcl_zllTouckLink_t g_zllTouchLink;
 
-void ll_network_generate(u8 *nwkKey);
+void ll_network_generate(uint8_t *nwkKey);
 
-void ll_network_store(u8 *nwkKey);
+void ll_network_store(uint8_t *nwkKey);
 
-void zcl_zllTouchLinkScanRequestHandler(epInfo_t *dstEp, u8 seqNo);
+void zcl_zllTouchLinkScanRequestHandler(epInfo_t *dstEp, uint8_t seqNo);
 
-void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *resp, epInfo_t *dstEp, u8 lqi);
+void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *resp, epInfo_t *dstEp, uint8_t lqi);
 
 void zcl_zllTouchLinkNetworkStartOrJoin(void *arg);
 
 void zcl_zllTouchLinkResetFactoryReq(void *arg);
 
-void zcl_zllTouchLinkNetworkStartRequestHandler(u8 logicChannel);
+void zcl_zllTouchLinkNetworkStartRequestHandler(uint8_t logicChannel);
 
-s32 zcl_zllTouchLinkNetworkStartResponseHandler(void *arg);
+int32_t zcl_zllTouchLinkNetworkStartResponseHandler(void *arg);
 
 void zcl_zllTouchLinkNetworkStartDirectJoin(void *arg);
 
-void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd);
+void zcl_zllTouchLinkNetworkJoinRequestHandler(uint8_t cmd);
 
-s32 zcl_zllTouchLinkNetwokJoinResponseHandler(void *arg);
+int32_t zcl_zllTouchLinkNetwokJoinResponseHandler(void *arg);
 
-s32 zcl_zllTouchLinkTimeout(void *arg);
+int32_t zcl_zllTouchLinkTimeout(void *arg);
 
-void zcl_zllTouchLinkFinish(u8 status);
+void zcl_zllTouchLinkFinish(uint8_t status);
 
 bool zcl_zllTouchLinkLeaveCnfCb(nlme_leave_cnf_t *pLeaveCnf);
 
-void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,u8 startEpIdx);
+void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,uint8_t startEpIdx);
 
 void zcl_zllTouchLinkDeviceInformationResponseHandler(zcl_zllTouchLinkDeviceInfoResp_t *devInfoResp);
 
-s32 zcl_zllTouchLinkStartNetworkStartOrJoinTimerStop(void);
+int32_t zcl_zllTouchLinkStartNetworkStartOrJoinTimerStop(void);
 
 void ll_zllAttrClr(void);
 
-void tl_zbNwkZllCommissionScanConfirm(void);
+void zb_NwkZllCommissionScanConfirm(void);
 
 #endif	/* ZCL_ZLL_COMMOSSIONING_INTERNAL_H */

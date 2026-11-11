@@ -38,26 +38,26 @@ typedef enum {
     SYSTEM_DEEP,                //deep back
 } startup_state_e;
 
-extern u32 sysTimerPerUs;
+extern uint32_t sysTimerPerUs;
 
 startup_state_e drv_platform_init(void);
 
-u32 drv_disable_irq(void);
-u32 drv_restore_irq(u32 en);
+uint32_t drv_disable_irq(void);
+uint32_t drv_restore_irq(uint32_t en);
 
 void drv_irqMask_clear(void);
 
-void drv_wd_setInterval(u32 ms);
+void drv_wd_setInterval(uint32_t ms);
 void drv_wd_start(void);
 void drv_wd_clear(void);
 
-u32 drv_u32Rand(void);
-void drv_generateRandomData(u8 *pData, u8 len);
+uint32_t drv_u32Rand(void);
+void drv_generateRandomData(uint8_t *pData, uint8_t len);
 
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);
 
-bool drv_get_primary_ieee_addr(u8 *addr);
+bool drv_get_primary_ieee_addr(uint8_t *addr);
 
 /* True when VDD is high enough for a flash write or erase. */
 bool zb_flash_vdd_ok(void);
@@ -68,7 +68,7 @@ bool zb_flash_vdd_ok(void);
  * of the event timer.
  */
 typedef int (*timerCb_t)(void *arg);
-int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg);
+int drv_hwTmr_set(uint8_t tmrIdx, uint32_t t_us, timerCb_t func, void *arg);
 
 /*
  * Outgoing frame counter retained across deep sleep. The vendor keeps it in a
@@ -76,4 +76,4 @@ int drv_hwTmr_set(u8 tmrIdx, u32 t_us, timerCb_t func, void *arg);
  * rewinds the counter. Declared here because the stack reaches it through the
  * vendor drv_pm.h, which this port does not import.
  */
-u32 drv_pm_deepSleep_frameCnt_get(void);
+uint32_t drv_pm_deepSleep_frameCnt_get(void);

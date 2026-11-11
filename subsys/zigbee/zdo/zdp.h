@@ -167,12 +167,12 @@ typedef enum {
  * */
 typedef struct {
     addrExt_t ieee_addr_interest;       /*!< The IEEE address to be matched by the Remote Device */
-    u8 req_type;                        /*!< zdo_addr_req_type
+    uint8_t req_type;                        /*!< zdo_addr_req_type
                                           Request type for this command: \n
                                           0x00 - Single device response \n
                                           0x01 - Extended response \n
                                           0x02-0xFF - reserved */
-    u8 start_index;                     /*!< If the Request type for this command is Extended response,
+    uint8_t start_index;                     /*!< If the Request type for this command is Extended response,
                                           the StartIndex provides the starting index for the requested elements
                                           of the associated devices list */
 } zdo_nwk_addr_req_t;
@@ -182,13 +182,13 @@ typedef struct {
  *
  * */
 typedef struct {
-    u16 nwk_addr_interest;              /*!< NWK address that is used for IEEE address mapping */
-    u8 req_type;                        /*!< zdo_addr_req_type
+    uint16_t nwk_addr_interest;              /*!< NWK address that is used for IEEE address mapping */
+    uint8_t req_type;                        /*!< zdo_addr_req_type
                                           Request type for this command:
                                           0x00 C Single device response
                                           0x01 C Extended response
                                           0x02-0xff C reserved */
-    u8 start_index;                     /*!< If the Request type for this command is Extended response,
+    uint8_t start_index;                     /*!< If the Request type for this command is Extended response,
                                           the StartIndex provides the starting index for the requested elements
                                           of the associated devices list */
 } zdo_ieee_addr_req_t;
@@ -198,7 +198,7 @@ typedef struct {
  *
  * */
 typedef struct {
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
 } zdo_node_descriptor_req_t;
 
 /**
@@ -212,8 +212,8 @@ typedef	zdo_node_descriptor_req_t       zdo_power_descriptor_req_t;
  *
  * */
 typedef struct _attribute_packed_ {
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u8 endpoint;                        /*!< The endpoint on the destination */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint8_t endpoint;                        /*!< The endpoint on the destination */
 } zdo_simple_descriptor_req_t;
 
 /**
@@ -227,11 +227,11 @@ typedef	zdo_node_descriptor_req_t       zdo_active_ep_req_t;
  *
  * */
 typedef struct {
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u16 profile_id;                     /*!< NWK address for the request */
-    u8 num_in_clusters;                 /*!< The number of Input Clusters provided for matching within the InClusterList */
-    u8 num_out_clusters;                /*!< The number of Output Clusters provided for matching within OutClusterList */
-    u16 cluster_list[2 * MAX_REQUESTED_CLUSTER_NUMBER];
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint16_t profile_id;                     /*!< NWK address for the request */
+    uint8_t num_in_clusters;                 /*!< The number of Input Clusters provided for matching within the InClusterList */
+    uint8_t num_out_clusters;                /*!< The number of Output Clusters provided for matching within OutClusterList */
+    uint16_t cluster_list[2 * MAX_REQUESTED_CLUSTER_NUMBER];
 } zdo_match_descriptor_req_t;
 
 /**
@@ -251,7 +251,7 @@ typedef	zdo_node_descriptor_req_t       zdo_user_descriptor_req_t;
  *
  * */
 typedef struct _attribute_packed_ {
-    u16 nwk_addr_local;                 /*!< NWK address for the Local Device */
+    uint16_t nwk_addr_local;                 /*!< NWK address for the Local Device */
     addrExt_t ieee_addr_local;          /*!< IEEE address for the Local Device */
     capability_info_t mac_capability;   /*!< Capability of the local device */
 } zdo_device_annce_req_t;
@@ -261,8 +261,8 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct {
-    u8 numberOfChildren;                /*!< The number of the children */
-    u8 *childInfo;                      /*!< the pointer to the IEEE address of the child bound to the parent */
+    uint8_t numberOfChildren;                /*!< The number of the children */
+    uint8_t *childInfo;                      /*!< the pointer to the IEEE address of the child bound to the parent */
 } zdo_parent_annce_req_t;
 
 /**
@@ -272,17 +272,17 @@ typedef struct {
  * 				information of the remote device.
  **/
 typedef struct {
-    u8 len; //0~16
-    u8 info[MAX_USER_DESC_LEN];
+    uint8_t len; //0~16
+    uint8_t info[MAX_USER_DESC_LEN];
 } user_descriptor_t;
 
 typedef struct {
-    u16 nwk_addr_interest;
+    uint16_t nwk_addr_interest;
     user_descriptor_t user_desc;
 } zdo_user_descriptor_set_req_t;
 
 typedef struct {
-    u16 server_mask;
+    uint16_t server_mask;
 } zdo_system_server_discovery_req_t;
 
 /**
@@ -290,20 +290,20 @@ typedef struct {
  *
  * */
 typedef struct {
-    u16 binding_target_addr;            /*!< The address of the target for the binding */
+    uint16_t binding_target_addr;            /*!< The address of the target for the binding */
 
-    u16 profile_id;                     /*!< ProfileID which is to be matched
+    uint16_t profile_id;                     /*!< ProfileID which is to be matched
                                            between two End_Device_Bind_req
                                            received at the ZigBee Coordinator
                                            within the timeout value pre-configured
                                            in the ZigBee Coordinator.*/
     addrExt_t src_ext_addr;             /*!< The IEEE address of the device generating the request */
-    u16 in_cluster_lst[MAX_REQUESTED_CLUSTER_NUMBER];   /*!< List of Input ClusterIDs to be used for matching */
-    u16 out_cluster_lst[MAX_REQUESTED_CLUSTER_NUMBER];  /*!< List of Output ClusterIDs to be used for matching */
+    uint16_t in_cluster_lst[MAX_REQUESTED_CLUSTER_NUMBER];   /*!< List of Input ClusterIDs to be used for matching */
+    uint16_t out_cluster_lst[MAX_REQUESTED_CLUSTER_NUMBER];  /*!< List of Output ClusterIDs to be used for matching */
 
-    u8 src_endpoint;                    /*!< The endpoint on the device generating the request */
-    u8 num_in_clusters;                 /*!< The number of Input Clusters provided for end device binding within the InClusterList */
-    u8 num_out_clusters;                /*!< The number of Output Clusters provided for matching within OutClusterList */
+    uint8_t src_endpoint;                    /*!< The endpoint on the device generating the request */
+    uint8_t num_in_clusters;                 /*!< The number of Input Clusters provided for end device binding within the InClusterList */
+    uint8_t num_out_clusters;                /*!< The number of Output Clusters provided for matching within OutClusterList */
 } zdo_edBindReq_t;
 
 typedef enum {
@@ -314,18 +314,18 @@ typedef enum {
 typedef struct _attribute_packed_ {
     addrExt_t src_addr;                 /*!< the device who build the binding table */
 
-    u8 src_endpoint;                    /*!< The source endpoint for the binding entry */
-    u8 cid16_l;                         /*!< The identifier of the cluster on the source device that is bound to the destination low 8-bit */
-    u8 cid16_h;                         /*!< The identifier of the cluster on the source device that is bound to the destination high 8-bit */
-    u8 dst_addr_mode;                   /*!< bind_req_dst_addr_mode
+    uint8_t src_endpoint;                    /*!< The source endpoint for the binding entry */
+    uint8_t cid16_l;                         /*!< The identifier of the cluster on the source device that is bound to the destination low 8-bit */
+    uint8_t cid16_h;                         /*!< The identifier of the cluster on the source device that is bound to the destination high 8-bit */
+    uint8_t dst_addr_mode;                   /*!< bind_req_dst_addr_mode
                                           0x01 - 16-bit group address for dstAddr and dstEp not present
                                           0x03 - 64-bit extAddr for dstAddr and estEp present */
     union _attribute_packed_ {
             struct{
                 addrExt_t dst_ext_addr;
-                u8 dst_endpoint;
+                uint8_t dst_endpoint;
             };
-            u16 dst_group_addr;
+            uint16_t dst_group_addr;
     };                                  /*!< The destination address for the binding entry */
 } zdo_bind_req_t;
 
@@ -336,7 +336,7 @@ typedef zdo_bind_req_t                  zdo_bindTabListRec_t;
  * @brief		Describes the parameters of the LQI response
  **/
 typedef struct {
-    u8 start_index;
+    uint8_t start_index;
 } zdo_mgmt_lqi_req_t;
 
 /**
@@ -344,7 +344,7 @@ typedef struct {
  *
  * */
 typedef struct {
-    u8 start_index;                     /*!< Starting Index for the requested elements of the Binding Table */
+    uint8_t start_index;                     /*!< Starting Index for the requested elements of the Binding Table */
 } zdo_mgmt_bind_req_t;
 
 /**
@@ -354,10 +354,10 @@ typedef struct {
 typedef struct {
     addrExt_t device_addr;              /*!< The 64-bit IEEE address of the entity to be re-moved from the network or NULL if the device removes itself from the network */
     struct {
-        u8 reserved:6;
-        u8 remove_children:1;           /*!< This field has a value of 1 if the device being asked to leave the network is also being asked to remove its child devices,
+        uint8_t reserved:6;
+        uint8_t remove_children:1;           /*!< This field has a value of 1 if the device being asked to leave the network is also being asked to remove its child devices,
                                           if any. Otherwise, it has a value of 0 */
-        u8 rejoin:1;                    /*!< This field has a value of 1 if the device being asked to leave from the current parent is requested to rejoin the network.
+        uint8_t rejoin:1;                    /*!< This field has a value of 1 if the device being asked to leave from the current parent is requested to rejoin the network.
                                           Otherwise, it has a value of 0 */
     } lr_bitfields;
 } zdo_mgmt_leave_req_t;
@@ -367,9 +367,9 @@ typedef struct {
  *
  * */
 typedef struct {
-    u8 permit_duration;                 /*!< The length of time in seconds during which the ZigBee coordinator or router will allow associations.
+    uint8_t permit_duration;                 /*!< The length of time in seconds during which the ZigBee coordinator or router will allow associations.
                                           The value 0x00 and 0xff indicate that per-mission is disabled or enabled, respectively, without a specified time limit */
-    u8 trust_center_significance;       /*!< This field shall always have a value of 1, indicating a request to change the Trust Center policy.
+    uint8_t trust_center_significance;       /*!< This field shall always have a value of 1, indicating a request to change the Trust Center policy.
                                           If a frame is received with a value of 0, it shall be treated as having a value of 1 */
 } zdo_mgmt_permit_join_req_t;
 
@@ -378,17 +378,17 @@ typedef struct {
  *
  * */
 typedef struct {
-    u32 scan_ch;                        /*!< scan channels, Bitmap */
-    u8 scan_duration;                   /*!< length of time to scan each channel. 0xfe ~ for channel change
+    uint32_t scan_ch;                        /*!< scan channels, Bitmap */
+    uint8_t scan_duration;                   /*!< length of time to scan each channel. 0xfe ~ for channel change
                                           0xff ~ for apsChannelMask and nwkManagerAddr attributes change */
     union {
-        u8 scan_cnt;                    /*!<  the number of energy scans to be conducted and reported */
-        u8 nwk_update_id;               /*!< The value of the nwkUpdateId contained in this request.
+        uint8_t scan_cnt;                    /*!<  the number of energy scans to be conducted and reported */
+        uint8_t nwk_update_id;               /*!< The value of the nwkUpdateId contained in this request.
                                           This value is set by the Network Channel Manager prior to sending the message.
                                           This field shall only be present of the ScanDuration is 0xfe or 0xff.
                                           If the ScanDuration is 0xff, then the value in the nwkUpdateID shall be ignored */
     };
-    u16 nwk_manager_addr;               /*!< This field shall be present only if the ScanDuration is set to 0xff, and, where present,
+    uint16_t nwk_manager_addr;               /*!< This field shall be present only if the ScanDuration is set to 0xff, and, where present,
                                           indicates the NWK address for the device with the Network Manager bit set in its Node De-scriptor */
 } zdo_mgmt_nwk_update_req_t;
 
@@ -399,21 +399,21 @@ typedef struct {
 #define	MAX_RSPNUM                      6 /*!< supported maximum number of the associated device */
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
     addrExt_t ieee_addr_remote;         /*!< 64-bit address for the Remote Device */
-    u16	nwk_addr_remote;                /*!< 16-bit address for the Remote Device */
-    u8 num_assoc_dev;                   /*!< Count of the number of 16-bit short addresses to follow.
+    uint16_t	nwk_addr_remote;                /*!< 16-bit address for the Remote Device */
+    uint8_t num_assoc_dev;                   /*!< Count of the number of 16-bit short addresses to follow.
                                           If the RequestType in the request is Extended Response and there are no associated devices on the Remote Device,
                                           this field shall be set to 0.
                                           If an error occurs or the Request Type in the request is for a Single Device Response,
                                           this field shall not be included in the frame */
-    u8 start_index;                     /*!< Starting index into the list of associated devices for this report.
+    uint8_t start_index;                     /*!< Starting index into the list of associated devices for this report.
                                           If the RequestType in the request is Extended Response and there are no associated devices on the Remote Device,
                                           this field shall not be included in the frame.
                                           If an error occurs or the Request Type in the request is for a Single Device Response,
                                           this field shall not be included in the frame */
-    u16 nwk_addr_assoc_dev_lst[MAX_RSPNUM]; /*!< A list of 16-bit addresses, one corresponding to each associated device to Remote Device;
+    uint16_t nwk_addr_assoc_dev_lst[MAX_RSPNUM]; /*!< A list of 16-bit addresses, one corresponding to each associated device to Remote Device;
                                               The number of 16-bit network addresses contained in this field is specified in the NumAssocDev field.
                                               If the RequestType in the request is Extended Response and there are no associated devices on the Remote Device,
                                               this field shall not be included in the frame.
@@ -428,33 +428,33 @@ typedef struct _attribute_packed_ {
 typedef zdo_nwk_addr_resp_t             zdo_ieee_addr_resp_t;
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;
     node_descriptor_t node_descriptor;
 } zdo_node_descript_resp_t;
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*! NWK address of the power descriptor request */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*! NWK address of the power descriptor request */
     power_descriptor_t power_descriptor;/*! Power descriptor of the device */
 } zdo_power_descriptor_resp_t;
 
 typedef struct _attribute_packed_ {
-    u8 endpoint;                        /*! end-point num of the simple descriptor 1 ~ 240 */
-    u16 app_profile_id;                 /*! APP profile ID specifies the profile which supported on this EP. */
-    u16 app_dev_id;                     /*! APP DEV ID specifies the device description supported on this EP. */
-    u8 app_dev_ver:4;                   /*! APP DEV version specifies the version of the device description supported */
-    u8 reserved:4;                      /*! Reserved */
-    u8 listInfo[1];                     /*! The cluster list supported on this EP */
+    uint8_t endpoint;                        /*! end-point num of the simple descriptor 1 ~ 240 */
+    uint16_t app_profile_id;                 /*! APP profile ID specifies the profile which supported on this EP. */
+    uint16_t app_dev_id;                     /*! APP DEV ID specifies the device description supported on this EP. */
+    uint8_t app_dev_ver:4;                   /*! APP DEV version specifies the version of the device description supported */
+    uint8_t reserved:4;                      /*! Reserved */
+    uint8_t listInfo[1];                     /*! The cluster list supported on this EP */
 } simple_descriptor_field_t;
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*! NWK address for the request.*/
-    u8 length;                          /*! Length in bytes of the Simple Descriptor to follow. */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*! NWK address for the request.*/
+    uint8_t length;                          /*! Length in bytes of the Simple Descriptor to follow. */
     simple_descriptor_field_t simple_descriptor; /*! Simple Descriptor */
 } zdo_simple_descriptor_resp_t;
 
@@ -463,22 +463,22 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u8 active_ep_count;                 /*!< The count of active endpoints on the Remote Device */
-    u8 active_ep_lst[MAX_REQUESTED_CLUSTER_NUMBER]; /*!< List of bytes each of which represents an 8-bit endpoint */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint8_t active_ep_count;                 /*!< The count of active endpoints on the Remote Device */
+    uint8_t active_ep_lst[MAX_REQUESTED_CLUSTER_NUMBER]; /*!< List of bytes each of which represents an 8-bit endpoint */
 } zdo_active_ep_resp_t;
 
 /**
  *  @brief Structure for Match_Desc_rsp
  */
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u8 matchLen;                        /*!< The count of endpoints on the Re-mote Device that match the request criteria */
-    u8 matchList[MAX_REQUESTED_CLUSTER_NUMBER]; /*!< List of bytes each of which represents an 8-bit endpoint */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint8_t matchLen;                        /*!< The count of endpoints on the Re-mote Device that match the request criteria */
+    uint8_t matchList[MAX_REQUESTED_CLUSTER_NUMBER]; /*!< List of bytes each of which represents an 8-bit endpoint */
 } zdo_match_descriptor_resp_t;
 
 /**
@@ -486,11 +486,11 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u8 length;                          /*!< Length in bytes of the ComplexDescriptor field */
-    u8 compDesc[1];
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint8_t length;                          /*!< Length in bytes of the ComplexDescriptor field */
+    uint8_t compDesc[1];
 } zdo_complex_descriptor_resp_t;
 
 /**
@@ -498,11 +498,11 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;              /*!< NWK address for the request */
-    u8 length;
-    u8 user_desc[MAX_USER_DESC_LEN];    /*!< detailed user descriptor */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;              /*!< NWK address for the request */
+    uint8_t length;
+    uint8_t user_desc[MAX_USER_DESC_LEN];    /*!< detailed user descriptor */
 } zdo_user_descriptor_resp_t;
 
 /**
@@ -510,27 +510,27 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 server_mask;                    /*!< Mask of the server supported  */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t server_mask;                    /*!< Mask of the server supported  */
 } zdo_system_server_discovery_resp_t;
 
 typedef struct {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u16 nwk_addr_interest;
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint16_t nwk_addr_interest;
 } zdo_user_descriptor_conf_resp_t;
 
 typedef struct {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u8 numberOfChildren;
-    u8 *childInfo;
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint8_t numberOfChildren;
+    uint8_t *childInfo;
 } zdo_parent_annce_rsp_t;
 
 typedef struct {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
 } zdo_bind_resp_t;
 
 typedef zdo_bind_resp_t                 zdo_end_dev_bind_resp_t;
@@ -539,48 +539,48 @@ typedef zdo_bind_resp_t                 zdo_unbind_resp_t;
 typedef struct _attribute_packed_ {
     addrExt_t ext_pan_id;
     addrExt_t ext_addr;
-    u16 network_addr;
-    u8 deviceType:2;
-    u8 rxOnWhenIdle:2;
-    u8 relationship:3;
-    u8 reserved1:1;
-    u8 permitJoining:2;
-    u8 reserved2:6;
-    u8 depth;
-    u8 lqi;
+    uint16_t network_addr;
+    uint8_t deviceType:2;
+    uint8_t rxOnWhenIdle:2;
+    uint8_t relationship:3;
+    uint8_t reserved1:1;
+    uint8_t permitJoining:2;
+    uint8_t reserved2:6;
+    uint8_t depth;
+    uint8_t lqi;
 } neighbor_tbl_lst_t;
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u8 neighbor_tbl_entries;
-    u8 start_index;
-    u8 neighbor_tbl_lst_cnt;
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint8_t neighbor_tbl_entries;
+    uint8_t start_index;
+    uint8_t neighbor_tbl_lst_cnt;
     neighbor_tbl_lst_t neighbor_tbl_lst[1];
 } zdo_mgmt_lqi_resp_t;
 
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u8 bind_tbl_entries;
-    u8 start_index;
-    u8 bind_tbl_lst_cnt;
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint8_t bind_tbl_entries;
+    uint8_t start_index;
+    uint8_t bind_tbl_lst_cnt;
     zdo_bindTabListRec_t bind_tbl_lst[1];
 } zdo_mgmt_bind_resp_t;
 
 typedef struct {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
 } zdo_mgmt_leave_resp_t;
 
 typedef zdo_bind_resp_t                 zdo_mgmt_permit_joining_resp_t;
 
 typedef struct _attribute_packed_ {
-    u32 scanned_channels;
-    u16 total_transmissions;
-    u16 transmissions_fail;
-    u8 size;
-    u8 energyValues[1];
+    uint32_t scanned_channels;
+    uint16_t total_transmissions;
+    uint16_t transmissions_fail;
+    uint8_t size;
+    uint8_t energyValues[1];
 } ed_scan_t;
 
 /**
@@ -590,13 +590,13 @@ typedef struct _attribute_packed_ {
  * 				unnamed union.
  **/
 typedef struct _attribute_packed_ {
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
     ed_scan_t scan_result;              /*! ED scan result */
 } zdo_mgmt_nwk_update_noti_t;
 
 typedef struct {
-    u8 seq_num;
+    uint8_t seq_num;
     union {
         zdo_nwk_addr_req_t nwk_addr_req;
         zdo_ieee_addr_req_t ieee_addr_req;
@@ -652,12 +652,12 @@ typedef struct {
 } zdo_zdp_resp_frame_t;
 
 typedef struct {
-    u8 *zpdu;
-    u16 src_addr;                       /*! the nwk address of the node that send this response */
-    u16 clusterId;                      /*! cluster identifier */
-    u8 seq_num;                         /*! Sequence number which same with the request value */
-    u8 status;                          /*! Response status */
-    u8 length;
+    uint8_t *zpdu;
+    uint16_t src_addr;                       /*! the nwk address of the node that send this response */
+    uint16_t clusterId;                      /*! cluster identifier */
+    uint8_t seq_num;                         /*! Sequence number which same with the request value */
+    uint8_t status;                          /*! Response status */
+    uint8_t length;
 } zdo_zdpDataInd_t;
 
 
@@ -669,17 +669,17 @@ typedef enum {
 } addr_mode_t;
 
 typedef struct {
-    u8 *zdu;
-    u8 *buff_addr;
+    uint8_t *zdu;
+    uint8_t *buff_addr;
     union {
-        u16 dst_nwk_addr;               //!< Destination short address. Specify this field if short address mode is applied, i.e. dstAddrMode equals SHORT_ADDR_MODE
+        uint16_t dst_nwk_addr;               //!< Destination short address. Specify this field if short address mode is applied, i.e. dstAddrMode equals SHORT_ADDR_MODE
         addrExt_t st_ext_addr;          //!< Destination extended address. Specify this field if extended address mode is applied, i.e. dstAddrMode equals EXT_ADDR_MODE
     };
-    u16 cluster_id;
-    u8 zduLen;
-    u8 dst_addr_mode;//addr_mode_t
+    uint16_t cluster_id;
+    uint8_t zduLen;
+    uint8_t dst_addr_mode;//addr_mode_t
     zdo_callback zdoRspReceivedIndCb;
-    u8 zdpSeqNum;
+    uint8_t zdpSeqNum;
 } zdo_zdp_req_t;
 
 /********************************************************************************************
@@ -886,7 +886,7 @@ void zdo_userDescIndicate(void *buf);
  *
  * @return	none
  */
-void zdp_cb_process(u16 tsn, void *buf);
+void zdp_cb_process(uint16_t tsn, void *buf);
 
 /**************************************************************************************************
  * @brief	ZDP initialization

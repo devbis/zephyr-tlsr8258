@@ -81,22 +81,22 @@ typedef enum {
  *  @brief  Definition format for trigger effect command
  */
 typedef struct {
-    u8 effectId;           //!< effect identifier
-    u8 effectVariant;      //!< effect Variant
+    uint8_t effectId;           //!< effect identifier
+    uint8_t effectVariant;      //!< effect Variant
 } zcl_triggerEffect_t;
 
 /**
  *  @brief  Definition format for identify command
  */
 typedef struct {
-    u16 identifyTime;
+    uint16_t identifyTime;
 } zcl_identifyCmd_t;
 
 /**
  *  @brief  Definition format for identify response command
  */
 typedef struct {
-    u16 timeout;
+    uint16_t timeout;
 } zcl_identifyRspCmd_t;
 
 /**
@@ -116,7 +116,7 @@ typedef union {
 /**
  *  @brief  Definition for identify command callback format
  */
-typedef void (*zcl_identifyCb_t)(u8 endpoint, u16 srcAddr, u16 identifyTime);
+typedef void (*zcl_identifyCb_t)(uint8_t endpoint, uint16_t srcAddr, uint16_t identifyTime);
 
 /**
  *  @brief  Definition for trigger command callback format
@@ -126,7 +126,7 @@ typedef void (*zcl_triggerEffectCb_t)(apsdeDataInd_t *pApsdeInd, zcl_triggerEffe
 /**
  *  @brief  Definition for identify command callback format
  */
-typedef void (*zcl_identifyQueryRspCb_t)(apsdeDataInd_t *pApsdeInd, u16 timeout);
+typedef void (*zcl_identifyQueryRspCb_t)(apsdeDataInd_t *pApsdeInd, uint16_t timeout);
 
 
 
@@ -149,13 +149,13 @@ typedef struct {
 /**
  *  @brief  External variable for identifyTime Attribute
  */
-extern u16 zcl_attr_identifyTime;
+extern uint16_t zcl_attr_identifyTime;
 /**
  *  @brief  External variable for identify Attribute Table
  */
 extern const zclAttrInfo_t identify_attrTbl[];
 
-extern const u8 zcl_identify_attrNum;
+extern const uint8_t zcl_identify_attrNum;
 
 /** @} end of group ZCL_IDENTIFY_Variables */
 #endif
@@ -173,7 +173,7 @@ extern const u8 zcl_identify_attrNum;
  *
  * @return      Status
  */
-status_t zcl_identify_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_identify_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 /**
  * @brief       API to send Identify command in IDENTIFY cluster
@@ -186,7 +186,7 @@ status_t zcl_identify_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclA
  *
  * @return      None
  */
-status_t zcl_identify_identify(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u16 identifyTime, u32 manuCode);
+status_t zcl_identify_identify(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint16_t identifyTime, uint32_t manuCode);
 #define zcl_identify_identifyCmd(a,b,c,d,e)     (zcl_identify_identify((a), (b), (c), ZCL_SEQ_NUM,(d), (e)))
 
 /**
@@ -199,7 +199,7 @@ status_t zcl_identify_identify(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefault
  *
  * @return      None
  */
-status_t zcl_identify_identifyQuery(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_identify_identifyQuery(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_identify_identifyQueryCmd(a,b,c)    (zcl_identify_identifyQuery((a), (b), (c), ZCL_SEQ_NUM))
 
 /**
@@ -214,11 +214,11 @@ status_t zcl_identify_identifyQuery(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDe
  *
  * @return      None
  */
-status_t zcl_identify_triggerEffect(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 effectId, u8 effectVariant);
+status_t zcl_identify_triggerEffect(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t effectId, uint8_t effectVariant);
 #define zcl_identify_sendTriggerCmd(a,b,c,d,e)  (zcl_identify_triggerEffect((a), (b), (c), ZCL_SEQ_NUM, (d), (e)))
 
 
-extern void zcl_identify_commissioningIdentify(zclIncoming_t *pInMsg, u16 identifyTime);
+extern void zcl_identify_commissioningIdentify(zclIncoming_t *pInMsg, uint16_t identifyTime);
 
 /** @} end of group ZCL_IDENTIFY_Fountions */
 

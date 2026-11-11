@@ -60,7 +60,7 @@ static void zbhci_cmd_formation(uint16_t len, const uint8_t *payload)
 static void zbhci_cmd_permit_join(uint16_t len, const uint8_t *payload)
 {
 	uint16_t target_addr;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if (len < 4U) {
 		zbhci_ack(ZBHCI_CMD_MGMT_PERMIT_JOIN_REQ, ZBHCI_MSG_STATUS_INCORRECT_PARAMETERS);
@@ -81,7 +81,7 @@ static void zbhci_cmd_get_child_nodes(uint16_t len, const uint8_t *payload)
 	uint8_t start_idx = (len >= 1U) ? payload[0] : 0U;
 	uint8_t count;
 
-	tl_childNodesListGet(start_idx, &info);
+	zb_childNodesListGet(start_idx, &info);
 
 	*o++ = info.info.status;
 	*o++ = info.info.totalChildNodesNum;
@@ -108,8 +108,8 @@ static void zbhci_cmd_af_data_send(uint16_t len, const uint8_t *payload)
 	epInfo_t dst;
 	uint16_t cluster_id;
 	uint16_t data_len;
-	u8 aps_cnt = 0U;
-	u8 src_ep;
+	uint8_t aps_cnt = 0U;
+	uint8_t src_ep;
 
 	if (len < 8U) {
 		zbhci_ack(ZBHCI_CMD_AF_DATA_SEND_TEST_REQ, ZBHCI_MSG_STATUS_INCORRECT_PARAMETERS);
@@ -132,7 +132,7 @@ static void zbhci_cmd_af_data_send(uint16_t len, const uint8_t *payload)
 	dst.radius = 30U;
 	cluster_id = read_be16(&payload[4]);
 
-	(void)af_dataSend(src_ep, &dst, cluster_id, data_len, (u8 *)&payload[8], &aps_cnt);
+	(void)af_dataSend(src_ep, &dst, cluster_id, data_len, (uint8_t *)&payload[8], &aps_cnt);
 	zbhci_ack(ZBHCI_CMD_AF_DATA_SEND_TEST_REQ, ZBHCI_MSG_STATUS_SUCCESS);
 }
 
@@ -142,7 +142,7 @@ static void zbhci_active_ep_rsp_cb(void *p)
 	const zdo_active_ep_resp_t *rsp;
 	uint8_t out[8U + MAX_REQUESTED_CLUSTER_NUMBER];
 	uint8_t *o = out;
-	u8 ep_count;
+	uint8_t ep_count;
 
 	if (ind == NULL || ind->zpdu == NULL) {
 		return;
@@ -161,7 +161,7 @@ static void zbhci_active_ep_rsp_cb(void *p)
 		ep_count = MAX_REQUESTED_CLUSTER_NUMBER;
 	}
 	*o++ = ep_count;
-	for (u8 i = 0; i < ep_count; i++) {
+	for (uint8_t i = 0; i < ep_count; i++) {
 		*o++ = rsp->active_ep_lst[i];
 	}
 
@@ -175,8 +175,8 @@ static void zbhci_simple_desc_rsp_cb(void *p)
 	uint8_t out[96];
 	uint8_t *o = out;
 	const uint8_t *list;
-	u8 in_count;
-	u8 out_count;
+	uint8_t in_count;
+	uint8_t out_count;
 
 	if (ind == NULL || ind->zpdu == NULL) {
 		return;
@@ -203,7 +203,7 @@ static void zbhci_simple_desc_rsp_cb(void *p)
 		list = rsp->simple_descriptor.listInfo;
 		in_count = *list++;
 		*o++ = in_count;
-		for (u8 i = 0; i < in_count; i++) {
+		for (uint8_t i = 0; i < in_count; i++) {
 			write_be16(o, (uint16_t)(list[0] | ((uint16_t)list[1] << 8)));
 			o += 2;
 			list += 2;
@@ -211,7 +211,7 @@ static void zbhci_simple_desc_rsp_cb(void *p)
 
 		out_count = *list++;
 		*o++ = out_count;
-		for (u8 i = 0; i < out_count; i++) {
+		for (uint8_t i = 0; i < out_count; i++) {
 			write_be16(o, (uint16_t)(list[0] | ((uint16_t)list[1] << 8)));
 			o += 2;
 			list += 2;
@@ -225,7 +225,7 @@ static void zbhci_cmd_active_ep_req(uint16_t len, const uint8_t *payload)
 {
 	zdo_active_ep_req_t req;
 	uint16_t target_addr;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if (len < 4U) {
 		zbhci_ack(ZBHCI_CMD_DISCOVERY_ACTIVE_EP_REQ, ZBHCI_MSG_STATUS_INCORRECT_PARAMETERS);
@@ -241,7 +241,7 @@ static void zbhci_cmd_simple_desc_req(uint16_t len, const uint8_t *payload)
 {
 	zdo_simple_descriptor_req_t req;
 	uint16_t target_addr;
-	u8 seq = 0U;
+	uint8_t seq = 0U;
 
 	if (len < 5U) {
 		zbhci_ack(ZBHCI_CMD_DISCOVERY_SIMPLE_DESC_REQ,

@@ -51,6 +51,6 @@
 #define ZCL_ATTRID_BATTERY_ALARM_STATE                  0x003E
 
 
-status_t zcl_powerCfg_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_powerCfg_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_POWER_CFG_H */

@@ -70,26 +70,26 @@ typedef enum {
 typedef struct {
     extPANId_t nwkExtendedPANID;
     extPANId_t apsUseExtendedPANID;
-    u32 apsChannelMask;
-    u8 apsDesignatedCoordinator;
-    u8 apsUseInsecureJoin;
+    uint32_t apsChannelMask;
+    uint8_t apsDesignatedCoordinator;
+    uint8_t apsUseInsecureJoin;
 } zdo_startup_attr_t;
 
 typedef struct {
     /* Integer value representing the time duration (in OctetDurations) between each NWK discovery attempt.
      * It is employed within ZDO to provide a time duration between the NLME-NETWORKDISCOVERY.request attempts.
      */
-    u32 config_nwk_indirectPollRate;//In ms
-    u16 config_nwk_time_btwn_scans;//In ms, default value, 100ms on 2.4GHz
+    uint32_t config_nwk_indirectPollRate;//In ms
+    uint16_t config_nwk_time_btwn_scans;//In ms, default value, 100ms on 2.4GHz
 
     /* The :Config_NWK_Scan_Attempts is employed within ZDO to call the NLME-NETWORKDISCOVERY.
      * request primitive the indicated number of times (for routers and end devices).Integer value
      * representing the number of scan attempts to make before the NWK layer decides which ZigBee
      * coordinator or router to associate with.
      */
-    u8 config_nwk_scan_attempts;//This attribute has default value of 5 and valid values between 1 and 255.
-    u8 config_permit_join_duration;//Permit join duration, 0x00 - disable join, 0xff - join is allowed forever
-    u8 config_parent_link_retry_threshold;//Number of retry parent sync before judged as connection lost and the default value is ZDO_MAX_PARENT_THRESHOLD_RETRY
+    uint8_t config_nwk_scan_attempts;//This attribute has default value of 5 and valid values between 1 and 255.
+    uint8_t config_permit_join_duration;//Permit join duration, 0x00 - disable join, 0xff - join is allowed forever
+    uint8_t config_parent_link_retry_threshold;//Number of retry parent sync before judged as connection lost and the default value is ZDO_MAX_PARENT_THRESHOLD_RETRY
 
     /* Addition rejoin with backoff timer for rejoin device.
      * |-------------------------------------------------|
@@ -102,42 +102,42 @@ typedef struct {
      * |<----- rejoin times = 2 ---->|<---------------------- third backoff -------------------->|
      * |<- duration ->|<- duration ->|<- backoff time  ->|<- backoff time  ->|<- backoff time  ->|
      */
-    u8 config_rejoin_times;//The number of rejoin attempts during the fast rejoin.
-    u16 config_rejoin_duration;//The amount of time between each rejoin attempt while the device is in Fast Rejoin mode, in seconds.
+    uint8_t config_rejoin_times;//The number of rejoin attempts during the fast rejoin.
+    uint16_t config_rejoin_duration;//The amount of time between each rejoin attempt while the device is in Fast Rejoin mode, in seconds.
                                                        //If 0, config_rejoin_times will be ignored and only one Fast Rejoin will be performed.
-    u16 config_rejoin_backoff_time;//The amount of time to sleep after the Fast Rejoin attempts before performing the next attempt, in seconds.
+    uint16_t config_rejoin_backoff_time;//The amount of time to sleep after the Fast Rejoin attempts before performing the next attempt, in seconds.
                                                                //If 0 means no Rejoin backoff/retry.
-    u16 config_max_rejoin_backoff_time;//Upper limit of the config_rejoin_backoff_time.
-    u16 config_rejoin_backoff_iteration;//The number of iterations of the Fast Rejoin backoff, in times.
+    uint16_t config_max_rejoin_backoff_time;//Upper limit of the config_rejoin_backoff_time.
+    uint16_t config_rejoin_backoff_iteration;//The number of iterations of the Fast Rejoin backoff, in times.
                                         //If 0 means do not reset the backoff duration.
 
-    u16 config_accept_nwk_update_pan_id;
-    u8 config_accept_nwk_update_channel;
+    uint16_t config_accept_nwk_update_pan_id;
+    uint8_t config_accept_nwk_update_channel;
     bool config_mgmt_leave_use_aps_sec;
     bool config_use_tc_sec_on_nwk_key_rotation;
-    u8 config_nwk_scan_duration;
+    uint8_t config_nwk_scan_duration;
 } zdo_attrCfg_t;
 
 /**
  *  @brief Structure for parameter of startDev callback function
  */
 typedef struct {
-    u8 status;
-    u8 channel_num;
-    u16	pan_id;
-    u16	short_addr;
+    uint8_t status;
+    uint8_t channel_num;
+    uint16_t	pan_id;
+    uint16_t	short_addr;
 } zdo_start_device_confirm_t;
 
 typedef struct {
     addrExt_t parentIeeeAddr;
     addrExt_t devIeeeAddr;
-    u16 devShortAddr;
-    u8 sta;//ss_apsmeUpdateDevStatus_e
+    uint16_t devShortAddr;
+    uint8_t sta;//ss_apsmeUpdateDevStatus_e
 } zdo_tc_join_ind_t;
 
 typedef struct {
-    u16 shortAddr;
-    u8 status;
+    uint16_t shortAddr;
+    uint8_t status;
 } zdo_nwk_status_ind_t;
 
 typedef void (*zdo_startDveAssocCb_t)(zdo_start_device_confirm_t *p);
@@ -181,7 +181,7 @@ typedef struct {
 extern zdo_appIndCb_t *zdoAppIndCbLst;
 extern zdo_touchLinkCb_t *zdoTouchLinkCb;
 extern zdo_attrCfg_t zdo_cfg_attributes;
-extern u32 TRANSPORT_NETWORK_KEY_WAIT_TIME;
+extern uint32_t TRANSPORT_NETWORK_KEY_WAIT_TIME;
 
 
 void zdo_zdpCbTblRegister(zdo_appIndCb_t *cbTbl);
@@ -197,8 +197,8 @@ void zdo_touchLinkCbRegister(zdo_touchLinkCb_t *cbTbl);
  *
  * @return	max retry number
  */
-u8 zdo_af_get_link_retry_threshold(void);
-void zdo_af_set_link_retry_threshold(u8 threshold);
+uint8_t zdo_af_get_link_retry_threshold(void);
+void zdo_af_set_link_retry_threshold(uint8_t threshold);
 
 /****************************************************************************************************
  * @brief	Interface to get the NWK indirect poll rate parameter, The value for this configuration attribute
@@ -208,8 +208,8 @@ void zdo_af_set_link_retry_threshold(u8 threshold);
  *
  * @return	poll rate in ms
  */
-u32 zdo_af_get_syn_rate(void);
-void zdo_af_set_syn_rate(u32 newRate);
+uint32_t zdo_af_get_syn_rate(void);
+void zdo_af_set_syn_rate(uint32_t newRate);
 
 /****************************************************************************************************
  * @brief	The :Config_Rejoin_Interval is either created when the application is first loaded or initialized with a
@@ -219,20 +219,20 @@ void zdo_af_set_syn_rate(u32 newRate);
  *
  * @return	rejoin interval
  */
-u8 zdo_af_get_rejoin_times(void);
-void zdo_af_set_rejoin_times(u8 times);
+uint8_t zdo_af_get_rejoin_times(void);
+void zdo_af_set_rejoin_times(uint8_t times);
 
-u16 zdo_af_get_rejoin_duration(void);
-void zdo_af_set_rejoin_duration(u16 duration);
+uint16_t zdo_af_get_rejoin_duration(void);
+void zdo_af_set_rejoin_duration(uint16_t duration);
 
-u16 zdo_af_get_rejoin_backoff_time(void);
-void zdo_af_set_rejoin_backoff_time(u16 interval);
+uint16_t zdo_af_get_rejoin_backoff_time(void);
+void zdo_af_set_rejoin_backoff_time(uint16_t interval);
 
-u16 zdo_af_get_max_rejoin_backoff_time(void);
-void zdo_af_set_max_rejoin_backoff_time(u16 interval);
+uint16_t zdo_af_get_max_rejoin_backoff_time(void);
+void zdo_af_set_max_rejoin_backoff_time(uint16_t interval);
 
-u16 zdo_af_get_rejoin_backoff_iteration(void);
-void zdo_af_set_rejoin_backoff_iteration(u16 iteration);
+uint16_t zdo_af_get_rejoin_backoff_iteration(void);
+void zdo_af_set_rejoin_backoff_iteration(uint16_t iteration);
 
 /****************************************************************************************************
  * @brief	The :Config_NWK_Scan_Attempts is employed within ZDO to call the NLME-NETWORKDISCOVERY. request
@@ -243,8 +243,8 @@ void zdo_af_set_rejoin_backoff_iteration(u16 iteration);
  *
  * @return	scan attempts
  */
-u8 zdo_af_get_scan_attempts(void);
-void zdo_af_set_scan_attempts(u8 attempts);
+uint8_t zdo_af_get_scan_attempts(void);
+void zdo_af_set_scan_attempts(uint8_t attempts);
 
 /**********************************************************************************************************
  * @brief	Interface to get time between scans attribute
@@ -253,7 +253,7 @@ void zdo_af_set_scan_attempts(u8 attempts);
  *
  * @return	value in ms
  */
-u16 zdo_af_get_nwk_time_btwn_scans(void);
+uint16_t zdo_af_get_nwk_time_btwn_scans(void);
 
 /**********************************************************************************************************
  * @brief	The default value for :Config_Permit_Join_Duration is 0x00, however, this value can be  established
@@ -263,14 +263,14 @@ u16 zdo_af_get_nwk_time_btwn_scans(void);
  *
  * @return	value
  */
-u8 zdo_af_get_permit_join_duration(void);
+uint8_t zdo_af_get_permit_join_duration(void);
 
 
-void zdo_af_set_accept_nwk_update_pan_id(u16 panId);
-u16 zdo_af_get_accept_nwk_update_pan_id(void);
+void zdo_af_set_accept_nwk_update_pan_id(uint16_t panId);
+uint16_t zdo_af_get_accept_nwk_update_pan_id(void);
 
-void zdo_af_set_accept_nwk_update_channel(u8 channel);
-u8 zdo_af_get_accept_nwk_update_channel(void);
+void zdo_af_set_accept_nwk_update_channel(uint8_t channel);
+uint8_t zdo_af_get_accept_nwk_update_channel(void);
 
 void zdo_af_set_mgmtLeave_use_aps_sec(bool enable);
 bool zdo_af_get_mgmtLeave_use_aps_sec(void);
@@ -287,7 +287,7 @@ bool zb_isUnderRejoinMode();
  *
  * @return	logic channel num
  */
-u8 zdo_channel_page2num(u32 chp);
+uint8_t zdo_channel_page2num(uint32_t chp);
 
 /************************************************************************
  * @brief	zdo layer initiate function. This function reset Application layer attributes
@@ -307,7 +307,7 @@ void zdo_init(void);
  *
  * @return	zdo_status_t
  */
-zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration);
+zdo_status_t zdo_nwkFormationStart(uint32_t scanChannels, uint8_t scanDuration);
 
 /******************************************************************************************
  * @brief	Start router request.
@@ -359,7 +359,7 @@ zdo_status_t zdo_nwkAssocJoinStart(void);
  *
  * @return	zdo_status_t
  */
-zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration);
+zdo_status_t zdo_nwkRejoinStart(uint32_t scanChannels, uint8_t scanDuration);
 
 /******************************************************************************************
  * @brief	Start network rejoin with back off timer.
@@ -370,7 +370,7 @@ zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration);
  *
  * @return	zdo_status_t
  */
-zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration);
+zdo_status_t zdo_nwkRejoinWithBackOff(uint32_t scanChannels, uint8_t scanDuration);
 
 /******************************************************************************************
  * @brief	Stop network rejoin with back off timer.
@@ -391,7 +391,7 @@ void zdo_nwkRejoinWithBackOffStop(void);
  *
  * @return	zdo_status_t
  */
-zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration);
+zdo_status_t zdo_nwkDirectJoinStart(uint32_t scanChannels, uint8_t scanDuration);
 
 /******************************************************************************************
  * @brief	Direct join accept.

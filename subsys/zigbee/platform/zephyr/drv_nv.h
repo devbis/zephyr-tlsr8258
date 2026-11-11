@@ -27,8 +27,8 @@
 #include <zephyr/zigbee/zb_types.h>
 
 typedef struct _attribute_packed_ {
-    u16 opIndex;
-    u8 	opSect;
+    uint16_t opIndex;
+    uint8_t 	opSect;
 } itemIfno_t;
 
 typedef enum {
@@ -103,17 +103,17 @@ typedef enum {
 #define ITEM_FIELD_IDLE                 0xFF
 
 nv_sts_t nv_resetAll(void);
-nv_sts_t nv_resetModule(u8 modules);
-nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf);
-nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf);
-nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx);
-nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len);
-nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx, u16 len, u8 *buf);
-void nv_itemLengthCheckAdd(u8 itemId, u16 len);
+nv_sts_t nv_resetModule(uint8_t modules);
+nv_sts_t nv_flashWriteNew(uint8_t single, uint16_t id, uint8_t itemId, uint16_t len, uint8_t *buf);
+nv_sts_t nv_flashReadNew(uint8_t single, uint8_t id, uint8_t itemId, uint16_t len, uint8_t *buf);
+nv_sts_t nv_itemDeleteByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx);
+nv_sts_t nv_flashSingleItemRemove(uint8_t id, uint8_t itemId, uint16_t len);
+nv_sts_t nv_flashReadByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx, uint16_t len, uint8_t *buf);
+void nv_itemLengthCheckAdd(uint8_t itemId, uint16_t len);
 nv_sts_t nv_resetToFactoryNew(void);
 bool nv_facrotyNewRstFlagCheck(void);
 void nv_facrotyNewRstFlagSet(void);
 void nv_facrotyNewRstFlagClear(void);
-nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount);
-nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount);
-nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len);
+nv_sts_t nv_nwkFrameCountSaveToFlash(uint32_t frameCount);
+nv_sts_t nv_nwkFrameCountFromFlash(uint32_t *frameCount);
+nv_sts_t nv_flashSingleItemSizeGet(uint8_t id, uint8_t itemId, uint16_t *len);

@@ -12,43 +12,43 @@
 
 #define ZB_MINIMAL_CCM_L_VAL 2U
 
-static void zb_minimal_aes_encrypt_block(const u8 *key, const u8 *in, u8 *out)
+static void zb_minimal_aes_encrypt_block(const uint8_t *key, const uint8_t *in, uint8_t *out)
 {
-	zb_aes_encrypt((u8 *)key, (u8 *)in, out);
+	zb_aes_encrypt((uint8_t *)key, (uint8_t *)in, out);
 }
 
-static void zb_minimal_ccm_xor_block(u8 *dst, const u8 *src)
+static void zb_minimal_ccm_xor_block(uint8_t *dst, const uint8_t *src)
 {
-	for (u8 i = 0U; i < 16U; i++) {
+	for (uint8_t i = 0U; i < 16U; i++) {
 		dst[i] ^= src[i];
 	}
 }
 
-static void zb_minimal_ccm_mac_block(const u8 *key, u8 state[16], const u8 block[16])
+static void zb_minimal_ccm_mac_block(const uint8_t *key, uint8_t state[16], const uint8_t block[16])
 {
-	u8 tmp[16];
+	uint8_t tmp[16];
 
 	memcpy(tmp, state, sizeof(tmp));
 	zb_minimal_ccm_xor_block(tmp, block);
 	zb_minimal_aes_encrypt_block(key, tmp, state);
 }
 
-static void zb_minimal_ccm_ctr_block(const u8 *key, const u8 nonce[13], u16 counter, u8 stream[16])
+static void zb_minimal_ccm_ctr_block(const uint8_t *key, const uint8_t nonce[13], uint16_t counter, uint8_t stream[16])
 {
-	u8 a_i[16] = {0};
+	uint8_t a_i[16] = {0};
 
 	a_i[0] = ZB_MINIMAL_CCM_L_VAL - 1U;
 	memcpy(&a_i[1], nonce, 13U);
-	a_i[14] = (u8)(counter >> 8);
-	a_i[15] = (u8)counter;
+	a_i[14] = (uint8_t)(counter >> 8);
+	a_i[15] = (uint8_t)counter;
 	zb_minimal_aes_encrypt_block(key, a_i, stream);
 }
 
-static void zb_minimal_ccm_add_aad(const u8 *key, u8 state[16], const u8 *aad, u8 aad_len)
+static void zb_minimal_ccm_add_aad(const uint8_t *key, uint8_t state[16], const uint8_t *aad, uint8_t aad_len)
 {
-	u8 block[16] = {0};
-	u8 idx = 0U;
-	u8 off = 0U;
+	uint8_t block[16] = {0};
+	uint8_t idx = 0U;
+	uint8_t off = 0U;
 
 	if ((aad == NULL) || (aad_len == 0U)) {
 		return;
@@ -70,11 +70,11 @@ static void zb_minimal_ccm_add_aad(const u8 *key, u8 state[16], const u8 *aad, u
 	}
 }
 
-static void zb_minimal_ccm_add_msg(const u8 *key, u8 state[16], const u8 *msg, u8 msg_len)
+static void zb_minimal_ccm_add_msg(const uint8_t *key, uint8_t state[16], const uint8_t *msg, uint8_t msg_len)
 {
-	u8 block[16] = {0};
-	u8 off = 0U;
-	u8 idx;
+	uint8_t block[16] = {0};
+	uint8_t off = 0U;
+	uint8_t idx;
 
 	while (off < msg_len) {
 		memset(block, 0, sizeof(block));
@@ -85,16 +85,16 @@ static void zb_minimal_ccm_add_msg(const u8 *key, u8 state[16], const u8 *msg, u
 	}
 }
 
-u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, const u8 *aad,
-			       u8 aad_len, u8 *msg, u8 msg_len, u8 *mic_out)
+uint8_t zb_minimal_ccm_encrypt_auth(const uint8_t *key, const uint8_t nonce[13], uint8_t mic_len, const uint8_t *aad,
+			       uint8_t aad_len, uint8_t *msg, uint8_t msg_len, uint8_t *mic_out)
 {
-	u8 mac_state[16] = {0};
-	u8 b0[16] = {0};
-	u8 s0[16];
-	u8 stream[16];
-	u8 flags = (u8)(ZB_MINIMAL_CCM_L_VAL - 1U);
-	u8 off = 0U;
-	u16 counter = 1U;
+	uint8_t mac_state[16] = {0};
+	uint8_t b0[16] = {0};
+	uint8_t s0[16];
+	uint8_t stream[16];
+	uint8_t flags = (uint8_t)(ZB_MINIMAL_CCM_L_VAL - 1U);
+	uint8_t off = 0U;
+	uint16_t counter = 1U;
 
 	if ((key == NULL) || (nonce == NULL) || (msg == NULL) || (mic_out == NULL) ||
 	    (mic_len != 4U)) {
@@ -104,10 +104,10 @@ u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, co
 	if (aad_len != 0U) {
 		flags |= 0x40U;
 	}
-	flags |= (u8)(((mic_len - 2U) / 2U) << 3);
+	flags |= (uint8_t)(((mic_len - 2U) / 2U) << 3);
 	b0[0] = flags;
 	memcpy(&b0[1], nonce, 13U);
-	b0[14] = (u8)(msg_len >> 8);
+	b0[14] = (uint8_t)(msg_len >> 8);
 	b0[15] = msg_len;
 
 	zb_minimal_ccm_mac_block(key, mac_state, b0);
@@ -117,10 +117,10 @@ u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, co
 	zb_minimal_ccm_ctr_block(key, nonce, 0U, s0);
 
 	while (off < msg_len) {
-		u8 blk_len = MIN((u8)16U, (u8)(msg_len - off));
+		uint8_t blk_len = MIN((uint8_t)16U, (uint8_t)(msg_len - off));
 
 		zb_minimal_ccm_ctr_block(key, nonce, counter++, stream);
-		for (u8 i = 0U; i < blk_len; i++) {
+		for (uint8_t i = 0U; i < blk_len; i++) {
 			msg[off + i] ^= stream[i];
 		}
 		off += blk_len;
@@ -132,24 +132,24 @@ u8 zb_minimal_ccm_encrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, co
 	 * radio DMA can observe a carrier while the stack is preparing it; writing
 	 * MIC first exposed a transient plaintext+valid-MIC frame on air.
 	 */
-	for (u8 i = 0U; i < mic_len; i++) {
+	for (uint8_t i = 0U; i < mic_len; i++) {
 		mic_out[i] = mac_state[i] ^ s0[i];
 	}
 
-	return (u8)(msg_len + mic_len);
+	return (uint8_t)(msg_len + mic_len);
 }
 
-bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, u8 *cipher,
-				 u8 cipher_len, const u8 *aad, u8 aad_len, const u8 *mic)
+bool zb_minimal_ccm_decrypt_auth(const uint8_t *key, const uint8_t nonce[13], uint8_t mic_len, uint8_t *cipher,
+				 uint8_t cipher_len, const uint8_t *aad, uint8_t aad_len, const uint8_t *mic)
 {
-	u8 mac_state[16] = {0};
-	u8 b0[16] = {0};
-	u8 s0[16];
-	u8 tag[16];
-	u8 stream[16];
-	u8 flags = (u8)(ZB_MINIMAL_CCM_L_VAL - 1U);
-	u8 off = 0U;
-	u16 counter = 1U;
+	uint8_t mac_state[16] = {0};
+	uint8_t b0[16] = {0};
+	uint8_t s0[16];
+	uint8_t tag[16];
+	uint8_t stream[16];
+	uint8_t flags = (uint8_t)(ZB_MINIMAL_CCM_L_VAL - 1U);
+	uint8_t off = 0U;
+	uint16_t counter = 1U;
 
 	if ((key == NULL) || (nonce == NULL) || (cipher == NULL) || (mic == NULL) ||
 	    (mic_len != 4U)) {
@@ -157,10 +157,10 @@ bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, 
 	}
 
 	while (off < cipher_len) {
-		u8 blk_len = MIN((u8)16U, (u8)(cipher_len - off));
+		uint8_t blk_len = MIN((uint8_t)16U, (uint8_t)(cipher_len - off));
 
 		zb_minimal_ccm_ctr_block(key, nonce, counter++, stream);
-		for (u8 i = 0U; i < blk_len; i++) {
+		for (uint8_t i = 0U; i < blk_len; i++) {
 			cipher[off + i] ^= stream[i];
 		}
 		off += blk_len;
@@ -169,10 +169,10 @@ bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, 
 	if (aad_len != 0U) {
 		flags |= 0x40U;
 	}
-	flags |= (u8)(((mic_len - 2U) / 2U) << 3);
+	flags |= (uint8_t)(((mic_len - 2U) / 2U) << 3);
 	b0[0] = flags;
 	memcpy(&b0[1], nonce, 13U);
-	b0[14] = (u8)(cipher_len >> 8);
+	b0[14] = (uint8_t)(cipher_len >> 8);
 	b0[15] = cipher_len;
 
 	zb_minimal_ccm_mac_block(key, mac_state, b0);
@@ -180,7 +180,7 @@ bool zb_minimal_ccm_decrypt_auth(const u8 *key, const u8 nonce[13], u8 mic_len, 
 	zb_minimal_ccm_add_msg(key, mac_state, cipher, cipher_len);
 
 	zb_minimal_ccm_ctr_block(key, nonce, 0U, s0);
-	for (u8 i = 0U; i < mic_len; i++) {
+	for (uint8_t i = 0U; i < mic_len; i++) {
 		tag[i] = mac_state[i] ^ s0[i];
 	}
 

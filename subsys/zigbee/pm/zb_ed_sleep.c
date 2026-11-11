@@ -79,12 +79,12 @@ static void zb_ed_sleep_rejected(enum zb_ed_sleep_reject_reason reason)
 
 static bool zb_ed_sleep_has_pending_mac_work(void)
 {
-	const u8 busy_flags = RX_BUSY | TX_BUSY | TX_ACKPACKET | RX_WAITINGACK |
+	const uint8_t busy_flags = RX_BUSY | TX_BUSY | TX_ACKPACKET | RX_WAITINGACK |
 				      RX_DATAPENDING | TX_UNDERWAY;
 
 	return (g_zbMacCtx.status != ZB_MAC_STATE_NORMAL) ||
 	       ((rf_busyFlag & busy_flags) != 0U) ||
-	       (mac_getTrxState() != MAC_TX_IDLE) || tl_zbMacStateBusy() ||
+	       (mac_getTrxState() != MAC_TX_IDLE) || zb_MacStateBusy() ||
 	       (get_next_data() != NULL);
 }
 

@@ -36,17 +36,17 @@
 #define NEIGHBOR_IS_PREVIOUS_CHILD              4
 #define NEIGHBOR_IS_UNAUTH_CHILD                5
 
-#ifndef TL_ZB_NEIGHBOR_TABLE_NUM
+#ifndef ZB_NEIGHBOR_TABLE_NUM
 #if ZB_ROUTER_ROLE
-#define TL_ZB_NEIGHBOR_TABLE_NUM                26
-#define TL_ZB_CHILD_TABLE_NUM                   16
+#define ZB_NEIGHBOR_TABLE_NUM                26
+#define ZB_CHILD_TABLE_NUM                   16
 #else
-#define TL_ZB_NEIGHBOR_TABLE_NUM                2
-#define TL_ZB_CHILD_TABLE_NUM                   0
+#define ZB_NEIGHBOR_TABLE_NUM                2
+#define ZB_CHILD_TABLE_NUM                   0
 #endif
 #endif
 
-#define TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE      6
+#define ZB_ADDITION_NEIGHBOR_TABLE_SIZE      6
 
 #define	TRANSFAILURE_CNT_MAX                    2
 
@@ -54,85 +54,85 @@
 typedef struct nebTbl_t {
     struct nebTbl_t *freeNext;
     struct nebTbl_t *activeNext;
-    u32 authTimeout;
-    u32 timeoutCnt;             //this field indicates the current time remaining, in seconds, for the end device.
-    u32 devTimeout;             //this field indicates the timeout, in seconds, for the end device child.
-    u16 endDevCfg;              //bit mask of the end device's cfg. the default value shall be 0.
-    u16 addrmapIdx;
+    uint32_t authTimeout;
+    uint32_t timeoutCnt;             //this field indicates the current time remaining, in seconds, for the end device.
+    uint32_t devTimeout;             //this field indicates the timeout, in seconds, for the end device child.
+    uint16_t endDevCfg;              //bit mask of the end device's cfg. the default value shall be 0.
+    uint16_t addrmapIdx;
 #ifdef ZB_SECURITY
-    u32 frameCounterFailCnt;
-    u32 receivedFrameCnt;
-    u32 incomingFrameCnt;       //incoming frame counter for this device after key change.
-    u8 keySeqNum;               //key number for which incoming_frame_counter is valid.
+    uint32_t frameCounterFailCnt;
+    uint32_t receivedFrameCnt;
+    uint32_t incomingFrameCnt;       //incoming frame counter for this device after key change.
+    uint8_t keySeqNum;               //key number for which incoming_frame_counter is valid.
 #else
-    u8 rsv;
+    uint8_t rsv;
 #endif
     bool keepaliveRcvd;         //this value indicates at least one keepalive has been received from the end device since the router has rebooted.
-    u8 rxOnWhileIdle:1;
-    u8 deviceType:3;            //NWK_DEVICE_TYPE_COORDINATOR = 0,
+    uint8_t rxOnWhileIdle:1;
+    uint8_t deviceType:3;            //NWK_DEVICE_TYPE_COORDINATOR = 0,
                                 //NWK_DEVICE_TYPE_ROUTER = 1,
                                 //NWK_DEVICE_TYPE_ED = 2
 
-    u8 relationship:3;          //NEIGHBOR_IS_PARENT = 0,
+    uint8_t relationship:3;          //NEIGHBOR_IS_PARENT = 0,
                                 //NEIGHBOR_IS_CHILD = 1,
                                 //NEIGHBOR_IS_SIBLING = 2,
                                 //NEIGHBOR_IS_UNAUTH_CHILD = 5
-    u8 used:1;
-    u8 age;
-    u8 depth;
-    u8 transFailure;
-    u8 lqi;
-    u8 outgoingCost;
-} tl_zb_normal_neighbor_entry_t;
+    uint8_t used:1;
+    uint8_t age;
+    uint8_t depth;
+    uint8_t transFailure;
+    uint8_t lqi;
+    uint8_t outgoingCost;
+} zb_normal_neighbor_entry_t;
 
 typedef struct {
     extPANId_t extPanId;
     addrExt_t extAddr;
 
-    u16 shortAddr;
-    u16 panId;
+    uint16_t shortAddr;
+    uint16_t panId;
 
-    u8 addrMode;
-    u8 logicChannel;
-    u8 depth:4;
-    u8 beaconOrder:4;
-    u8 permitJoining:1;
-    u8 potentialParent:1;
-    u8 routerCapacity:1;
-    u8 edCapacity:1;
-    u8 stackProfile:4;
+    uint8_t addrMode;
+    uint8_t logicChannel;
+    uint8_t depth:4;
+    uint8_t beaconOrder:4;
+    uint8_t permitJoining:1;
+    uint8_t potentialParent:1;
+    uint8_t routerCapacity:1;
+    uint8_t edCapacity:1;
+    uint8_t stackProfile:4;
 
-    u8 deviceType:2;
-    u8 superframeOrder:6;
-    u8 lqi;
-    u8 nwkUpdateId;
-    u8 rsv;
-} tl_zb_addition_neighbor_entry_t;
+    uint8_t deviceType:2;
+    uint8_t superframeOrder:6;
+    uint8_t lqi;
+    uint8_t nwkUpdateId;
+    uint8_t rsv;
+} zb_addition_neighbor_entry_t;
 
 typedef struct {
-    tl_zb_addition_neighbor_entry_t additionNeighborTbl[TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE];//168
-    tl_zb_normal_neighbor_entry_t *freeHead;
-    tl_zb_normal_neighbor_entry_t *activeHead;
-    u8 additionNeighborNum;
-    u8 normalNeighborNum;
-    u8 childrenNum;
-    u8 resv;
-    tl_zb_normal_neighbor_entry_t neighborTbl[TL_ZB_NEIGHBOR_TABLE_NUM]; //shall be allocated at the last field in the structure of the tl_zb_neighbor_entry_t
-} tl_zb_neighbor_entry_t _attribute_aligned_(4);
+    zb_addition_neighbor_entry_t additionNeighborTbl[ZB_ADDITION_NEIGHBOR_TABLE_SIZE];//168
+    zb_normal_neighbor_entry_t *freeHead;
+    zb_normal_neighbor_entry_t *activeHead;
+    uint8_t additionNeighborNum;
+    uint8_t normalNeighborNum;
+    uint8_t childrenNum;
+    uint8_t resv;
+    zb_normal_neighbor_entry_t neighborTbl[ZB_NEIGHBOR_TABLE_NUM]; //shall be allocated at the last field in the structure of the zb_neighbor_entry_t
+} zb_neighbor_entry_t _attribute_aligned_(4);
 
 
 #define ZBHCI_CHILD_LIST_NUM_MAX        5
 
 typedef struct {
     addrExt_t extAddr;
-    u16 nwkAddr;
+    uint16_t nwkAddr;
 } nwk_childNodesList_t;
 
 typedef struct {
-    u8 status;                  /*! status, 0: success, 1: failure */
-    u8 totalChildNodesNum;      /*! total number of the child nodes */
-    u8 startIdx;                /*! start of the child table index */
-    u8 childNodesNum;           /*! number of the child nodes in this response packet */
+    uint8_t status;                  /*! status, 0: success, 1: failure */
+    uint8_t totalChildNodesNum;      /*! total number of the child nodes */
+    uint8_t startIdx;                /*! start of the child table index */
+    uint8_t childNodesNum;           /*! number of the child nodes in this response packet */
 } nwk_childNodesInfo_t;
 
 typedef struct {
@@ -140,52 +140,52 @@ typedef struct {
     nwk_childNodesList_t list[ZBHCI_CHILD_LIST_NUM_MAX];        /*! child list */
 } nwk_childTableInfo_t;
 
-extern u8 NWK_NEIGHBORTBL_ADD_LQITHRESHOLD;
-extern u32 NWK_UNAUTH_CHILD_TABLE_LIFE_TIME;
+extern uint8_t NWK_NEIGHBORTBL_ADD_LQITHRESHOLD;
+extern uint32_t NWK_UNAUTH_CHILD_TABLE_LIFE_TIME;
 
-extern u8 TL_ZB_NEIGHBOR_TABLE_SIZE;
-extern u8 TL_ZB_CHILD_TABLE_SIZE;
-extern tl_zb_neighbor_entry_t g_zb_neighborTbl;
+extern uint8_t ZB_NEIGHBOR_TABLE_SIZE;
+extern uint8_t ZB_CHILD_TABLE_SIZE;
+extern zb_neighbor_entry_t g_zb_neighborTbl;
 
-void tl_zbNeighborTableInit(void);
+void zb_NeighborTableInit(void);
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(tl_zb_normal_neighbor_entry_t *entry, u8 delete);
+zb_normal_neighbor_entry_t *zb_NeighborTableUpdate(zb_normal_neighbor_entry_t *entry, uint8_t delete);
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx);
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchFromExtAddr(uint16_t *shortAddr, addrExt_t extAddr, uint16_t *idx);
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx);
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchFromShortAddr(uint16_t shortAddr, addrExt_t extAddr, uint16_t *idx);
 
-void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry);
+void zb_NeighborTableDelete(zb_normal_neighbor_entry_t *entry);
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchForParent(void);
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchForParent(void);
 
-u16 tl_zbNeighborParentShortAddrGet(void);
+uint16_t zb_NeighborParentShortAddrGet(void);
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborEntryGetFromIdx(u8 idx);
+zb_normal_neighbor_entry_t *zb_NeighborEntryGetFromIdx(uint8_t idx);
 
-u8 tl_nwkNeighborDeleteByAddrmapIdx(u16 idx);
+uint8_t zb_nwkNeighborDeleteByAddrmapIdx(uint16_t idx);
 
-tl_zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(u16 shortAddr);
+zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(uint16_t shortAddr);
 
-tl_zb_addition_neighbor_entry_t *tl_zbAdditionNeighborEntryGetFromIdx(u8 idx);
-u8 tl_neighborFrameCntReset(void);
-u8 tl_zbAdditionNeighborTableNumGet(void);
+zb_addition_neighbor_entry_t *zb_AdditionNeighborEntryGetFromIdx(uint8_t idx);
+uint8_t zb_neighborFrameCntReset(void);
+uint8_t zb_AdditionNeighborTableNumGet(void);
 
-void tl_zbAdditionNeighborReset(void);
+void zb_AdditionNeighborReset(void);
 
-u8 tl_zbAdditionNeighborTableUpdate(tl_zb_addition_neighbor_entry_t *entry);
+uint8_t zb_AdditionNeighborTableUpdate(zb_addition_neighbor_entry_t *entry);
 
-u8 tl_zbNeighborTableNumGet(void);
+uint8_t zb_NeighborTableNumGet(void);
 
-u8 tl_zbNeighborTableRouterValidNumGet(void);
+uint8_t zb_NeighborTableRouterValidNumGet(void);
 
-u8 tl_zbNeighborTableChildEDNumGet(void);
+uint8_t zb_NeighborTableChildEDNumGet(void);
 
-tl_zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr);
+zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr);
 
 
 /*********************************************************************
- * @fn      tl_allChildNodesRemove
+ * @fn      zb_allChildNodesRemove
  *
  * @brief   remove all the child nodes
  *
@@ -193,10 +193,10 @@ tl_zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr);
  *
  * @return  None
  */
-void tl_allChildNodesRemove(void);
+void zb_allChildNodesRemove(void);
 
 /*********************************************************************
- * @fn      tl_childNodesListGet
+ * @fn      zb_childNodesListGet
  *
  * @brief   get the child nodes list
  *
@@ -206,7 +206,7 @@ void tl_allChildNodesRemove(void);
  *
  * @return  None
  */
-void tl_childNodesListGet(u8 startIdx, nwk_childTableInfo_t *t);
+void zb_childNodesListGet(uint8_t startIdx, nwk_childTableInfo_t *t);
 
 
 #endif /* NWK_NEIGHBOR_H */

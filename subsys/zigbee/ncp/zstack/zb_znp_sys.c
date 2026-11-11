@@ -24,7 +24,7 @@
 LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 
 extern void zb_reset(void);
-extern u16 tl_bdbInstallCodeCRC16(u8 *pInstallCode, u8 len);
+extern uint16_t zb_bdbInstallCodeCRC16(uint8_t *pInstallCode, uint8_t len);
 
 /* MT capabilities: SYS, AF, ZDO, UTIL, APP and APP_CNF. */
 #define ZNP_CAPABILITIES            0x0559U
@@ -633,16 +633,16 @@ static void app_cnf_add_install_code(const uint8_t *d, uint8_t len)
 	code_len = len - 9U;
 
 	if (d[0] == ZNP_INSTALL_CODE_WITH_CRC && code_len == SEC_KEY_LEN + 2U) {
-		if (tl_bdbInstallCodeCRC16((u8 *)code, SEC_KEY_LEN) !=
+		if (zb_bdbInstallCodeCRC16((uint8_t *)code, SEC_KEY_LEN) !=
 		    znp_get_u16(&code[SEC_KEY_LEN])) {
 			znp_srsp_status(ZNP_SUBSYS_APP_CNF, 0x04U, ZNP_STATUS_INVALID_PARAMETER);
 			return;
 		}
 
-		bdb_preInstallCodeAdd((u8 *)&d[1], (u8 *)code);
+		bdb_preInstallCodeAdd((uint8_t *)&d[1], (uint8_t *)code);
 	} else if (d[0] == ZNP_INSTALL_CODE_DERIVED_KEY && code_len == SEC_KEY_LEN) {
 		/* A device keeps one key, so a new one replaces the old. */
-		(void)ss_devKeyPairDelete((u8 *)&d[1]);
+		(void)ss_devKeyPairDelete((uint8_t *)&d[1]);
 
 		memset(&pair, 0, sizeof(pair));
 		memcpy(pair.device_address, &d[1], 8U);

@@ -8,14 +8,14 @@
 #include "aps.h"
 #include "ev_buffer.h"
 
-u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt)
+uint8_t af_dataSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t cmdPldLen, uint8_t *cmdPld, uint8_t *apsCnt)
 {
 	aps_data_req_t req;
 
 	memset(&req, 0, sizeof(req));
 	req.src_endpoint = srcEp;
 	req.cluster_id = clusterId;
-	req.asdu_length = (u8)cmdPldLen;
+	req.asdu_length = (uint8_t)cmdPldLen;
 	req.dst_addr_mode = pDstEpInfo->dstAddrMode;
 	req.tx_options = pDstEpInfo->txOptions;
 	req.radius = pDstEpInfo->radius;
@@ -32,13 +32,13 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 	req.aps_addr.dst_endpoint = pDstEpInfo->dstEp;
 	*apsCnt = req.apsCnt;
 
-	if ((u16)cmdPldLen > aps_ib.aps_fragment_payload_size &&
+	if ((uint16_t)cmdPldLen > aps_ib.aps_fragment_payload_size &&
 	    pDstEpInfo->dstAddrMode != APS_SHORT_GROUPADDR_NOEP) {
 		req.tx_options |= APS_TX_OPT_ACK_TX;
 		return apsDataFragmentRequest(&req, cmdPld, cmdPldLen);
 	}
 
-	return apsDataRequest(&req, cmdPld, (u8)cmdPldLen);
+	return apsDataRequest(&req, cmdPld, (uint8_t)cmdPldLen);
 }
 
 void af_dataCnfHandler(void *arg)
@@ -46,12 +46,12 @@ void af_dataCnfHandler(void *arg)
 	apsdeDataConf_t *cnf = (apsdeDataConf_t *)arg;
 	af_endpoint_descriptor_t *zdoEp = af_zdoSimpleDescriptorGet();
 	af_endpoint_descriptor_t *epList = af_epDescriptorGet();
-	u8 epNum = af_availableEpNumGet();
+	uint8_t epNum = af_availableEpNumGet();
 
 	if (zdoEp->cb_cnf != NULL && cnf->srcEndpoint == zdoEp->ep) {
 		zdoEp->cb_cnf(arg);
 	} else {
-		for (u8 i = 0; i < epNum; i++) {
+		for (uint8_t i = 0; i < epNum; i++) {
 			if (epList[i].cb_cnf != NULL && epList[i].ep == cnf->srcEndpoint) {
 				epList[i].cb_cnf(arg);
 				break;
@@ -59,16 +59,16 @@ void af_dataCnfHandler(void *arg)
 		}
 	}
 
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }
 
 void af_aps_data_entry(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	af_endpoint_descriptor_t *epList;
-	u8 epNum;
+	uint8_t epNum;
 	aps_data_ind_t *stagingInd;
-	u16 stagingSize;
+	uint16_t stagingSize;
 
 	if (ind->dst_ep == ZDO_EP) {
 		af_endpoint_descriptor_t *zdoEp;
@@ -90,7 +90,7 @@ void af_aps_data_entry(void *arg)
 		return;
 	}
 
-	stagingSize = (u16)(sizeof(*ind) + ind->asduLength);
+	stagingSize = (uint16_t)(sizeof(*ind) + ind->asduLength);
 	stagingInd = (aps_data_ind_t *)ev_buf_allocate(stagingSize);
 	if (stagingInd == NULL) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -98,10 +98,10 @@ void af_aps_data_entry(void *arg)
 	}
 
 	memcpy(stagingInd, ind, sizeof(*stagingInd));
-	stagingInd->asdu = (u8 *)stagingInd + sizeof(*stagingInd);
+	stagingInd->asdu = (uint8_t *)stagingInd + sizeof(*stagingInd);
 	memcpy(stagingInd->asdu, ind->asdu, ind->asduLength);
 
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		af_endpoint_descriptor_t *ep = &epList[i];
 		af_simple_descriptor_t *simple = ep->correspond_simple_desc;
 
@@ -121,17 +121,17 @@ void af_aps_data_entry(void *arg)
 
 		aps_data_ind_t *callbackInd = (aps_data_ind_t *)ev_buf_allocate(stagingSize);
 		if (callbackInd == NULL) {
-			ev_buf_free((u8 *)stagingInd);
+			ev_buf_free((uint8_t *)stagingInd);
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
 
 		memcpy(callbackInd, stagingInd, stagingSize);
-		callbackInd->asdu = (u8 *)callbackInd + sizeof(*callbackInd);
+		callbackInd->asdu = (uint8_t *)callbackInd + sizeof(*callbackInd);
 		ep->cb_rx(callbackInd);
 	}
 
-	ev_buf_free((u8 *)stagingInd);
+	ev_buf_free((uint8_t *)stagingInd);
 	zb_buf_free((zb_buf_t *)arg);
 }
 
@@ -139,9 +139,9 @@ void af_aps_data_fragment_entry(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	af_endpoint_descriptor_t *epList = af_epDescriptorGet();
-	u8 epNum = af_availableEpNumGet();
+	uint8_t epNum = af_availableEpNumGet();
 
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		af_endpoint_descriptor_t *ep = &epList[i];
 		af_simple_descriptor_t *simple = ep->correspond_simple_desc;
 
@@ -166,5 +166,5 @@ void af_aps_data_fragment_entry(void *arg)
 		return;
 	}
 
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }

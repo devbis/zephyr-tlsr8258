@@ -113,27 +113,27 @@ typedef struct {
 /**
  *  @brief  External variable for basic Attribute
  */
-extern const u8 zcl_attr_zclVer;
-extern const u8 zcl_attr_appVer;
-extern const u8 zcl_attr_stackVer;
-extern const u8 zcl_attr_hwVer;
-extern const u8 zcl_attr_mfName[];
-extern const u8 zcl_attr_dateCode[];
-extern const u8 zcl_attr_powerSrc;
-extern const u8 zcl_attr_swBuildId[];
-extern u8 zcl_attr_modelID[];
-extern u8 zcl_attr_locDesc[];
-extern u8 zcl_attr_phyEnv;
-extern u8 zcl_attr_devEnabled;
-extern u8 zcl_attr_alarmMask;
-extern u8 zcl_attr_localCfg;
+extern const uint8_t zcl_attr_zclVer;
+extern const uint8_t zcl_attr_appVer;
+extern const uint8_t zcl_attr_stackVer;
+extern const uint8_t zcl_attr_hwVer;
+extern const uint8_t zcl_attr_mfName[];
+extern const uint8_t zcl_attr_dateCode[];
+extern const uint8_t zcl_attr_powerSrc;
+extern const uint8_t zcl_attr_swBuildId[];
+extern uint8_t zcl_attr_modelID[];
+extern uint8_t zcl_attr_locDesc[];
+extern uint8_t zcl_attr_phyEnv;
+extern uint8_t zcl_attr_devEnabled;
+extern uint8_t zcl_attr_alarmMask;
+extern uint8_t zcl_attr_localCfg;
 
 /**
  *  @brief  External variable for basic Attribute table
  */
 extern const zclAttrInfo_t basic_attrTbl[];
 
-extern const u8 zcl_basic_attrNum;
+extern const uint8_t zcl_basic_attrNum;
 
 /** @} end of group ZCL_BASIC_Variables */
 #endif
@@ -152,7 +152,7 @@ extern const u8 zcl_basic_attrNum;
  *
  * @return      Status
  */
-status_t zcl_basic_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_basic_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 /**
  * @brief       API to send Basic Reset to factory default command 
@@ -164,7 +164,7 @@ status_t zcl_basic_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      None
  */
-status_t zcl_basic_reset(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_basic_reset(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_basic_resetFactoryDftCmd(a,b,c)     (zcl_basic_reset((a), (b), (c), ZCL_SEQ_NUM))
 
 /** @} end of group ZCL_BASIC_Fountions */

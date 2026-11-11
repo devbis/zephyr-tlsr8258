@@ -89,7 +89,7 @@ void zb_platform_network_left(void);
 /**
  * @brief Put the device's own IEEE address into the MAC PIB.
  *
- * tl_zbMacReset() clears the PIB, the address with it; a device that does not put it back
+ * zb_MacReset() clears the PIB, the address with it; a device that does not put it back
  * associates, after a leave, with an address of zeros, and the coordinator's answer never
  * matches it.
  */

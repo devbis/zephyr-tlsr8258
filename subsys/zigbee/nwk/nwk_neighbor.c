@@ -17,32 +17,32 @@ enum {
 	NWK_CHILD_NODES_STATUS_SUCCESS = 0,
 };
 
-static inline void neighbor_entry_copy_state(tl_zb_normal_neighbor_entry_t *dst,
-					     const tl_zb_normal_neighbor_entry_t *src)
+static inline void neighbor_entry_copy_state(zb_normal_neighbor_entry_t *dst,
+					     const zb_normal_neighbor_entry_t *src)
 {
 	enum {
-		NEIGHBOR_COPY_OFFSET = OFFSETOF(tl_zb_normal_neighbor_entry_t, authTimeout),
-		NEIGHBOR_COPY_SIZE = sizeof(tl_zb_normal_neighbor_entry_t) - NEIGHBOR_COPY_OFFSET,
+		NEIGHBOR_COPY_OFFSET = OFFSETOF(zb_normal_neighbor_entry_t, authTimeout),
+		NEIGHBOR_COPY_SIZE = sizeof(zb_normal_neighbor_entry_t) - NEIGHBOR_COPY_OFFSET,
 	};
 
-	memcpy((u8 *)dst + NEIGHBOR_COPY_OFFSET, (const u8 *)src + NEIGHBOR_COPY_OFFSET,
+	memcpy((uint8_t *)dst + NEIGHBOR_COPY_OFFSET, (const uint8_t *)src + NEIGHBOR_COPY_OFFSET,
 	       NEIGHBOR_COPY_SIZE);
 }
 
-static inline bool neighbor_entry_used(const tl_zb_normal_neighbor_entry_t *entry)
+static inline bool neighbor_entry_used(const zb_normal_neighbor_entry_t *entry)
 {
 	return (entry != NULL) && (entry->used != 0);
 }
 
-static inline bool neighbor_is_child_rel(u8 relationship)
+static inline bool neighbor_is_child_rel(uint8_t relationship)
 {
 	return (relationship == NEIGHBOR_IS_CHILD) || (relationship == NEIGHBOR_IS_UNAUTH_CHILD);
 }
 
-static inline u8 neighbor_active_count_update(void)
+static inline uint8_t neighbor_active_count_update(void)
 {
-	u8 count = 0;
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	uint8_t count = 0;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
 
 	while (neighbor_entry_used(entry)) {
 		count++;
@@ -53,7 +53,7 @@ static inline u8 neighbor_active_count_update(void)
 	return count;
 }
 
-void tl_nebListAdd(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
+void zb_nebListAdd(uint8_t freeList, zb_normal_neighbor_entry_t *entry)
 {
 	if (freeList) {
 		entry->freeNext = g_zb_neighborTbl.freeHead;
@@ -66,10 +66,10 @@ void tl_nebListAdd(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
 
 /* The vendor object carries a separate walk per list ("8:" free, "48:"
  * active) rather than selecting the link field inside the loop. */
-void tl_nebListDelete(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
+void zb_nebListDelete(uint8_t freeList, zb_normal_neighbor_entry_t *entry)
 {
-	tl_zb_normal_neighbor_entry_t *cur;
-	tl_zb_normal_neighbor_entry_t *next;
+	zb_normal_neighbor_entry_t *cur;
+	zb_normal_neighbor_entry_t *next;
 
 	if (freeList) {
 		cur = g_zb_neighborTbl.freeHead;
@@ -116,19 +116,19 @@ void tl_nebListDelete(u8 freeList, tl_zb_normal_neighbor_entry_t *entry)
 	}
 }
 
-void tl_zbNeighborTableRst(void)
+void zb_NeighborTableRst(void)
 {
 	memset(&g_zb_neighborTbl, 0, neighborTblSizeGet());
 	g_zb_neighborTbl.activeHead = NULL;
 	g_zb_neighborTbl.freeHead = &g_zb_neighborTbl.neighborTbl[0];
 
 	{
-		tl_zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[0];
+		zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[0];
 
 		/* The chaining loop is skipped for a
 		 * one-entry table and only the last entry is terminated. */
-		if (TL_ZB_NEIGHBOR_TABLE_SIZE != 1U) {
-			for (u8 i = 0; (u8)(TL_ZB_NEIGHBOR_TABLE_SIZE - 1U) > i; i++) {
+		if (ZB_NEIGHBOR_TABLE_SIZE != 1U) {
+			for (uint8_t i = 0; (uint8_t)(ZB_NEIGHBOR_TABLE_SIZE - 1U) > i; i++) {
 				entry->relationship = NEIGHBOR_IS_NONE_OF_ABOVE;
 				entry->used = 0;
 				entry->activeNext = NULL;
@@ -142,15 +142,15 @@ void tl_zbNeighborTableRst(void)
 		entry->activeNext = NULL;
 	}
 
-	for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
 		g_zb_neighborTbl.additionNeighborTbl[i].shortAddr = MAC_SHORT_ADDR_NONE;
 		ZB_IEEE_ADDR_INVALID(g_zb_neighborTbl.additionNeighborTbl[i].extAddr);
 	}
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborFreeEntryGet(void)
+zb_normal_neighbor_entry_t *zb_NeighborFreeEntryGet(void)
 {
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.freeHead;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.freeHead;
 
 	if (entry == NULL) {
 		return NULL;
@@ -164,15 +164,15 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborFreeEntryGet(void)
 	return entry;
 }
 
-u8 tl_zbNeighborTableNumGet(void)
+uint8_t zb_NeighborTableNumGet(void)
 {
 	return neighbor_active_count_update();
 }
 
-u8 tl_zbNeighborTableChildEDNumGet(void)
+uint8_t zb_NeighborTableChildEDNumGet(void)
 {
-	u8 count = 0;
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	uint8_t count = 0;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
 
 	while (neighbor_entry_used(entry)) {
 		if ((entry->deviceType == NWK_DEVICE_TYPE_ED) &&
@@ -186,10 +186,10 @@ u8 tl_zbNeighborTableChildEDNumGet(void)
 	return count;
 }
 
-u8 tl_zbNeighborTableRouterValidNumGet(void)
+uint8_t zb_NeighborTableRouterValidNumGet(void)
 {
-	u8 count = 0;
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	uint8_t count = 0;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
 
 	while (neighbor_entry_used(entry)) {
 		if (((entry->deviceType == NWK_DEVICE_TYPE_COORDINATOR) ||
@@ -203,9 +203,9 @@ u8 tl_zbNeighborTableRouterValidNumGet(void)
 	return count;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchForParent(void)
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchForParent(void)
 {
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
 
 	while (neighbor_entry_used(entry)) {
 		if (entry->relationship == NEIGHBOR_IS_PARENT) {
@@ -217,11 +217,11 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchForParent(void)
 	return NULL;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForChildEndDev(void *entry)
+zb_normal_neighbor_entry_t *zb_NeighborTabSearchForChildEndDev(void *entry)
 {
-	tl_zb_normal_neighbor_entry_t *cur =
+	zb_normal_neighbor_entry_t *cur =
 		(entry == NULL) ? g_zb_neighborTbl.activeHead
-				: ((tl_zb_normal_neighbor_entry_t *)entry)->activeNext;
+				: ((zb_normal_neighbor_entry_t *)entry)->activeNext;
 
 	while (neighbor_entry_used(cur)) {
 		if ((cur->deviceType == NWK_DEVICE_TYPE_ED) &&
@@ -234,11 +234,11 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForChildEndDev(void *entry)
 	return NULL;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForRouter(void *entry)
+zb_normal_neighbor_entry_t *zb_NeighborTabSearchForRouter(void *entry)
 {
-	tl_zb_normal_neighbor_entry_t *cur =
+	zb_normal_neighbor_entry_t *cur =
 		(entry == NULL) ? g_zb_neighborTbl.activeHead
-				: ((tl_zb_normal_neighbor_entry_t *)entry)->activeNext;
+				: ((zb_normal_neighbor_entry_t *)entry)->activeNext;
 
 	while (neighbor_entry_used(cur)) {
 		if (cur->deviceType == NWK_DEVICE_TYPE_ROUTER) {
@@ -251,9 +251,9 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTabSearchForRouter(void *entry)
 }
 
 /* Every vendor lookup carries its own copy of this walk. */
-static inline tl_zb_normal_neighbor_entry_t *neighbor_by_addrmap_idx(u16 idx)
+static inline zb_normal_neighbor_entry_t *neighbor_by_addrmap_idx(uint16_t idx)
 {
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
 
 	while (neighbor_entry_used(entry)) {
 		if (entry->addrmapIdx == idx) {
@@ -265,15 +265,15 @@ static inline tl_zb_normal_neighbor_entry_t *neighbor_by_addrmap_idx(u16 idx)
 	return NULL;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromAddrmapIdx(u16 idx)
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchFromAddrmapIdx(uint16_t idx)
 {
 	return neighbor_by_addrmap_idx(idx);
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborEntryGetFromIdx(u8 idx)
+zb_normal_neighbor_entry_t *zb_NeighborEntryGetFromIdx(uint8_t idx)
 {
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
-	u8 i = 0;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	uint8_t i = 0;
 
 	while (neighbor_entry_used(entry)) {
 		if (i == idx) {
@@ -286,60 +286,60 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborEntryGetFromIdx(u8 idx)
 	return NULL;
 }
 
-u16 tl_zbNeighborParentShortAddrGet(void)
+uint16_t zb_NeighborParentShortAddrGet(void)
 {
-	tl_zb_normal_neighbor_entry_t *parent = tl_zbNeighborTableSearchForParent();
+	zb_normal_neighbor_entry_t *parent = zb_NeighborTableSearchForParent();
 
-	return (parent != NULL) ? tl_zbshortAddrByIdx(parent->addrmapIdx) : MAC_SHORT_ADDR_NONE;
+	return (parent != NULL) ? zb_shortAddrByIdx(parent->addrmapIdx) : MAC_SHORT_ADDR_NONE;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromExtAddr(u16 *shortAddr,
-								   addrExt_t extAddr, u16 *idx)
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchFromExtAddr(uint16_t *shortAddr,
+								   addrExt_t extAddr, uint16_t *idx)
 {
-	if (tl_zbShortAddrByExtAddr(shortAddr, extAddr, idx) != RET_OK) {
+	if (zb_ShortAddrByExtAddr(shortAddr, extAddr, idx) != RET_OK) {
 		return NULL;
 	}
 
 	return neighbor_by_addrmap_idx(*idx);
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableSearchFromShortAddr(u16 shortAddr,
-								     addrExt_t extAddr, u16 *idx)
+zb_normal_neighbor_entry_t *zb_NeighborTableSearchFromShortAddr(uint16_t shortAddr,
+								     addrExt_t extAddr, uint16_t *idx)
 {
-	if (tl_zbExtAddrByShortAddr(shortAddr, extAddr, idx) != RET_OK) {
+	if (zb_ExtAddrByShortAddr(shortAddr, extAddr, idx) != RET_OK) {
 		return NULL;
 	}
 
 	return neighbor_by_addrmap_idx(*idx);
 }
 
-tl_zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(u16 shortAddr)
+zb_normal_neighbor_entry_t *nwk_neTblGetByShortAddr(uint16_t shortAddr)
 {
-	u16 idx = 0;
+	uint16_t idx = 0;
 
-	if (tl_idxByShortAddr(&idx, shortAddr) != RET_OK) {
+	if (zb_idxByShortAddr(&idx, shortAddr) != RET_OK) {
 		return NULL;
 	}
 
 	return neighbor_by_addrmap_idx(idx);
 }
 
-tl_zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr)
+zb_normal_neighbor_entry_t *nwk_neTblGetByExtAddr(addrExt_t extAddr)
 {
-	u16 idx = 0;
+	uint16_t idx = 0;
 
-	if (tl_idxByExtAddr(&idx, extAddr) != RET_OK) {
+	if (zb_idxByExtAddr(&idx, extAddr) != RET_OK) {
 		return NULL;
 	}
 
 	return neighbor_by_addrmap_idx(idx);
 }
 
-tl_zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(u16 shortAddr)
+zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(uint16_t shortAddr)
 {
-	tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
-	u8 outgoingCost;
-	u8 cost;
+	zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
+	uint8_t outgoingCost;
+	uint8_t cost;
 
 	if (entry == NULL) {
 		return NULL;
@@ -363,7 +363,7 @@ tl_zb_normal_neighbor_entry_t *nwkValidNeighborToFwd(u16 shortAddr)
 	return (cost < NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD) ? entry : NULL;
 }
 
-void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry)
+void zb_NeighborTableDelete(zb_normal_neighbor_entry_t *entry)
 {
 	addrExt_t extAddr;
 
@@ -379,31 +379,31 @@ void tl_zbNeighborTableDelete(tl_zb_normal_neighbor_entry_t *entry)
 
 	g_sysDiags.neighborRemoved++;
 
-	tl_zbExtAddrByIdx(entry->addrmapIdx, extAddr);
+	zb_ExtAddrByIdx(entry->addrmapIdx, extAddr);
 	if (!aps_bindingTblExist(extAddr)) {
-		tl_zbNwkAddrMapDelete(entry->addrmapIdx);
+		zb_NwkAddrMapDelete(entry->addrmapIdx);
 	}
 
 	entry->relationship = NEIGHBOR_IS_NONE_OF_ABOVE;
 	entry->used = 0;
 	entry->transFailure = 0;
 
-	tl_nebListDelete(0, entry);
-	tl_nebListAdd(1, entry);
+	zb_nebListDelete(0, entry);
+	zb_nebListAdd(1, entry);
 
 	neighbor_active_count_update();
-	(void)tl_zbNeighborTableChildEDNumGet();
+	(void)zb_NeighborTableChildEDNumGet();
 }
 
-u8 tl_nwkNeighborDeleteByAddrmapIdx(u16 idx)
+uint8_t zb_nwkNeighborDeleteByAddrmapIdx(uint16_t idx)
 {
-	tl_zb_normal_neighbor_entry_t *entry = tl_zbNeighborTableSearchFromAddrmapIdx(idx);
+	zb_normal_neighbor_entry_t *entry = zb_NeighborTableSearchFromAddrmapIdx(idx);
 
 	if (entry == NULL) {
 		return 0;
 	}
 
-	tl_zbNeighborTableDelete(entry);
+	zb_NeighborTableDelete(entry);
 	return 1;
 }
 
@@ -413,12 +413,12 @@ u8 tl_nwkNeighborDeleteByAddrmapIdx(u16 idx)
  * returned a bool, excluded NEIGHBOR_IS_PARENT (the vendor does not) and was
  * missing the routing-table check entirely.
  */
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableDeleteAuto(u8 delete)
+zb_normal_neighbor_entry_t *zb_NeighborTableDeleteAuto(uint8_t delete)
 {
-	tl_zb_normal_neighbor_entry_t *bestNoCost = NULL;
-	tl_zb_normal_neighbor_entry_t *bestWithCost = NULL;
-	tl_zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
-	tl_zb_normal_neighbor_entry_t *victim = NULL;
+	zb_normal_neighbor_entry_t *bestNoCost = NULL;
+	zb_normal_neighbor_entry_t *bestWithCost = NULL;
+	zb_normal_neighbor_entry_t *entry = g_zb_neighborTbl.activeHead;
+	zb_normal_neighbor_entry_t *victim = NULL;
 
 	while (neighbor_entry_used(entry)) {
 		/* The end-device build never evicts a parent, child, or unauthenticated
@@ -435,7 +435,7 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableDeleteAuto(u8 delete)
 		if (entry->rxOnWhileIdle == 0U &&
 		    entry->deviceType == NWK_DEVICE_TYPE_COORDINATOR &&
 		    entry->relationship == NEIGHBOR_IS_CHILD &&
-		    nwkRoutingTabEntryFind(tl_zbshortAddrByIdx(entry->addrmapIdx)) != NULL) {
+		    nwkRoutingTabEntryFind(zb_shortAddrByIdx(entry->addrmapIdx)) != NULL) {
 			entry = entry->activeNext;
 			continue;
 		}
@@ -461,23 +461,23 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableDeleteAuto(u8 delete)
 	}
 
 	if (victim != NULL) {
-		tl_zbNeighborTableDelete(victim);
+		zb_NeighborTableDelete(victim);
 	}
 
 	return victim;
 }
 
-tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(tl_zb_normal_neighbor_entry_t *entry,
-							u8 delete)
+zb_normal_neighbor_entry_t *zb_NeighborTableUpdate(zb_normal_neighbor_entry_t *entry,
+							uint8_t delete)
 {
-	tl_zb_normal_neighbor_entry_t *match;
-	tl_zb_normal_neighbor_entry_t *freeEntry;
+	zb_normal_neighbor_entry_t *match;
+	zb_normal_neighbor_entry_t *freeEntry;
 
 	if (entry->lqi < NWK_NEIGHBORTBL_ADD_LQITHRESHOLD) {
 		return NULL;
 	}
 
-	match = tl_zbNeighborTableSearchFromAddrmapIdx(entry->addrmapIdx);
+	match = zb_NeighborTableSearchFromAddrmapIdx(entry->addrmapIdx);
 	if (match != NULL) {
 		neighbor_entry_copy_state(match, entry);
 		match->used = 1;
@@ -485,36 +485,36 @@ tl_zb_normal_neighbor_entry_t *tl_zbNeighborTableUpdate(tl_zb_normal_neighbor_en
 	}
 
 	if ((entry->deviceType == NWK_DEVICE_TYPE_ED) &&
-	    (tl_zbNeighborTableChildEDNumGet() >= TL_ZB_CHILD_TABLE_SIZE)) {
+	    (zb_NeighborTableChildEDNumGet() >= ZB_CHILD_TABLE_SIZE)) {
 		return NULL;
 	}
 
-	if (neighbor_active_count_update() >= TL_ZB_NEIGHBOR_TABLE_SIZE) {
-		if (tl_zbNeighborTableDeleteAuto(delete) == NULL) {
+	if (neighbor_active_count_update() >= ZB_NEIGHBOR_TABLE_SIZE) {
+		if (zb_NeighborTableDeleteAuto(delete) == NULL) {
 			return NULL;
 		}
 	}
 
-	freeEntry = tl_zbNeighborFreeEntryGet();
+	freeEntry = zb_NeighborFreeEntryGet();
 	if (freeEntry == NULL) {
 		return NULL;
 	}
 
 	neighbor_entry_copy_state(freeEntry, entry);
 	freeEntry->used = 1;
-	tl_nebListDelete(1, freeEntry);
-	tl_nebListAdd(0, freeEntry);
+	zb_nebListDelete(1, freeEntry);
+	zb_nebListAdd(0, freeEntry);
 
 	g_sysDiags.neighborAdded++;
-	(void)tl_zbNeighborTableChildEDNumGet();
+	(void)zb_NeighborTableChildEDNumGet();
 	neighbor_active_count_update();
 
 	return freeEntry;
 }
 
-void tl_zbAdditionNeighborReset(void)
+void zb_AdditionNeighborReset(void)
 {
-	for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
 		g_zb_neighborTbl.additionNeighborTbl[i].shortAddr = MAC_SHORT_ADDR_NONE;
 		ZB_IEEE_ADDR_INVALID(g_zb_neighborTbl.additionNeighborTbl[i].extAddr);
 	}
@@ -522,11 +522,11 @@ void tl_zbAdditionNeighborReset(void)
 	g_zb_neighborTbl.additionNeighborNum = 0;
 }
 
-tl_zb_addition_neighbor_entry_t *
-AdditionNeighborEntryGetFromExtAddr(const tl_zb_addition_neighbor_entry_t *key)
+zb_addition_neighbor_entry_t *
+AdditionNeighborEntryGetFromExtAddr(const zb_addition_neighbor_entry_t *key)
 {
-	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
-		tl_zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
+	for (uint8_t i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
 
 		if (ZB_IEEE_ADDR_CMP(entry->extAddr, key->extAddr) &&
 		    ZB_EXTPANID_CMP(entry->extPanId, key->extPanId)) {
@@ -537,11 +537,11 @@ AdditionNeighborEntryGetFromExtAddr(const tl_zb_addition_neighbor_entry_t *key)
 	return NULL;
 }
 
-tl_zb_addition_neighbor_entry_t *
-AdditionNeighborEntryGetFromShortAddr(const tl_zb_addition_neighbor_entry_t *key)
+zb_addition_neighbor_entry_t *
+AdditionNeighborEntryGetFromShortAddr(const zb_addition_neighbor_entry_t *key)
 {
-	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
-		tl_zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
+	for (uint8_t i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
 
 		if ((entry->shortAddr == key->shortAddr) &&
 		    ZB_EXTPANID_CMP(entry->extPanId, key->extPanId)) {
@@ -552,9 +552,9 @@ AdditionNeighborEntryGetFromShortAddr(const tl_zb_addition_neighbor_entry_t *key
 	return NULL;
 }
 
-u8 tl_zbAdditionNeighborTableUpdate(tl_zb_addition_neighbor_entry_t *entry)
+uint8_t zb_AdditionNeighborTableUpdate(zb_addition_neighbor_entry_t *entry)
 {
-	tl_zb_addition_neighbor_entry_t *dst = NULL;
+	zb_addition_neighbor_entry_t *dst = NULL;
 
 	if (entry->addrMode == ADDR_MODE_SHORT) {
 		dst = AdditionNeighborEntryGetFromShortAddr(entry);
@@ -563,14 +563,14 @@ u8 tl_zbAdditionNeighborTableUpdate(tl_zb_addition_neighbor_entry_t *entry)
 	}
 
 	if (dst == NULL) {
-		if (g_zb_neighborTbl.additionNeighborNum < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE) {
+		if (g_zb_neighborTbl.additionNeighborNum < ZB_ADDITION_NEIGHBOR_TABLE_SIZE) {
 			dst = &g_zb_neighborTbl
 				       .additionNeighborTbl[g_zb_neighborTbl.additionNeighborNum++];
 		} else {
-			u8 depth = entry->depth;
+			uint8_t depth = entry->depth;
 
-			for (u8 i = 0; i < TL_ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
-				tl_zb_addition_neighbor_entry_t *cur =
+			for (uint8_t i = 0; i < ZB_ADDITION_NEIGHBOR_TABLE_SIZE; i++) {
+				zb_addition_neighbor_entry_t *cur =
 					&g_zb_neighborTbl.additionNeighborTbl[i];
 
 				if (cur->depth > depth) {
@@ -589,20 +589,20 @@ u8 tl_zbAdditionNeighborTableUpdate(tl_zb_addition_neighbor_entry_t *entry)
 	return RET_OK;
 }
 
-u8 tl_zbAdditionNeighborTableNumGet(void)
+uint8_t zb_AdditionNeighborTableNumGet(void)
 {
 	return g_zb_neighborTbl.additionNeighborNum;
 }
 
-tl_zb_addition_neighbor_entry_t *tl_zbAdditionNeighborEntryGetFromIdx(u8 idx)
+zb_addition_neighbor_entry_t *zb_AdditionNeighborEntryGetFromIdx(uint8_t idx)
 {
 	return &g_zb_neighborTbl.additionNeighborTbl[idx];
 }
 
-tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtPanId(extPANId_t extPanId)
+zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtPanId(extPANId_t extPanId)
 {
-	for (u8 i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
-		tl_zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
+	for (uint8_t i = 0; i < g_zb_neighborTbl.additionNeighborNum; i++) {
+		zb_addition_neighbor_entry_t *entry = &g_zb_neighborTbl.additionNeighborTbl[i];
 
 		/* The entry
 		 * is returned when lqi is non-zero. */
@@ -615,44 +615,44 @@ tl_zb_addition_neighbor_entry_t *AdditionNeighborEntryGetFromExtPanId(extPANId_t
 	return NULL;
 }
 
-u8 tl_neighborFrameCntReset(void)
+uint8_t zb_neighborFrameCntReset(void)
 {
-	for (u8 i = 0; i < TL_ZB_NEIGHBOR_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < ZB_NEIGHBOR_TABLE_SIZE; i++) {
 		g_zb_neighborTbl.neighborTbl[i].incomingFrameCnt = 0;
 	}
 
 	return 0;
 }
 
-void tl_zbNeighborTableInit(void)
+void zb_NeighborTableInit(void)
 {
 	itemIfno_t itemInfo;
 	zb_addrForNeighbor_t addrNv;
-	tl_zb_normal_neighbor_entry_t neighbor;
+	zb_normal_neighbor_entry_t neighbor;
 
 	memset(&itemInfo, 0, sizeof(itemInfo));
-	tl_zbNeighborTableRst();
+	zb_NeighborTableRst();
 
 	memset(&neighbor, 0, sizeof(neighbor));
 
 	/* Both passes read their index out of NV_MODULE_ADDRESS_TABLE, not
 	 * NV_MODULE_ZB_INFO. */
 	if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE,
-			    sizeof(zb_addrForNeighbor_t), (u8 *)&itemInfo) == NV_SUCC) {
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
-			tl_zb_normal_neighbor_entry_t *nbe;
+			    sizeof(zb_addrForNeighbor_t), (uint8_t *)&itemInfo) == NV_SUCC) {
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
+			zb_normal_neighbor_entry_t *nbe;
 
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE,
 						NV_ITEM_ADDRESS_FOR_NEIGHBOR, itemInfo.opSect, i,
 						sizeof(zb_addrForNeighbor_t),
-						(u8 *)&addrNv) != NV_SUCC) {
+						(uint8_t *)&addrNv) != NV_SUCC) {
 				continue;
 			}
 
-			(void)tl_zbNwkAddrMapAdd(addrNv.shortAddr, addrNv.extAddr,
+			(void)zb_NwkAddrMapAdd(addrNv.shortAddr, addrNv.extAddr,
 						 &neighbor.addrmapIdx);
 			/* The vendor stores the successful NV-read status here, not the
-			 * return value from tl_zbNwkAddrMapAdd(). */
+			 * return value from zb_NwkAddrMapAdd(). */
 			neighbor.incomingFrameCnt = 0;
 			neighbor.rxOnWhileIdle = addrNv.rxOnWhileIdle;
 			neighbor.relationship = addrNv.relationship;
@@ -660,7 +660,7 @@ void tl_zbNeighborTableInit(void)
 			neighbor.depth = addrNv.depth;
 
 			if (neighbor.deviceType == NWK_DEVICE_TYPE_ED) {
-				u32 timeout =
+				uint32_t timeout =
 					g_zbInfo.nwkNib.endDevTimeoutDefault
 						? (60UL << g_zbInfo.nwkNib.endDevTimeoutDefault)
 						: 10UL;
@@ -669,11 +669,11 @@ void tl_zbNeighborTableInit(void)
 				neighbor.devTimeout = timeout;
 			}
 
-			neighbor.lqi = (u8)(NWK_NEIGHBORTBL_ADD_LQITHRESHOLD + 1U);
+			neighbor.lqi = (uint8_t)(NWK_NEIGHBORTBL_ADD_LQITHRESHOLD + 1U);
 			neighbor.outgoingCost = 0;
 			neighbor.used = 1;
 
-			nbe = tl_zbNeighborTableUpdate(&neighbor, 0);
+			nbe = zb_NeighborTableUpdate(&neighbor, 0);
 			if (nbe != NULL) {
 				nbe->lqi = 0;
 			}
@@ -696,16 +696,16 @@ void tl_zbNeighborTableInit(void)
 		memset(&itemInfo, 0, sizeof(itemInfo));
 
 		if (nv_flashReadNew(0, NV_MODULE_ADDRESS_TABLE, ITEM_FIELD_IDLE,
-				    sizeof(timeoutInfo), (u8 *)&itemInfo) != NV_SUCC) {
+				    sizeof(timeoutInfo), (uint8_t *)&itemInfo) != NV_SUCC) {
 			return;
 		}
 
-		for (u16 i = 0; i <= itemInfo.opIndex; i++) {
-			tl_zb_normal_neighbor_entry_t *nbe;
+		for (uint16_t i = 0; i <= itemInfo.opIndex; i++) {
+			zb_normal_neighbor_entry_t *nbe;
 
 			if (nv_flashReadByIndex(NV_MODULE_ADDRESS_TABLE, NV_ITEM_ED_TIMEOUT,
 						itemInfo.opSect, i, sizeof(timeoutInfo),
-						(u8 *)&timeoutInfo) != NV_SUCC) {
+						(uint8_t *)&timeoutInfo) != NV_SUCC) {
 				continue;
 			}
 
@@ -728,8 +728,8 @@ void tl_zbNeighborTableInit(void)
 #if !defined(ZB_ROUTER_ROLE)
 void nwkNebManagePeriodic(void)
 {
-	for (u8 i = 0; i < TL_ZB_NEIGHBOR_TABLE_SIZE; i++) {
-		tl_zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[i];
+	for (uint8_t i = 0; i < ZB_NEIGHBOR_TABLE_SIZE; i++) {
+		zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[i];
 
 		/* The vendor tests the used bit before checking the parent record's
 		 * type, relationship, and timeout fields. */
@@ -745,7 +745,7 @@ void nwkNebManagePeriodic(void)
 			}
 		}
 
-		tl_zbTaskPost((tl_zb_callback_t)nwkEndDevTimeoutRejoin, NULL);
+		zb_TaskPost((zb_callback_t)nwkEndDevTimeoutRejoin, NULL);
 		/* The vendor returns after posting the first rejoin request in a pass. */
 		return;
 	}
@@ -759,10 +759,10 @@ void nwkNebManagePeriodic(void)
  */
 void nwkNebManagePeriodic(void)
 {
-	for (u8 i = 0; i < TL_ZB_NEIGHBOR_TABLE_SIZE; i++) {
-		tl_zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[i];
+	for (uint8_t i = 0; i < ZB_NEIGHBOR_TABLE_SIZE; i++) {
+		zb_normal_neighbor_entry_t *entry = &g_zb_neighborTbl.neighborTbl[i];
 		zb_addrForNeighbor_t rec;
-		u32 *counter;
+		uint32_t *counter;
 
 		if (!entry->used) {
 			continue;
@@ -795,38 +795,38 @@ void nwkNebManagePeriodic(void)
 
 		memset(&rec, 0, sizeof(rec));
 		rec.relationship = entry->relationship;
-		rec.shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
-		tl_zbExtAddrByIdx(entry->addrmapIdx, rec.extAddr);
+		rec.shortAddr = zb_shortAddrByIdx(entry->addrmapIdx);
+		zb_ExtAddrByIdx(entry->addrmapIdx, rec.extAddr);
 		(void)nwk_nodeAddrInfoDelete(&rec);
-		tl_zbNeighborTableDelete(entry);
+		zb_NeighborTableDelete(entry);
 	}
 }
 #endif
 
-void tl_allChildNodesRemove(void)
+void zb_allChildNodesRemove(void)
 {
-	tl_zb_normal_neighbor_entry_t *entry = NULL;
+	zb_normal_neighbor_entry_t *entry = NULL;
 
-	while ((entry = tl_zbNeighborTabSearchForChildEndDev(entry)) != NULL) {
+	while ((entry = zb_NeighborTabSearchForChildEndDev(entry)) != NULL) {
 		zb_addrForNeighbor_t addrInfo;
 
 		/* Only these three fields are filled in; nwk_nodeAddrInfoDelete()
 		 * matches on the extended address and the relationship. */
-		addrInfo.shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
-		tl_zbExtAddrByIdx(entry->addrmapIdx, addrInfo.extAddr);
+		addrInfo.shortAddr = zb_shortAddrByIdx(entry->addrmapIdx);
+		zb_ExtAddrByIdx(entry->addrmapIdx, addrInfo.extAddr);
 		addrInfo.relationship = entry->relationship;
 
 		(void)nwk_nodeAddrInfoDelete(&addrInfo);
-		tl_zbNeighborTableDelete(entry);
+		zb_NeighborTableDelete(entry);
 		/* The search resumes from the entry that was
 		 * just removed rather than restarting at the head. */
 	}
 }
 
-void tl_childNodesListGet(u8 startIdx, nwk_childTableInfo_t *t)
+void zb_childNodesListGet(uint8_t startIdx, nwk_childTableInfo_t *t)
 {
-	tl_zb_normal_neighbor_entry_t *entry = NULL;
-	u8 skipped = 0;
+	zb_normal_neighbor_entry_t *entry = NULL;
+	uint8_t skipped = 0;
 
 	if (t == NULL) {
 		return;
@@ -835,12 +835,12 @@ void tl_childNodesListGet(u8 startIdx, nwk_childTableInfo_t *t)
 	/* The vendor initializes the result header only; unused list slots retain
 	 * their previous contents. */
 	t->info.status = NWK_CHILD_NODES_STATUS_SUCCESS;
-	t->info.totalChildNodesNum = tl_zbNeighborTableChildEDNumGet();
+	t->info.totalChildNodesNum = zb_NeighborTableChildEDNumGet();
 	t->info.startIdx = startIdx;
 	t->info.childNodesNum = 0;
 
-	while ((entry = tl_zbNeighborTabSearchForChildEndDev(entry)) != NULL) {
-		u8 outIdx;
+	while ((entry = zb_NeighborTabSearchForChildEndDev(entry)) != NULL) {
+		uint8_t outIdx;
 
 		if (skipped < startIdx) {
 			skipped++;
@@ -848,8 +848,8 @@ void tl_childNodesListGet(u8 startIdx, nwk_childTableInfo_t *t)
 		}
 
 		outIdx = t->info.childNodesNum;
-		tl_zbExtAddrByIdx(entry->addrmapIdx, t->list[outIdx].extAddr);
-		t->list[outIdx].nwkAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
+		zb_ExtAddrByIdx(entry->addrmapIdx, t->list[outIdx].extAddr);
+		t->list[outIdx].nwkAddr = zb_shortAddrByIdx(entry->addrmapIdx);
 		t->info.childNodesNum++;
 
 		if (t->info.childNodesNum >= ZBHCI_CHILD_LIST_NUM_MAX) {

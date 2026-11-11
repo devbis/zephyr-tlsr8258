@@ -202,30 +202,30 @@
  */
 typedef struct {
     UTCTime endTime;
-    u8 intervalChannel;
-    u8 numberOfPeriods;
+    uint8_t intervalChannel;
+    uint8_t numberOfPeriods;
 } zcl_metering_getProfileCmd_t;
 
 /**
  *  @brief	Format of the Request Mirror Response command
  */
 typedef struct {
-    u16 endPointId;
+    uint16_t endPointId;
 } zcl_metering_requestMirrorRspCmd_t;
 
 /**
  *  @brief	Format of the Mirror Removed command
  */
 typedef struct {
-    u16 removedEndPointId;
+    uint16_t removedEndPointId;
 } zcl_metering_mirrorRemovedCmd_t;
 
 /**
  *  @brief	Format of the Request Fast Poll Mode command
  */
 typedef struct {
-    u8 fastPollUpdatePeriod;
-    u8 duration;
+    uint8_t fastPollUpdatePeriod;
+    uint8_t duration;
 } zcl_metering_requestFastPollModeCmd_t;
 
 /**
@@ -233,10 +233,10 @@ typedef struct {
  */
 typedef struct {
     UTCTime endTime;
-    u8 status;
-    u8 profileIntervalPeriod;
-    u8 numberOfPeriodsDelived;
-    u8 *intervals;
+    uint8_t status;
+    uint8_t profileIntervalPeriod;
+    uint8_t numberOfPeriodsDelived;
+    uint8_t *intervals;
 } zcl_metering_getProfileRspCmd_t;
 
 /**
@@ -244,7 +244,7 @@ typedef struct {
  */
 typedef struct {
     UTCTime fastPollModeEndTime;
-    u8 appliedUpdatePeriod;
+    uint8_t appliedUpdatePeriod;
 } zcl_metering_requestFastPollModeRspCmd_t;
 
 #if 0
@@ -273,34 +273,34 @@ typedef struct {
 
 
 extern const zclAttrInfo_t metering_attrTbl[];
-extern const u8 zcl_metering_attrNum;
+extern const uint8_t zcl_metering_attrNum;
 #endif
 
 
-status_t zcl_metering_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_metering_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_metering_getProfile(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_getProfileCmd_t *pReq);
+status_t zcl_metering_getProfile(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_getProfileCmd_t *pReq);
 #define zcl_metering_getProfileCmd(a,b,c,d)     (zcl_metering_getProfile((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_metering_requestMirrorRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestMirrorRspCmd_t *pRsp);
+status_t zcl_metering_requestMirrorRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestMirrorRspCmd_t *pRsp);
 #define zcl_metering_requestMirrorRspCmd(a,b,c,d,e)     (zcl_metering_requestMirrorRsp((a), (b), (c), (d), (e)))
 
-status_t zcl_metering_mirrorRemoved(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_mirrorRemovedCmd_t *pRsp);
+status_t zcl_metering_mirrorRemoved(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_mirrorRemovedCmd_t *pRsp);
 #define zcl_metering_mirrorRemovedCmd(a,b,c,d)          (zcl_metering_mirrorRemoved((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_metering_requestFastPollMode(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestFastPollModeCmd_t *pReq);
+status_t zcl_metering_requestFastPollMode(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestFastPollModeCmd_t *pReq);
 #define zcl_metering_requestFastPollModeCmd(a,b,c,d)    (zcl_metering_requestFastPollMode((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_metering_getProfileRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_getProfileRspCmd_t *pRsp);
+status_t zcl_metering_getProfileRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_getProfileRspCmd_t *pRsp);
 #define zcl_metering_getProfileRspCmd(a,b,c,d,e)        (zcl_metering_getProfileRsp((a), (b), (c), (d), (e)))
 
-status_t zcl_metering_requestMirror(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_metering_requestMirror(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_metering_requestMirrorCmd(a,b,c)    (zcl_metering_requestMirror((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_metering_removeMirror(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_metering_removeMirror(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_metering_removeMirrorCmd(a,b,c)     (zcl_metering_removeMirror((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_metering_requestFastPollModeRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_metering_requestFastPollModeRspCmd_t *pRsp);
+status_t zcl_metering_requestFastPollModeRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_metering_requestFastPollModeRspCmd_t *pRsp);
 #define zcl_metering_requestFastPollModeRspCmd(a,b,c,d,e)       (zcl_metering_requestFastPollModeRsp((a), (b), (c), (d), (e)))
 
 #endif	/* ZCL_METERING_H */

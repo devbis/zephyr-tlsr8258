@@ -26,13 +26,13 @@
 #define NWK_ADDR_MAP_H
 
 
-#define ZB_UNKNOWN_SHORT_ADDR           (u16)(-1)
+#define ZB_UNKNOWN_SHORT_ADDR           (uint16_t)(-1)
 
-#ifndef TL_ZB_NWK_ADDR_MAP_NUM
+#ifndef ZB_NWK_ADDR_MAP_NUM
 #if (ZB_ROUTER_ROLE)
-    #define TL_ZB_NWK_ADDR_MAP_NUM      128
+    #define ZB_NWK_ADDR_MAP_NUM      128
 #else
-    #define TL_ZB_NWK_ADDR_MAP_NUM      8
+    #define ZB_NWK_ADDR_MAP_NUM      8
 #endif
 #endif
 
@@ -41,68 +41,68 @@ typedef struct addrMapping_t {
     struct addrMapping_t *activeNext;
     addrExt_t extAddr;
 
-    u16 shortAddr;
-    u8 aps_dup_cnt;
-    u8 used:1;
-    u8 aps_dup_clock:3;
-    u8 bind:1;
-    u8 resv:3;
-} tl_zb_addr_map_entry_t;//size 20
+    uint16_t shortAddr;
+    uint8_t aps_dup_cnt;
+    uint8_t used:1;
+    uint8_t aps_dup_clock:3;
+    uint8_t bind:1;
+    uint8_t resv:3;
+} zb_addr_map_entry_t;//size 20
 
 typedef struct {
-    tl_zb_addr_map_entry_t *freeHead;
-    tl_zb_addr_map_entry_t *activeHead;
-    u32 validNum;
-    tl_zb_addr_map_entry_t addrMap[TL_ZB_NWK_ADDR_MAP_NUM]; //shall be allocated at the last field in the structure of the tl_zb_addr_map_t
-} tl_zb_addr_map_t;
+    zb_addr_map_entry_t *freeHead;
+    zb_addr_map_entry_t *activeHead;
+    uint32_t validNum;
+    zb_addr_map_entry_t addrMap[ZB_NWK_ADDR_MAP_NUM]; //shall be allocated at the last field in the structure of the zb_addr_map_t
+} zb_addr_map_t;
 
 typedef struct {
-    u16 shortAddr;
+    uint16_t shortAddr;
     addrExt_t extAddr;
-    u8 depth;
-    u8 rxOnWhileIdle:1;
-    u8 deviceType:3;
-    u8 relationship:3;
-    u8 used:1;
+    uint8_t depth;
+    uint8_t rxOnWhileIdle:1;
+    uint8_t deviceType:3;
+    uint8_t relationship:3;
+    uint8_t used:1;
 } zb_addrForNeighbor_t;
 
 typedef struct {
-    u16 mask_dstTable;
+    uint16_t mask_dstTable;
     addrExt_t dstExtAddr;
 } zb_addrForBind_t;
 
 typedef struct {
-    u32 devTimeout;
+    uint32_t devTimeout;
     addrExt_t extAddr;
 } zb_addrForEDTimeout_t;
 
-extern u16 TL_ZB_NWK_ADDR_MAP_SIZE;
-extern tl_zb_addr_map_t g_nwkAddrMap;
-u32 addrMapTblSizeGet(void);
+extern uint16_t ZB_NWK_ADDR_MAP_SIZE;
+extern zb_addr_map_t g_nwkAddrMap;
+uint32_t addrMapTblSizeGet(void);
 
 #define zb_addressTableNumGet()         (g_nwkAddrMap.validNum)
 
 
-u8 zb_address_ieee_by_short(u16 short_addr, addrExt_t ieee_address);
+uint8_t zb_address_ieee_by_short(uint16_t short_addr, addrExt_t ieee_address);
 
-void tl_addrMappingForBind(u8 bind, u16 idx);
+void zb_addrMappingForBind(uint8_t bind, uint16_t idx);
 
-addrExt_t *tl_zbExtAddrPtrByShortAddr(u16 shortAddr);
+addrExt_t *zb_ExtAddrPtrByShortAddr(uint16_t shortAddr);
 
 /* get address entry based on the index of the table */
-tl_zb_addr_map_entry_t *tl_zbNwkAddrMapEntryGet(u16 orderIndex);
+zb_addr_map_entry_t *zb_NwkAddrMapEntryGet(uint16_t orderIndex);
 
 /* store address information for child table */
 void nwk_nodeAddrInfoStore(void *arg);
 
-s32 nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv);
+int32_t nwk_nodeAddrInfoDelete(zb_addrForNeighbor_t *pAddrNv);
 
 /* store address information for parent table */
-s32 nwk_parentNodeInfoStore(void);
+int32_t nwk_parentNodeInfoStore(void);
 
 /* store address information for bind table */
-s32 nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv);
+int32_t nwk_bindAddrInfoUpdate(zb_addrForBind_t *pAddrNv);
 
-s32 nwk_bindAddrInfoDelete(zb_addrForBind_t *pAddrNv);
+int32_t nwk_bindAddrInfoDelete(zb_addrForBind_t *pAddrNv);
 
 #endif /* NWK_ADDR_MAP_H */

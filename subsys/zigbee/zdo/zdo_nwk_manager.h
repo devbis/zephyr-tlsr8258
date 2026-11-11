@@ -15,33 +15,33 @@ typedef struct {
 	ev_timer_event_t *backoffEvt;
 	nwkDiscoveryUserCb_t nwkDiscCb;
 	void *savedBuf;
-	u32 scanChannels;
-	u16 backoffTime;
-	u16 backoffIter;
-	u8 rejoinCnt;
-	u8 scanDuration;
-	u8 nwkDiscAttempt;
-	u8 scanCount;
-	u8 linkRetryCnt;
-	u8 state;
+	uint32_t scanChannels;
+	uint16_t backoffTime;
+	uint16_t backoffIter;
+	uint8_t rejoinCnt;
+	uint8_t scanDuration;
+	uint8_t nwkDiscAttempt;
+	uint8_t scanCount;
+	uint8_t linkRetryCnt;
+	uint8_t state;
 } zdo_nwk_manager_t;
 
 extern zdo_nwk_manager_t g_zdo_nwk_manager;
-extern u8 zdo_mgmt_nwk_flag;
+extern uint8_t zdo_mgmt_nwk_flag;
 
 static inline zdo_nwk_manager_t *zdo_nwk_mngr(void)
 {
 	return &g_zdo_nwk_manager;
 }
 
-zdo_status_t zdo_nlmeEdScanReq(u32 scanChannels, u8 scanDuration, u8 scanCount);
+zdo_status_t zdo_nlmeEdScanReq(uint32_t scanChannels, uint8_t scanDuration, uint8_t scanCount);
 zdo_status_t zdo_nlmeLeaveReq(void *arg);
 #if defined(ZB_ROUTER_ROLE)
-zdo_status_t zdo_nlmePermitJoinReq(u8 permitDuration);
+zdo_status_t zdo_nlmePermitJoinReq(uint8_t permitDuration);
 zdo_status_t zdo_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq);
 #endif
-u8 zdo_syncReq(void);
-u8 zdo_set_pollRate(u32 rate);
+uint8_t zdo_syncReq(void);
+uint8_t zdo_set_pollRate(uint32_t rate);
 #if defined(ZB_COORDINATOR_ROLE)
 void zdo_manyToOneRouteDisc(void *arg);
 #endif

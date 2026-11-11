@@ -33,17 +33,17 @@
 #ifndef ZB_CAPABILITY_INFO_T_DEFINED
 #define ZB_CAPABILITY_INFO_T_DEFINED
 typedef struct {
-	u8 altPanCoord:1;
-	u8 devType:1;
-	u8 powerSrc:1;
-	u8 rcvOnWhenIdle:1;
-	u8 reserved:2;
-	u8 secuCapability:1;
-	u8 allocAddr:1;
+	uint8_t altPanCoord:1;
+	uint8_t devType:1;
+	uint8_t powerSrc:1;
+	uint8_t rcvOnWhenIdle:1;
+	uint8_t reserved:2;
+	uint8_t secuCapability:1;
+	uint8_t allocAddr:1;
 } capability_info_t;
 #endif
 
-typedef struct nebTbl_t tl_zb_normal_neighbor_entry_t;
+typedef struct nebTbl_t zb_normal_neighbor_entry_t;
 typedef struct ev_timer_event_t ev_timer_event_t;
 
 
@@ -341,52 +341,52 @@ typedef enum {
 * @brief	Holds the data to assemble the frame control field
 */
 typedef struct {
-    u8 frameType:2;             /*!< Frame type of this frame */
-    u8 protocolVer:4;           /*!< Protocol version of this frame */
-    u8 discRoute:2;             /*!< Discover route enable */
-    u8 multicastFlg:1;          /*!< Multicast enabled */
-    u8 security:1;              /*!< Security enabled */
-    u8 srcRoute:1;              /*!< Source route enabled */
-    u8 dstIEEEAddr:1;           /*!< Dst IEEE address present */
-    u8 srcIEEEAddr:1;           /*!< Src IEEE address present */
-    u8 endDevInitiator:1;       /*!< End device initiator */
-    u8 reserved:2;
+    uint8_t frameType:2;             /*!< Frame type of this frame */
+    uint8_t protocolVer:4;           /*!< Protocol version of this frame */
+    uint8_t discRoute:2;             /*!< Discover route enable */
+    uint8_t multicastFlg:1;          /*!< Multicast enabled */
+    uint8_t security:1;              /*!< Security enabled */
+    uint8_t srcRoute:1;              /*!< Source route enabled */
+    uint8_t dstIEEEAddr:1;           /*!< Dst IEEE address present */
+    uint8_t srcIEEEAddr:1;           /*!< Src IEEE address present */
+    uint8_t endDevInitiator:1;       /*!< End device initiator */
+    uint8_t reserved:2;
 } nwkFrameCtrl_t;
 
 /***************************************************************************
 * @brief	Multicast control
 */
 typedef struct {
-    u8 multicastMode:2;
-    u8 nonmemberRadius:3;
-    u8 maxNonmemberRadius:3;
+    uint8_t multicastMode:2;
+    uint8_t nonmemberRadius:3;
+    uint8_t maxNonmemberRadius:3;
 } nwkMcastCtrl_t;
 
 /***************************************************************************
 * @brief	Source route subframe
 */
 typedef struct {
-    u8 relayCnt;
-    u8 relayIdx;
-    u8 *relayList;
+    uint8_t relayCnt;
+    uint8_t relayIdx;
+    uint8_t *relayList;
 } srcRouteSubframe_t;
 
 /***************************************************************************
 * @brief	The main network header struct
 */
 typedef struct {
-    u16 dstAddr;
-    u16 srcAddr;
+    uint16_t dstAddr;
+    uint16_t srcAddr;
 
     nwkFrameCtrl_t frameControl;
-    u8 radius;
-    u8 seqNum;
+    uint8_t radius;
+    uint8_t seqNum;
 
     extAddr_t dstIeeeAddr;
     extAddr_t srcIeeeAddr;
 
     nwkMcastCtrl_t mcastControl;
-    u8 frameHdrLen;
+    uint8_t frameHdrLen;
     srcRouteSubframe_t srcRouteSubframe;
 } nwk_hdr_t;
 
@@ -396,22 +396,22 @@ typedef struct {
 typedef struct {
     addrExt_t ieeAddr;  //for interPan
 
-    u16 dstAddr;
-    u8 radius;
-    u8 addrMode;
+    uint16_t dstAddr;
+    uint8_t radius;
+    uint8_t addrMode;
 
-    u8 nonmemberRadius;
-    u8 discoverRoute;
+    uint8_t nonmemberRadius;
+    uint8_t discoverRoute;
     bool securityEnable;
-    u8 ndsuHandle;
+    uint8_t ndsuHandle;
 
-    u8 *nsdu;
+    uint8_t *nsdu;
 
-    u8 nsduLen;
+    uint8_t nsduLen;
     bool useAlias;
-    u16 aliasSrcAddr;
+    uint16_t aliasSrcAddr;
 
-    u8 aliasSeqNum;
+    uint8_t aliasSeqNum;
     bool unicastSkipRouting;
 } nlde_data_req_t;
 
@@ -419,36 +419,36 @@ typedef struct {
 * @brief	NLDE-DATA.confirm
 */
 typedef struct {
-    u32 txTime;
-    u8 status;
-    u8 nsduHandle;
+    uint32_t txTime;
+    uint8_t status;
+    uint8_t nsduHandle;
 } nlde_data_cnf_t;
 
 /***************************************************************************
 * @brief	NLDE-DATA.indication
 */
 typedef struct {
-    u8 *nsdu;
+    uint8_t *nsdu;
 
-    u8 nsduLen;
-    u8 dstAddrMode;
+    uint8_t nsduLen;
+    uint8_t dstAddrMode;
     bool securityUse;
-    u8 lqi;
+    uint8_t lqi;
 
-    u16 dstAddr;
-    u16 srcAddr;
+    uint16_t dstAddr;
+    uint16_t srcAddr;
 
-    u32 rxTime;
-    u16 srcMacAddr;
-    s8 rssi;
+    uint32_t rxTime;
+    uint16_t srcMacAddr;
+    int8_t rssi;
 } nlde_data_ind_t;
 
 /***************************************************************************
 * @brief	NLME-NETWORK-DISCOVERY.request
 */
 typedef struct {
-    u32	scanChannels;
-    u8 scanDuration;
+    uint32_t	scanChannels;
+    uint8_t scanDuration;
 } nlme_nwkDisc_req_t;
 
 /***************************************************************************
@@ -458,12 +458,12 @@ typedef struct {
 typedef struct zb_nlme_network_descriptor_s {
     extPANId_t extPANId;
 
-    u8 logicalChannel;
-    u8 stackProfile;
-    u8 zigbeeVer;
-    u8 beaconOrder;
+    uint8_t logicalChannel;
+    uint8_t stackProfile;
+    uint8_t zigbeeVer;
+    uint8_t beaconOrder;
 
-    u8 superframeOrder;
+    uint8_t superframeOrder;
     bool permitJoining;
     bool routerCapacity;
     bool endDevCapacity;
@@ -474,50 +474,50 @@ typedef struct zb_nlme_network_descriptor_s {
 */
 typedef struct {
     nwk_descriptor_t nwkDescriptor[PANID_TABLE_SIZE];
-    u8 status;
-    u8 nwkCount;
+    uint8_t status;
+    uint8_t nwkCount;
 } nlme_nwkDisc_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-NETWORK-FORMATION.request
 */
 typedef struct {
-    u32 scanChannels;
-    u16 distributedNwkAddr;
+    uint32_t scanChannels;
+    uint16_t distributedNwkAddr;
     bool distributedNetwork;
     bool batteryLifeExt;
-    u8 scanDuration;
-    u8 beaconOrder;
-    u8 superframeOrder;
+    uint8_t scanDuration;
+    uint8_t beaconOrder;
+    uint8_t superframeOrder;
 } nlme_nwkFormation_req_t;
 
 /***************************************************************************
 * @brief	NLME-NETWORK-FORMATION.confirm
 */
 typedef struct {
-    u8 status;
+    uint8_t status;
 } nlme_nwkFormation_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-PERMIT_JOINING.request
 */
 typedef struct {
-    u8 permitDuration;
+    uint8_t permitDuration;
 } nlme_permitJoining_req_t;
 
 /***************************************************************************
 * @brief	NLME-PERMIT_JOINING.confirm
 */
 typedef struct {
-    u8 status;
+    uint8_t status;
 } nlme_permitJoining_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-START-ROUTER.request
 */
 typedef struct {
-    u8 beaconOrder;
-    u8 superframeOrder;
+    uint8_t beaconOrder;
+    uint8_t superframeOrder;
     bool batteryLifeExt;
 } nlme_startRouter_req_t;
 
@@ -525,23 +525,23 @@ typedef struct {
 * @brief	NLME-START-ROUTER.confirm
 */
 typedef struct {
-    u8 status;
+    uint8_t status;
 } nlme_startRouter_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-ED-SCAN.request
 */
 typedef struct {
-    u32 scanChannels;
-    u8 scanDuration;
+    uint32_t scanChannels;
+    uint8_t scanDuration;
 } nlme_edScan_req_t;
 
 /***************************************************************************
 * @brief	NLME-ED-SCAN.confirm
 */
 typedef struct {
-    u8 status;
-    u8 edList[MAX_ED_SCAN_RESULTS_SUPPORTED];
+    uint8_t status;
+    uint8_t edList[MAX_ED_SCAN_RESULTS_SUPPORTED];
 } nlme_edScan_cnf_t;
 
 /***************************************************************************
@@ -550,13 +550,13 @@ typedef struct {
 */
 #if 0
 typedef struct {
-    u8 altPanCoord:1;
-    u8 devType:1;
-    u8 powerSrc:1;
-    u8 rcvOnWhenIdle:1;
-    u8 reserved:2;
-    u8 secuCapability:1;
-    u8 allocAddr:1;
+    uint8_t altPanCoord:1;
+    uint8_t devType:1;
+    uint8_t powerSrc:1;
+    uint8_t rcvOnWhenIdle:1;
+    uint8_t reserved:2;
+    uint8_t secuCapability:1;
+    uint8_t allocAddr:1;
 } capability_info_t;
 #endif
 
@@ -565,9 +565,9 @@ typedef struct {
 */
 typedef struct {
     extPANId_t extPANId;
-    u32 scanChannels;
-    u8 rejoinNwk;//rejoinNwk_method_t
-    u8 scanDuration;
+    uint32_t scanChannels;
+    uint8_t rejoinNwk;//rejoinNwk_method_t
+    uint8_t scanDuration;
     capability_info_t capabilityInfo;
     bool securityEnabled;
 } nlme_join_req_t;
@@ -577,9 +577,9 @@ typedef struct {
 */
 typedef struct {
     extAddr_t extAddr;
-    u16 nwkAddr;
+    uint16_t nwkAddr;
     capability_info_t capabilityInfo;
-    u8 rejoinNwk;//rejoinNwk_method_t
+    uint8_t rejoinNwk;//rejoinNwk_method_t
     bool secureRejoin;
 } nlme_join_ind_t;
 
@@ -587,9 +587,9 @@ typedef struct {
 * @brief	NLME-JOIN.confirm
 */
 typedef struct {
-    u16 nwkAddr;
-    u8 status;
-    u8 activeChannel;
+    uint16_t nwkAddr;
+    uint8_t status;
+    uint8_t activeChannel;
     extPANId_t extPANId;
 } nlme_join_cnf_t;
 
@@ -598,7 +598,7 @@ typedef struct {
 */
 typedef struct {
     extAddr_t deviceAddr;
-    u16 nwkAddr;        //spec no this one
+    uint16_t nwkAddr;        //spec no this one
     capability_info_t capabilityInfo;
 } nlme_directJoin_req_t;
 
@@ -607,7 +607,7 @@ typedef struct {
 */
 typedef struct {
     extAddr_t deviceAddr;
-    u8 status;
+    uint8_t status;
 } nlme_directJoin_cnf_t;
 
 /***************************************************************************
@@ -633,7 +633,7 @@ typedef struct {
 */
 typedef struct {
     extAddr_t deviceAddr;
-    u8 status;
+    uint8_t status;
 } nlme_leave_cnf_t;
 
 /***************************************************************************
@@ -647,7 +647,7 @@ typedef struct {
 * @brief	NLME-RESET.confirm
 */
 typedef struct {
-    u8 status;
+    uint8_t status;
 } nlme_reset_cnf_t;
 
 /***************************************************************************
@@ -661,58 +661,58 @@ typedef struct {
 * @brief	NLME-SYNC.confirm
 */
 typedef struct {
-    u8 status;
+    uint8_t status;
 } nlme_sync_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-GET.request
 */
 typedef struct {
-    u8 nibAttr;//nib_attribute_t
+    uint8_t nibAttr;//nib_attribute_t
 } nlme_get_req_t;
 
 /***************************************************************************
 * @brief	NLME-GET.confirm
 */
 typedef struct {
-    u8 status;
-    u8 nibAttr;//nib_attribute_t
-    u16 nibAttrLen;
-    u8 *nibAttrVal;
+    uint8_t status;
+    uint8_t nibAttr;//nib_attribute_t
+    uint16_t nibAttrLen;
+    uint8_t *nibAttrVal;
 } nlme_get_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-SET.request
 */
 typedef struct {
-    u8 *nibAttrVal;
-    u16 nibAttrLen;
-    u8 nibAttr;//nib_attribute_t
+    uint8_t *nibAttrVal;
+    uint16_t nibAttrLen;
+    uint8_t nibAttr;//nib_attribute_t
 } nlme_set_req_t;
 
 /***************************************************************************
 * @brief	NLME-SET.confirm
 */
 typedef struct {
-    u8 status;
-    u8 nibAttr;//nib_attribute_t
+    uint8_t status;
+    uint8_t nibAttr;//nib_attribute_t
 } nlme_set_cnf_t;
 
 /***************************************************************************
 * @brief	NLME-NWK-STATUS.indication
 */
 typedef struct {
-    u16 nwkAddr;
-    u8 status;//nwk_statusCode_t
+    uint16_t nwkAddr;
+    uint8_t status;//nwk_statusCode_t
 } nlme_nwkStatus_ind_t;
 
 /***************************************************************************
 * @brief	NLME-ROUTE-DISCOVERY.request
 */
 typedef struct {
-    u16 dstAddr;
-    u8 dstAddrMode;//zb_addr_mode_t
-    u8 radius;
+    uint16_t dstAddr;
+    uint8_t dstAddrMode;//zb_addr_mode_t
+    uint8_t radius;
     bool noRouteCache;
 } nlme_routeDisc_req_t;
 
@@ -720,8 +720,8 @@ typedef struct {
 * @brief	NLME-ROUTE-DISCOVERY.confirm
 */
 typedef struct {
-    u8 status;
-    u8 nwkStatusCode;//nwk_statusCode_t
+    uint8_t status;
+    uint8_t nwkStatusCode;//nwk_statusCode_t
 } nlme_routeDisc_cnf_t;
 
 /****************************************************************************
@@ -746,21 +746,21 @@ typedef enum {
 * @brief	Route request command payload
 */
 typedef struct {
-    u8 reservedL:3;
-    u8 manyToOne:2;
-    u8 dstIeeeAddr:1;
-    u8 multicast:1;
-    u8 reservedH:1;
+    uint8_t reservedL:3;
+    uint8_t manyToOne:2;
+    uint8_t dstIeeeAddr:1;
+    uint8_t multicast:1;
+    uint8_t reservedH:1;
 } rreq_opt_t;
 
 typedef struct {
     extAddr_t dstIeeeAddr;
 
     rreq_opt_t options;
-    u8 routeReqId;
-    u16 dstAddr;
+    uint8_t routeReqId;
+    uint16_t dstAddr;
 
-    u8 pathCost;
+    uint8_t pathCost;
 } nwkCmd_routeReq_t;
 
 /****************************************************************************
@@ -769,40 +769,40 @@ typedef struct {
 typedef struct {
     extAddr_t originatorIeeeAddr;
     extAddr_t responderIeeeAddr;
-    u16 originatorAddr;
-    u16 responderAddr;
+    uint16_t originatorAddr;
+    uint16_t responderAddr;
     struct {
-        u8 reservedL:4;
-        u8 originatorIeeeAddr:1;
-        u8 responderIeeeAddr:1;
-        u8 multicast:1;
-        u8 reservedH:1;
+        uint8_t reservedL:4;
+        uint8_t originatorIeeeAddr:1;
+        uint8_t responderIeeeAddr:1;
+        uint8_t multicast:1;
+        uint8_t reservedH:1;
     } options;
-    u8 routeReqId;
-    u8 pathCost;
+    uint8_t routeReqId;
+    uint8_t pathCost;
 } nwkCmd_routeReply_t;
 
 /****************************************************************************
 * @brief	Network status command payload
 */
 typedef struct {
-    u16 dstAddr;
-    u8 statusCode;//nwk_statusCode_t
+    uint16_t dstAddr;
+    uint8_t statusCode;//nwk_statusCode_t
 } nwkCmd_nwkStatus_t;
 
 /****************************************************************************
 * @brief	Network status command payload
 */
 typedef struct {
-    u8 cmdId;//nwk_cmdId_t
-    u8 statusCode;//nwk_statusCode_t
-    u8 srcIEEEAddrPresent;
-    u8 dstIEEEAddrPresent;
+    uint8_t cmdId;//nwk_cmdId_t
+    uint8_t statusCode;//nwk_statusCode_t
+    uint8_t srcIEEEAddrPresent;
+    uint8_t dstIEEEAddrPresent;
     extAddr_t dstIeeeAddr;
-    u16 dstAddr;
-    u8 handle;
-    u8 payloadLen;
-    u8 payload[1];
+    uint16_t dstAddr;
+    uint8_t handle;
+    uint8_t payloadLen;
+    uint8_t payload[1];
 } myNwkCmd_nwkStatus_t;
 
 
@@ -811,10 +811,10 @@ typedef struct {
 */
 typedef struct {
     struct {
-        u8 reserved:5;
-        u8 rejoin:1;
-        u8 request:1;
-        u8 removeChildren:1;
+        uint8_t reserved:5;
+        uint8_t rejoin:1;
+        uint8_t request:1;
+        uint8_t removeChildren:1;
     } options;
 } nwkCmd_leave_t;
 
@@ -822,8 +822,8 @@ typedef struct {
 * @brief	Route record command payload
 */
 typedef struct {
-    u8 *relayList;
-    u8 relayCnt;
+    uint8_t *relayList;
+    uint8_t relayCnt;
 } nwkCmd_routeRecord_t;
 
 /****************************************************************************
@@ -837,20 +837,20 @@ typedef struct {
 * @brief	Rejoin response command payload
 */
 typedef struct {
-    u16 nwkAddr;
-    u8 rejoinStatus;
+    uint16_t nwkAddr;
+    uint8_t rejoinStatus;
 } nwkCmd_rejoinResp_t;
 
 /****************************************************************************
 * @brief	Link status entry
 */
 typedef struct _attribute_packed_ {
-    u16 neighborNwkAddr;
+    uint16_t neighborNwkAddr;
     struct {
-        u8 incomingCost:3;
-        u8 reservedL:1;
-        u8 outingCost:3;
-        u8 reservedH:1;
+        uint8_t incomingCost:3;
+        uint8_t reservedL:1;
+        uint8_t outingCost:3;
+        uint8_t reservedH:1;
     } linkStatus;
 } linkStatus_entry_t;
 
@@ -860,10 +860,10 @@ typedef struct _attribute_packed_ {
 typedef struct {
     linkStatus_entry_t *linkStatusList;
     struct {
-        u8 entryCnt:5;
-        u8 firstFrame:1;
-        u8 lastFrame:1;
-        u8 reserved:1;
+        uint8_t entryCnt:5;
+        uint8_t firstFrame:1;
+        uint8_t lastFrame:1;
+        uint8_t reserved:1;
     } options;
 } nwkCmd_linkStatus_t;
 
@@ -872,10 +872,10 @@ typedef struct {
 */
 typedef struct {
     extPANId_t epid;
-    u8 *panIds;
+    uint8_t *panIds;
     struct {
-        u8 reportInfoCnt:5;
-        u8 reportCmdId:3;
+        uint8_t reportInfoCnt:5;
+        uint8_t reportCmdId:3;
     } options;
 } nwkCmd_nwkReport_t;
 
@@ -884,12 +884,12 @@ typedef struct {
 */
 typedef struct {
     extPANId_t epid;
-    u16 newPanId;
+    uint16_t newPanId;
     struct {
-        u8 updateInfoCnt:5;
-        u8 updateCmdId:3;
+        uint8_t updateInfoCnt:5;
+        uint8_t updateCmdId:3;
     } options;
-    u8 updateId;
+    uint8_t updateId;
 } nwkCmd_nwkUpdate_t;
 
 
@@ -924,8 +924,8 @@ typedef enum {
 * @brief	End device timeout request command payload
 */
 typedef struct {
-    u8 reqTimeoutEnum;//reqTimeoutEnum_t
-    u8 endDevCfg;
+    uint8_t reqTimeoutEnum;//reqTimeoutEnum_t
+    uint8_t endDevCfg;
 } nwkCmd_endDevTimeoutReq_t;
 
 /****************************************************************************
@@ -948,16 +948,16 @@ typedef enum {
 * @brief	End device timeout response command payload
 */
 typedef struct {
-    u8 status;//endDevTimeoutRspStatus_t
-    u8 parentInfo;
+    uint8_t status;//endDevTimeoutRspStatus_t
+    uint8_t parentInfo;
 } nwkCmd_endDevTimeoutResp_t;
 
 /***************************************************************************
 * @brief	Union of all the command frame data structures.
 */
 typedef struct {
-    u8 cmdId;                                                   /*!< nwk_cmdId_t, Nwk cmd frame command ID */
-    u8 reserved[3];
+    uint8_t cmdId;                                                   /*!< nwk_cmdId_t, Nwk cmd frame command ID */
+    uint8_t reserved[3];
     union {
         nwkCmd_routeReq_t               rreq;                   /*!< Route request command */
         nwkCmd_routeReply_t             rrep;                   /*!< Route reply command */
@@ -979,34 +979,34 @@ typedef struct {
 */
 typedef struct {
     void *srcBuf;       //pending source buffer for NWK layer
-    u16 srcAddr;        //srcAddr of this packet
-    u16 dstAddr;        //dstAddr of this packet
-    u8 handle;
-    u8 seqNum;
-    u8 routeReqId;
-    u8 expirationTime:6;
-    u8 needRouteDisc:1; //indicate this buffer need route discovery
-    u8 used:1;
+    uint16_t srcAddr;        //srcAddr of this packet
+    uint16_t dstAddr;        //dstAddr of this packet
+    uint8_t handle;
+    uint8_t seqNum;
+    uint8_t routeReqId;
+    uint8_t expirationTime:6;
+    uint8_t needRouteDisc:1; //indicate this buffer need route discovery
+    uint8_t used:1;
 } nwk_txDataPendEntry_t;
 
 /***************************************************************************
 * @brief	broadcast transaction record
 */
 typedef struct {
-    tl_zb_normal_neighbor_entry_t *edEntry;
+    zb_normal_neighbor_entry_t *edEntry;
     nwk_txDataPendEntry_t *entry;
     ev_timer_event_t *retryTimer;
-    u16 *passiveAckAddr;        /* keep track of which of its neighboring devices have successfully relayed.
+    uint16_t *passiveAckAddr;        /* keep track of which of its neighboring devices have successfully relayed.
                                  * it will malloc an ev_buffer to trace, be care of ev_buffer's setting, in ev_buffer.h.
-                                 * u16 *passiveAckAddr = (u16 *)ev_buf_allocate(TL_ZB_NEIGHBOR_TABLE_SIZE)
+                                 * uint16_t *passiveAckAddr = (uint16_t *)ev_buf_allocate(ZB_NEIGHBOR_TABLE_SIZE)
                                  */
-    u16 srcAddr;
-    u8 seqNum;
-    u8 retries;                 /* broadcast retries times */
-    u8 activeNum;
-    u8 expirationTime;
-    u8 status;
-    u8 used;
+    uint16_t srcAddr;
+    uint8_t seqNum;
+    uint8_t retries;                 /* broadcast retries times */
+    uint8_t activeNum;
+    uint8_t expirationTime;
+    uint8_t status;
+    uint8_t used;
 } nwk_brcTransRecordEntry_t;
 
 /***************************************************************************
@@ -1029,27 +1029,27 @@ typedef enum {
 * @brief	network route record table entry
 */
 typedef struct {
-    u16 nwkAddr;
-    u16 path[NWK_MAX_SOURCE_ROUTE];
-    u8 relayCnt:7;
-    u8 used:1;
-    u8 forgetCnt;
+    uint16_t nwkAddr;
+    uint16_t path[NWK_MAX_SOURCE_ROUTE];
+    uint8_t relayCnt:7;
+    uint8_t used:1;
+    uint8_t forgetCnt;
 } nwk_routeRecordTabEntry_t;
 
 /***************************************************************************
 * @brief	network routing table entry
 */
 typedef struct {
-    u16 dstAddr;
-    u16 nextHopAddr;
-    u8 status;
-    u8 noRouteCache:1;
-    u8 manyToOne:1;
-    u8 routeRecordRequired:1;
-    u8 groupIdFlag:1;
-    u8 transFail:4;
-    u8 residCost;
-    u8 forgetCnt;
+    uint16_t dstAddr;
+    uint16_t nextHopAddr;
+    uint8_t status;
+    uint8_t noRouteCache:1;
+    uint8_t manyToOne:1;
+    uint8_t routeRecordRequired:1;
+    uint8_t groupIdFlag:1;
+    uint8_t transFail:4;
+    uint8_t residCost;
+    uint8_t forgetCnt;
 } nwk_routingTabEntry_t;
 
 /***************************************************************************
@@ -1059,16 +1059,16 @@ typedef struct {
 typedef struct {
     void *buf;
     ev_timer_event_t *retryTimer;
-    u16 srcAddr;
-    u16 senderAddr;
-    u16 dstAddr;
-    u16 expiry;
-    u8 routeReqId;
-    u8 forwardCost;
-    u8 residCost;
-    u8 lastCost;
-    u8 retries;
-    u8 used;
+    uint16_t srcAddr;
+    uint16_t senderAddr;
+    uint16_t dstAddr;
+    uint16_t expiry;
+    uint8_t routeReqId;
+    uint8_t forwardCost;
+    uint8_t residCost;
+    uint8_t lastCost;
+    uint8_t retries;
+    uint8_t used;
 } nwk_routeDiscEntry_t;
 
 /***************************************************************************
@@ -1076,135 +1076,135 @@ typedef struct {
 * 			route discoveries in progress.
 */
 typedef struct {
-    u16 originator;
-    u16 interval;
-    u8 retries;
-    u8 radius;
-    u8 seqNum;
+    uint16_t originator;
+    uint16_t interval;
+    uint8_t retries;
+    uint8_t radius;
+    uint8_t seqNum;
     nwkCmd_t routeReqCmd;
 } nwk_routeReqEntry_t;
 
 
 
-extern u8 NWKC_TRANSFAILURE_CNT_THRESHOLD;
-extern u8 NWKC_INITIAL_RREQ_RETRIES;
-extern u8 NWKC_RREQ_RETRIES;
-extern u16 ROUTING_TABLE_SIZE;
-extern u8 NWK_BRC_TRANSTBL_SIZE;
+extern uint8_t NWKC_TRANSFAILURE_CNT_THRESHOLD;
+extern uint8_t NWKC_INITIAL_RREQ_RETRIES;
+extern uint8_t NWKC_RREQ_RETRIES;
+extern uint16_t ROUTING_TABLE_SIZE;
+extern uint8_t NWK_BRC_TRANSTBL_SIZE;
 extern bool NWK_BRC_PASSIVE_ACK_ENABLE;
-extern u32 NWK_BRC_JITTER;
+extern uint32_t NWK_BRC_JITTER;
 extern nwk_routingTabEntry_t g_routingTab[];
 extern nwk_brcTransRecordEntry_t g_brcTransTab[];
 #if ZB_COORDINATOR_ROLE
-extern u16 NWK_ROUTE_RECORD_TABLE_SIZE;
+extern uint16_t NWK_ROUTE_RECORD_TABLE_SIZE;
 extern nwk_routeRecordTabEntry_t g_routeRecTab[];
 #endif
 extern bool AUTO_QUICK_DATA_POLL_ENABLE;
-extern u32 AUTO_QUICK_DATA_POLL_INTERVAL;
-extern u8 AUTO_QUICK_DATA_POLL_TIMES;
+extern uint32_t AUTO_QUICK_DATA_POLL_INTERVAL;
+extern uint8_t AUTO_QUICK_DATA_POLL_TIMES;
 extern bool PRE_PARENT_FIRST_WHEN_REJOIN;
 
-extern u8 NWK_COST_THRESHOLD_ONEHOP;
-extern u8 NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD;
-extern u16 TL_ZB_ASSOCJOIN_FILTER_PANID;
-extern u16 TL_ZB_ASSOCJOIN_PERMIT_PANID;
-extern u32 LONG_UPTIME_THRESHOLD;
+extern uint8_t NWK_COST_THRESHOLD_ONEHOP;
+extern uint8_t NWK_NEIGHBOR_SEND_OUTGOING_THRESHOLD;
+extern uint16_t ZB_ASSOCJOIN_FILTER_PANID;
+extern uint16_t ZB_ASSOCJOIN_PERMIT_PANID;
+extern uint32_t LONG_UPTIME_THRESHOLD;
 extern bool NWK_HEADER_SRC_IEEE_INCLUDE;
 
-u16 tl_zbNwkStochasticAddrCal(void);
-void tl_zbNwkStatusAddrConflictInd(void *arg);
-bool tl_zbNwkAddrConflictDetect(void *arg, u16 nwkAddr, addrExt_t ieeeAddr);
+uint16_t zb_NwkStochasticAddrCal(void);
+void zb_NwkStatusAddrConflictInd(void *arg);
+bool zb_NwkAddrConflictDetect(void *arg, uint16_t nwkAddr, addrExt_t ieeeAddr);
 
-void tl_zbNwkAddrMapInit(void);
-zb_nwk_status_t tl_zbNwkAddrMapAdd(u16 shortAddr, addrExt_t extAddr, u16 *ref);
-u8 tl_idxByShortAddr(u16 *idx, u16 shortAddr);
-u8 tl_idxByExtAddr(u16 *idx, addrExt_t extAddr);
-void tl_zbNwkAddrMapDelete(u16 idx);
-u8 tl_zbShortAddrByExtAddr(u16 *shortAddr, addrExt_t extAddr, u16 *idx);
-u8 tl_zbExtAddrByShortAddr(u16 shortAddr, addrExt_t extAddr, u16 *idx);
-void tl_zbExtAddrByIdx(u16 idx, addrExt_t extAddr);
-u16 tl_zbshortAddrByIdx(u16 idx);
+void zb_NwkAddrMapInit(void);
+zb_nwk_status_t zb_NwkAddrMapAdd(uint16_t shortAddr, addrExt_t extAddr, uint16_t *ref);
+uint8_t zb_idxByShortAddr(uint16_t *idx, uint16_t shortAddr);
+uint8_t zb_idxByExtAddr(uint16_t *idx, addrExt_t extAddr);
+void zb_NwkAddrMapDelete(uint16_t idx);
+uint8_t zb_ShortAddrByExtAddr(uint16_t *shortAddr, addrExt_t extAddr, uint16_t *idx);
+uint8_t zb_ExtAddrByShortAddr(uint16_t shortAddr, addrExt_t extAddr, uint16_t *idx);
+void zb_ExtAddrByIdx(uint16_t idx, addrExt_t extAddr);
+uint16_t zb_shortAddrByIdx(uint16_t idx);
 
-void tl_zbNwkAddrConflictStatusSend(u16 dstAddr, u16 statusAddr, u8 forceSeqNum);
-void tl_zbNwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, u8 handle);
-void tl_zbNwkNlmeNwkStatusInd(void *arg, u16 nwkAddr, nwk_statusCode_t status);
+void zb_NwkAddrConflictStatusSend(uint16_t dstAddr, uint16_t statusAddr, uint8_t forceSeqNum);
+void zb_NwkSendNwkStatusCmd(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *pNwkStatus, uint8_t handle);
+void zb_NwkNlmeNwkStatusInd(void *arg, uint16_t nwkAddr, nwk_statusCode_t status);
 
-void tl_zbNwkInit(u8 coldReset);
-void tl_zbNwkTaskProc(void);
+void zb_NwkInit(uint8_t coldReset);
+void zb_NwkTaskProc(void);
 
-u8 nwkHdrParse(nwk_hdr_t *pNwkHdr, u8 *msdu);
-u8 getNwkHdrSize(nwk_hdr_t *pNwkHdr);
-u8 *nwkHdrBuilder(u8 *buf, nwk_hdr_t *pNwkHdr);
+uint8_t nwkHdrParse(nwk_hdr_t *pNwkHdr, uint8_t *msdu);
+uint8_t getNwkHdrSize(nwk_hdr_t *pNwkHdr);
+uint8_t *nwkHdrBuilder(uint8_t *buf, nwk_hdr_t *pNwkHdr);
 
-void tl_zbNwkLinkStatusStart(void);
-void tl_zbNwkLinkStatusStop(void);
-void tl_zbNwkSendLinkStatus(void);
+void zb_NwkLinkStatusStart(void);
+void zb_NwkLinkStatusStop(void);
+void zb_NwkSendLinkStatus(void);
 
-void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, u8 endDevCfg);
+void nwkEndDevTimeoutReqSend(reqTimeoutEnum_t reqTimeoutEnum, uint8_t endDevCfg);
 void keepaliveMsgSendStop(void);
 /**
    Confirms start procedure.
    @param - reference to buffer.
  */
-void tl_zbMacMlmeStartConfirmHandler(void *arg);
-void tl_zbMacMlmePollConfirmHandler(void *arg);
-void tl_zbMacMcpsDataConfirmHandler(void *arg);
-void tl_zbMacMcpsDataIndicationHandler(void *buf);
-void tl_zbMacMlmeAssociateConfirmHandler(void *arg);
-void tl_zbMacMlmeCommStatusIndicationHandler(void *arg);
-void tl_zbMacMlmeScanConfirmHandler(void *arg);
-void tl_zbMacMlmeBeaconNotifyIndicationHandler(void *arg);
-void tl_zbMacMlmeAssociateIndicationHandler(void *arg);
-void tl_zbMacMlmeResetConfirmHandler (void *arg);
-void tl_zbMacMlmeOrphanIndicationHandler(void *arg);
-void tl_zbMacMlmeSyncLossIndicationHandler(void *arg);
-void tl_zbMacMlmePollIndicationHandler(void *arg);
+void zb_MacMlmeStartConfirmHandler(void *arg);
+void zb_MacMlmePollConfirmHandler(void *arg);
+void zb_MacMcpsDataConfirmHandler(void *arg);
+void zb_MacMcpsDataIndicationHandler(void *buf);
+void zb_MacMlmeAssociateConfirmHandler(void *arg);
+void zb_MacMlmeCommStatusIndicationHandler(void *arg);
+void zb_MacMlmeScanConfirmHandler(void *arg);
+void zb_MacMlmeBeaconNotifyIndicationHandler(void *arg);
+void zb_MacMlmeAssociateIndicationHandler(void *arg);
+void zb_MacMlmeResetConfirmHandler (void *arg);
+void zb_MacMlmeOrphanIndicationHandler(void *arg);
+void zb_MacMlmeSyncLossIndicationHandler(void *arg);
+void zb_MacMlmePollIndicationHandler(void *arg);
 
 
-void tl_zbNwkNldeDataRequestHandler(void *arg);
-void tl_zbNwkNlmeNetworkFormationRequestHandler(void *arg);
-void tl_zbNwkNlmePermitJoiningRequestHandler(void *arg);
-void tl_zbNwkNlmeNwkDiscRequestHandler(void *arg);
-void tl_zbNwkNlmeStartRouterRequestHandler(void *arg);
-void tl_zbNwkNlmeRouteDiscRequestHandler(void *arg);
-void tl_zbNwkNlmeJoinRequestHandler(void *arg);
-void tl_zbNwkNlmeDirectJoinRequestHandler(void *arg);
-void tl_zbNwkNlmeEDScanRequestHandler(void *arg);
-void tl_zbNwkNlmeLeaveRequestHandler(void *arg);
-void tl_zbNwkNlmeResetRequestHandler(void *arg);
-void tl_zbNwkNlmeSyncRequestHandler(void *arg);
+void zb_NwkNldeDataRequestHandler(void *arg);
+void zb_NwkNlmeNetworkFormationRequestHandler(void *arg);
+void zb_NwkNlmePermitJoiningRequestHandler(void *arg);
+void zb_NwkNlmeNwkDiscRequestHandler(void *arg);
+void zb_NwkNlmeStartRouterRequestHandler(void *arg);
+void zb_NwkNlmeRouteDiscRequestHandler(void *arg);
+void zb_NwkNlmeJoinRequestHandler(void *arg);
+void zb_NwkNlmeDirectJoinRequestHandler(void *arg);
+void zb_NwkNlmeEDScanRequestHandler(void *arg);
+void zb_NwkNlmeLeaveRequestHandler(void *arg);
+void zb_NwkNlmeResetRequestHandler(void *arg);
+void zb_NwkNlmeSyncRequestHandler(void *arg);
 
 
 /*
  * high layer to NWK layer primitive
  * */
 
-#define tl_zbNwkNldeDataRequest(p)              tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, p)
-#define tl_zbNwkNlmeNwkDiscRequest(p)           tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_NWK_DISCOVERY_REQ, p)
-#define tl_zbNwkNlmeJoinRequest(p)              tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, p)
-#define tl_zbNwkNlmeNwkFormationRequest(p)      tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_NWK_FORMATION_REQ, p)
-#define tl_zbNwkNlmePermitJoiningRequest(p)     tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_PERMIT_JOINING_REQ, p)
-#define tl_zbNwkNlmeRouteDiscRequest(p)         tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, p)
-#define tl_zbNwkNlmeStartRouterRequest(p)       tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_START_ROUTER_REQ, p)
-#define tl_zbNwkNlmeDirectJoinRequest(p)        tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_DIRECT_JOIN_REQ, p)
-#define tl_zbNwkNlmeEDScanRequest(p)            tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ED_SCAN_REQ, p)
-#define tl_zbNwkNlmeLeaveRequest(p)             tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_LEAVE_REQ, p)
-#define tl_zbNwkNlmeResetRequest(p)             tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_RESET_REQ, p)
-#define tl_zbNwkNlmeSyncRequest(p)              tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_SYNC_REQ, p)
+#define zb_NwkNldeDataRequest(p)              zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLDE_DATA_REQ, p)
+#define zb_NwkNlmeNwkDiscRequest(p)           zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_NWK_DISCOVERY_REQ, p)
+#define zb_NwkNlmeJoinRequest(p)              zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, p)
+#define zb_NwkNlmeNwkFormationRequest(p)      zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_NWK_FORMATION_REQ, p)
+#define zb_NwkNlmePermitJoiningRequest(p)     zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_PERMIT_JOINING_REQ, p)
+#define zb_NwkNlmeRouteDiscRequest(p)         zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, p)
+#define zb_NwkNlmeStartRouterRequest(p)       zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_START_ROUTER_REQ, p)
+#define zb_NwkNlmeDirectJoinRequest(p)        zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_DIRECT_JOIN_REQ, p)
+#define zb_NwkNlmeEDScanRequest(p)            zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ED_SCAN_REQ, p)
+#define zb_NwkNlmeLeaveRequest(p)             zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_LEAVE_REQ, p)
+#define zb_NwkNlmeResetRequest(p)             zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_RESET_REQ, p)
+#define zb_NwkNlmeSyncRequest(p)              zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_SYNC_REQ, p)
 
 
 
 typedef void (*nwkDataIndCb_t)(void *p);
-void tl_nwkDataIndRegister(nwkDataIndCb_t cb);
+void zb_nwkDataIndRegister(nwkDataIndCb_t cb);
 
 
 
-u8 is_device_factory_new(void);
+uint8_t is_device_factory_new(void);
 
-void tl_edBrcDataSkipParentSet(bool skip);
+void zb_edBrcDataSkipParentSet(bool skip);
 
 #if ZB_TEST_ENABLE
-extern u8 nwkSecurityEn;
+extern uint8_t nwkSecurityEn;
 #define NWK_SECURITY_EN_SET(v)  nwkSecurityEn = v
 #endif
 
