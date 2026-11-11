@@ -9,6 +9,16 @@ target_sources(app PRIVATE
   src/app_profile.c
 )
 
+if(CONFIG_BOARD_WEACT_STM32WB55_CORE)
+  # USB CDC console and mcumgr, watchdog and the flash state fix of the board; the same
+  # fix is built into its MCUboot, see mcuboot/
+  include(${ZEPHYR_BASE}/samples/subsys/usb/common/common.cmake)
+  target_sources(app PRIVATE
+    src/board_weact_stm32wb55_core.c
+    mcuboot/wbfix/wbfix.c
+  )
+endif()
+
 # Expose ZCL SDK headers (zcl/, af/) that live under subsys/zigbee but are
 # not part of the public zephyr_include_directories set.
 target_include_directories(app PRIVATE
