@@ -242,9 +242,8 @@ config ZIGBEE_GP
 	  wired in here). The GP endpoint (242) registers and interviews
 	  correctly against Zigbee2MQTT, but no actual Green Power device
 	  has been tested against it, so GPDF relaying itself is unverified.
-	  On the tlsr8258_tb03f router build this adds ~17 KB flash and
-	  ~0.6 KB RAM on top of an already tight RAM budget (~96.6% ->
-	  ~97.8%).
+	  The proxy adds about 17 KB of flash and 0.6 KB of RAM, which matters
+	  on a SoC with little of either.
 
 menu "ZCL clusters"
 	depends on ZIGBEE_ZCL
@@ -535,7 +534,7 @@ config ZIGBEE_OTA
 	  Zigbee OTA Upgrade client. The server sends a standard Zigbee OTA
 	  file whose image element is an MCUboot image signed with imgtool.
 	  The client writes the element to slot 1 (the "slot1_partition"
-	  devicetree node, see the tlsr8258-mcuboot snippet), and the
+	  devicetree node, for example from the tlsr8258-mcuboot snippet), and the
 	  application calls ota_mcuReboot() on OTA_EVT_COMPLETE to have MCUboot
 	  verify and test the image. The new image is confirmed once the device
 	  is on the network; MCUboot reverts it on the next reset otherwise.
@@ -551,7 +550,6 @@ config ZIGBEE_OTA_CONFIRM_DELAY_S
 
 config ZIGBEE_MANUFACTURER_CODE
 	hex "Manufacturer code"
-	default 0x1141 if ZIGBEE_RADIO_PORT_TLSR8258 || ZIGBEE_RADIO_PORT_TLSR8269
 	default 0x1002 if SOC_FAMILY_SILABS_S1 || SOC_FAMILY_SILABS_S2
 	default 0x131B if SOC_FAMILY_ESPRESSIF_ESP32
 	default 0x1279 if SOC_FAMILY_NORDIC_NRF
@@ -562,11 +560,9 @@ config ZIGBEE_MANUFACTURER_CODE
 	help
 	  Manufacturer code of the node descriptor, which a coordinator reads, and
 	  the value the OTA files of the product carry. The default is the code of
-	  the SoC vendor: 0x1141 Telink, 0x1002 Silicon Labs (EFR32), 0x131B
-	  Espressif, 0x1279 Nordic, 0x1055 Bouffalo Lab, 0x123C PHYPLUS (PHY62xx).
-	  A product that ships under its own code sets it here. Zero, the default
-	  on other SoCs, is not a registered code: the build warns until a code is
-	  set.
+	  the SoC vendor where the SoC sets one. A product that ships under its
+	  own code sets it here. Zero, the default otherwise, is not a registered
+	  code: the build warns until a code is set.
 
 config ZIGBEE_WWAH
 	bool "Works With All Hubs"
@@ -581,12 +577,12 @@ config ZIGBEE_WWAH
 config ZIGBEE_MAC_CLOCK_HW_CYCLES
 	bool "Count the MAC deadlines in cycles of the hardware counter"
 	depends on ZIGBEE_RADIO_PORT_GENERIC
-	default y if SOC_FAMILY_TELINK_TLSR
 	help
 	  The MAC measures its deadlines in microseconds taken from the kernel
-	  tick. Select this when the tick is too coarse for them, as the 100 Hz
-	  tick of the TLSR8258: the MAC then counts the cycles of the hardware
-	  counter, which must run at a whole number of MHz.
+	  tick. Select this when the tick is too coarse for them, as with a
+	  100 Hz tick: the MAC then counts the cycles of the hardware counter,
+	  which must run at a whole number of MHz. A SoC whose tick is that coarse
+	  enables it by default.
 
 module = ZIGBEE
 module-str = zigbee
@@ -596,20 +592,6 @@ endif # ZIGBEE
 
 config ZIGBEE_RADIO_PORT
 	bool
-
-config ZIGBEE_RADIO_PORT_TLSR8258
-	bool
-	depends on IEEE802154_TELINK_TLSR8258
-	select ZIGBEE_RADIO_PORT
-	select CRYPTO
-	default y if IEEE802154_TELINK_TLSR8258
-
-config ZIGBEE_RADIO_PORT_TLSR8269
-	bool
-	depends on IEEE802154_TELINK_TLSR8269
-	select ZIGBEE_RADIO_PORT
-	select CRYPTO
-	default y if IEEE802154_TELINK_TLSR8269
 
 config ZIGBEE_AES_ENGINE
 	bool
