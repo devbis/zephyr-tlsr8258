@@ -7,5 +7,6 @@
 / {
 	chosen {
 		zigbee,ncp-uart = &uart0;
+		zigbee,aes = &ecb;
 	};
 };
