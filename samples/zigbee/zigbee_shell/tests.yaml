@@ -13,6 +13,7 @@ common:
     - slwrb4180a
     - dt_xt_zb1_devkit
     - nucleo_wba55cg
+    - weact_stm32wb55_core
   tags:
     - zigbee
 tests:
