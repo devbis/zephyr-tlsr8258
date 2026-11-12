@@ -7,3 +7,21 @@ config SOC_PHY6252
 	select CPU_CORTEX_M_HAS_SYSTICK
 	select SOC_PREP_HOOK
 	select XIP
+
+config PHY6252_WATCHDOG
+	bool "Reset the chip when the system hangs"
+	default y
+	depends on SOC_PHY6252 && WATCHDOG && DT_HAS_SNPS_DESIGNWARE_WATCHDOG_ENABLED
+	help
+	  Start the watchdog at boot and feed it from a thread of the lowest priority. A thread of a
+	  higher priority that does not leave the CPU, or interrupts that stay locked, stop the
+	  feeding and the chip is reset. Disable it where the code feeds the watchdog itself
+	  (MCUboot).
+
+config PHY6252_WATCHDOG_TIMEOUT_MS
+	int "Timeout of the watchdog in ms"
+	default 8000
+	depends on PHY6252_WATCHDOG
+	help
+	  The timeout comes from the 32 kHz RC oscillator in steps of a power of two, 2 s up to
+	  256 s.
