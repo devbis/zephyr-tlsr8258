@@ -310,7 +310,14 @@ static void mac_trxTask(void *arg)
 	if (event == MAC_TX_EV_NEW_DATA) {
 		mac_trx_vars.ackSeqNum = entry->seqNum;
 		mac_trx_vars.ackRequired = entry->fAck;
-		mac_trx_vars.frameRetryCnt = 0;
+		/*
+		 * A retry is posted as a new-data event as well, and its count must survive:
+		 * clearing it for a retry never lets it reach macMaxFrameRetries, so a frame that
+		 * no one acknowledges is sent again for ever.
+		 */
+		if (state != MAC_TX_RETRY) {
+			mac_trx_vars.frameRetryCnt = 0;
+		}
 		rf802154_tx_ready(entry->txData, entry->psduLen);
 	}
 
