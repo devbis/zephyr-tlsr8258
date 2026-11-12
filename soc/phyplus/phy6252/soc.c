@@ -33,6 +33,66 @@ extern const uintptr_t _irq_vector_table[];
 #error "The CPU timebase frequency must be 16 MHz or 48 MHz"
 #endif
 
+/*
+ * The console UART of the board: UART0 on P9/P10 (the pins of the boot ROM loader) or UART1 on
+ * P2/P3. The other pair stays GPIO with a pull-up; the boot ROM listens on P10 after every reset, a
+ * floating input must not look like its synchronisation string.
+ */
+#if DT_NODE_EXISTS(DT_NODELABEL(uart1))
+#if DT_SAME_NODE(DT_CHOSEN(zephyr_console), DT_NODELABEL(uart1))
+#define PHY6252_CONSOLE_UART1 1
+#endif
+#endif
+
+/* Index of a pad in the SDK's pin table: P2 is 2, P3 is 3, P9 is 5, P10 is 6 */
+#define PAD_P2  2U
+#define PAD_P3  3U
+#define PAD_P9  5U
+#define PAD_P10 6U
+
+#define FMUX_UART0_TX 4U
+#define FMUX_UART0_RX 5U
+#define FMUX_UART1_TX 8U
+#define FMUX_UART1_RX 9U
+
+/* The 2 bit fields in AON IOCTL0/IOCTL1: 0 float, 1 strong pull-up, 2 weak pull-up, 3 pull-down */
+static void phy6252_pad_pull(uint32_t pad, uint32_t pull)
+{
+	volatile uint32_t *const ioctl0 = (volatile uint32_t *)0x4000f008U;
+	volatile uint32_t *const ioctl1 = (volatile uint32_t *)0x4000f00cU;
+	static const struct {
+		uint8_t pad;
+		uint8_t reg;
+		uint8_t shift;
+	} map[] = {
+		{2U, 0U, 7U}, {3U, 0U, 10U}, {5U, 0U, 28U}, {6U, 1U, 1U},
+	};
+
+	for (size_t i = 0U; i < ARRAY_SIZE(map); i++) {
+		if (map[i].pad == pad) {
+			volatile uint32_t *const r = map[i].reg == 0U ? ioctl0 : ioctl1;
+
+			*r = (*r & ~(3U << map[i].shift)) | (pull << map[i].shift);
+		}
+	}
+}
+
+/* A pad to a peripheral function through the full mux of the IOMUX */
+static void phy6252_pad_function(uint32_t pad, uint32_t function)
+{
+	volatile uint32_t *const pad_enable = (volatile uint32_t *)0x40003814U;
+	volatile uint32_t *const mux_enable = (volatile uint32_t *)0x4000380cU;
+	volatile uint32_t *const mux_select = (volatile uint32_t *)(0x40003818U + (pad / 4U) * 4U);
+	const uint32_t shift = (pad % 4U) * 8U;
+
+	if (pad == PAD_P2 || pad == PAD_P3) {
+		/* The pads of the debug interface: give them to the peripherals */
+		*pad_enable |= BIT(pad - 2U);
+	}
+	*mux_select = (*mux_select & ~(0x3fU << shift)) | (function << shift);
+	*mux_enable |= BIT(pad);
+}
+
 void soc_prep_hook(void)
 {
 	volatile uintptr_t *const jump = (volatile uintptr_t *)0x1fff0000U;
@@ -61,6 +121,29 @@ void soc_prep_hook(void)
 		}
 	}
 
+#ifdef PHY6252_CONSOLE_UART1
+	/* UART1 on P2/P3, the pads of the boot ROM loader stay inputs with a pull-up */
+	*clock |= BIT(7) | BIT(25); /* IOMUX, UART1 */
+	*reset &= ~BIT(25);
+	*reset |= BIT(25);
+	phy6252_pad_pull(PAD_P9, 2U);
+	phy6252_pad_pull(PAD_P10, 2U);
+	phy6252_pad_pull(PAD_P2, 1U);
+	phy6252_pad_pull(PAD_P3, 1U);
+#ifdef CONFIG_PHY6252_UART1_SWAP
+	phy6252_pad_function(PAD_P3, FMUX_UART1_TX);
+	phy6252_pad_function(PAD_P2, FMUX_UART1_RX);
+#else
+	phy6252_pad_function(PAD_P2, FMUX_UART1_TX);
+	phy6252_pad_function(PAD_P3, FMUX_UART1_RX);
+#endif
+#else
+#if DT_NODE_EXISTS(DT_NODELABEL(uart1)) && DT_NODE_HAS_STATUS(DT_NODELABEL(uart1), okay)
+	/* UART1 without pins: its clock and reset only */
+	*clock |= BIT(25);
+	*reset &= ~BIT(25);
+	*reset |= BIT(25);
+#endif
 	/* UART0: P9 is TX and P10 is RX. */
 	*clock |= (1U << 7) | (1U << 8);
 	*reset &= ~(1U << 8);
@@ -69,6 +152,7 @@ void soc_prep_hook(void)
 	*pull1 = (*pull1 & ~(3U << 1)) | (2U << 1);
 	*mux_select = (*mux_select & ~0x003f3f00U) | 0x00050400U;
 	*mux_enable |= (1U << 5) | (1U << 6);
+#endif
 
 #ifdef CONFIG_COUNTER_SNPS_DW
 	/* Timers 5 and 6 share a reset and have a 4 MHz clock. */
@@ -87,7 +171,11 @@ void soc_prep_hook(void)
  */
 static int phy6252_uart_fifo(void)
 {
+#ifdef PHY6252_CONSOLE_UART1
+	volatile uint32_t *const fcr = (volatile uint32_t *)(0x40009000U + 2U * 4U);
+#else
 	volatile uint32_t *const fcr = (volatile uint32_t *)(0x40004000U + 2U * 4U);
+#endif
 
 	*fcr = 0x07U; /* FIFO enable, clear RX and TX FIFO */
 
