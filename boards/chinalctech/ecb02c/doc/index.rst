@@ -61,9 +61,19 @@ P9 (TX) and P10 (RX), for a module that is wired there. Pass the file with
 Flashing
 ********
 
-The serial utility `rdwr_phy62x2.py`_ writes ``zephyr.phy6252.bin`` through the boot ROM; connect it
-to P9/P10 and give the offset ``0x11002000``. Reboot an application that has a shell with ``kernel
-reboot cold`` and start the utility within 50 ms to catch the window of the ROM without a power
-cycle. The reboot of the SoC code sets the reset cause that opens the window.
+The serial utility `rdwr_phy62x2.py`_ writes ``zephyr.phy6252.bin`` through the boot ROM; connect
+it to P9/P10 and give the offset ``0x11002000``. An application that has a shell reboots into the
+window of the boot ROM with ``kernel reboot cold``; ``support/flash_rom.py`` does that and then
+runs the tool within the 50 ms the window needs, without a power cycle. The shell is on UART1 and
+the boot ROM on P9/P10, so the script takes the port of the shell in ``SHELL_PORT`` when two
+adapters are used. The reboot of the SoC code sets the reset cause that opens the window.
+
+An application is replaced through the serial recovery of MCUboot. ``support/phyflash.sh`` reboots
+the application, catches the window MCUboot waits for a command in and uploads the signed image
+with ``cmcumgr``; the client has to repeat a command after a timeout. The sample
+:zephyr:code-sample:`chinalctech_ecb02c_shell` is such an application. A new loader is written
+through the boot ROM, or by the application of
+:zephyr:code-sample:`chinalctech_ecb02c_loader_update` that carries it. If the power fails while a
+loader is written the chip has none and only the boot ROM on P9/P10 helps.
 
 .. _rdwr_phy62x2.py: https://github.com/pvvx/PHY62x2/blob/master/Utils/rdwr_phy62x2.py
