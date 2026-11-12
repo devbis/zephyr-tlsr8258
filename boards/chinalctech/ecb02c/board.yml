@@ -1,0 +1,6 @@
+board:
+  name: ecb02c
+  full_name: ChinaLCTech ECB02C
+  vendor: chinalctech
+  socs:
+    - name: phy6252
