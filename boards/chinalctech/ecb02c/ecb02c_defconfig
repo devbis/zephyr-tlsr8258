@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+CONFIG_MAIN_STACK_SIZE=1024
+CONFIG_SERIAL=y
+CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=y
+CONFIG_UART_NS16550=y
+CONFIG_UART_NS16550_ACCESS_WORD_ONLY=y
+CONFIG_UART_INTERRUPT_DRIVEN=y
+
+# The USB-UART of the module is wired to UART1 with TX on P3 and RX on P2
+CONFIG_PHY6252_UART1_SWAP=y
+
+# The watchdog of the chip; the applications are reset when they hang
+CONFIG_WATCHDOG=y
