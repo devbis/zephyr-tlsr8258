@@ -59,6 +59,8 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 #define PHY6252_IRQ_COK             BIT(10)
 #define PHY6252_IRQ_CLEAR           0x3FFFU
 #define PHY6252_CRC_ZIGBEE           0x03U
+#define PHY6252_BB_CRC_FMT          0x40030124U
+#define PHY6252_LL_TFIFO            0x40031400U
 
 #define PHY6252_CHANNEL_MIN         11U
 #define PHY6252_CHANNEL_MAX         26U
@@ -78,24 +80,11 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
  * TX FIFO is written through one data port with a hardware write pointer, the RX FIFO is read
  * through another, and both are reset through LL+0x58.
  */
-#define ROM_LL_HW_SET_TRX_SETTLE ((void (*)(uint8_t, uint8_t, uint8_t))0x000113ddU)
-#define ROM_LL_HW_RST_TFIFO      ((void (*)(void))0x000110e9U)
 #define ROM_LL_HW_RST_RFIFO      ((void (*)(void))0x000110b1U)
-#define ROM_LL_HW_WRITE_TFIFO    ((uint8_t (*)(const uint8_t *, uint8_t))0x000115c1U)
 #define ROM_LL_HW_READ_RFIFO_ZB  ((uint8_t (*)(uint8_t *, uint16_t *, uint32_t *, uint32_t *)) \
 				  0x00010f51U)
 
-/*
- * TX settle time (microseconds) the baseband waits after a trigger before it reads the TX FIFO
- * and starts the frame: the shipping firmware programs 88 + 8 + 40 for an ordinary frame and
- * 128 + 8 + 40 for an acknowledgement sent right after a reception. It then triggers the
- * acknowledgement at once instead of waiting for the turnaround time itself.
- */
-#define PHY6252_SETTLE_BB_TX        0x58U
-#define PHY6252_SETTLE_BB_ACK       0x80U
-#define PHY6252_SETTLE_AFE          0x08U
-#define PHY6252_SETTLE_PLL          0x28U
-
+#define PHY6252_LL_IGN_CRC_EMPTY    0x03U
 #define PHY6252_LL_MODE_STX         0U
 #define PHY6252_LL_MODE_SRX         1U
 #define PHY6252_LL_STX_CONFIG       0x000100U
@@ -117,6 +106,8 @@ struct phy6252_data {
 	atomic_t started;
 	atomic_t ack_waiting;
 	atomic_t expected_ack_seq;
+	atomic_t rx_stopping;
+	struct k_sem rx_stopped;
 	uint16_t channel;
 	uint16_t short_addr;
 	uint16_t filter_pan_id;
@@ -135,17 +126,18 @@ static struct phy6252_data phy6252_data;
 
 K_MSGQ_DEFINE(phy6252_rx_queue, sizeof(struct phy6252_rx_frame), PHY6252_RX_QUEUE_DEPTH, 4);
 
-static uint32_t phy6252_reg_read(uint32_t addr)
+static ALWAYS_INLINE uint32_t phy6252_reg_read(uint32_t addr)
 {
 	return *(volatile uint32_t *)addr;
 }
 
-static void phy6252_reg_write(uint32_t addr, uint32_t value)
+static ALWAYS_INLINE void phy6252_reg_write(uint32_t addr, uint32_t value)
 {
 	*(volatile uint32_t *)addr = value;
 }
 
-static void phy6252_reg_write_field(uint32_t addr, uint8_t high, uint8_t low, uint32_t value)
+static ALWAYS_INLINE void phy6252_reg_write_field(uint32_t addr, uint8_t high, uint8_t low,
+						  uint32_t value)
 {
 	uint32_t mask = ((1U << (high - low + 1U)) - 1U) << low;
 	uint32_t old_value = phy6252_reg_read(addr);
@@ -239,12 +231,13 @@ static uint8_t phy6252_rssi_to_lqi(int8_t rssi_dbm)
 	return (uint8_t)(((clamped + 100) * 255) / 80);
 }
 
-static bool phy6252_is_ack(const uint8_t *psdu, uint8_t len)
+static __ramfunc bool phy6252_is_ack(const uint8_t *psdu, uint8_t len)
 {
 	return (len >= 3U) && ((psdu[0] & 0x07U) == 0x02U);
 }
 
-static bool phy6252_filter_match(struct phy6252_data *data, const uint8_t *psdu, uint8_t len)
+static __ramfunc bool phy6252_filter_match(struct phy6252_data *data, const uint8_t *psdu,
+					   uint8_t len)
 {
 	uint16_t filter_pan_id;
 	uint16_t frame_pan_id;
@@ -263,7 +256,9 @@ static bool phy6252_filter_match(struct phy6252_data *data, const uint8_t *psdu,
 	key = irq_lock();
 	filter_pan_id = data->filter_pan_id;
 	filter_short_addr = data->short_addr;
-	memcpy(ieee_addr, data->filter_ieee_addr, sizeof(ieee_addr));
+	for (size_t i = 0U; i < sizeof(ieee_addr); i++) {
+		ieee_addr[i] = data->filter_ieee_addr[i];
+	}
 	pan_filter_enabled = data->pan_filter_enabled;
 	short_filter_enabled = data->short_filter_enabled;
 	ieee_filter_enabled = data->ieee_filter_enabled;
@@ -307,126 +302,348 @@ static bool phy6252_filter_match(struct phy6252_data *data, const uint8_t *psdu,
 		if (len < 13U) {
 			return false;
 		}
-		return !ieee_filter_enabled || (memcmp(&psdu[5], ieee_addr, sizeof(ieee_addr)) == 0);
+		if (!ieee_filter_enabled) {
+			return true;
+		}
+		for (size_t i = 0U; i < sizeof(ieee_addr); i++) {
+			if (psdu[5U + i] != ieee_addr[i]) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	return true;
 }
 
-static void phy6252_radio_set_channel(struct phy6252_data *data, uint16_t channel)
-{
-	uint8_t rf_channel = (uint8_t)((channel - PHY6252_CHANNEL_MIN) * 5U + 5U);
-	uint8_t calibrated_channel = CLAMP(rf_channel, 2U, 66U);
-	uint16_t index = (uint16_t)((calibrated_channel - 2U) >> 1);
-	uint16_t cal0 = data->tp_cal0;
-	uint16_t cal1 = data->tp_cal1;
-	uint16_t cal = (cal1 >= cal0) ? (cal0 + (index * (cal1 - cal0)) / 32U) :
-							 (cal0 - (index * (cal0 - cal1)) / 32U);
+/*
+ * Radio bring-up as in the PHY62x2 SDK (rf_phy_ini, rf_calibrate, ll_hw_set_timing for the
+ * Zigbee packet format) and in the zigbee-rs backend that runs on a PB-03F (PHY6252) with
+ * hardware FCS.
+ */
+#define PHY6252_PCR_SW_RESET2       0x4000000CU
+#define PHY6252_BBLL_RST_BIT        10U
+#define PHY6252_AON_PMU_CTRL        0x4000F014U
+#define PHY6252_RX_TIMEOUT_US       0xFFFFU
+#define PHY6252_RX_STOP_TIMEOUT_US  33U
+#define PHY6252_RX_STOP_WAIT_MS     5U
+#define PHY6252_HCLK_MHZ            (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000U)
+#define PHY6252_TP_CAL_OFFSET       2U
+#define PHY6252_TRX_SETTLE(bb, afe, pll) (((bb) << 16) | ((afe) << 8) | (pll))
+/* ll_hw_set_trx_settle(57, 8, 52) of the ROM for the Zigbee packet format */
+#define PHY6252_TRX_SETTLE_ZIGBEE   PHY6252_TRX_SETTLE(57U, 8U, 52U)
+/* The turnaround of an ACK sent from the interrupt, measured with a sniffer */
+#define PHY6252_TRX_SETTLE_ACK      PHY6252_TRX_SETTLE(118U, 8U, 52U)
 
-	data->channel = channel;
-	phy6252_reg_write(PHY6252_RF_REG(0xB4U), rf_channel);
-	phy6252_reg_write_field(PHY6252_RF_REG(0x94U), 7U, 0U, (uint8_t)cal);
+struct phy6252_pa_entry {
+	int8_t dbm;
+	uint8_t code;
+};
+
+/* PA code of the QFN32 parts (RF_PHY_TX_POWER_* of the SDK), the highest power first */
+static const struct phy6252_pa_entry phy6252_pa_table[] = {
+	{5, 0x3f}, {0, 0x1f}, {-2, 0x0f}, {-5, 0x0a}, {-20, 0x01},
+};
+
+static __ramfunc uint8_t phy6252_rf_channel_index(uint16_t channel)
+{
+	return (uint8_t)(5U + 5U * (channel - PHY6252_CHANNEL_MIN));
 }
 
+/* RF_PHY_TPCAL_CALC() with the clamp that ll_hw_go() applies to the RF channel */
+static __ramfunc uint8_t phy6252_tpcal_for_channel(const struct phy6252_data *data, uint8_t rf_chn)
+{
+	uint32_t index = (uint32_t)(CLAMP(rf_chn, 2U, 80U) - 2U) >> 1;
+	uint32_t cal0 = data->tp_cal0;
+	uint32_t cal1 = data->tp_cal1;
+
+	if (cal0 > cal1) {
+		return (uint8_t)(((cal0 << 5) - ((cal0 - cal1) * index) + 16U) >> 5);
+	}
+	return (uint8_t)cal0;
+}
+
+static void phy6252_radio_set_channel(struct phy6252_data *data, uint16_t channel)
+{
+	data->channel = channel;
+	phy6252_reg_write(PHY6252_RF_REG(0xB4U), phy6252_rf_channel_index(channel));
+}
+
+/* ll_hw_go(): clear the status, unmask the mode done, trigger, then load the channel's cal */
+static __ramfunc void phy6252_ll_go(void)
+{
+	struct phy6252_data *data = &phy6252_data;
+
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
+	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
+	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+	phy6252_reg_write(PHY6252_RF_REG(0x94U),
+			  0x1000U | phy6252_tpcal_for_channel(data,
+						phy6252_rf_channel_index(data->channel)));
+}
+
+/* Reset the TX FIFO and load [PHR][PSDU] through its word-wide data port */
+static __ramfunc void phy6252_tfifo_load(const uint8_t *buf, size_t len)
+{
+	phy6252_reg_write(PHY6252_LL_REG(0x58U), 0x0001U);
+	for (size_t i = 0U; i < len; i += 4U) {
+		uint32_t word = 0U;
+
+		for (size_t j = 0U; (j < 4U) && ((i + j) < len); j++) {
+			word |= (uint32_t)buf[i + j] << (8U * j);
+		}
+		phy6252_reg_write(PHY6252_LL_TFIFO, word);
+	}
+}
+
+/* rf_phy_set_txPower(): the supply trims and the PA code in 0xB8[16:12] */
 static void phy6252_radio_set_tx_power(struct phy6252_data *data, int8_t dbm)
 {
-	uint32_t old_value = phy6252_reg_read(PHY6252_RF_REG(0xB8U));
-	uint32_t power = (uint32_t)dbm & 0x1FU;
+	const struct phy6252_pa_entry *entry = &phy6252_pa_table[ARRAY_SIZE(phy6252_pa_table) - 1U];
+	uint32_t b8;
 
-	phy6252_reg_write(PHY6252_RF_REG(0xB8U), (old_value & 0x0FFFU) | (power << 12));
+	for (size_t i = 0U; i < ARRAY_SIZE(phy6252_pa_table); i++) {
+		if (phy6252_pa_table[i].dbm <= dbm) {
+			entry = &phy6252_pa_table[i];
+			break;
+		}
+	}
+
+	if (entry->code == 0x3fU) {
+		phy6252_reg_write_field(PHY6252_AON_PMU_CTRL, 18U, 15U, 0x08U);
+		phy6252_reg_write_field(PHY6252_RF_REG(0xCCU), 11U, 10U, 0U);
+		phy6252_reg_write_field(PHY6252_RF_REG(0xDCU), 9U, 5U, 1U << 2);
+	} else {
+		phy6252_reg_write_field(PHY6252_AON_PMU_CTRL, 18U, 15U, 0x0AU);
+		phy6252_reg_write_field(PHY6252_RF_REG(0xCCU), 11U, 10U, 2U);
+		phy6252_reg_write_field(PHY6252_RF_REG(0xDCU), 9U, 5U, 1U);
+	}
+	b8 = phy6252_reg_read(PHY6252_RF_REG(0xB8U));
+	phy6252_reg_write(PHY6252_RF_REG(0xB8U), (b8 & 0x0FFFU) | ((uint32_t)entry->code << 12));
 	data->tx_power_dbm = dbm;
 }
 
-static uint8_t phy6252_rf_tp_calibrate(uint8_t channel)
+/* rf_tp_cal(rfChn, fDev = 1): the raw two-point modulation calibration code */
+static uint8_t phy6252_rf_tp_calibrate(uint8_t rf_chn)
 {
-	uint32_t old_value;
-	uint8_t cap;
+	const uint32_t bit23 = (PHY6252_HCLK_MHZ == 48U) ? 1U : 0U;
+	uint8_t code;
 
-	phy6252_reg_write(PHY6252_RF_REG(0xB4U), channel);
-	old_value = phy6252_reg_read(PHY6252_RF_REG(0x80U));
-	phy6252_reg_write(PHY6252_RF_REG(0x80U), old_value | BIT(10));
-	k_busy_wait(50U);
-	cap = (uint8_t)(phy6252_reg_read(PHY6252_RF_REG(0x94U)) & 0xFFU);
-	phy6252_reg_write(PHY6252_RF_REG(0x80U), old_value);
+	phy6252_reg_write(PHY6252_RF_REG(0x40U), 0x00030010U);
+	phy6252_reg_write_field(PHY6252_RF_REG(0xD8U), 20U, 18U, 2U);
+	phy6252_reg_write(PHY6252_RF_REG(0x8CU), 0x0053407FU);
+	phy6252_reg_write_field(PHY6252_RF_REG(0x8CU), 23U, 23U, bit23);
+	phy6252_reg_write(PHY6252_RF_REG(0xB4U), rf_chn);
+	phy6252_reg_write(PHY6252_RF_REG(0xA0U), 0x0000000EU);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000000U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000114U);
+	k_busy_wait(3000U);
+	code = (uint8_t)((phy6252_reg_read(PHY6252_RF_REG(0xF4U)) >> 16) & 0xFFU);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000000U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA0U), 0x00000000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x8CU), 0x00104040U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000140U);
+	phy6252_reg_write(PHY6252_RF_REG(0x40U), 0x00032800U);
+	phy6252_reg_write_field(PHY6252_RF_REG(0x8CU), 23U, 23U, bit23);
 
-	return ((cap >= 0x05U) && (cap <= 0x3FU)) ? cap : 0x20U;
+	return code;
 }
 
-static void phy6252_radio_init_hw(struct phy6252_data *data)
+/* rf_rxDcoc_cfg(rfChn, bwSet = 1): the RX DC-offset calibration, 0x20200000 if it fails */
+static uint32_t phy6252_rx_dcoc_calibrate(uint8_t rf_chn)
+{
+	const uint32_t flt_phy = 0x034DU;
+	uint32_t result = 0x20200000U;
+	int64_t deadline;
+
+	phy6252_reg_write(PHY6252_LL_REG(0x24U), 0U);
+	phy6252_reg_write(PHY6252_LL_REG(0x28U), 0U);
+	phy6252_reg_write(PHY6252_RF_REG(0xB4U), rf_chn);
+	phy6252_reg_write(PHY6252_RF_REG(0xA0U), 0x0000000EU);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000100U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA8U), 0x00000040U);
+	phy6252_reg_write(PHY6252_RF_REG(0xACU), 0x00000050U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x0000012AU);
+	phy6252_reg_write(PHY6252_RF_REG(0xE0U), 0x00000100U);
+	phy6252_reg_write(PHY6252_RF_REG(0xC8U), 0x000001A4U);
+	phy6252_reg_write(PHY6252_RF_REG(0xC4U), 0x00002020U);
+	phy6252_reg_write(PHY6252_RF_REG(0x50U), 0x200C5680U);
+	k_busy_wait(100U);
+	phy6252_reg_write(PHY6252_RF_REG(0x78U), (flt_phy << 22) | 0x00216564U);
+	phy6252_reg_write(PHY6252_RF_REG(0x78U), (flt_phy << 22) | 0x00216565U);
+
+	deadline = k_uptime_get() + 4;
+	while (k_uptime_get() < deadline) {
+		uint32_t ec = phy6252_reg_read(PHY6252_RF_REG(0xECU));
+
+		if (((ec >> 30) & 0x3U) == 0x3U) {
+			result = ec & 0x3F3FFFFFU;
+			phy6252_reg_write(PHY6252_RF_REG(0xC4U), 0x00010000U | (result >> 16));
+			break;
+		}
+	}
+
+	phy6252_reg_write(PHY6252_RF_REG(0x78U), (flt_phy << 22) | 0x00216564U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA8U), 0U);
+	phy6252_reg_write(PHY6252_RF_REG(0xACU), 0U);
+	phy6252_reg_write(PHY6252_RF_REG(0xC8U), 0U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000100U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA0U), 0U);
+	phy6252_reg_write(PHY6252_RF_REG(0xA4U), 0x00000140U);
+
+	return result;
+}
+
+/* Reset the LL engine (BBLL_RST) and clear its FIFOs and status */
+static void phy6252_ll_reset(void)
+{
+	phy6252_reg_write_field(PHY6252_PCR_SW_RESET2, PHY6252_BBLL_RST_BIT, PHY6252_BBLL_RST_BIT,
+				0U);
+	phy6252_reg_write_field(PHY6252_PCR_SW_RESET2, PHY6252_BBLL_RST_BIT, PHY6252_BBLL_RST_BIT,
+				1U);
+	phy6252_reg_write(PHY6252_LL_REG(0x0CU), 0U);
+	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
+	phy6252_reg_write(PHY6252_LL_REG(0x58U), 0x0100U);
+	phy6252_reg_write(PHY6252_LL_REG(0x58U), 0x0001U);
+}
+
+/* rf_phy_ana_cfg() with the 16 MHz crystal as the RF PHY clock */
+static void phy6252_radio_ana_cfg(void)
 {
 	phy6252_reg_write_field(PHY6252_CLK_CTRL, 18U, 18U, 1U);
-	phy6252_reg_write_field(PHY6252_CLK_CFG, 25U, 24U, 0U);
+	phy6252_reg_write_field(PHY6252_CLK_CFG, 25U, 24U, 2U);
 	phy6252_reg_write_field(PHY6252_CLK_CFG, 23U, 22U, 0U);
 	phy6252_reg_write_field(PHY6252_CLK_CFG, 6U, 5U, 3U);
 	phy6252_reg_write_field(PHY6252_CLK_CFG, 8U, 8U, 1U);
 	phy6252_reg_write_field(PHY6252_CLK_CFG, 19U, 18U, 3U);
-	phy6252_reg_write_field(PHY6252_RF_REG(0x80U), 0U, 0U, 1U);
+	phy6252_reg_write_field(PHY6252_RF_REG(0x8CU), 23U, 23U,
+				(PHY6252_HCLK_MHZ == 48U) ? 1U : 0U);
 
 	phy6252_reg_write(PHY6252_RF_REG(0xCCU), 0x20000BC0U);
-	phy6252_reg_write(PHY6252_RF_REG(0xD0U), 0x00000140U);
-	phy6252_reg_write(PHY6252_RF_REG(0xD4U), 0x04083F6AU);
-	phy6252_reg_write(PHY6252_RF_REG(0xD8U), 0x04928000U);
-	phy6252_reg_write(PHY6252_RF_REG(0x104U), 0x000000A0U);
-	phy6252_reg_write(PHY6252_RF_REG(0x108U), 0x07083F9AU);
-	phy6252_reg_write(PHY6252_RF_REG(0x10CU), 0x04910000U);
-	phy6252_reg_write(PHY6252_RF_REG(0x80U), 0x000024CDU);
-	phy6252_reg_write(PHY6252_RF_REG(0xDCU), 0x01BE7F0FU);
-	phy6252_reg_write(PHY6252_RF_REG(0xB0U), 0x01000003U);
+	phy6252_reg_write(PHY6252_RF_REG(0xD0U), 0x00000160U);
+	phy6252_reg_write(PHY6252_RF_REG(0xD4U), 0x076A3E7AU);
+	phy6252_reg_write(PHY6252_RF_REG(0xD8U), 0x04890000U);
+	phy6252_reg_write(PHY6252_RF_REG(0xD0U), 0x00000180U);
+	phy6252_reg_write(PHY6252_RF_REG(0xD4U), 0x076A3E7AU);
+	phy6252_reg_write(PHY6252_RF_REG(0xD8U), 0x04890000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x104U), 0x00000180U);
+	phy6252_reg_write(PHY6252_RF_REG(0x108U), 0x076A3E7AU);
+	phy6252_reg_write(PHY6252_RF_REG(0x10CU), 0x04898000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x80U), 0x000024CCU);
+	phy6252_reg_write_field(PHY6252_RF_REG(0x80U), 0U, 0U, 1U);
+	phy6252_reg_write(PHY6252_RF_REG(0xB8U), 0x0825U);
+	phy6252_reg_write(PHY6252_RF_REG(0xDCU), 0x01A6FC2FU);
+}
+
+/* rf_phy_bb_cfg() for the Zigbee packet format */
+static void phy6252_radio_bb_cfg(const struct phy6252_data *data)
+{
+	static const uint32_t agc_table[] = {
+		0x545C9CA4U, 0x4243444CU, 0x464C5241U, 0x2E343A40U, 0x557F0028U,
+		0x3D43494FU, 0x4C2B3137U, 0x343A4046U, 0x1C22282EU,
+	};
 
 	phy6252_reg_write(PHY6252_RF_REG(0xE0U), 0x00000080U);
 	phy6252_reg_write_field(PHY6252_RF_REG(0xD8U), 20U, 18U, 2U);
-	phy6252_reg_write(PHY6252_RF_REG(0x90U), 0x00080000U);
+	phy6252_reg_write(PHY6252_RF_REG(0x90U), 0x00087000U);
+	phy6252_reg_write(PHY6252_RF_REG(0xB0U), 0x01000002U);
+	phy6252_reg_write(PHY6252_RF_REG(0x94U), 0x00001000U + data->tp_cal0);
 	phy6252_reg_write(PHY6252_RF_REG(0x00U), 0x78068000U);
 	phy6252_reg_write(PHY6252_RF_REG(0x48U), 0x00000000U);
 	phy6252_reg_write(PHY6252_RF_REG(0x40U), 0x000B2800U);
 	phy6252_reg_write(PHY6252_RF_REG(0x4CU), 0x3675EE07U);
-	phy6252_reg_write(PHY6252_RF_REG(0x0CU), 128U);
+	/* ll_hw_set_crc_fmt(): the TX format in bits 15:8, the RX format in 7:0 */
+	phy6252_reg_write(PHY6252_BB_CRC_FMT, (PHY6252_CRC_ZIGBEE << 8) | PHY6252_CRC_ZIGBEE);
+	phy6252_reg_write(PHY6252_RF_REG(0x50U), 0x22086680U);
+	phy6252_reg_write_field(PHY6252_RF_REG(0x0CU), 7U, 0U, 0xFFU);
+	for (size_t i = 0U; i < ARRAY_SIZE(agc_table); i++) {
+		phy6252_reg_write(PHY6252_RF_REG(0x54U + (4U * i)), agc_table[i]);
+	}
+}
 
-	/*
-	 * LL+0x08, +0x18 and +0x1C are inter-frame timing registers (in 1/16 us), not resets. The values
-	 * come from the unverified zigbee-rs backend; the shipping firmware programs 1600..2112 into
-	 * +0x18 and 1728..1920 into +0x1C. Keep these until they are checked on a board.
-	 */
-	phy6252_reg_write(PHY6252_LL_REG(0x18U), 192U * 16U);
-	phy6252_reg_write(PHY6252_LL_REG(0x1CU), 192U * 16U);
-	phy6252_reg_write(PHY6252_LL_REG(0x08U), (80U * 16U << 16) | (80U * 16U));
-	phy6252_reg_write(PHY6252_LL_REG(0x34U),
-			  PHY6252_CRC_ZIGBEE | (PHY6252_CRC_ZIGBEE << 4));
+/* ll_hw_set_timing() of the ROM for the Zigbee format, in HCLK cycles, and the RX windows */
+static void phy6252_radio_ll_cfg(void)
+{
+	phy6252_reg_write(PHY6252_LL_REG(0x20U),
+			  ((10U * PHY6252_HCLK_MHZ) << 16) | PHY6252_HCLK_MHZ);
+	phy6252_reg_write(PHY6252_LL_REG(0x1CU), 62U * PHY6252_HCLK_MHZ);
+	phy6252_reg_write(PHY6252_LL_REG(0x18U), 72U * PHY6252_HCLK_MHZ);
+	phy6252_reg_write(PHY6252_RF_REG(0xBCU), PHY6252_TRX_SETTLE_ZIGBEE);
+	phy6252_reg_write(PHY6252_LL_REG(0x68U), PHY6252_LL_IGN_CRC_EMPTY);
+	phy6252_reg_write(PHY6252_LL_REG(0x24U), PHY6252_RX_TIMEOUT_US);
+	phy6252_reg_write(PHY6252_LL_REG(0x28U), PHY6252_RX_TIMEOUT_US);
+}
 
-	data->tp_cal0 = phy6252_rf_tp_calibrate(2U) + 4U;
-	data->tp_cal1 = phy6252_rf_tp_calibrate(66U) + 4U;
+static void phy6252_radio_init_hw(struct phy6252_data *data)
+{
+	phy6252_ll_reset();
+	phy6252_radio_ana_cfg();
 	phy6252_radio_set_tx_power(data, 0);
+
+	data->tp_cal0 = phy6252_rf_tp_calibrate(2U) + PHY6252_TP_CAL_OFFSET;
+	data->tp_cal1 = phy6252_rf_tp_calibrate(66U) + PHY6252_TP_CAL_OFFSET;
+	(void)phy6252_rx_dcoc_calibrate(88U);
+
+	/* The calibration overwrites RF+0x40, 0x50 and 0xE0: the baseband is set up after it */
+	phy6252_radio_bb_cfg(data);
+	phy6252_radio_ll_cfg();
 	phy6252_radio_set_channel(data, PHY6252_CHANNEL_MIN);
+
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 }
 
-static void phy6252_radio_abort(void)
+static __ramfunc void phy6252_radio_abort(void)
 {
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x0CU), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
 }
 
-static void phy6252_radio_rx_start(void)
+static __ramfunc void phy6252_radio_rx_start(void)
 {
 	phy6252_reg_write(PHY6252_LL_REG(0x00U), 0U);
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
+	phy6252_reg_write(PHY6252_LL_REG(0x58U), 0x0100U);
+	phy6252_reg_write(PHY6252_LL_REG(0x24U), PHY6252_RX_TIMEOUT_US);
+	phy6252_reg_write(PHY6252_LL_REG(0x28U), PHY6252_RX_TIMEOUT_US);
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_SRX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
-	phy6252_reg_write(PHY6252_LL_REG(0x28U), UINT16_MAX);
-	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
-	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+	phy6252_ll_go();
+}
+
+/*
+ * Stop the receiver that runs continuously: the RX window is cut to 33 us so the engine ends
+ * with a timeout, or completes a frame it has already synchronized to. Stopping it by clearing
+ * the trigger leaves the next transmit unable to start. Resetting the LL engine is the bounded
+ * fallback. The receiver is not re-armed here.
+ */
+static void phy6252_rx_stop(struct phy6252_data *data)
+{
+	if (atomic_get(&data->started) == 0) {
+		return;
+	}
+
+	k_sem_reset(&data->rx_stopped);
+	atomic_set(&data->rx_stopping, 1);
+	phy6252_reg_write(PHY6252_LL_REG(0x24U), PHY6252_RX_STOP_TIMEOUT_US);
+	phy6252_reg_write(PHY6252_LL_REG(0x28U), PHY6252_RX_STOP_TIMEOUT_US);
+	if (k_sem_take(&data->rx_stopped, K_MSEC(PHY6252_RX_STOP_WAIT_MS)) != 0) {
+		phy6252_ll_reset();
+		phy6252_radio_ll_cfg();
+	}
+	atomic_set(&data->rx_stopping, 0);
 }
 
 static void phy6252_measure_rssi(struct phy6252_data *data, bool resume_rx, int8_t *rssi)
 {
+	phy6252_rx_stop(data);
 	phy6252_radio_abort();
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_SRX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
 	phy6252_reg_write(PHY6252_LL_REG(0x28U), 0x0800U);
-	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+	phy6252_ll_go();
 	k_busy_wait(PHY6252_CCA_SETTLE_US);
 	/* RF+0xE8 holds the received level as a positive magnitude, as the SDK reads it. */
 	*rssi = -(int8_t)(phy6252_reg_read(PHY6252_RF_REG(0xE8U)) >> 24);
@@ -438,12 +655,13 @@ static void phy6252_measure_rssi(struct phy6252_data *data, bool resume_rx, int8
 
 }
 
-static bool phy6252_filter_frame(struct phy6252_data *data, const uint8_t *psdu, uint8_t len)
+static __ramfunc bool phy6252_filter_frame(struct phy6252_data *data, const uint8_t *psdu,
+					   uint8_t len)
 {
 	return phy6252_filter_match(data, psdu, len);
 }
 
-static bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t *psdu,
+static __ramfunc bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t *psdu,
 				      uint8_t len)
 {
 	uint8_t ieee_addr[sizeof(data->ieee_addr)];
@@ -475,8 +693,9 @@ static bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t 
 	short_filter_enabled = data->short_filter_enabled;
 	short_addr = data->short_addr;
 	ieee_filter_enabled = data->ieee_filter_enabled;
-	memcpy(ieee_addr, ieee_filter_enabled ? data->filter_ieee_addr : data->ieee_addr,
-	       sizeof(ieee_addr));
+	for (size_t i = 0U; i < sizeof(ieee_addr); i++) {
+		ieee_addr[i] = ieee_filter_enabled ? data->filter_ieee_addr[i] : data->ieee_addr[i];
+	}
 	irq_unlock(key);
 
 	if (promiscuous) {
@@ -495,14 +714,21 @@ static bool phy6252_frame_requires_ack(struct phy6252_data *data, const uint8_t 
 	}
 
 	if (dst_mode == 3U) {
-		return (len >= 13U) &&
-		       (memcmp(&psdu[5], ieee_addr, sizeof(ieee_addr)) == 0);
+		if (len < 13U) {
+			return false;
+		}
+		for (size_t i = 0U; i < sizeof(ieee_addr); i++) {
+			if (psdu[5U + i] != ieee_addr[i]) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	return false;
 }
 
-static void phy6252_send_ack(uint8_t sequence)
+static __ramfunc void phy6252_send_ack(uint8_t sequence)
 {
 	const uint32_t tx_timeout_cycles = k_us_to_cyc_ceil32(PHY6252_ACK_TX_TIMEOUT_US);
 	/* The hardware appends the FCS; no pending-data bit is set in the FCF. */
@@ -512,34 +738,31 @@ static void phy6252_send_ack(uint8_t sequence)
 	phy6252_radio_abort();
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
-	phy6252_reg_write(PHY6252_LL_REG(0x40U), 1U);
-	ROM_LL_HW_SET_TRX_SETTLE(PHY6252_SETTLE_BB_ACK, PHY6252_SETTLE_AFE, PHY6252_SETTLE_PLL);
-
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
-	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
+	phy6252_reg_write(PHY6252_RF_REG(0xBCU), PHY6252_TRX_SETTLE_ACK);
 	/*
 	 * Trigger first and load the frame right after, as the shipping firmware does: the
 	 * baseband reads the TX FIFO only when the settle time has passed, and that settle
 	 * time is what makes the acknowledgement start about a turnaround time after the
 	 * end of the received frame.
 	 */
-	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
-	ROM_LL_HW_RST_TFIFO();
-	(void)ROM_LL_HW_WRITE_TFIFO(ack, sizeof(ack));
+	phy6252_ll_go();
+	phy6252_tfifo_load(ack, sizeof(ack));
 
 	tx_start_cycles = k_cycle_get_32();
 	while ((phy6252_reg_read(PHY6252_LL_REG(0x10U)) & PHY6252_IRQ_MD) == 0U) {
 		if ((k_cycle_get_32() - tx_start_cycles) >= tx_timeout_cycles) {
 			phy6252_radio_abort();
+			phy6252_reg_write(PHY6252_RF_REG(0xBCU), PHY6252_TRX_SETTLE_ZIGBEE);
 			return;
 		}
 	}
 
 	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
+	phy6252_reg_write(PHY6252_RF_REG(0xBCU), PHY6252_TRX_SETTLE_ZIGBEE);
 }
 
-static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu, uint8_t len,
-				 int8_t rssi_dbm)
+static __ramfunc void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu,
+					   uint8_t len, int8_t rssi_dbm)
 {
 	if ((atomic_get(&data->ack_waiting) == 0) || !phy6252_is_ack(psdu, len) ||
 	    (psdu[2] != (uint8_t)atomic_get(&data->expected_ack_seq))) {
@@ -568,7 +791,7 @@ static void phy6252_ack_received(struct phy6252_data *data, const uint8_t *psdu,
 	k_sem_give(&data->ack_done);
 }
 
-static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
+static __ramfunc void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 {
 	struct phy6252_rx_frame frame;
 	/* The ROM copies whole FIFO words: the PHR, the PSDU with its FCS and up to 3 bytes of pad. */
@@ -623,7 +846,7 @@ static void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 	}
 }
 
-static void phy6252_radio_isr(const void *arg)
+static __ramfunc void phy6252_radio_isr(const void *arg)
 {
 	struct phy6252_data *data = (struct phy6252_data *)arg;
 	uint32_t irq_status = phy6252_reg_read(PHY6252_LL_REG(0x10U));
@@ -639,6 +862,10 @@ static void phy6252_radio_isr(const void *arg)
 		phy6252_rx_irq(data, irq_status);
 	}
 
+	if (atomic_get(&data->rx_stopping) != 0) {
+		k_sem_give(&data->rx_stopped);
+		return;
+	}
 	if (atomic_get(&data->started) != 0) {
 		phy6252_radio_rx_start();
 	}
@@ -867,23 +1094,18 @@ static int phy6252_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	k_sem_reset(&data->ack_done);
 	atomic_set(&data->expected_ack_seq, (len >= 3U) ? psdu[2] : 0U);
 	atomic_set(&data->ack_waiting, ack_requested ? 1 : 0);
+	phy6252_rx_stop(data);
 	phy6252_radio_abort();
 	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
-	phy6252_reg_write(PHY6252_LL_REG(0x40U), 1U);
 
 	uint8_t tx_buf[PHY6252_MAX_PSDU + 1U];
 
 	/* PHR (PSDU length including the FCS the hardware appends) followed by the PSDU. */
 	tx_buf[0] = (uint8_t)(len + PHY6252_FCS_LEN);
 	memcpy(&tx_buf[1], psdu, len);
-	ROM_LL_HW_SET_TRX_SETTLE(PHY6252_SETTLE_BB_TX, PHY6252_SETTLE_AFE, PHY6252_SETTLE_PLL);
-	ROM_LL_HW_RST_TFIFO();
-	(void)ROM_LL_HW_WRITE_TFIFO(tx_buf, (uint8_t)(len + 1U));
-
-	phy6252_reg_write(PHY6252_LL_REG(0x14U), PHY6252_IRQ_CLEAR);
-	phy6252_reg_write(PHY6252_LL_REG(0x0CU), PHY6252_IRQ_MD);
-	phy6252_reg_write(PHY6252_LL_REG(0x00U), 1U);
+	phy6252_tfifo_load(tx_buf, len + 1U);
+	phy6252_ll_go();
 	ret = k_sem_take(&data->tx_done, K_MSEC(PHY6252_TX_TIMEOUT_MS));
 	if (ret != 0) {
 		atomic_set(&data->ack_waiting, 0);
@@ -987,6 +1209,8 @@ static int phy6252_init(const struct device *dev)
 	k_mutex_init(&data->op_lock);
 	k_sem_init(&data->tx_done, 0, 1);
 	k_sem_init(&data->ack_done, 0, 1);
+	k_sem_init(&data->rx_stopped, 0, 1);
+	atomic_set(&data->rx_stopping, 0);
 	k_work_init(&data->rx_work, phy6252_rx_work_handler);
 	data->channel = PHY6252_CHANNEL_MIN;
 	data->filter_pan_id = 0xFFFFU;
