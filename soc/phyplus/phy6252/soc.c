@@ -13,6 +13,16 @@ extern const uintptr_t _irq_vector_table[];
 #define ROM_CLK_INIT     ((int (*)(uint32_t))0x0000a5edU)
 #define ROM_CLK_GET_PCLK ((uint32_t (*)(void))0x0000a5d1U)
 #define SYS_CLK_XTAL_16M 2U
+#define SYS_CLK_DLL_48M  3U
+
+/* The core clock is the CPU timebase of the devicetree: the 16 MHz crystal or the 48 MHz DLL. */
+#if CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 16000000
+#define PHY6252_SYS_CLK SYS_CLK_XTAL_16M
+#elif CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 48000000
+#define PHY6252_SYS_CLK SYS_CLK_DLL_48M
+#else
+#error "The CPU timebase frequency must be 16 MHz or 48 MHz"
+#endif
 
 void soc_prep_hook(void)
 {
@@ -33,9 +43,10 @@ void soc_prep_hook(void)
 		jump[224U + i] = _irq_vector_table[i];
 	}
 
-	/* Select the 16 MHz crystal and require the UART clock to match. */
-	*(volatile uint8_t *)0x1fff0a4aU = SYS_CLK_XTAL_16M;
-	if (ROM_CLK_INIT(SYS_CLK_XTAL_16M) != 0 || ROM_CLK_GET_PCLK() != 16000000U) {
+	/* Select the core clock and require the clock of the peripherals to match. */
+	*(volatile uint8_t *)0x1fff0a4aU = PHY6252_SYS_CLK;
+	if (ROM_CLK_INIT(PHY6252_SYS_CLK) != 0 ||
+	    ROM_CLK_GET_PCLK() != CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC) {
 		for (;;) {
 			__asm__ volatile("wfi");
 		}
