@@ -25,3 +25,11 @@ config PHY6252_WATCHDOG_TIMEOUT_MS
 	help
 	  The timeout comes from the 32 kHz RC oscillator in steps of a power of two, 2 s up to
 	  256 s.
+
+config PHY6252_UART1_SWAP
+	bool "UART1 with TX on P3 and RX on P2"
+	depends on SOC_PHY6252
+	help
+	  UART1 is on P2 (TX) and P3 (RX) when the console is on UART1. Select this when the adapter
+	  is wired the other way round.
+
