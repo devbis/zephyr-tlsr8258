@@ -86,9 +86,12 @@ LOG_MODULE_REGISTER(ieee802154_phy6252, CONFIG_IEEE802154_DRIVER_LOG_LEVEL);
 
 #define PHY6252_LL_IGN_CRC_EMPTY    0x03U
 #define PHY6252_LL_MODE_STX         0U
+#define PHY6252_LL_MODE_TRX         2U
 #define PHY6252_LL_MODE_SRX         1U
 #define PHY6252_LL_STX_CONFIG       0x000100U
 #define PHY6252_LL_SRX_CONFIG       0x010001U
+#define PHY6252_LL_TRX_CONFIG       0x010102U
+#define PHY6252_ACK_WAIT_US         864U
 #define PHY6252_LL_BYPASS_FIELDS    0x07U
 
 struct phy6252_rx_frame {
@@ -123,6 +126,7 @@ struct phy6252_data {
 };
 
 static struct phy6252_data phy6252_data;
+
 
 K_MSGQ_DEFINE(phy6252_rx_queue, sizeof(struct phy6252_rx_frame), PHY6252_RX_QUEUE_DEPTH, 4);
 
@@ -857,6 +861,12 @@ static __ramfunc void phy6252_radio_isr(const void *arg)
 
 	if (((irq_status & PHY6252_IRQ_MD) != 0U) && (mode == PHY6252_LL_MODE_STX)) {
 		k_sem_give(&data->tx_done);
+	} else if (((irq_status & PHY6252_IRQ_MD) != 0U) && (mode == PHY6252_LL_MODE_TRX)) {
+		/* The transmit and the window for its ACK ended: take the ACK, then wake the TX */
+		if ((irq_status & PHY6252_IRQ_COK) != 0U) {
+			phy6252_rx_irq(data, irq_status);
+		}
+		k_sem_give(&data->tx_done);
 	} else if ((mode == PHY6252_LL_MODE_SRX) &&
 		   ((irq_status & (PHY6252_IRQ_MD | PHY6252_IRQ_RTO)) != 0U)) {
 		phy6252_rx_irq(data, irq_status);
@@ -1096,7 +1106,19 @@ static int phy6252_tx(const struct device *dev, enum ieee802154_tx_mode mode,
 	atomic_set(&data->ack_waiting, ack_requested ? 1 : 0);
 	phy6252_rx_stop(data);
 	phy6252_radio_abort();
-	phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
+	/*
+	 * A frame that wants an ACK is sent and its ACK received in one LL operation: the engine
+	 * turns the radio around after the TX to RX interval. Re-arming the receiver from the
+	 * interrupt after the transmit is too slow for the 192 us turnaround, no ACK is seen.
+	 */
+	if (ack_requested) {
+		phy6252_reg_write(PHY6252_LL_REG(0x24U), PHY6252_ACK_WAIT_US);
+		phy6252_reg_write(PHY6252_LL_REG(0x28U), PHY6252_ACK_WAIT_US);
+		phy6252_reg_write(PHY6252_LL_REG(0x58U), 0x0100U);
+		phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_TRX_CONFIG);
+	} else {
+		phy6252_reg_write(PHY6252_LL_REG(0x04U), PHY6252_LL_STX_CONFIG);
+	}
 	phy6252_reg_write(PHY6252_LL_REG(0x38U), PHY6252_LL_BYPASS_FIELDS);
 
 	uint8_t tx_buf[PHY6252_MAX_PSDU + 1U];
