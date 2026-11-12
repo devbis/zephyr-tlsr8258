@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: ECB02C shell
+tests:
+  sample.boards.chinalctech.ecb02c_shell:
+    platform_allow: ecb02c
+    build_only: true
+    tags: chinalctech
