@@ -7,6 +7,9 @@
 #include <zephyr/init.h>
 #include <zephyr/irq.h>
 #include <zephyr/linker/sections.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/watchdog.h>
+#include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/platform/hooks.h>
 
@@ -160,3 +163,85 @@ static int phy6252_xip_cache_init(void)
 }
 
 SYS_INIT(phy6252_xip_cache_init, PRE_KERNEL_1, 0);
+
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(watchdog0), okay)
+/*
+ * The clock and the reset of the watchdog as in hal_watchdog_init() of the vendor SDK: the 32 kHz
+ * RC oscillator, the clock gate, the reset of the module released and pulsed.
+ */
+static void phy6252_wdt_delay(void)
+{
+	/* The system timer does not run yet: a plain loop, as in the SDK */
+	for (volatile uint32_t i = 0U; i < 40U; i++) {
+	}
+}
+
+static int phy6252_wdt_hw_init(void)
+{
+	volatile uint32_t *const clksel = (volatile uint32_t *)0x4000f03cU;
+	volatile uint32_t *const sw_reset0 = (volatile uint32_t *)0x40000000U;
+	volatile uint32_t *const sw_clk1 = (volatile uint32_t *)0x40000014U;
+	volatile uint32_t *const sw_reset2 = (volatile uint32_t *)0x4000000cU;
+
+	*clksel &= ~BIT(16);
+	*sw_clk1 |= BIT(5);
+	if ((*sw_reset0 & BIT(2)) == 0U) {
+		*sw_reset0 |= BIT(2);
+		phy6252_wdt_delay();
+	}
+	if ((*sw_reset2 & BIT(2)) == 0U) {
+		*sw_reset2 |= BIT(2);
+		phy6252_wdt_delay();
+	}
+	*sw_reset2 &= ~BIT(5);
+	phy6252_wdt_delay();
+	*sw_reset2 |= BIT(5);
+	phy6252_wdt_delay();
+	return 0;
+}
+
+SYS_INIT(phy6252_wdt_hw_init, PRE_KERNEL_1, 1);
+#endif
+
+#ifdef CONFIG_PHY6252_WATCHDOG
+/*
+ * The watchdog is armed as soon as its driver is ready, so a hang in any later initialization or in
+ * the application resets the chip. The hardware init above resets the module and so disarms the
+ * timer that the bootloader has started.
+ */
+static int phy6252_wdt_arm(void)
+{
+	const struct device *wdt = DEVICE_DT_GET(DT_NODELABEL(watchdog0));
+	struct wdt_timeout_cfg cfg = {
+		.flags = WDT_FLAG_RESET_SOC,
+		.window.min = 0U,
+		.window.max = CONFIG_PHY6252_WATCHDOG_TIMEOUT_MS,
+	};
+
+	if (!device_is_ready(wdt) || wdt_install_timeout(wdt, &cfg) < 0 || wdt_setup(wdt, 0) != 0) {
+		return -ENODEV;
+	}
+	return 0;
+}
+
+/* Right after the devices (priority 50), where the driver of the watchdog is initialized */
+SYS_INIT(phy6252_wdt_arm, POST_KERNEL, 51);
+
+static void phy6252_wdt_feeder(void *a, void *b, void *c)
+{
+	const struct device *wdt = DEVICE_DT_GET(DT_NODELABEL(watchdog0));
+
+	ARG_UNUSED(a);
+	ARG_UNUSED(b);
+	ARG_UNUSED(c);
+
+	for (;;) {
+		(void)wdt_feed(wdt, 0);
+		k_msleep(CONFIG_PHY6252_WATCHDOG_TIMEOUT_MS / 4);
+	}
+}
+
+/* The lowest priority: it runs only when nothing else wants the CPU */
+K_THREAD_DEFINE(phy6252_wdt, 512, phy6252_wdt_feeder, NULL, NULL, NULL,
+		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
+#endif
