@@ -1,0 +1,26 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The console, the shell and the MCUmgr serial transport on UART0, pins P9 (TX) and P10 (RX), the
+ * pins of the boot ROM loader, for a module that is wired there instead of to the USB-UART on P2
+ * and P3. Build with -DEXTRA_DTC_OVERLAY_FILE=<this file>, for MCUboot as well.
+ */
+
+/ {
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,uart-mcumgr = &uart0;
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "disabled";
+};
