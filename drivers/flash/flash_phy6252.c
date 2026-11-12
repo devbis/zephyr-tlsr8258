@@ -82,6 +82,20 @@ static __ramfunc int phy6252_flash_command(uint32_t offset, uint8_t *buf, uint32
 	*cache = 0U;
 	*cache_reset = 3U;
 	*bypass = 0U;
+
+	/*
+	 * Drop the cached lines of what was just erased or written; the XIP cache would return the
+	 * old data (hal_cache_tag_flush() of the vendor SDK).
+	 */
+	*bypass = 1U;
+	*cache = 2U;
+	for (volatile uint32_t i = 0U; i < 8U; i++) {
+	}
+	*cache = 3U;
+	for (volatile uint32_t i = 0U; i < 8U; i++) {
+	}
+	*cache = 0U;
+	*bypass = 0U;
 	return result;
 }
 
