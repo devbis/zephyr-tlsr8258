@@ -11,6 +11,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/random/random.h>
+#include <zephyr/sys/reboot.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_znp.h>
@@ -219,8 +220,10 @@ static void sys_reset_req(const uint8_t *d, uint8_t len)
 	uint8_t opt = 0U;
 	size_t n;
 
-	ARG_UNUSED(d);
-	ARG_UNUSED(len);
+	/* Reset type 0 is a hard reset of the chip, as in Z-Stack; type 1 resets the stack only */
+	if ((len >= 1U) && (d[0] == 0U)) {
+		sys_reboot(SYS_REBOOT_COLD);
+	}
 
 	(void)znp_nv_read(ZNP_NV_STARTUP_OPTION, 0U, &opt, 1U, &n);
 
