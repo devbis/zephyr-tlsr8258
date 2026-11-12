@@ -4,6 +4,7 @@
  */
 
 #include <stdint.h>
+#include <zephyr/init.h>
 #include <zephyr/platform/hooks.h>
 
 extern const uintptr_t _vector_table[];
@@ -68,3 +69,22 @@ void soc_prep_hook(void)
 	*reset |= 1U << 5;
 #endif
 }
+
+#ifdef CONFIG_SERIAL
+/*
+ * The NS16550 driver ends its initialisation with a write of FCR that leaves the FIFO bit clear.
+ * The UART then raises one interrupt per character and, with the interrupt latency of this core,
+ * loses bytes from 115200 baud bursts. Enable the 16 byte FIFO again; the receive trigger stays at
+ * one character.
+ */
+static int phy6252_uart_fifo(void)
+{
+	volatile uint32_t *const fcr = (volatile uint32_t *)(0x40004000U + 2U * 4U);
+
+	*fcr = 0x07U; /* FIFO enable, clear RX and TX FIFO */
+
+	return 0;
+}
+
+SYS_INIT(phy6252_uart_fifo, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif
