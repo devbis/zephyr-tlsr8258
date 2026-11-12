@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <zephyr/init.h>
 #include <zephyr/irq.h>
+#include <zephyr/linker/sections.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/platform/hooks.h>
 
@@ -17,6 +18,8 @@ extern const uintptr_t _irq_vector_table[];
 #define ROM_CLK_GET_PCLK ((uint32_t (*)(void))0x0000a5d1U)
 #define SYS_CLK_XTAL_16M 2U
 #define SYS_CLK_DLL_48M  3U
+#define ROM_SPIF_CONFIG  ((int (*)(uint32_t, uint8_t, uint32_t, uint8_t, uint8_t))0x00016dc5U)
+#define XFRD_FCMD_READ   0x00000003U
 
 /* The core clock is the CPU timebase of the devicetree: the 16 MHz crystal or the 48 MHz DLL. */
 #if CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 16000000
@@ -112,3 +115,48 @@ void sys_arch_reboot(int type)
 	}
 }
 #endif
+
+/*
+ * The boot ROM leaves the cache of the XIP flash bypassed: every instruction is fetched from the
+ * flash by its own SPI transaction and the code runs about a hundred times slower than it can (a
+ * hash of a 50 KB image took 43 s). Configure the flash read and enable the cache as the vendor SDK
+ * does after the clock initialisation. The read mode of the flash changes underneath, so this runs
+ * from SRAM.
+ */
+static __ramfunc void phy6252_xip_cache_enable(void)
+{
+	volatile uint32_t *const pcr_cache_gate = (volatile uint32_t *)0x40000020U;
+	volatile uint32_t *const pcr_cache_rst = (volatile uint32_t *)0x40000024U;
+	volatile uint32_t *const pcr_cache_bypass = (volatile uint32_t *)0x40000028U;
+	volatile uint32_t *const cache_ctrl = (volatile uint32_t *)0x4000c000U;
+	volatile int delay = 100;
+
+	(void)ROM_SPIF_CONFIG(PHY6252_SYS_CLK, 1U, XFRD_FCMD_READ, 0U, 0U);
+
+	*pcr_cache_gate |= 3U;
+	*pcr_cache_rst = 2U;
+	while (delay-- > 0) {
+	}
+	*pcr_cache_rst = 3U;
+
+	/* Flush the tags */
+	*pcr_cache_bypass = 1U;
+	*cache_ctrl = 2U;
+	delay = 8;
+	while (delay-- > 0) {
+	}
+	*cache_ctrl = 3U;
+	delay = 8;
+	while (delay-- > 0) {
+	}
+	*cache_ctrl = 0U;
+	*pcr_cache_bypass = 0U;
+}
+
+static int phy6252_xip_cache_init(void)
+{
+	phy6252_xip_cache_enable();
+	return 0;
+}
+
+SYS_INIT(phy6252_xip_cache_init, PRE_KERNEL_1, 0);
