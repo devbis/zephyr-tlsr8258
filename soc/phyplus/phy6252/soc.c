@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 #include <zephyr/init.h>
+#include <zephyr/irq.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/platform/hooks.h>
 
 extern const uintptr_t _vector_table[];
@@ -87,4 +89,26 @@ static int phy6252_uart_fifo(void)
 }
 
 SYS_INIT(phy6252_uart_fifo, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif
+
+#ifdef CONFIG_REBOOT
+/*
+ * NVIC_SystemReset() resets the core only and the boot ROM does not start afterwards. The reset of
+ * the vendor SDK (hal_system_soft_reset()) resets every module through SW_RESET1; the reset cause
+ * the ROM reads from the retained register is set to a cold start, so that the ROM opens its UART
+ * loader window as after power-up and a flash tool can connect without a power cycle.
+ */
+void sys_arch_reboot(int type)
+{
+	/* AP_AON->SLEEP_R[0] and AP_PCR->SW_RESET1 */
+	volatile uint32_t *const reset_cause = (volatile uint32_t *)0x4000f0c0U;
+	volatile uint32_t *const sw_reset1 = (volatile uint32_t *)0x40000004U;
+
+	ARG_UNUSED(type);
+	(void)irq_lock();
+	*reset_cause = 0U; /* RSTC_COLD_UP */
+	*sw_reset1 = 0U;
+	for (;;) {
+	}
+}
 #endif
