@@ -1,0 +1,14 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * An application that MCUboot starts: the offsets of the code partition are relative to the whole
+ * flash.
+ */
+/ {
+	chosen {
+		zephyr,flash = &flash_memory;
+	};
+};
