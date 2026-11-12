@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* Z-Stack host UART for ecb02c: uart1 (P3 TX, P2 RX), the module's console UART and the one its
+ * USB-UART is wired to. The coordinator build turns the console and the shell off, so the UART
+ * carries only the NCP protocol.
+ */
+
+/ {
+	chosen {
+		zigbee,ncp-uart = &uart1;
+	};
+};
