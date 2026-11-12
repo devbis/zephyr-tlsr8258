@@ -33,6 +33,18 @@ ev_timer_event_t *quickDataPollTimerEvt = NULL;
 #endif
 
 #if defined(ZB_ROUTER_ROLE)
+/*
+ * A frame goes out indirectly, on the poll of the node, only for a child that sleeps between
+ * polls. A neighbor that is not a child, a router that a link status added for example, has no
+ * poll to wait for, whatever its entry says about the receiver.
+ */
+static bool nwk_neighborIsSleepyChild(const zb_normal_neighbor_entry_t *neighbor)
+{
+	return (neighbor != NULL) && (neighbor->rxOnWhileIdle == 0U) &&
+	       ((neighbor->relationship == NEIGHBOR_IS_CHILD) ||
+		(neighbor->relationship == NEIGHBOR_IS_UNAUTH_CHILD));
+}
+
 static void nwk_tx_data_pend_route_disc_fail(nwk_txDataPendEntry_t *pend)
 {
 	if (pend == NULL) {
@@ -571,8 +583,8 @@ brc_tx:
 			nextHop = nwkSrcRouteReplayNextHop(pNwkHdr);
 			if (pNwkHdr->srcRouteSubframe.relayIdx == 0U) {
 				neighbor = nwk_neTblGetByShortAddr(nextHop);
-				if (neighbor != NULL) {
-					indirect = neighbor->rxOnWhileIdle ? 0U : 1U;
+				if (nwk_neighborIsSleepyChild(neighbor)) {
+					indirect = 1U;
 				}
 			}
 
@@ -667,8 +679,7 @@ brc_tx:
 		 * sleeping child immediately means nobody is listening: its receiver
 		 * only opens for a moment after each data request. */
 		nwk_tx(buf, pNwkHdr, nextHop,
-		       (neighbor != NULL && neighbor->rxOnWhileIdle == 0U) ? 1U : 0U, payload,
-		       payloadLen);
+		       nwk_neighborIsSleepyChild(neighbor) ? 1U : 0U, payload, payloadLen);
 		return;
 	}
 #else
