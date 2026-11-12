@@ -28,6 +28,46 @@ static void tx_drain(size_t max);
 
 static struct znp_parser rx;
 
+#ifdef CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ
+#define ZNP_RX_RING_SIZE 512U
+
+/* Filled by the UART interrupt, drained by zb_znp_poll(); a byte that does not fit is dropped */
+static uint8_t rx_ring[ZNP_RX_RING_SIZE];
+static volatile size_t rx_head;
+static volatile size_t rx_tail;
+
+static void znp_uart_isr(const struct device *dev, void *user_data)
+{
+	uint8_t buf[16];
+
+	ARG_UNUSED(user_data);
+
+	uart_irq_update(dev);
+	/* Bounded, so an interrupt cause that is not handled here cannot hold the CPU */
+	for (int pass = 0; pass < 8 && uart_irq_is_pending(dev) > 0; pass++) {
+		int n;
+
+		if (uart_irq_rx_ready(dev) <= 0) {
+			/* A line error is cleared by reading the status */
+			(void)uart_err_check(dev);
+			uart_irq_update(dev);
+			continue;
+		}
+
+		n = uart_fifo_read(dev, buf, sizeof(buf));
+		for (int i = 0; i < n; i++) {
+			size_t next = (rx_head + 1U) % ZNP_RX_RING_SIZE;
+
+			if (next != rx_tail) {
+				rx_ring[rx_head] = buf[i];
+				rx_head = next;
+			}
+		}
+		uart_irq_update(dev);
+	}
+}
+#endif
+
 static void znp_dispatch(uint8_t cmd0, uint8_t cmd1, const uint8_t *data, uint8_t len)
 {
 	uint8_t type = cmd0 >> 5;
@@ -79,6 +119,11 @@ int zb_znp_init(const struct device *uart_dev)
 	znp_parser_reset(&rx);
 	znp_sys_start();
 
+#ifdef CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ
+	uart_irq_callback_user_data_set(uart_dev, znp_uart_isr, NULL);
+	uart_irq_rx_enable(uart_dev);
+#endif
+
 	return 0;
 }
 
@@ -90,9 +135,17 @@ void zb_znp_poll(void)
 		return;
 	}
 
+#ifdef CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ
+	while (rx_tail != rx_head) {
+		byte = rx_ring[rx_tail];
+		rx_tail = (rx_tail + 1U) % ZNP_RX_RING_SIZE;
+		znp_rx_byte((uint8_t)byte);
+	}
+#else
 	while (uart_poll_in(znp_uart_dev, &byte) == 0) {
 		znp_rx_byte((uint8_t)byte);
 	}
+#endif
 
 	tx_drain(ZNP_TX_BURST_BYTES);
 	znp_persist_service();
