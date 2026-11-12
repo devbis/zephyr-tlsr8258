@@ -516,6 +516,16 @@ config ZIGBEE_NCP_ZSTACK
 
 endchoice
 
+config ZIGBEE_NCP_ZSTACK_UART_IRQ
+	bool "Receive the Z-Stack host UART in the interrupt"
+	depends on ZIGBEE_NCP_ZSTACK
+	depends on UART_INTERRUPT_DRIVEN
+	help
+	  Collect the bytes of the host UART in a ring from the UART interrupt
+	  instead of reading them from the Zigbee thread. The thread polls the
+	  UART between other work, and a UART with a small receive FIFO loses
+	  the end of a long request while the stack is busy.
+
 endif # ZIGBEE_NCP
 
 config ZIGBEE_ZBHCI_UART
