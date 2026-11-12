@@ -1,0 +1,10 @@
+identifier: ecb02c
+name: ChinaLCTech ECB02C
+type: mcu
+arch: arm
+ram: 57
+flash: 128
+toolchain:
+  - zephyr
+  - gnuarmemb
+vendor: chinalctech
