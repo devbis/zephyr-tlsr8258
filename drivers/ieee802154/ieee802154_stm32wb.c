@@ -1039,10 +1039,8 @@ static int wb_init(const struct device *dev)
 		LOG_ERR("cannot read the EUI-64 from the RCP (%d)", ret);
 		return ret != 0 ? ret : -EIO;
 	}
-	/* Zephyr keeps link addresses little endian */
-	for (int i = 0; i < 8; i++) {
-		wb.mac[i] = eui[7 - i];
-	}
+	/* The link address is big endian, as the RCP reports the EUI-64 */
+	memcpy(wb.mac, eui, sizeof(wb.mac));
 
 	wb.cca_threshold = -75;
 	if (spinel_get(SPINEL_PROP_PHY_CCA_THRESHOLD, &v, &vlen) == 0 && vlen == 1U) {
