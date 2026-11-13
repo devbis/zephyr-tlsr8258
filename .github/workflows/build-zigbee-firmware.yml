@@ -186,6 +186,21 @@ jobs:
             role: coordinator
             role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: gnuarmemb
+          - soc: ecb02c
+            board: ecb02c
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: ecb02c
+            board: ecb02c
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: gnuarmemb
+          - soc: ecb02c
+            board: ecb02c
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: gnuarmemb
 
     steps:
       - name: Checkout repository
@@ -215,7 +230,7 @@ jobs:
           west zephyr-export
 
       - name: Install the MCUboot image tool dependencies
-        if: matrix.soc == 'stm32wb55'
+        if: matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c'
         run: |
           # imgtool signs the application and needs its own Python packages
           python -m pip install -r ../bootloader/mcuboot/scripts/requirements.txt
@@ -265,7 +280,7 @@ jobs:
           west blobs fetch hal_bouffalolab
 
       - name: Install Arm GNU Toolchain
-        if: matrix.soc == 'nrf52840' || matrix.soc == 'nrf52840_nicenano' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55'
+        if: matrix.soc == 'nrf52840' || matrix.soc == 'nrf52840_nicenano' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c'
         shell: bash
         run: |
           set -euo pipefail
@@ -357,6 +372,12 @@ jobs:
                   "-DEXTRA_CONF_FILE=coordinator_znp.conf;coordinator_znp_weact_stm32wb55_core.conf"
                   "-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_weact_stm32wb55_core.overlay"
                 )
+              elif [[ "$SOC" == ecb02c ]]; then
+                # The host talks to UART1, the USB-UART of the module on P2 and P3.
+                cmake_args+=(
+                  "-DEXTRA_CONF_FILE=coordinator_znp.conf;coordinator_znp_ecb02c.conf"
+                  "-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_ecb02c.overlay"
+                )
               else
                 cmake_args+=(-DEXTRA_CONF_FILE=coordinator_znp.conf)
               fi
@@ -425,6 +446,15 @@ jobs:
             grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
             grep -Fx 'CONFIG_IEEE802154_STM32WB=y' "$config_file"
           fi
+          if [[ "$SOC" == ecb02c ]]; then
+            grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
+            grep -Fx 'CONFIG_IEEE802154_PHY6252=y' "$config_file"
+            # the USB-UART of the module is wired to UART1 with TX on P3 and RX on P2
+            grep -Fx 'CONFIG_PHY6252_UART1_SWAP=y' "$config_file"
+          fi
+          if [[ "$ROLE" == coordinator && "$SOC" == ecb02c ]]; then
+            grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ=y' "$config_file"
+          fi
           if [[ "$SOC" == tlsr8258 ]]; then
             grep -Fx 'CONFIG_MINIMAL_LIBC=y' "$config_file"
             ! grep -q '^CONFIG_USE_SEGGER_RTT=y$' "$config_file"
@@ -434,15 +464,20 @@ jobs:
           ninja -C "$build_dir" ram_report
           cp "$config_file" "$RUNNER_TEMP/${SOC}-${ROLE}.config"
 
+          firmware_name="${SOC}-${ROLE}.bin"
           if [[ "$SOC" == phy6252 ]]; then
             firmware="$build_dir/zephyr/zephyr.phy6252.bin"
+          elif [[ "$SOC" == ecb02c ]]; then
+            # MCUboot starts the signed application, which is the update image of the module
+            firmware="$build_dir/zephyr/zephyr.signed.bin"
+            firmware_name="${SOC}-${ROLE}-app.signed.bin"
           else
             firmware="$build_dir/zephyr/zephyr.bin"
           fi
           test -s "$firmware"
           mkdir -p "$RUNNER_TEMP/firmware"
           install -m 0644 "$firmware" \
-            "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
+            "$RUNNER_TEMP/firmware/$firmware_name"
           if [[ "$SOC" == nrf52840_nicenano ]]; then
             install -m 0644 "$build_dir/zephyr/zephyr.uf2" \
               "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.uf2"
@@ -487,6 +522,30 @@ jobs:
           image = loader + b"\xff" * (SLOT0_OFFSET - len(loader)) + app
           pathlib.Path(sys.argv[3]).write_bytes(image)
           PY
+          fi
+
+          if [[ "$SOC" == ecb02c && "$ROLE" == coordinator ]]; then
+            sample="$ZEPHYR_BASE/samples/zigbee/zigbee_shell"
+            support="$ZEPHYR_BASE/boards/chinalctech/ecb02c/support"
+            boot_dir="$RUNNER_TEMP/build-${SOC}-mcuboot"
+            # MCUboot with the serial recovery on UART1 (P2/P3), for the flash map of the board
+            west build -p always \
+              -b "$BOARD" \
+              -d "$boot_dir" \
+              ../bootloader/mcuboot/boot/zephyr \
+              -- \
+              "-DEXTRA_CONF_FILE=$sample/mcuboot/ecb02c.conf" \
+              "-DEXTRA_DTC_OVERLAY_FILE=$sample/mcuboot/ecb02c.overlay"
+            grep -Fx 'CONFIG_BOOT_SERIAL_UART=y' "$boot_dir/zephyr/.config"
+            grep -Fx 'CONFIG_PHY6252_UART1_SWAP=y' "$boot_dir/zephyr/.config"
+
+            # The image for the first flashing: the boot ROM table and MCUboot at 0x2000 and the
+            # signed coordinator in its slot at 0x18000; later images go to the serial recovery.
+            (cd "$support" && python -m unittest test_merge_loader)
+            python "$support/merge_loader.py" \
+              "$boot_dir/zephyr/zephyr.phy6252.bin" \
+              "$firmware" \
+              "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
           fi
 
           if [[ "$SOC" == bl702 ]]; then
@@ -617,9 +676,10 @@ jobs:
           tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
           mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
           # 24 images of the eight boards, the loader images and the update images of the
-          # three STM32WB55 roles, the two coprocessor binaries
-          if [[ "${#firmware_files[@]}" -ne 32 ]]; then
-            echo "Expected thirty-two firmware files, found ${#firmware_files[@]}" >&2
+          # three STM32WB55 roles, the three update images of the ECB02C and its image with the
+          # loader, the two coprocessor binaries
+          if [[ "${#firmware_files[@]}" -ne 36 ]]; then
+            echo "Expected thirty-six firmware files, found ${#firmware_files[@]}" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -628,7 +688,7 @@ jobs:
 
           Toolchains:
           - TLSR8258: TC32 LLVM \`$TC32_TOOLCHAIN_VERSION\`
-          - nRF52840, EFR32MG21, STM32WBA, STM32WB55 and PB-03F (PHY6252): Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
+          - nRF52840, EFR32MG21, STM32WBA, STM32WB55, ECB02C and PB-03F (PHY6252): Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
           - ESP32-C6, ESP32-H2 and BL702: Zephyr SDK with the RISC-V toolchain
 
           The release contains router, end-device, and coordinator images for TLSR8258,
@@ -651,6 +711,14 @@ jobs:
           STM32CubeWB. \`stm32wb55-copro-fus.bin\` is the FUS of that release. Both come
           unmodified from STM32CubeWB v$STM32CUBEWB_VERSION and are licensed by
           STMicroelectronics for use on its devices.
+          The release also has router, end-device, and coordinator images for the ECB02C
+          (PHY6222). \`ecb02c-coordinator.bin\` is MCUboot (serial recovery on UART1 of the
+          module, P2 and P3) and the coordinator in one image, for the first flashing only:
+          connect a USB-UART to P9 and P10 and write it through the boot ROM at 0x11002000, for
+          example with \`rdwr_phy62x2.py -p <port> -r we 0x11002000 ecb02c-coordinator.bin\` of
+          the PHY62x2 utilities, then use the USB-UART of the module. \`ecb02c-<role>-app.signed.bin\`
+          is the application alone, for the serial recovery of MCUboot (mcumgr, within 3 s after
+          a reset; the coordinator restarts into it with SYS_RESET_REQ type 0).
           The BL702 `.bin` files include the native BFNP boot header and can be programmed over UART
           with `bflb-mcu-tool` (`--chipname=bl702 --xtal=32M`).
           The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
