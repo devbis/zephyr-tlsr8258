@@ -14,6 +14,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
+#if defined(CONFIG_SOC_SERIES_BL70X) && defined(CONFIG_PM)
+#include <soc.h>
+#endif
 
 #include "zbapi/zb_api.h"
 #include "zcl/general/zcl_basic.h"
@@ -255,12 +258,8 @@ static void button_long_press(struct k_work *work)
 	(void)zb_TaskPost(factory_reset_task, NULL);
 }
 
-static void button_debounce(struct k_work *work)
+static void button_set(struct app_button *btn, bool pressed)
 {
-	struct app_button *btn =
-		CONTAINER_OF(k_work_delayable_from_work(work), struct app_button, debounce);
-	bool pressed = gpio_pin_get_dt(&btn->spec) > 0;
-
 	if (pressed == btn->pressed) {
 		return;
 	}
@@ -275,6 +274,30 @@ static void button_debounce(struct k_work *work)
 	}
 
 	(void)zb_TaskPost(button_task, (void *)(uintptr_t)(((uintptr_t)btn->idx << 1) | pressed));
+}
+
+static void button_debounce(struct k_work *work)
+{
+	struct app_button *btn =
+		CONTAINER_OF(k_work_delayable_from_work(work), struct app_button, debounce);
+
+	button_set(btn, gpio_pin_get_dt(&btn->spec) > 0);
+}
+
+/*
+ * True when the press of the button has started the firmware: a button that is
+ * a wakeup source ends the deep sleep of the device, the firmware restarts and
+ * no edge announces the press. The button may be released again by now.
+ */
+static bool button_woke_device(const struct app_button *btn)
+{
+#if defined(CONFIG_SOC_SERIES_BL70X) && defined(CONFIG_PM)
+	/* The SoC does not tell which pin ended the hibernate; sw0 is the wakeup key. */
+	if ((btn->idx == 0U) && (bl70x_wakeup_cause() == BL70X_WAKEUP_PIN)) {
+		return true;
+	}
+#endif
+	return gpio_pin_get_dt(&btn->spec) > 0;
 }
 
 static void button_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins)
@@ -305,6 +328,11 @@ void app_buttons_init(app_button_cb_t cb)
 		gpio_init_callback(&btn->cb, button_isr, BIT(btn->spec.pin));
 		(void)gpio_add_callback(btn->spec.port, &btn->cb);
 		(void)gpio_pin_interrupt_configure_dt(&btn->spec, GPIO_INT_EDGE_BOTH);
+		if (button_woke_device(btn)) {
+			button_set(btn, true);
+			/* The release, if it came before the interrupt was enabled. */
+			(void)k_work_reschedule(&btn->debounce, K_MSEC(APP_BUTTON_DEBOUNCE_MS));
+		}
 	}
 #else
 	ARG_UNUSED(cb);
