@@ -66,6 +66,21 @@ jobs:
             role: coordinator
             role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: gnuarmemb
+          - soc: nrf52840_nicenano
+            board: promicro_nrf52840/nrf52840/uf2
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: nrf52840_nicenano
+            board: promicro_nrf52840/nrf52840/uf2
+            role: end-device
+            role_symbol: CONFIG_ZIGBEE_ED
+            toolchain_variant: gnuarmemb
+          - soc: nrf52840_nicenano
+            board: promicro_nrf52840/nrf52840/uf2
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: gnuarmemb
           - soc: efr32mg21
             board: slwrb4180a
             role: router
@@ -250,7 +265,7 @@ jobs:
           west blobs fetch hal_bouffalolab
 
       - name: Install Arm GNU Toolchain
-        if: matrix.soc == 'nrf52840' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55'
+        if: matrix.soc == 'nrf52840' || matrix.soc == 'nrf52840_nicenano' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55'
         shell: bash
         run: |
           set -euo pipefail
@@ -303,7 +318,15 @@ jobs:
 
           case "$ROLE" in
             router)
-              cmake_args+=(-DEXTRA_CONF_FILE=router.conf)
+              if [[ "$SOC" == nrf52840_nicenano ]]; then
+                cmake_args+=(
+                  '-DEXTRA_CONF_FILE=router.conf;promicro_usb_shell.conf'
+                  -DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay
+                  -DCONFIG_ZIGBEE_STACK_SIZE=4096
+                )
+              else
+                cmake_args+=(-DEXTRA_CONF_FILE=router.conf)
+              fi
               # The router does not fit into the 128 KiB of flash with logging.
               if [[ "$SOC" == phy6252 ]]; then
                 cmake_args+=(-DCONFIG_LOG=n)
@@ -311,13 +334,24 @@ jobs:
               ;;
             end-device)
               cmake_args+=(-DCONFIG_ZIGBEE_ED=y)
+              if [[ "$SOC" == nrf52840_nicenano ]]; then
+                cmake_args+=(
+                  '-DEXTRA_CONF_FILE=promicro_usb_shell.conf;promicro_ed_usb.conf'
+                  '-DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay;promicro_ed_usb.overlay'
+                )
+              fi
               # Deep sleep is implemented for the TLSR8258 and the BL702 only.
               if [[ "$SOC" == tlsr8258 || "$SOC" == bl702 ]]; then
                 cmake_args+=(-DEXTRA_CONF_FILE=sleepy_deep.conf)
               fi
               ;;
             coordinator)
-              if [[ "$SOC" == stm32wb55 ]]; then
+              if [[ "$SOC" == nrf52840_nicenano ]]; then
+                cmake_args+=(
+                  '-DEXTRA_CONF_FILE=coordinator_znp.conf;promicro_znp_usb.conf'
+                  '-DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay;promicro_znp_usb.overlay'
+                )
+              elif [[ "$SOC" == stm32wb55 ]]; then
                 # The host talks to the first USB CDC port of the board.
                 cmake_args+=(
                   "-DEXTRA_CONF_FILE=coordinator_znp.conf;coordinator_znp_weact_stm32wb55_core.conf"
@@ -369,9 +403,18 @@ jobs:
           if [[ "$ROLE" == coordinator ]]; then
             grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK=y' "$config_file"
           fi
+          if [[ "$ROLE" == coordinator && "$SOC" == nrf52840_nicenano ]]; then
+            grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK_PROMICRO_UF2=y' "$config_file"
+          fi
           if [[ "$ROLE" == end-device && ( "$SOC" == tlsr8258 || "$SOC" == bl702 ) ]]; then
             grep -Fx 'CONFIG_PM=y' "$config_file"
             grep -Fx 'CONFIG_ZIGBEE_SLEEPY_DEEP=y' "$config_file"
+          fi
+          if [[ "$ROLE" == end-device && ( "$SOC" == nrf52840 || "$SOC" == nrf52840_nicenano ) ]]; then
+            grep -Fx 'CONFIG_ZIGBEE_SLEEPY=y' "$config_file"
+            grep -Fx 'CONFIG_ZIGBEE_SLEEPY_LIGHT=y' "$config_file"
+            grep -Fx 'CONFIG_TICKLESS_KERNEL=y' "$config_file"
+            grep -Fx 'CONFIG_NRF_RTC_TIMER=y' "$config_file"
           fi
           if [[ "$SOC" == esp32c6 || "$SOC" == esp32h2 ]]; then
             grep -Fx 'CONFIG_ZIGBEE_CHANNEL_MASK=0x800' "$config_file"
@@ -400,6 +443,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/firmware"
           install -m 0644 "$firmware" \
             "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.bin"
+          if [[ "$SOC" == nrf52840_nicenano ]]; then
+            install -m 0644 "$build_dir/zephyr/zephyr.uf2" \
+              "$RUNNER_TEMP/firmware/${SOC}-${ROLE}.uf2"
+          fi
 
           if [[ "$SOC" == stm32wb55 ]]; then
             sample="$ZEPHYR_BASE/samples/zigbee/zigbee_shell"
@@ -497,7 +544,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.soc }}-${{ matrix.role }}
-          path: ${{ runner.temp }}/firmware/${{ matrix.soc }}-${{ matrix.role }}*.bin
+          path: ${{ runner.temp }}/firmware/${{ matrix.soc }}-${{ matrix.role }}*
           if-no-files-found: error
 
       - name: Upload RAM report
@@ -608,7 +655,8 @@ jobs:
           with `bflb-mcu-tool` (`--chipname=bl702 --xtal=32M`).
           The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
           and ZHA.
-          The end devices for TLSR8258 and BL702 are sleepy: they deep sleep between parent polls.
+          The end devices for TLSR8258 and BL702 deep sleep between parent polls. The nRF52840
+          end device uses System ON sleep with RTC wakeup and retains RAM.
           EOF
           printf '%s\n' "${firmware_files[@]}"
 

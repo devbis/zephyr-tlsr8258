@@ -33,6 +33,55 @@ for example ``tlsr8258_tb03f``, ``nrf52840dk/nrf52840``,
 coordinator with permit join open.
 The ESP32-C6 and ESP32-H2 board configurations scan channel 11.
 
+The nRF52840 end device uses System ON sleep with RAM retained. The kernel
+uses RTC1 to wake for timeouts, including parent polls. System OFF cannot be
+used for this because it does not support RTC wakeup. Actual power consumption
+also depends on the board, connected peripherals, and radio activity.
+
+nice!nano without SoftDevice
+***************************
+
+For a nice!nano whose UF2 bootloader reports ``SoftDevice: not found``, use
+``promicro_nosd.overlay`` to place the application at 0x1000. The following
+build enables a USB shell on the router:
+
+.. code-block:: console
+
+   west build -b promicro_nrf52840/nrf52840/uf2 samples/zigbee/zigbee_shell -- \
+     -DEXTRA_CONF_FILE="router.conf;promicro_usb_shell.conf" \
+     -DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay -DCONFIG_ZIGBEE_STACK_SIZE=4096
+
+The shell command ``uf2`` reboots into the UF2 bootloader for updates over USB.
+Copy the resulting ``zephyr/zephyr.uf2`` file to the bootloader's NICENANO disk.
+The USB shell configuration is intended for development and power consumption
+with USB enabled is not representative of a battery-powered sleepy device.
+
+For a sleepy end device with USB shell and CPU load logging, use:
+
+.. code-block:: console
+
+   west build -b promicro_nrf52840/nrf52840/uf2 samples/zigbee/zigbee_shell -- \
+     -DEXTRA_CONF_FILE="promicro_usb_shell.conf;promicro_ed_usb.conf" \
+     -DEXTRA_DTC_OVERLAY_FILE="promicro_nosd.overlay;promicro_ed_usb.overlay"
+
+The log reports CPU load every 10 seconds. The idle fraction does not measure
+radio or USB power. The end-device storage is separate from router and coordinator
+storage.
+
+To build a coordinator with one USB ZNP port instead, use:
+
+.. code-block:: console
+
+   west build -b promicro_nrf52840/nrf52840/uf2 samples/zigbee/zigbee_shell -- \
+     -DEXTRA_CONF_FILE="coordinator_znp.conf;promicro_znp_usb.conf" \
+     -DEXTRA_DTC_OVERLAY_FILE="promicro_nosd.overlay;promicro_znp_usb.overlay"
+
+This build keeps the coordinator's Zigbee storage separate from the router's.
+To enter the UF2 bootloader, stop the ZNP host so it releases the serial port,
+then run ``python3 promicro_znp_uf2.py /dev/ttyACM0`` from this sample directory.
+The script requires pyserial. It sends the board-specific ZNP SYS command 0xF0
+with payload ``UF2!``; this is an extension, not a standard ZNP reset command.
+
 WeAct STM32WB55 core board
 **************************
 
