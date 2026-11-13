@@ -8,5 +8,13 @@ tests:
     build_only: true
     platform_allow:
       - tlsr8258_tb03f
+      - dt_xt_zb1_devkit
+    tags:
+      - zigbee
+  sample.zigbee.switch.sleepy_deep:
+    build_only: true
+    extra_args: EXTRA_CONF_FILE=sleepy_deep.conf
+    platform_allow:
+      - dt_xt_zb1_devkit
     tags:
       - zigbee

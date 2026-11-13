@@ -14,15 +14,35 @@ to Level command that advances by 50 levels per press. No binding is needed.
 The sample shares its bootstrap, Basic and Identify clusters, ``led0`` and button
 handling with the other device samples in ``../common``, and its commissioning
 policy with ``zigbee_shell``. Holding ``sw0`` for 5 seconds resets the device
-to factory defaults. It does not implement scenes, color control, poll control
-or a sleepy configuration.
+to factory defaults. It does not implement scenes, color control or poll
+control.
 
 Requirements
 ************
 
-Only built for ``tlsr8258_tb03f``; it has not been run on hardware. The board
-overlay enables the button on PA7, which shares the SWS debug line; remove the
-overlay when a debugger must stay attached.
+Built for ``tlsr8258_tb03f`` and ``dt_xt_zb1_devkit``.
+
+The ``tlsr8258_tb03f`` build has not been run on hardware. Its board overlay
+enables the button on PA7, which shares the SWS debug line; remove the overlay
+when a debugger must stay attached.
+
+On ``dt_xt_zb1_devkit`` (BL702) the button connects GPIO9 to the ground. GPIO9
+is the only pin of the module that ends the hibernate of the SoC.
+
+Battery powered switch
+**********************
+
+``sleepy_deep.conf`` makes the switch a sleepy end device that enters deep sleep
+between the parent polls. The firmware restarts on every wakeup: from the timer
+for the next poll, or from ``sw0`` when its ``gpio-keys`` node has the
+``wakeup-source`` property. A press that wakes the device is reported like any
+other press, so the command leaves a few tens of milliseconds after it.
+
+.. code-block:: console
+
+   west build -b dt_xt_zb1_devkit samples/zigbee/switch -- -DEXTRA_CONF_FILE=sleepy_deep.conf
+
+The device does not sleep while ``sw0`` is held.
 
 Building
 ********

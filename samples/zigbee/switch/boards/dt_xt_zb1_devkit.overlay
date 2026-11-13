@@ -1,0 +1,50 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The Zigbee NV is an NVS volume and a lookup of an absent key walks every
+ * sector of it: eight sectors at the end of the flash keep the start-up, which
+ * a sleepy device repeats on every wakeup, in the range of milliseconds.
+ */
+&storage_partition {
+	reg = <0x000f8000 DT_SIZE_K(32)>;
+};
+
+/* The retention RAM keeps the outgoing frame counter through the hibernate. */
+&retram {
+	retainedmem: retainedmem {
+		compatible = "zephyr,retained-ram";
+		status = "okay";
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+/*
+ * The button connects GPIO9 to the ground. GPIO9 is the only pin of the module
+ * that ends the hibernate; the pull-up flag selects the one of the hibernate
+ * domain, so the button needs no resistor.
+ */
+/ {
+	chosen {
+		zigbee,retained-mem = &retainedmem;
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		wakeup-source;
+
+		sw0: button_0 {
+			gpios = <&gpio0 9 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			label = "Button";
+		};
+	};
+
+	aliases {
+		sw0 = &sw0;
+	};
+};
