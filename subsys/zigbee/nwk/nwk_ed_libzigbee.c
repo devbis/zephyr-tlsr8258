@@ -10,9 +10,9 @@
  * trust center holds for it (most importantly the Transport-Key the TC defers
  * right after association, then the interview requests). In the libzigbee stack
  * that polling is ALREADY driven natively:
- *   - zdo_set_pollRate(500) is armed right after association
- *     (zdo_nwk_manager.c), so pollRateCb -> zdo_syncReq polls the parent every
- *     500 ms while rx-off; and
+ *   - zdo_set_pollRate(CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS) is armed right after
+ *     association (zdo_nwk_manager.c), so pollRateCb -> zdo_syncReq polls the
+ *     parent at the configured interval while rx-off; and
  *   - nwk_data.c issues an immediate quick-poll whenever a MAC ACK reports
  *     frame-pending, so queued frames are drained back-to-back.
  * That native machinery is self-paced (one poll per timer tick / per pending

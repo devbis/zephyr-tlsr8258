@@ -1097,7 +1097,7 @@ void zdo_nlme_join_confirm(void *arg)
 	}
 
 #if !defined(ZB_ROUTER_ROLE)
-	zdo_set_pollRate(500U);
+	zdo_set_pollRate(CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS);
 	if (aps_ib.aps_authenticated || ss_ib_security_level_get() == 0U) {
 		zdo_startDeviceCnf(arg, ZDO_SUCCESS);
 		return;
