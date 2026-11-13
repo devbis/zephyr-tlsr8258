@@ -14,6 +14,13 @@
  * mtimecmp before it calls pm_state_set(), so the time left until it is the
  * time to sleep. The state stays locked until code that can restore itself
  * releases it with pm_policy_state_lock_put().
+ *
+ * The keys of a gpio-keys node that has wakeup-source end the hibernate early.
+ * Only GPIO9 to GPIO13 reach the hibernate domain and they share one trigger,
+ * so every such key has the same active level. The pulls of the pin controller
+ * are off in the hibernate: a key with a pull flag gets the pull of the
+ * hibernate domain instead, which is the one against its active level and is
+ * common to the five pads; a key without one needs an external resistor.
  */
 
 #include <string.h>
@@ -21,6 +28,7 @@
 #include <zephyr/arch/riscv/arch.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/pm/pm.h>
@@ -30,6 +38,7 @@
 
 #include <bflb_soc.h>
 #include <hbn_reg.h>
+#include <soc.h>
 
 #define MTIME_ADDR    DT_REG_ADDR_BY_NAME(DT_NODELABEL(mtimer), mtime)
 #define MTIMECMP_ADDR DT_REG_ADDR_BY_NAME(DT_NODELABEL(mtimer), mtimecmp)
@@ -58,7 +67,9 @@
 
 #define SF_CTRL_OWNER_SAHB 0U
 
-#define HBN_STATUS_ENTER_FLAG 0x4e424845U
+#define HBN_STATUS_ENTER_FLAG  0x4e424845U
+/* Written by the boot ROM when the reset is the end of a hibernate. */
+#define HBN_STATUS_WAKEUP_FLAG 0x4e424857U
 #define HBN_LDO_LEVEL_1P00V   8U
 /* Word in the retention RAM the vendor boot code reads as "RTC is enabled". */
 #define RETRAM_RTC_ENABLE     0x40010FFCU
@@ -69,9 +80,93 @@
 /* The RTC compare is 40 bits wide. */
 #define RTC_CYCLES_MAX 0xffffffff00ULL
 
+/* The pads of the hibernate domain are GPIO9 to GPIO13, one bit each. */
+#define HBN_PAD_FIRST    9U
+#define HBN_PAD_LAST     13U
+#define HBN_PAD_ALL      0x1fU
+/* Level triggers that need no clock. */
+#define HBN_PIN_MODE_LOW  6U
+#define HBN_PIN_MODE_HIGH 7U
+
+#define WAKE_KEYS(node, fn)                                                                        \
+	COND_CODE_1(DT_PROP(node, wakeup_source), (DT_FOREACH_CHILD_STATUS_OKAY(node, fn)), ())
+#define WAKE_KEY_FOREACH(fn) DT_FOREACH_STATUS_OKAY_VARGS(gpio_keys, WAKE_KEYS, fn)
+
+#define WAKE_KEY_PAD(key)   BIT(DT_GPIO_PIN(key, gpios) - HBN_PAD_FIRST)
+#define WAKE_KEY_FLAGS(key) DT_GPIO_FLAGS(key, gpios)
+
+#define WAKE_KEY_ONE(key)  + 1
+#define WAKE_KEY_MASK(key) | WAKE_KEY_PAD(key)
+#define WAKE_KEY_LOW(key)                                                                          \
+	| (((WAKE_KEY_FLAGS(key) & GPIO_ACTIVE_LOW) != 0U) ? WAKE_KEY_PAD(key) : 0U)
+#define WAKE_KEY_PULL(key)                                                                         \
+	| (((WAKE_KEY_FLAGS(key) & (GPIO_PULL_UP | GPIO_PULL_DOWN)) != 0U) ? WAKE_KEY_PAD(key) : 0U)
+/* The pull of the hibernate domain: up for an active low key, down for an active high one. */
+#define WAKE_KEY_CHECK(key)                                                                        \
+	BUILD_ASSERT(DT_GPIO_PIN(key, gpios) >= HBN_PAD_FIRST &&                                   \
+		     DT_GPIO_PIN(key, gpios) <= HBN_PAD_LAST,                                      \
+		     "only GPIO9 to GPIO13 end the hibernate");                                    \
+	BUILD_ASSERT((WAKE_KEY_FLAGS(key) &                                                        \
+		      (((WAKE_KEY_FLAGS(key) & GPIO_ACTIVE_LOW) != 0U) ? GPIO_PULL_DOWN            \
+								       : GPIO_PULL_UP)) == 0U,     \
+		     "the pull of a wakeup key is the one against its active level");
+#define WAKE_KEY_SPEC(key) GPIO_DT_SPEC_GET(key, gpios),
+
+#define WAKE_KEY_COUNT (0 WAKE_KEY_FOREACH(WAKE_KEY_ONE))
+#define WAKE_PADS      (0U WAKE_KEY_FOREACH(WAKE_KEY_MASK))
+#define WAKE_PADS_LOW  (0U WAKE_KEY_FOREACH(WAKE_KEY_LOW))
+#define WAKE_PADS_PULL (0U WAKE_KEY_FOREACH(WAKE_KEY_PULL))
+
+WAKE_KEY_FOREACH(WAKE_KEY_CHECK)
+BUILD_ASSERT(WAKE_PADS_LOW == 0U || WAKE_PADS_LOW == WAKE_PADS,
+	     "the wakeup keys share one trigger: one active level for all of them");
+BUILD_ASSERT(WAKE_PADS_PULL == 0U || WAKE_PADS_PULL == WAKE_PADS,
+	     "the wakeup keys share one pull enable: a pull flag on all of them or on none");
+
+#if WAKE_KEY_COUNT > 0
+static const struct gpio_dt_spec wake_keys[] = {WAKE_KEY_FOREACH(WAKE_KEY_SPEC)};
+#endif
+
 static uint64_t boot_mtime;
 static uint64_t boot_rtc;
 static bool boot_rtc_valid;
+static enum bl70x_wakeup_cause wakeup_cause;
+
+enum bl70x_wakeup_cause bl70x_wakeup_cause(void)
+{
+	return wakeup_cause;
+}
+
+/* True while a wakeup key is pressed. */
+static bool wake_key_pressed(void)
+{
+#if WAKE_KEY_COUNT > 0
+	for (size_t i = 0U; i < ARRAY_SIZE(wake_keys); i++) {
+		if (gpio_pin_get_dt(&wake_keys[i]) > 0) {
+			return true;
+		}
+	}
+#endif
+	return false;
+}
+
+/* HBN_IRQ_MODE for the hibernate: the trigger, the wakeup pads and their pull. */
+static uint32_t hbn_irq_mode(void)
+{
+	uint32_t t = sys_read32(HBN_BASE + HBN_IRQ_MODE_OFFSET);
+
+	t &= HBN_PIN_WAKEUP_MODE_UMSK & HBN_PIN_WAKEUP_MASK_UMSK & HBN_REG_AON_PAD_IE_SMT_UMSK;
+	t &= ~BIT(HBN_REG_EN_HW_PU_PD_POS);
+	t |= ((WAKE_PADS_LOW != 0U) ? HBN_PIN_MODE_LOW : HBN_PIN_MODE_HIGH)
+	     << HBN_PIN_WAKEUP_MODE_POS;
+	t |= (HBN_PAD_ALL & ~WAKE_PADS) << HBN_PIN_WAKEUP_MASK_POS;
+	t |= WAKE_PADS << HBN_REG_AON_PAD_IE_SMT_POS;
+	if (WAKE_PADS_PULL != 0U) {
+		t |= BIT(HBN_REG_EN_HW_PU_PD_POS);
+	}
+
+	return t;
+}
 
 static uint64_t mtime_read(void)
 {
@@ -120,7 +215,7 @@ static uint64_t rtc_read(void)
  * Runs from RAM: the flash is powered down before the last steps. It does not
  * return; the RTC compare resets the SoC.
  */
-static __ramfunc void hbn_enter(uint64_t cycles, uint8_t *flash_cfg)
+static __ramfunc void hbn_enter(uint64_t cycles, uint8_t *flash_cfg, uint32_t irq_mode)
 {
 	void (*trim_rc32k)(void) = (void (*)(void))ROM_API[ROM_HBN_TRIM_RC32K];
 	void (*xtal_off)(void) = (void (*)(void))ROM_API[ROM_AON_POWER_OFF_XTAL];
@@ -143,12 +238,10 @@ static __ramfunc void hbn_enter(uint64_t cycles, uint8_t *flash_cfg)
 	t &= ~(BIT(HBN_PU_XTAL32K_POS) | BIT(HBN_PU_XTAL32K_BUF_POS));
 	sys_write32(t, HBN_BASE + HBN_XTAL32K_OFFSET);
 
-	/* No pin wakeup and no pulls. */
-	t = sys_read32(HBN_BASE + HBN_IRQ_MODE_OFFSET);
-	t &= ~BIT(HBN_REG_EN_HW_PU_PD_POS);
-	t |= HBN_PIN_WAKEUP_MASK_MSK;
-	t &= HBN_REG_AON_PAD_IE_SMT_UMSK;
-	sys_write32(t, HBN_BASE + HBN_IRQ_MODE_OFFSET);
+	/* The wakeup pads, after the events they have latched so far. */
+	sys_write32(HBN_PAD_ALL, HBN_BASE + HBN_IRQ_CLR_OFFSET);
+	sys_write32(0U, HBN_BASE + HBN_IRQ_CLR_OFFSET);
+	sys_write32(irq_mode, HBN_BASE + HBN_IRQ_MODE_OFFSET);
 
 	/* RTC wakeup: the counter value now plus the sleep time. */
 	sys_write32(1U, RETRAM_RTC_ENABLE);
@@ -226,6 +319,14 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 		return;
 	}
 
+	/*
+	 * A pressed key would end the hibernate at once and the firmware would
+	 * restart for as long as the key is held: stay awake until it is released.
+	 */
+	if (wake_key_pressed()) {
+		return;
+	}
+
 	cmp = mtimecmp_read();
 	now = mtime_read();
 	us = (cmp > now) ? ((cmp - now) * 1000000ULL) / MTIME_HZ : 0U;
@@ -241,7 +342,7 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 		k_busy_wait(3000);
 	}
 
-	hbn_enter(cycles, flash_cfg);
+	hbn_enter(cycles, flash_cfg, hbn_irq_mode());
 }
 
 void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
@@ -270,6 +371,19 @@ static int bl70x_pm_init(void)
 	boot_mtime = mtime_read();
 	boot_rtc_valid = true;
 
+	/*
+	 * The boot ROM clears the wakeup events, so the cause is taken from the
+	 * RTC: a counter that has not reached its compare value did not end the
+	 * hibernate.
+	 */
+	if (sys_read32(HBN_BASE + HBN_RSV0_OFFSET) == HBN_STATUS_WAKEUP_FLAG) {
+		uint64_t compare = ((uint64_t)(sys_read32(HBN_BASE + HBN_TIME_H_OFFSET) & 0xffU)
+				    << 32) | sys_read32(HBN_BASE + HBN_TIME_L_OFFSET);
+
+		wakeup_cause = (boot_rtc < compare) ? BL70X_WAKEUP_PIN : BL70X_WAKEUP_TIMER;
+		sys_write32(0U, HBN_BASE + HBN_RSV0_OFFSET);
+	}
+
 	return 0;
 }
 
@@ -281,6 +395,18 @@ SYS_INIT(bl70x_pm_init, PRE_KERNEL_1, 0);
  */
 static int bl70x_pm_soft_off_lock_init(void)
 {
+#if WAKE_KEY_COUNT > 0
+	for (size_t i = 0U; i < ARRAY_SIZE(wake_keys); i++) {
+		if (!gpio_is_ready_dt(&wake_keys[i]) ||
+		    gpio_pin_configure_dt(&wake_keys[i], GPIO_INPUT) != 0) {
+			return -ENODEV;
+		}
+	}
+	/* A key pressed just before the RTC compare is still held this early. */
+	if (wakeup_cause == BL70X_WAKEUP_TIMER && wake_key_pressed()) {
+		wakeup_cause = BL70X_WAKEUP_PIN;
+	}
+#endif
 	pm_policy_state_lock_get(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
 
 	return 0;
