@@ -351,7 +351,6 @@ jobs:
               cmake_args+=(-DCONFIG_ZIGBEE_ED=y)
               if [[ "$SOC" == nrf52840_nicenano ]]; then
                 cmake_args+=(
-                  '-DEXTRA_CONF_FILE=promicro_usb_shell.conf;promicro_ed_usb.conf'
                   '-DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay;promicro_ed_usb.overlay'
                 )
               fi
@@ -441,7 +440,7 @@ jobs:
           fi
           if [[ "$ROLE" == end-device && ( "$SOC" == nrf52840 || "$SOC" == nrf52840_nicenano ) ]]; then
             grep -Fx 'CONFIG_ZIGBEE_SLEEPY=y' "$config_file"
-            grep -Fx 'CONFIG_ZIGBEE_SLEEPY_LIGHT=y' "$config_file"
+            grep -Fx 'CONFIG_ZIGBEE_SLEEPY_DEEP_SYSTEM_ON=y' "$config_file"
             grep -Fx 'CONFIG_TICKLESS_KERNEL=y' "$config_file"
             grep -Fx 'CONFIG_NRF_RTC_TIMER=y' "$config_file"
           fi
