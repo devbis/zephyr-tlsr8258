@@ -9,6 +9,10 @@ target_sources(app PRIVATE
   src/app_profile.c
 )
 
+if(CONFIG_BOARD_PROMICRO_NRF52840 AND CONFIG_SHELL)
+  target_sources(app PRIVATE src/board_promicro_nrf52840.c)
+endif()
+
 if(CONFIG_BOARD_WEACT_STM32WB55_CORE)
   # USB CDC console and mcumgr, watchdog and the flash state fix of the board; the same
   # fix is built into its MCUboot, see mcuboot/

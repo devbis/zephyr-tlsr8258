@@ -1,0 +1,18 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&app_partition_nosd {
+	reg = <0x1000 0xdb000>;
+};
+
+&flash0 {
+	partitions {
+		zigbee_nv_partition: partition@dc000 {
+			compatible = "zephyr,mapped-partition";
+			label = "zigbee_ed_nv";
+			reg = <0xdc000 0x8000>;
+		};
+	};
+};
