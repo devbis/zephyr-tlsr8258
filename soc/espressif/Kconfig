@@ -38,12 +38,14 @@ endmenu
 
 config RESERVE_RTC_MEM
 	int
+	default 32 if SOC_SERIES_ESP32H2 && DT_HAS_ZEPHYR_RETAINED_RAM_ENABLED
 	default 24
 	help
 	  This option reserves an area (bytes) in RTC FAST memory.
 	  It is used to keep the RTC timer retention data at a fixed
 	  address so time reads stay valid across sleep. SoCs without
-	  RTC retention memory ignore this value.
+	  RTC retention memory ignore this value. ESP32-H2 with retained
+	  RAM reserves an additional 8 bytes for that memory region.
 
 config SOC_ESP32_ENABLE_PVT
 	bool "Auto adjust hp & lp voltage using pvt function"

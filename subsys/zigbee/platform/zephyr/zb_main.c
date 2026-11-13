@@ -511,17 +511,13 @@ static void zb_core_bootstrap_once(void)
 		}
 		if (g_zbNwkCtx.joined && (g_zbMacPib.phyChannelCur >= 11U) &&
 		    (g_zbMacPib.phyChannelCur <= 26U)) {
-			uint32_t poll_rate = zdo_af_get_syn_rate();
+			uint32_t poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
 
 			zb_ed_join_save_restored();
-			if (poll_rate == 0U) {
-				poll_rate = CONFIG_ZIGBEE_ED_POLL_INTERVAL_MS;
-			}
 			/*
-			 * zb_platform_zdo_attr_init() resets the indirect poll rate to 1000 ms on
-			 * every boot, so zdo_set_pollRate() would take its unchanged-rate early
-			 * return and never create the poll timer. Clear the cached rate so the
-			 * call arms it.
+			 * A deep-sleep wake restarts the stack, so the cached poll rate is
+			 * initialized to 1000 ms instead of retaining the configured rate.
+			 * Clear it so zdo_set_pollRate() arms the configured interval.
 			 */
 			zdo_af_set_syn_rate(0U);
 			zdo_set_pollRate(poll_rate);
