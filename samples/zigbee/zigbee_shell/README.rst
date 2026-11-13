@@ -11,7 +11,8 @@ endpoint 1. On start it restores its network from flash, or, when it has no
 network yet, steers into one that permits joining on channel 11. It then
 announces itself and answers the coordinator's interview.
 
-The default configuration is a sleepy end device; ``router.conf`` builds a
+The default configuration builds an end device; it is sleepy when the board
+supports and enables the required sleep configuration. ``router.conf`` builds a
 router, which also accepts children. ``coordinator_znp.conf`` builds a
 coordinator that a Z-Stack host (Zigbee2MQTT with ``adapter: zstack``, or ZHA)
 drives over the UART that the board overlay names as ``zigbee,ncp-uart``; the

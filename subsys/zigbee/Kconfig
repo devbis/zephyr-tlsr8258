@@ -161,7 +161,7 @@ config ZIGBEE_SLEEPY
 	bool "Sleepy end device"
 	depends on ZIGBEE_ED
 	depends on ZIGBEE_BDB
-	depends on PM
+	depends on PM || SOC_NRF52840
 	depends on TICKLESS_KERNEL
 	default y
 	help
@@ -178,6 +178,7 @@ choice ZIGBEE_SLEEPY_MODE
 
 config ZIGBEE_SLEEPY_DEEP
 	bool "Deep sleep (the device restarts on wake)"
+	depends on PM
 	depends on HAS_PM_STATE_SOFT_OFF
 	depends on $(dt_chosen_enabled,$(DT_CHOSEN_ZIGBEE_RETAINED_MEM))
 	select RETAINED_MEM
@@ -194,6 +195,8 @@ config ZIGBEE_SLEEPY_LIGHT
 	  Suspend between polls without a restart. Use it where a boot costs
 	  more energy than the device can spare, for example a switch powered
 	  through the load it controls.
+	  On nRF52840, the CPU enters System ON sleep when idle and the kernel
+	  RTC wakes it for pending timeouts; system PM is not needed.
 
 endchoice
 
@@ -203,7 +206,7 @@ config ZIGBEE_ED_POLL_INTERVAL_MS
 	int "Sleepy end-device parent poll interval"
 	depends on ZIGBEE_ED
 	range 50 60000
-	default 500
+	default 7000
 	help
 	  Interval between data requests to the parent in the stable joined
 	  state. It is also the sleep time of one deep-sleep cycle.
