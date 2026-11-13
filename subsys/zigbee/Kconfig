@@ -529,6 +529,13 @@ config ZIGBEE_NCP_ZSTACK_UART_IRQ
 	  UART between other work, and a UART with a small receive FIFO loses
 	  the end of a long request while the stack is busy.
 
+config ZIGBEE_NCP_ZSTACK_PROMICRO_UF2
+	bool "Allow the ZNP host to enter the nice!nano UF2 bootloader"
+	depends on ZIGBEE_NCP_ZSTACK && BOARD_PROMICRO_NRF52840
+	help
+	  Provide a board-specific ZNP command to reset into the Adafruit UF2
+	  bootloader. The bootloader must support the GPREGRET UF2 request.
+
 endif # ZIGBEE_NCP
 
 config ZIGBEE_ZBHCI_UART
