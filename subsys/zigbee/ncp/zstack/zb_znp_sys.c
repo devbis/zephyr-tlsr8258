@@ -8,6 +8,9 @@
  */
 #include <string.h>
 
+#if defined(CONFIG_ZIGBEE_NCP_ZSTACK_PROMICRO_UF2)
+#include <hal/nrf_power.h>
+#endif
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/random/random.h>
@@ -214,6 +217,30 @@ static void znp_reset_ind(uint8_t reason)
 }
 
 /* SYS */
+
+#if defined(CONFIG_ZIGBEE_NCP_ZSTACK_PROMICRO_UF2)
+static void uf2_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	NRF_POWER->GPREGRET = 0x57U;
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+static K_WORK_DELAYABLE_DEFINE(uf2_work, uf2_work_handler);
+
+static void sys_enter_uf2(const uint8_t *d, uint8_t len)
+{
+	static const uint8_t magic[] = {'U', 'F', '2', '!'};
+
+	if (len != sizeof(magic) || memcmp(d, magic, sizeof(magic)) != 0) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0xf0U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0xf0U, ZNP_STATUS_SUCCESS);
+	(void)k_work_reschedule(&uf2_work, K_MSEC(500));
+}
+#endif
 
 static void sys_reset_req(const uint8_t *d, uint8_t len)
 {
@@ -686,6 +713,9 @@ static const struct znp_cmd sys_cmds[] = {
 	{ZNP_SUBSYS_SYS, 0x14U, sys_set_tx_power},
 	{ZNP_SUBSYS_SYS, 0x1CU, sys_nv_read_ext},
 	{ZNP_SUBSYS_SYS, 0x1DU, sys_nv_write_ext},
+#if defined(CONFIG_ZIGBEE_NCP_ZSTACK_PROMICRO_UF2)
+	{ZNP_SUBSYS_SYS, 0xf0U, sys_enter_uf2},
+#endif
 	{ZNP_SUBSYS_UTIL, 0x00U, util_get_device_info},
 	{ZNP_SUBSYS_UTIL, 0x01U, util_get_nv_info},
 	{ZNP_SUBSYS_UTIL, 0x09U, util_time_alive},

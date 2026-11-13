@@ -18,6 +18,36 @@ common:
     - zigbee
 tests:
   sample.zigbee.node.end_device: {}
+  sample.zigbee.node.end_device.promicro:
+    platform_allow:
+      - promicro_nrf52840/nrf52840/uf2
+    integration_platforms:
+      - promicro_nrf52840/nrf52840/uf2
+  sample.zigbee.node.end_device.promicro_usb:
+    platform_allow:
+      - promicro_nrf52840/nrf52840/uf2
+    integration_platforms:
+      - promicro_nrf52840/nrf52840/uf2
+    extra_args:
+      - EXTRA_CONF_FILE="promicro_usb_shell.conf;promicro_ed_usb.conf"
+      - EXTRA_DTC_OVERLAY_FILE="promicro_nosd.overlay;promicro_ed_usb.overlay"
+  sample.zigbee.node.router.promicro_usb:
+    platform_allow:
+      - promicro_nrf52840/nrf52840/uf2
+    integration_platforms:
+      - promicro_nrf52840/nrf52840/uf2
+    extra_args:
+      - EXTRA_CONF_FILE="router.conf;promicro_usb_shell.conf"
+      - EXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay
+      - CONFIG_ZIGBEE_STACK_SIZE=4096
+  sample.zigbee.node.coordinator_znp.promicro_usb:
+    platform_allow:
+      - promicro_nrf52840/nrf52840/uf2
+    integration_platforms:
+      - promicro_nrf52840/nrf52840/uf2
+    extra_args:
+      - EXTRA_CONF_FILE="coordinator_znp.conf;promicro_znp_usb.conf"
+      - EXTRA_DTC_OVERLAY_FILE="promicro_nosd.overlay;promicro_znp_usb.overlay"
   sample.zigbee.node.router:
     extra_args:
       - EXTRA_CONF_FILE=router.conf
