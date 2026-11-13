@@ -68,6 +68,14 @@ runs the tool within the 50 ms the window needs, without a power cycle. The shel
 the boot ROM on P9/P10, so the script takes the port of the shell in ``SHELL_PORT`` when two
 adapters are used. The reboot of the SoC code sets the reset cause that opens the window.
 
+The release builds of the Zigbee firmware have ``ecb02c-coordinator.bin``, MCUboot and the ZNP
+coordinator in one image for the first flashing. Connect a USB-UART to P9 and P10 and write it at
+``0x11002000``: ``rdwr_phy62x2.py -p <port> -r we 0x11002000 ecb02c-coordinator.bin``. The erase of
+a sector can take longer than the 0.5 s of the tool; raise its timeout if the write fails. The
+image is made by ``support/merge_loader.py`` from the loader of the build and the signed
+application. ``ecb02c-router-app.signed.bin``, ``ecb02c-end-device-app.signed.bin`` and
+``ecb02c-coordinator-app.signed.bin`` are the applications alone, for the serial recovery.
+
 An application is replaced through the serial recovery of MCUboot. ``support/phyflash.sh`` reboots
 the application, catches the window MCUboot waits for a command in and uploads the signed image
 with ``cmcumgr``; the client has to repeat a command after a timeout. The sample
