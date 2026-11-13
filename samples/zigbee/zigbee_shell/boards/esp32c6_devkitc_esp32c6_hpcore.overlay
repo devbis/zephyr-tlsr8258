@@ -17,9 +17,15 @@
 	status = "okay";
 };
 
+&rtc_timer {
+	status = "okay";
+	wakeup-source;
+};
+
 / {
 	chosen {
 		zigbee,ncp-uart = &usb_serial;
 		zigbee,aes = &aes;
+		zigbee,retained-mem = &retainedmem0;
 	};
 };

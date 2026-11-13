@@ -38,6 +38,25 @@ uses RTC1 to wake for timeouts, including parent polls. System OFF cannot be
 used for this because it does not support RTC wakeup. Actual power consumption
 also depends on the board, connected peripherals, and radio activity.
 
+ESP32-H2 and ESP32-C6 end devices can use timed deep sleep, which restarts the
+firmware on every wake. Build with ``sleepy_deep.conf`` and the matching overlay
+to enable the SoC's soft-off power state:
+
+.. code-block:: console
+
+   west build -b esp32h2_devkitm/esp32h2 samples/zigbee/zigbee_shell -- \
+     -DEXTRA_CONF_FILE=sleepy_deep.conf \
+     -DEXTRA_DTC_OVERLAY_FILE=sleepy_deep_esp32h2.overlay
+
+   west build -b esp32c6_devkitc/esp32c6/hpcore samples/zigbee/zigbee_shell -- \
+     -DEXTRA_CONF_FILE=sleepy_deep.conf \
+     -DEXTRA_DTC_OVERLAY_FILE=sleepy_deep_esp32c6.overlay
+
+The board overlays enable the RTC timer and select retained memory for the
+Zigbee security frame counter. ESP32-H2 reserves the last 8 bytes of LP SRAM for
+the counter record and keeps the adjacent RTC timer data outside the linker
+region. The 7-second parent poll interval includes a full boot on each cycle.
+
 nice!nano without SoftDevice
 ***************************
 

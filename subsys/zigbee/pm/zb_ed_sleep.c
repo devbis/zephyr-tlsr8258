@@ -175,7 +175,7 @@ static bool zb_ed_sleep_ready(void)
 static const struct device *const zb_ed_sleep_retained =
 	DEVICE_DT_GET(DT_CHOSEN(zigbee_retained_mem));
 
-/* True while the SoC may pick PM_STATE_SOFT_OFF; the SoC starts with it locked. */
+/* True while the SoC may enter deep sleep; all PM states start locked. */
 static bool zb_ed_sleep_allowed;
 
 static uint8_t zb_ed_sleep_record_checksum(const uint8_t *record)
@@ -252,7 +252,16 @@ static int zb_ed_sleep_init(void)
 	}
 
 	pm_notifier_register(&zb_ed_sleep_notifier);
-	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
+	/*
+	 * Some SoCs lock PM_STATE_SOFT_OFF at start-up on behalf of firmware that
+	 * cannot restore itself after the restart. This module can: release that
+	 * lock; the lock on all states gates the deep sleep from here on.
+	 */
+	if (pm_policy_state_lock_is_active(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES)) {
+		pm_policy_state_lock_put(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
+	}
+	/* Keep deep sleep disabled until a joined ED passes the readiness checks. */
+	pm_policy_state_all_lock_get();
 
 	return 0;
 }
@@ -301,9 +310,12 @@ static void zb_ed_sleep_allow(bool allow)
 			zb_ed_sleep_rejected(ZB_ED_SLEEP_REJECT_RADIO);
 			return;
 		}
-		pm_policy_state_lock_put(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
+		/* The periodic maintenance timer would wake an idle SED every second. */
+		secondClockStop();
+		pm_policy_state_all_lock_put();
 	} else {
-		pm_policy_state_lock_get(PM_STATE_SOFT_OFF, PM_ALL_SUBSTATES);
+		pm_policy_state_all_lock_get();
+		secondClockRun();
 	}
 
 	zb_ed_sleep_allowed = allow;

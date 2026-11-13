@@ -61,6 +61,23 @@ LOG_MODULE_REGISTER(soc_pm, CONFIG_SOC_LOG_LEVEL);
 
 static const struct device *const rtc_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(rtc_timer));
 
+static int rtc_wakeup_source_init(void)
+{
+	if ((rtc_dev == NULL) || !device_is_ready(rtc_dev) ||
+	    !pm_device_wakeup_is_capable(rtc_dev)) {
+		return 0;
+	}
+
+	if (!pm_device_wakeup_enable(rtc_dev, true)) {
+		LOG_ERR("Failed to enable RTC timer as a wakeup source");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+SYS_INIT(rtc_wakeup_source_init, APPLICATION, 0);
+
 static bool sleep_enabled;
 static uint64_t sleep_time_us;
 static uint64_t lpm_budget_us;
@@ -141,8 +158,13 @@ static bool ESP32_PM_SLEEP_FN_ATTR rtc_wakeup_enable(enum pm_state state, bool e
 
 		if ((sleep_time_us > lead_us) &&
 		    ((sleep_time_us - lead_us) >= MIN_RESIDENCY_SLEEP_US)) {
-			esp_sleep_enable_timer_wakeup(sleep_time_us - lead_us);
-			result = true;
+			esp_err_t err = esp_sleep_enable_timer_wakeup(sleep_time_us - lead_us);
+
+			if (err == ESP_OK) {
+				result = true;
+			} else {
+				LOG_ERR("Failed to enable RTC timer wakeup (%d)", err);
+			}
 		}
 	} else {
 		esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
@@ -270,7 +292,10 @@ void pm_state_set(enum pm_state state, uint8_t substate_id)
 	case PM_STATE_SOFT_OFF:
 		/* esp_timer alarms do not survive deep sleep. */
 		sleep_time_us = lpm_budget_us;
-		rtc_wakeup_enable(state, true);
+		if (!rtc_wakeup_enable(state, true)) {
+			LOG_WRN("Deep sleep skipped because RTC timer wakeup could not be configured");
+			break;
+		}
 #if defined(SOC_PM_SUPPORT_RTC_PERIPH_PD)
 		esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 #else
