@@ -1,0 +1,23 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,code-partition = &app_partition_nosd;
+	};
+};
+
+&flash0 {
+	partitions {
+		/delete-node/ partition@0;
+		/delete-node/ partition@26000;
+
+		app_partition_nosd: partition@1000 {
+			compatible = "zephyr,mapped-partition";
+			label = "Application";
+			reg = <0x1000 0xeb000>;
+		};
+	};
+};
