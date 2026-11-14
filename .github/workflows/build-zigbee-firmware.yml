@@ -681,12 +681,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="${RELEASE_TAG_PREFIX}-$(date -u +%Y%m%d)-$(printf '%s' "$GITHUB_SHA" | cut -c1-6)"
-          mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f -name '*.bin' | sort)
-          # 24 images of the eight boards, the loader images and the update images of the
-          # three STM32WB55 roles, the three update images of the ECB02C and its image with the
-          # loader, the two coprocessor binaries
-          if [[ "${#firmware_files[@]}" -ne 36 ]]; then
-            echo "Expected thirty-six firmware files, found ${#firmware_files[@]}" >&2
+          mapfile -t firmware_files < <(find release-artifacts -maxdepth 1 -type f | sort)
+          if [[ "${#firmware_files[@]}" -eq 0 ]]; then
+            echo "No firmware files found" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
@@ -732,6 +729,7 @@ jobs:
           and ZHA.
           The end devices for TLSR8258 and BL702 deep sleep between parent polls. The nRF52840
           end device uses System ON sleep with RTC wakeup and retains RAM.
+          The nice!nano firmware is also available in UF2 format for its bootloader.
           EOF
           printf '%s\n' "${firmware_files[@]}"
 
@@ -743,15 +741,22 @@ jobs:
           set -euo pipefail
           tag='${{ steps.release.outputs.tag }}'
           repo="$GITHUB_REPOSITORY"
+          mapfile -d '' -t firmware_files < <(
+            find release-artifacts -maxdepth 1 -type f -print0 | sort -z
+          )
+          if [[ "${#firmware_files[@]}" -eq 0 ]]; then
+            echo "No firmware files found" >&2
+            exit 1
+          fi
           if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
             gh release edit "$tag" \
               --repo "$repo" \
               --title "$tag" \
               --notes-file release-notes.md \
               --prerelease
-            gh release upload "$tag" release-artifacts/*.bin --repo "$repo" --clobber
+            gh release upload "$tag" "${firmware_files[@]}" --repo "$repo" --clobber
           else
-            gh release create "$tag" release-artifacts/*.bin \
+            gh release create "$tag" "${firmware_files[@]}" \
               --repo "$repo" \
               --title "$tag" \
               --notes-file release-notes.md \
