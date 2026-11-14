@@ -21,6 +21,18 @@
 
 #include <stm32wbxx.h>
 
+enum stm32wb_standby_wake {
+	/** The reset was not the end of a PM_STATE_SOFT_OFF sleep. */
+	STM32WB_STANDBY_WAKE_NONE,
+	/** The system left Standby on the RTC wakeup timer. */
+	STM32WB_STANDBY_WAKE_STANDBY,
+	/** The system left Standby by a reset from the NRST pin (RESET button). */
+	STM32WB_STANDBY_WAKE_RESET_PIN,
+};
+
+/** How the last reset related to a PM_STATE_SOFT_OFF sleep. */
+enum stm32wb_standby_wake stm32wb_standby_wake_get(void);
+
 #endif /* !_ASMLANGUAGE */
 
 #endif /* _STM32WBX_SOC_H_ */
