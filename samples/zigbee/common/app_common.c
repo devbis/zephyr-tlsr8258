@@ -14,7 +14,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
-#if defined(CONFIG_SOC_SERIES_BL70X) && defined(CONFIG_PM)
+#if (defined(CONFIG_SOC_SERIES_BL70X) || defined(CONFIG_SOC_SERIES_STM32WBX)) && defined(CONFIG_PM)
 #include <soc.h>
 #endif
 
@@ -294,6 +294,15 @@ static bool button_woke_device(const struct app_button *btn)
 #if defined(CONFIG_SOC_SERIES_BL70X) && defined(CONFIG_PM)
 	/* The SoC does not tell which pin ended the hibernate; sw0 is the wakeup key. */
 	if ((btn->idx == 0U) && (bl70x_wakeup_cause() == BL70X_WAKEUP_PIN)) {
+		return true;
+	}
+#endif
+#if defined(CONFIG_SOC_SERIES_STM32WBX) && defined(CONFIG_PM)
+	/*
+	 * The BOOT button is no wakeup pin of the STM32WB: the RESET button ends the Standby, and
+	 * is reported as a press of sw0.
+	 */
+	if ((btn->idx == 0U) && (stm32wb_standby_wake_get() == STM32WB_STANDBY_WAKE_RESET_PIN)) {
 		return true;
 	}
 #endif
