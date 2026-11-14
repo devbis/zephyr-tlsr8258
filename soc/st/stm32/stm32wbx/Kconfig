@@ -14,6 +14,7 @@ config SOC_SERIES_STM32WBX
 	select HAS_SWO
 	# Software options
 	select HAS_PM
+	select HAS_PM_STATE_SOFT_OFF
 	select HAS_POWEROFF
 	select PM_STATE_SET_IRQ_UNLOCKED
 	select SOC_EARLY_INIT_HOOK
