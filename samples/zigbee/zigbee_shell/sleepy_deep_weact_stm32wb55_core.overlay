@@ -1,0 +1,21 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zigbee,retained-mem = &retained_bkp;
+	};
+
+	/* The first backup registers hold the frame counter; the last one is MCUboot's magic */
+	retained_bkp: retained_bkp {
+		compatible = "st,stm32-bkp-retained";
+		first-register = <0>;
+		size = <8>;
+	};
+};
+
+&standby {
+	status = "okay";
+};

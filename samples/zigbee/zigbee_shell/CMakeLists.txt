@@ -16,7 +16,9 @@ endif()
 if(CONFIG_BOARD_WEACT_STM32WB55_CORE)
   # USB CDC console and mcumgr, watchdog and the flash state fix of the board; the same
   # fix is built into its MCUboot, see mcuboot/
-  include(${ZEPHYR_BASE}/samples/subsys/usb/common/common.cmake)
+  if(CONFIG_USB_DEVICE_STACK_NEXT)
+    include(${ZEPHYR_BASE}/samples/subsys/usb/common/common.cmake)
+  endif()
   target_sources(app PRIVATE
     src/board_weact_stm32wb55_core.c
     mcuboot/wbfix/wbfix.c
