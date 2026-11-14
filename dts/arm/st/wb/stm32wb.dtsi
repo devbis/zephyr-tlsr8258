@@ -36,7 +36,7 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-m4f";
 			reg = <0>;
-			cpu-power-states = <&stop0 &stop1 &stop2>;
+			cpu-power-states = <&stop0 &stop1 &stop2 &standby>;
 		};
 
 		power-states {
@@ -59,6 +59,18 @@
 				power-state-name = "suspend-to-idle";
 				substate-id = <3>;
 				min-residency-us = <900>;
+			};
+
+			standby: state3 {
+				/*
+				 * Standby ends in a reset, so it is enabled by the applications
+				 * that can restore their state, see soc/st/stm32/stm32wbx/power.c.
+				 */
+				compatible = "zephyr,power-state";
+				power-state-name = "soft-off";
+				min-residency-us = <1000000>;
+				exit-latency-us = <400000>;
+				status = "disabled";
 			};
 		};
 	};
