@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config RETAINED_MEM_STM32_BKP
+	bool "STM32 RTC backup register retained memory driver"
+	default y
+	depends on DT_HAS_ST_STM32_BKP_RETAINED_ENABLED
+	help
+	  Enable driver for retained memory kept in the RTC backup registers.
