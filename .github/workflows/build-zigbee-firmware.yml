@@ -362,6 +362,11 @@ jobs:
                   -DEXTRA_CONF_FILE=sleepy_deep.conf
                   "-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/sleepy_deep_${SOC}.overlay"
                 )
+              elif [[ "$SOC" == stm32wb55 ]]; then
+                cmake_args+=(
+                  -DEXTRA_CONF_FILE=sleepy_deep.conf
+                  "-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/sleepy_deep_weact_stm32wb55_core.overlay"
+                )
               fi
               ;;
             coordinator)
@@ -433,7 +438,7 @@ jobs:
           fi
           if [[ "$ROLE" == end-device &&
                 ( "$SOC" == tlsr8258 || "$SOC" == bl702 ||
-                  "$SOC" == esp32h2 || "$SOC" == esp32c6 ) ]]; then
+                  "$SOC" == esp32h2 || "$SOC" == esp32c6 || "$SOC" == stm32wb55 ) ]]; then
             grep -Fx 'CONFIG_PM=y' "$config_file"
             grep -Fx 'CONFIG_ZIGBEE_SLEEPY=y' "$config_file"
             grep -Fx 'CONFIG_ZIGBEE_SLEEPY_DEEP=y' "$config_file"
@@ -727,8 +732,10 @@ jobs:
           with `bflb-mcu-tool` (`--chipname=bl702 --xtal=32M`).
           The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
           and ZHA.
-          The end devices for TLSR8258 and BL702 deep sleep between parent polls. The nRF52840
-          end device uses System ON sleep with RTC wakeup and retains RAM.
+          The end devices for TLSR8258, BL702, ESP32 and STM32WB55 deep sleep between parent polls.
+          The nRF52840 end device uses System ON sleep with RTC wakeup and retains RAM.
+          The STM32WB55 end device restarts from Standby after every sleep and MCUboot skips its
+          update window then, so update it over DFU (BOOT and RESET), or power-cycle it first.
           The nice!nano firmware is also available in UF2 format for its bootloader.
           EOF
           printf '%s\n' "${firmware_files[@]}"
