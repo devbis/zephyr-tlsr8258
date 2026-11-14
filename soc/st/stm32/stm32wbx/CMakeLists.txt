@@ -11,9 +11,11 @@ zephyr_linker_sources_ifdef(CONFIG_BT_STM32_IPM
   ipm.ld
   )
 
-zephyr_sources_ifdef(CONFIG_PM
-  power.c
-  )
+if(CONFIG_PM)
+  zephyr_sources(power.c)
+  # z_get_next_timeout_expiry() times the Standby wakeup
+  zephyr_library_include_directories(${ZEPHYR_BASE}/kernel/include)
+endif()
 
 zephyr_sources_ifdef(CONFIG_POWEROFF poweroff.c)
 
