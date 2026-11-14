@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Retained memory in the RTC backup registers of an STM32 SoC. The registers
+  keep their value across a Standby wake, which resets the core and the SRAM.
+
+compatible: "st,stm32-bkp-retained"
+
+include: base.yaml
+
+properties:
+  first-register:
+    type: int
+    default: 0
+    description: Index of the first backup register of the region.
+
+  size:
+    type: int
+    required: true
+    description: Size of the region in bytes, a multiple of 4.
