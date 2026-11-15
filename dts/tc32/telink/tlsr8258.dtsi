@@ -9,6 +9,10 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
+	chosen {
+		zephyr,ieee802154 = &zb;
+	};
+
 	clocks {
 		/*
 		 * System clock: the CPU and the UART, SPI, I2C and PWM dividers. The SoC selects
