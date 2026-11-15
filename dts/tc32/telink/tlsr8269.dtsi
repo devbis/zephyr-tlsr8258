@@ -16,6 +16,10 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 
+	chosen {
+		zephyr,ieee802154 = &zb;
+	};
+
 	clocks {
 		sys_clk: clock-sys {
 			compatible = "fixed-clock";
