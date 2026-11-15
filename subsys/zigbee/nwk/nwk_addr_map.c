@@ -172,7 +172,9 @@ uint8_t zb_ExtAddrByShortAddr(uint16_t shortAddr, addrExt_t extAddr, uint16_t *i
 
 		if (e->shortAddr == shortAddr) {
 			ZB_IEEE_ADDR_COPY(extAddr, e->extAddr);
-			*idx = addr_map_idx_of(e);
+			if (idx != NULL) {
+				*idx = addr_map_idx_of(e);
+			}
 			return RET_OK;
 		}
 	}
