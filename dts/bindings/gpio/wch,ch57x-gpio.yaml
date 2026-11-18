@@ -1,0 +1,19 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: WCH CH57x GPIO port (PA has 16 pins, PB has 24 pins)
+
+compatible: "wch,ch57x-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  "#gpio-cells":
+    const: 2
+
+gpio-cells:
+  - pin
+  - flags
