@@ -1,0 +1,6 @@
+board:
+  name: ch579m_evt
+  full_name: WCH CH579M EVT
+  vendor: wch
+  socs:
+    - name: ch579

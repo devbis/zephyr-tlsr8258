@@ -1,0 +1,17 @@
+/*
+ * Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&pinctrl {
+	uart1_default: uart1_default {
+		group1 {
+			pinmux = <CH57X_UART1_TX_PA9>;
+			output-high;
+		};
+		group2 {
+			pinmux = <CH57X_UART1_RX_PA8>;
+			bias-pull-up;
+		};
+	};
+};

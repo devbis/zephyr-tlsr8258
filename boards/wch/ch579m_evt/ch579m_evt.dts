@@ -1,0 +1,37 @@
+/*
+ * Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <wch/ch57x/ch579.dtsi>
+#include "ch579m_evt-pinctrl.dtsi"
+
+/ {
+	model = "WCH CH579M EVT board";
+	compatible = "wch,ch579m-evt", "wch,ch579";
+
+	chosen {
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&gpiob {
+	status = "okay";
+};
+
+/* PA8/PA9: also the ISP serial download channel of the board */
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-names = "default";
+};

@@ -1,0 +1,13 @@
+identifier: ch579m_evt
+name: WCH CH579M EVT
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 32
+flash: 250
+supported:
+  - gpio
+  - serial
+vendor: wch
