@@ -23,8 +23,10 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZNP_AF_DATA_REQUEST_EXT 0x02U
 #define ZNP_AF_DATA_REQUEST_SRC_RTG 0x03U
 #define ZNP_AF_DELETE           0x04U
+#define ZNP_AF_INTER_PAN_CTL    0x10U
 #define ZNP_AF_DATA_CONFIRM     0x80U
 #define ZNP_AF_INCOMING_MSG     0x81U
+#define ZNP_AF_INCOMING_MSG_EXT 0x82U
 
 #define ZNP_ADDR_MODE_GROUP     0x01U
 #define ZNP_ADDR_MODE_NWK       0x02U
@@ -39,6 +41,12 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZNP_MAX_ENDPOINTS       16U
 #define ZNP_MAX_CLUSTERS        16U
 #define ZNP_MAX_PENDING         8U
+
+/* The endpoint a host addresses inter-PAN frames to, and how long a channel switch lasts. */
+#define ZNP_INTER_PAN_EP        0xFEU
+#define ZNP_INTER_PAN_HOLD_MS   10000U
+#define ZNP_CHANNEL_MIN         11U
+#define ZNP_CHANNEL_MAX         26U
 
 struct znp_endpoint {
 	bool used;
@@ -103,6 +111,31 @@ static void znp_ep_rx(void *arg)
 	uint8_t *p = out;
 	bool group = info->dst_addr_mode == APS_SHORT_GROUPADDR_NOEP;
 	uint8_t n = (uint8_t)MIN(ind->asduLen, ZNP_MAX_DATA - 26U);
+
+	if (info->src_addr_mode == ADDR_MODE_EXT) {
+		/* Inter-PAN: AF_INCOMING_MSG_EXT carries the sender's IEEE address. */
+		n = (uint8_t)MIN(ind->asduLen, ZNP_MAX_DATA - 32U);
+		p = znp_put_u16(p, 0U);
+		p = znp_put_u16(p, info->cluster_id);
+		*p++ = ZNP_ADDR_MODE_IEEE;
+		memcpy(p, info->src_ext_addr, 8U);
+		p += 8U;
+		*p++ = ZNP_INTER_PAN_EP;
+		p = znp_put_u16(p, 0U); /* source PAN is not kept */
+		*p++ = info->dst_ep;
+		*p++ = 0U;
+		*p++ = info->lqi;
+		*p++ = 0U;
+		p = znp_put_u32(p, info->rx_tick);
+		*p++ = info->aps_counter;
+		p = znp_put_u16(p, n);
+		memcpy(p, ind->asdu, n);
+		p += n;
+
+		znp_areq(ZNP_SUBSYS_AF, ZNP_AF_INCOMING_MSG_EXT, out, (size_t)(p - out));
+		ev_buf_free((uint8_t *)arg);
+		return;
+	}
 
 	p = znp_put_u16(p, group ? info->dst_addr : 0U);
 	p = znp_put_u16(p, info->cluster_id);
@@ -220,6 +253,10 @@ static uint8_t aps_send(uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep, 
 	req.apsCnt = aps_get_counter_value();
 	req.enableNWKsecurity = (ss_ib_security_level_get() != 0U);
 	req.tx_options = ((options & ZNP_AF_OPT_ACK_REQUEST) != 0U) ? APS_TX_OPT_ACK_TX : 0U;
+	if (dst_ep == ZNP_INTER_PAN_EP && addr_mode != ZNP_ADDR_MODE_GROUP) {
+		/* Inter-PAN frames are never acknowledged by the APS layer. */
+		req.tx_options = APS_TX_OPT_INTRA_PAN;
+	}
 	*aps_cnt = req.apsCnt;
 
 	switch (addr_mode) {
@@ -383,12 +420,90 @@ static void af_delete(const uint8_t *d, uint8_t len)
 	znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_DELETE, ZNP_STATUS_FAILURE);
 }
 
+static bool inter_pan_active;
+static uint8_t inter_pan_saved_channel;
+static ev_timer_event_t *inter_pan_timer;
+
+static void inter_pan_leave(void)
+{
+	if (inter_pan_timer != NULL) {
+		(void)ev_timer_taskCancel(&inter_pan_timer);
+	}
+
+	if (inter_pan_active) {
+		inter_pan_active = false;
+		ZB_TRANSCEIVER_SET_CHANNEL(inter_pan_saved_channel);
+	}
+}
+
+/* A host that never clears the inter-PAN channel must not leave the network deaf. */
+static int inter_pan_expired(void *arg)
+{
+	(void)arg;
+
+	inter_pan_timer = NULL;
+	inter_pan_leave();
+	return -1;
+}
+
+/*
+ * Inter-PAN control: the channel switch and the endpoint registration a host
+ * does for Touchlink. The channel is restored on clear or after a timeout.
+ */
+static void af_inter_pan_ctl(const uint8_t *d, uint8_t len)
+{
+	static bool ep_set;
+	uint8_t status = ZNP_STATUS_SUCCESS;
+
+	if (len < 1U) {
+		znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_INTER_PAN_CTL, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	switch (d[0]) {
+	case 0x00U: /* InterPanClr */
+		inter_pan_leave();
+		break;
+	case 0x01U: /* InterPanSet: channel */
+		if (len < 2U || d[1] < ZNP_CHANNEL_MIN || d[1] > ZNP_CHANNEL_MAX) {
+			status = ZNP_STATUS_INVALID_PARAMETER;
+			break;
+		}
+		if (!inter_pan_active) {
+			inter_pan_saved_channel = MAC_IB().phyChannelCur;
+			inter_pan_active = true;
+		}
+		ZB_TRANSCEIVER_SET_CHANNEL(d[1]);
+		if (inter_pan_timer != NULL) {
+			(void)ev_timer_taskCancel(&inter_pan_timer);
+		}
+		inter_pan_timer = ev_timer_taskPost(inter_pan_expired, NULL, ZNP_INTER_PAN_HOLD_MS);
+		break;
+	case 0x02U: /* InterPanReg: endpoint */
+		if (len < 2U) {
+			status = ZNP_STATUS_INVALID_PARAMETER;
+		} else {
+			ep_set = true;
+		}
+		break;
+	case 0x03U: /* InterPanChk */
+		status = ep_set ? ZNP_STATUS_SUCCESS : ZNP_STATUS_FAILURE;
+		break;
+	default:
+		status = ZNP_STATUS_INVALID_PARAMETER;
+		break;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_AF, ZNP_AF_INTER_PAN_CTL, status);
+}
+
 static const struct znp_cmd af_cmds[] = {
 	{ZNP_SUBSYS_AF, ZNP_AF_REGISTER, af_register},
 	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST, af_data_request},
 	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_EXT, af_data_request_ext},
 	{ZNP_SUBSYS_AF, ZNP_AF_DATA_REQUEST_SRC_RTG, af_data_request_src_rtg},
 	{ZNP_SUBSYS_AF, ZNP_AF_DELETE, af_delete},
+	{ZNP_SUBSYS_AF, ZNP_AF_INTER_PAN_CTL, af_inter_pan_ctl},
 };
 
 bool znp_af_handle(uint8_t subsys, uint8_t cmd, const uint8_t *data, uint8_t len)
