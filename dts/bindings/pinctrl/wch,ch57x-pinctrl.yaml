@@ -1,0 +1,39 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  WCH CH57x pin controller. It configures the GPIO direction, pulls and
+  output level of the listed pins and selects the pin location of the
+  peripheral through R16_PIN_ALTERNATE.
+
+  Pins are described with the CH57X_PIN() / CH57X_PIN_ALT() macros of
+  <zephyr/dt-bindings/pinctrl/ch57x-pinctrl.h>. A pin that is driven by the
+  peripheral (UART TX) needs output-high, a pin that is read (UART RX) needs
+  bias-pull-up or no output property at all.
+
+compatible: "wch,ch57x-pinctrl"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+child-binding:
+  description: Pin configuration state.
+  child-binding:
+    description: Group of pins sharing one configuration.
+
+    include:
+      - name: pincfg-node.yaml
+        property-allowlist:
+          - bias-pull-up
+          - bias-pull-down
+          - output-high
+          - output-low
+
+    properties:
+      pinmux:
+        required: true
+        type: array
+        description: Pins, as CH57X_PIN() or CH57X_PIN_ALT().
