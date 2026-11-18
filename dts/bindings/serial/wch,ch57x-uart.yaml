@@ -1,0 +1,21 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: WCH CH57x UART (16550-like, 8-byte FIFO)
+
+compatible: "wch,ch57x-uart"
+
+include: [uart-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  stop-bits:
+    default: "1"
+
+  data-bits:
+    default: 8

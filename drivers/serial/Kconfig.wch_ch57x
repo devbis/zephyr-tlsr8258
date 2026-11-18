@@ -1,0 +1,12 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config UART_WCH_CH57X
+	bool "WCH CH57x UART driver"
+	default y
+	depends on DT_HAS_WCH_CH57X_UART_ENABLED
+	select SERIAL_HAS_DRIVER
+	select SERIAL_SUPPORT_INTERRUPT
+	select PINCTRL
+	help
+	  Enable the UART driver for the WCH CH57x (CH579) family.
