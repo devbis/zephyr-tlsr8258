@@ -39,7 +39,7 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZNP_STATUS_APS_FAIL     0xB1U
 
 #define ZNP_MAX_ENDPOINTS       16U
-#define ZNP_MAX_CLUSTERS        16U
+#define ZNP_MAX_CLUSTERS        24U
 #define ZNP_MAX_PENDING         8U
 
 /* The endpoint a host addresses inter-PAN frames to, and how long a channel switch lasts. */
