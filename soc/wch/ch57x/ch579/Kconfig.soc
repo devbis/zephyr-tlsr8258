@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_CH579
+	bool
+	help
+	  WCH CH579 (Arm Cortex-M0, 250 KiB flash, 32 KiB SRAM, BLE/Ethernet/USB).
+
+config SOC
+	default "ch579" if SOC_CH579
