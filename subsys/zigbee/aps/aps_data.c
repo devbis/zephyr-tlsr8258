@@ -1561,6 +1561,11 @@ void aps_data_request(void *arg)
 
 	/* Inter-PAN frames use the compact five-byte APS header and frame type 3. */
 	if (interPan != 0U) {
+		if (req->dst_addr_mode == APS_LONG_DSTADDR_WITHEP) {
+			/* An inter-PAN unicast is addressed by IEEE address, known or not. */
+			nlde.addrMode = APS_LONG_DSTADDR_WITHEP;
+			ZB_IEEE_ADDR_COPY(nlde.ieeAddr, requestedExt);
+		}
 		frameCtrl = (uint8_t)((frameCtrl & (uint8_t)~APS_FRAME_CTRL_DELIVERY_MODE_BROADCAST) |
 				 APS_FRAME_CTRL_FRAME_TYPE_INTERPAN);
 		nsdu = asdu - 5;
