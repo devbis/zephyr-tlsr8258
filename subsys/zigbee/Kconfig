@@ -546,6 +546,13 @@ config ZIGBEE_NCP_ZSTACK_PROMICRO_UF2
 	  Provide a board-specific ZNP command to reset into the Adafruit UF2
 	  bootloader. The bootloader must support the GPREGRET UF2 request.
 
+config ZIGBEE_NCP_ZSTACK_FEM_DEBUG
+	bool "Allow the ZNP host to set the front end module pins"
+	depends on ZIGBEE_NCP_ZSTACK
+	help
+	  Provide a ZNP command, SYS 0xF1 with the CTX and CRX levels, that sets the
+	  control pins of an external front end module. For bringing up a radio link only.
+
 endif # ZIGBEE_NCP
 
 config ZIGBEE_ZBHCI_UART

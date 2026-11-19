@@ -54,6 +54,13 @@ void zb_radio_reset(void);
 void zb_radio_filter_sync(void);
 void zb_radio_trx_switch(uint8_t mode, uint8_t phy_chn);
 void zb_radio_trx_off_auto_mode(void);
+
+/** Set the CTX and CRX pins of the external front end module, for debugging a radio link. */
+int zb_radio_fem_debug_set(uint8_t ctx, uint8_t crx);
+uint8_t zb_radio_fem_ppi_ctl(uint8_t enable, uint8_t disable);
+
+/** Frame counters for debugging a radio link: RX, RX drops, TX, MAC commands with ACK request, AssocReq, DataReq, ACKs the radio started. */
+void zb_radio_dbg_get(uint32_t out[12]);
 void zb_radio_tx_power_set(uint8_t level);
 /* Set the transmit power in dBm; 0 on success, a negative errno otherwise. */
 int zb_radio_tx_power_dbm_set(int16_t dbm);

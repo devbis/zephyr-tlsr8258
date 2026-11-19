@@ -1197,8 +1197,17 @@ void nrf_802154_receive_failed(nrf_802154_rx_error_t error, uint32_t id)
 	}
 }
 
+uint32_t nrf5_dbg_ack_started;
+
+/* Debug hook: the Zigbee radio glue overrides it */
+__weak void zb_radio_dbg_ack_started(void)
+{
+}
+
 void nrf_802154_tx_ack_started(const uint8_t *data)
 {
+	nrf5_dbg_ack_started++;
+	zb_radio_dbg_ack_started();
 	nrf5_data.last_frame_ack_fpb = data[FRAME_PENDING_OFFSET] & FRAME_PENDING_BIT;
 	nrf5_data.last_frame_ack_seb = data[SECURITY_ENABLED_OFFSET] & SECURITY_ENABLED_BIT;
 }
