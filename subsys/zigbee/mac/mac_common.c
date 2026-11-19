@@ -8,13 +8,13 @@
 #include "mac_trx_api.h"
 #include "mac_common.h"
 
-_attribute_ram_code_ u8 tl_zbMacHdrSize(u16 frameCtrl)
+_attribute_ram_code_ uint8_t zb_MacHdrSize(uint16_t frameCtrl)
 {
-	u8 hdrSize = MAC_HDR_FCF_SEQ_LEN;
-	u8 dstAddrMode =
-		(u8)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
-	u8 srcAddrMode =
-		(u8)((frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
+	uint8_t hdrSize = MAC_HDR_FCF_SEQ_LEN;
+	uint8_t dstAddrMode =
+		(uint8_t)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
+	uint8_t srcAddrMode =
+		(uint8_t)((frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
 
 	if (dstAddrMode != ADDR_MODE_NONE) {
 		hdrSize = (dstAddrMode == ADDR_MODE_EXT)
@@ -23,24 +23,24 @@ _attribute_ram_code_ u8 tl_zbMacHdrSize(u16 frameCtrl)
 	}
 
 	if (srcAddrMode != ADDR_MODE_NONE) {
-		hdrSize = (u8)(hdrSize + ((srcAddrMode == ADDR_MODE_EXT) ? MAC_EXT_ADDR_LEN
+		hdrSize = (uint8_t)(hdrSize + ((srcAddrMode == ADDR_MODE_EXT) ? MAC_EXT_ADDR_LEN
 									 : MAC_SHORT_ADDR_LEN));
 
 		if ((frameCtrl & MAC_FCF_INTRA_PAN_MASK) == 0U) {
-			hdrSize = (u8)(hdrSize + MAC_PAN_ID_LEN);
+			hdrSize = (uint8_t)(hdrSize + MAC_PAN_ID_LEN);
 		}
 	}
 
 	return hdrSize;
 }
 
-u8 *tl_zbMacHdrBuilder(u8 *buf, tl_zb_mac_mhr_t *mhr)
+uint8_t *zb_MacHdrBuilder(uint8_t *buf, zb_mac_mhr_t *mhr)
 {
-	u8 *p = buf + MAC_HDR_FCF_SEQ_LEN;
-	u8 dstAddrMode =
-		(u8)((mhr->frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
-	u8 srcAddrMode =
-		(u8)((mhr->frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
+	uint8_t *p = buf + MAC_HDR_FCF_SEQ_LEN;
+	uint8_t dstAddrMode =
+		(uint8_t)((mhr->frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
+	uint8_t srcAddrMode =
+		(uint8_t)((mhr->frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
 
 	COPY_U16TOBUFFER(buf, mhr->frameCtrl);
 	buf[2] = ZB_MAC_DSN();
@@ -78,19 +78,19 @@ u8 *tl_zbMacHdrBuilder(u8 *buf, tl_zb_mac_mhr_t *mhr)
 	return p;
 }
 
-u8 tl_zbMacHdrParse(tl_zb_mac_mhr_t *mhr, u8 *buf)
+uint8_t zb_MacHdrParse(zb_mac_mhr_t *mhr, uint8_t *buf)
 {
-	u16 frameCtrl = ZB_LE_U16(&buf[0]);
-	u8 *p = buf + MAC_HDR_FCF_SEQ_LEN;
+	uint16_t frameCtrl = ZB_LE_U16(&buf[0]);
+	uint8_t *p = buf + MAC_HDR_FCF_SEQ_LEN;
 
-	memset(mhr, 0, sizeof(tl_zb_mac_mhr_t));
+	memset(mhr, 0, sizeof(zb_mac_mhr_t));
 
 	mhr->frameCtrl = frameCtrl;
 	mhr->seqNum = buf[2];
 	mhr->dstAddrMode =
-		(u8)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
+		(uint8_t)((frameCtrl & MAC_FCF_DST_ADDR_MODE_MASK) >> MAC_FCF_DST_ADDR_MODE_POS);
 	mhr->srcAddrMode =
-		(u8)((frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
+		(uint8_t)((frameCtrl & MAC_FCF_SRC_ADDR_MODE_MASK) >> MAC_FCF_SRC_ADDR_MODE_POS);
 	mhr->panIdMode = (frameCtrl & MAC_FCF_INTRA_PAN_MASK) ? 1U : 0U;
 
 	if (mhr->dstAddrMode != ADDR_MODE_NONE) {
@@ -123,5 +123,5 @@ u8 tl_zbMacHdrParse(tl_zb_mac_mhr_t *mhr, u8 *buf)
 		}
 	}
 
-	return (u8)(p - buf);
+	return (uint8_t)(p - buf);
 }

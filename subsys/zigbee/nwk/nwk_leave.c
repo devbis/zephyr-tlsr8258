@@ -10,21 +10,21 @@
 #include "zdo_nwk_manager.h"
 #include "ss_security_flags.h"
 
-static void nwk_nlmeLeaveCnf(void *arg, u8 status, addrExt_t extAddr)
+static void nwk_nlmeLeaveCnf(void *arg, uint8_t status, addrExt_t extAddr)
 {
 	nlme_leave_cnf_t *cnf = (nlme_leave_cnf_t *)arg;
 
 	ZB_IEEE_ADDR_COPY(cnf->deviceAddr, extAddr);
 	cnf->status = status;
 
-	tl_zbTaskPost(zdo_nlme_leave_confirm_cb, arg);
+	zb_TaskPost(zdo_nlme_leave_confirm_cb, arg);
 }
 
-void tl_zbNwkSendLeaveReqCmd(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 handle)
+void zb_NwkSendLeaveReqCmd(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *cmd, uint8_t handle)
 {
-	u8 *payload;
+	uint8_t *payload;
 
-	TL_BUF_INITIAL_ALLOC(buf, NWK_LEAVE_CMD_LEN, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, NWK_LEAVE_CMD_LEN, payload, uint8_t *);
 
 	payload[0] = cmd[0];
 	payload[1] = cmd[4];
@@ -38,10 +38,10 @@ void tl_zbNwkSendLeaveReqCmd(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *cmd, u8 hand
 	nwk_fwdPacket(buf, pNwkHdr, payload, NWK_LEAVE_CMD_LEN);
 }
 
-int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
+int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle)
 {
-	u8 *hdr = (u8 *)pNwkHdr;
-	u8 security = 0;
+	uint8_t *hdr = (uint8_t *)pNwkHdr;
+	uint8_t security = 0;
 
 	if (ss_ib_secure_all_fresh() && ss_ib_security_level_get() != 0U) {
 		security = ss_keyPreconfigured() != 0U ? 1U : 0U;
@@ -52,13 +52,13 @@ int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
 	 * srcIEEEAddr (bit 4) and endDevInitiator (bit 5). */
 #if !defined(ZB_ROUTER_ROLE)
 	/* Only the end device object sets endDevInitiator, from parentInfo != 0. */
-	hdr[5] = (u8)((hdr[5] & (u8)~NWK_FC_HIGH_ED_INITIATOR) |
-		      (u8)(g_zbInfo.nwkNib.parentInfo != 0U ? NWK_FC_HIGH_ED_INITIATOR : 0U));
+	hdr[5] = (uint8_t)((hdr[5] & (uint8_t)~NWK_FC_HIGH_ED_INITIATOR) |
+		      (uint8_t)(g_zbInfo.nwkNib.parentInfo != 0U ? NWK_FC_HIGH_ED_INITIATOR : 0U));
 #endif
-	hdr[4] = (u8)((hdr[4] & (u8)~NWK_FC_LOW_FRAME_TYPE_MASK) | NWK_FC_LOW_FRAME_TYPE_COMMAND);
-	hdr[4] = (u8)((hdr[4] & (u8)~NWK_FC_LOW_PROTO_VER_MASK) | NWK_FC_LOW_PROTO_VER_PRO);
-	hdr[5] = (u8)((hdr[5] & (u8)~NWK_FC_HIGH_SECURITY) |
-		      (u8)(security << NWK_FC_HIGH_SECURITY_SHIFT));
+	hdr[4] = (uint8_t)((hdr[4] & (uint8_t)~NWK_FC_LOW_FRAME_TYPE_MASK) | NWK_FC_LOW_FRAME_TYPE_COMMAND);
+	hdr[4] = (uint8_t)((hdr[4] & (uint8_t)~NWK_FC_LOW_PROTO_VER_MASK) | NWK_FC_LOW_PROTO_VER_PRO);
+	hdr[5] = (uint8_t)((hdr[5] & (uint8_t)~NWK_FC_HIGH_SECURITY) |
+		      (uint8_t)(security << NWK_FC_HIGH_SECURITY_SHIFT));
 	hdr[5] |= NWK_FC_HIGH_SRC_IEEE;
 
 	ZB_IEEE_ADDR_COPY(pNwkHdr->srcIeeeAddr, g_zbInfo.macPib.extAddress);
@@ -68,17 +68,17 @@ int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle)
 	g_zbInfo.nwkNib.seqNum++;
 	pNwkHdr->frameHdrLen = getNwkHdrSize(pNwkHdr);
 
-	tl_zbNwkSendLeaveReqCmd((zb_buf_t *)arg, pNwkHdr, (u8 *)cmd, handle);
+	zb_NwkSendLeaveReqCmd((zb_buf_t *)arg, pNwkHdr, (uint8_t *)cmd, handle);
 
 	return 0;
 }
 
-static int nwkLeaveReqStart(void *arg, u16 dstAddr, u8 request)
+static int nwkLeaveReqStart(void *arg, uint16_t dstAddr, uint8_t request)
 {
 	nlme_leave_req_t *req = (nlme_leave_req_t *)arg;
 	nwk_hdr_t nwkHdr;
 	nwkCmd_t cmd;
-	u8 *hdr = (u8 *)&nwkHdr;
+	uint8_t *hdr = (uint8_t *)&nwkHdr;
 
 	memset(&nwkHdr, 0, sizeof(nwkHdr));
 	memset(&cmd, 0, sizeof(cmd));
@@ -103,7 +103,7 @@ static int nwkLeaveReqStart(void *arg, u16 dstAddr, u8 request)
 	return nwkLeaveReqSend(arg, &nwkHdr, &cmd, NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE);
 }
 
-void tl_zbNwkNlmeLeaveRequestHandler(void *arg)
+void zb_NwkNlmeLeaveRequestHandler(void *arg)
 {
 	nlme_leave_req_t *req = (nlme_leave_req_t *)arg;
 	addrExt_t extAddr;
@@ -123,7 +123,7 @@ void tl_zbNwkNlmeLeaveRequestHandler(void *arg)
 	}
 
 	{
-		tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr(extAddr);
+		zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr(extAddr);
 
 		if (entry == NULL) {
 			nwk_nlmeLeaveCnf(arg, NWK_STATUS_UNKNOWN_DEVICE, extAddr);
@@ -135,11 +135,11 @@ void tl_zbNwkNlmeLeaveRequestHandler(void *arg)
 			return;
 		}
 
-		nwkLeaveReqStart(arg, tl_zbshortAddrByIdx(entry->addrmapIdx), 1);
+		nwkLeaveReqStart(arg, zb_shortAddrByIdx(entry->addrmapIdx), 1);
 	}
 }
 
-void nwk_leaveCmdSendCnf(void *arg, u16 dstAddr)
+void nwk_leaveCmdSendCnf(void *arg, uint16_t dstAddr)
 {
 	addrExt_t extAddr;
 
@@ -148,17 +148,17 @@ void nwk_leaveCmdSendCnf(void *arg, u16 dstAddr)
 		(void)zb_address_ieee_by_short(dstAddr, extAddr);
 	}
 
-	nwk_nlmeLeaveCnf(arg, ((u8 *)arg)[9], extAddr);
+	nwk_nlmeLeaveCnf(arg, ((uint8_t *)arg)[9], extAddr);
 }
 
-void tl_zbNwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
+void zb_NwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 {
 	nlme_leave_req_t *req = (nlme_leave_req_t *)arg;
 	nlme_leave_ind_t *ind = (nlme_leave_ind_t *)arg;
 	addrExt_t srcExtAddr;
-	u16 srcAddr = pNwkHdr->srcAddr;
-	tl_zb_normal_neighbor_entry_t *entry;
-	u16 srcAddrMapIdx;
+	uint16_t srcAddr = pNwkHdr->srcAddr;
+	zb_normal_neighbor_entry_t *entry;
+	uint16_t srcAddrMapIdx;
 #if defined(ZB_ED_ROLE)
 	bool reqNotBroadcast;
 #endif
@@ -168,7 +168,7 @@ void tl_zbNwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		return;
 	}
 
-	if (tl_zbExtAddrByShortAddr(srcAddr, srcExtAddr, &srcAddrMapIdx) ==
+	if (zb_ExtAddrByShortAddr(srcAddr, srcExtAddr, &srcAddrMapIdx) ==
 	    NWK_ADDR_LOOKUP_FAILED) {
 		zb_buf_free((zb_buf_t *)arg);
 		return;
@@ -190,14 +190,14 @@ void tl_zbNwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		ZB_IEEE_ADDR_ZERO(req->deviceAddr);
 		req->removeChildren = cmd->leave.options.removeChildren ? TRUE : FALSE;
 		req->rejoin = cmd->leave.options.rejoin ? TRUE : FALSE;
-		tl_zbTaskPost(tl_zbNwkNlmeLeaveRequestHandler, arg);
+		zb_TaskPost(zb_NwkNlmeLeaveRequestHandler, arg);
 		return;
 	}
 
 	if (cmd->leave.options.request == 0U || ZB_NWK_IS_ADDRESS_BROADCAST(pNwkHdr->dstAddr)) {
 		ZB_IEEE_ADDR_COPY(ind->deviceAddr, srcExtAddr);
 		ind->rejoin = cmd->leave.options.rejoin ? TRUE : FALSE;
-		tl_zbTaskPost(zdo_nlme_leave_indication_cb, arg);
+		zb_TaskPost(zdo_nlme_leave_indication_cb, arg);
 		return;
 	}
 
@@ -206,7 +206,7 @@ void tl_zbNwkLeaveReqCmdHandler(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd)
 		ZB_IEEE_ADDR_ZERO(req->deviceAddr);
 		req->removeChildren = cmd->leave.options.removeChildren ? TRUE : FALSE;
 		req->rejoin = cmd->leave.options.rejoin ? TRUE : FALSE;
-		tl_zbTaskPost(tl_zbNwkNlmeLeaveRequestHandler, arg);
+		zb_TaskPost(zb_NwkNlmeLeaveRequestHandler, arg);
 		return;
 	}
 #endif

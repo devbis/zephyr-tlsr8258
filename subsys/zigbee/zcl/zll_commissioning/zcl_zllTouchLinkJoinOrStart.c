@@ -32,18 +32,18 @@
 _CODE_ZCL_ static void zcl_zllTouchLinNetworkStartRespCmdSend(void *arg);
 
 /*
- * @fn      tl_zbNwkZllCommissionScanConfirm
+ * @fn      zb_NwkZllCommissionScanConfirm
  *
  * @brief	the callback for touch link active scan
  *
  * @param 	arg
  *
  */
-_CODE_ZCL_ void tl_zbNwkZllCommissionScanConfirm(void)
+_CODE_ZCL_ void zb_NwkZllCommissionScanConfirm(void)
 {
-    u8 channel = 0xff;
-    u8 panNumOnChannel[16] = {0};
-    u8 nodesOnChannel = 0xff;
+    uint8_t channel = 0xff;
+    uint8_t panNumOnChannel[16] = {0};
+    uint8_t nodesOnChannel = 0xff;
 
     //printf("zllScanCnf: state = %x\n", g_zllTouchLink.state);
 
@@ -51,35 +51,35 @@ _CODE_ZCL_ void tl_zbNwkZllCommissionScanConfirm(void)
         return;
     }
 
-    u32 i = 0;
-    u8  neighborNum = tl_zbAdditionNeighborTableNumGet();
-    tl_zb_addition_neighbor_entry_t *pEntry = NULL;
+    uint32_t i = 0;
+    uint8_t  neighborNum = zb_AdditionNeighborTableNumGet();
+    zb_addition_neighbor_entry_t *pEntry = NULL;
 
     for (i = 0; i < neighborNum; i++) {
-        pEntry = tl_zbAdditionNeighborEntryGetFromIdx(i);
-        if (pEntry && pEntry->logicChannel >= TL_ZB_MAC_CHANNEL_START && pEntry->logicChannel <= TL_ZB_MAC_CHANNEL_STOP) {
-            panNumOnChannel[pEntry->logicChannel-TL_ZB_MAC_CHANNEL_START]++;
+        pEntry = zb_AdditionNeighborEntryGetFromIdx(i);
+        if (pEntry && pEntry->logicChannel >= ZB_MAC_CHANNEL_START && pEntry->logicChannel <= ZB_MAC_CHANNEL_STOP) {
+            panNumOnChannel[pEntry->logicChannel-ZB_MAC_CHANNEL_START]++;
         }
     }
 
     /* select channel */
-    for (i = TL_ZB_MAC_CHANNEL_START ; i <= TL_ZB_MAC_CHANNEL_STOP ; i++) {
-        if ((g_zllTouchLink.scanChanMask & (1 << i)) && panNumOnChannel[i-TL_ZB_MAC_CHANNEL_START] < nodesOnChannel) {
-            nodesOnChannel = panNumOnChannel[i-TL_ZB_MAC_CHANNEL_START];
+    for (i = ZB_MAC_CHANNEL_START ; i <= ZB_MAC_CHANNEL_STOP ; i++) {
+        if ((g_zllTouchLink.scanChanMask & (1 << i)) && panNumOnChannel[i-ZB_MAC_CHANNEL_START] < nodesOnChannel) {
+            nodesOnChannel = panNumOnChannel[i-ZB_MAC_CHANNEL_START];
             channel = i;
         }
     }
 
     /* select panId */
-    u32 unique_pan_id = 0x00;
-    u16 panId = ZB_RANDOM();
+    uint32_t unique_pan_id = 0x00;
+    uint16_t panId = ZB_RANDOM();
     while (!unique_pan_id) {
         if (panId == MAC_INVALID_PANID) {
             panId = ZB_RANDOM();
         }
 
         for (i = 0; i < neighborNum; i++) {
-            pEntry = tl_zbAdditionNeighborEntryGetFromIdx(i);
+            pEntry = zb_AdditionNeighborEntryGetFromIdx(i);
             if (pEntry->panId == panId) {
                 panId++;
                 break;
@@ -91,15 +91,15 @@ _CODE_ZCL_ void tl_zbNwkZllCommissionScanConfirm(void)
     }
 
     extPANId_t extPanId;
-    u16 random[4] = {0};
-    for (u32 i = 0; i < 4; i++) {
+    uint16_t random[4] = {0};
+    for (uint32_t i = 0; i < 4; i++) {
         random[i] = zb_random();
     }
     ZB_EXTPANID_COPY(extPanId, random);
 
     //channel = 0x0b;  //for DEBUG
     g_zllTouchLink.workingChannelBackUp = channel;
-    tl_zbAdditionNeighborReset();
+    zb_AdditionNeighborReset();
 
     /* use the old channel */
     ZB_TRANSCEIVER_SET_CHANNEL(g_zllTouchLink.touchLinkChan);
@@ -110,9 +110,9 @@ _CODE_ZCL_ void tl_zbNwkZllCommissionScanConfirm(void)
         ZB_EXTPANID_COPY(NWK_NIB().extPANId, extPanId);
         g_zbMacCtx.curChannel = g_zllTouchLink.workingChannelBackUp; //channel;
 
-        u16 nwkAddr = 0xffff;
+        uint16_t nwkAddr = 0xffff;
         if (g_touchlinkAttr.freeNwkAddressRangeBegin == 0x0000) {
-            nwkAddr = tl_zbNwkStochasticAddrCal();
+            nwkAddr = zb_NwkStochasticAddrCal();
         } else {
             nwkAddr = g_touchlinkAttr.freeNwkAddressRangeBegin++;
         }
@@ -133,16 +133,16 @@ _CODE_ZCL_ void tl_zbNwkZllCommissionScanConfirm(void)
         startParams->logicalChannel = g_zllTouchLink.workingChannelBackUp;//channel;
 
         if (g_zllTouchLink.transId != 0 && channel != 0xff) {
-            TL_SCHEDULE_TASK(zcl_zllTouchLinNetworkStartRespCmdSend, (void *)SUCCESS);
+            ZB_SCHEDULE_TASK(zcl_zllTouchLinNetworkStartRespCmdSend, (void *)SUCCESS);
         }
     }
 }
 
 /* NWK-discovery */
-static void touchlink_discovery_network(u32 chanMask)
+static void touchlink_discovery_network(uint32_t chanMask)
 {
-    u32 scanChannels;
-    u8 scanDuration;
+    uint32_t scanChannels;
+    uint8_t scanDuration;
 
     if (0 == chanMask) {
         scanChannels = BDB_ATTR().primaryChannelSet;
@@ -153,7 +153,7 @@ static void touchlink_discovery_network(u32 chanMask)
 
     g_zllTouchLink.scanChanMask = chanMask;
 
-    zb_nwkDiscovery(scanChannels, scanDuration, tl_zbNwkZllCommissionScanConfirm);
+    zb_nwkDiscovery(scanChannels, scanDuration, zb_NwkZllCommissionScanConfirm);
 }
 
 /*
@@ -164,7 +164,7 @@ static void touchlink_discovery_network(u32 chanMask)
  * @param 	arg
  *
  */
-_CODE_ZCL_ static  s32 zcl_zllTouchLinkStartNetworkStartOrJoinTimeout(void *arg)
+_CODE_ZCL_ static  int32_t zcl_zllTouchLinkStartNetworkStartOrJoinTimeout(void *arg)
 {
     g_zllTouchLink.runTimer = NULL;
     zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_STARTORJOIN_TIMEOUT);
@@ -180,15 +180,15 @@ _CODE_ZCL_ static  s32 zcl_zllTouchLinkStartNetworkStartOrJoinTimeout(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ s32 zcl_zllTouchLinkStartNetworkStartOrJoinTimerStop(void)
+_CODE_ZCL_ int32_t zcl_zllTouchLinkStartNetworkStartOrJoinTimerStop(void)
 {
     if (g_zllTouchLink.runTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
     }
 
     /* should cancel the transId life timer */
     if (g_zllTouchLink.transIdLifeTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
     }
 
     return -1;
@@ -351,11 +351,11 @@ _CODE_ZCL_ bool zcl_zllTouchLinkLeaveCnfCb(nlme_leave_cnf_t *pLeaveCnf)
  * @param 	arg
  *
  */
-_CODE_ZCL_ static s32 zcl_zllTouchLinkNetworkStartOrJoinNwkLeave(void *arg)
+_CODE_ZCL_ static int32_t zcl_zllTouchLinkNetworkStartOrJoinNwkLeave(void *arg)
 {
     /* should cancel the transId life timer */
     if (g_zllTouchLink.transIdLifeTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
     }
 
     if (!is_device_factory_new()) {
@@ -393,34 +393,34 @@ _CODE_ZCL_ static void zcl_zllTouchLinNetworkStartRespCmdSend(void *arg)
     }
 
 #ifdef ZB_ROUTER_ROLE
-    u32 status = (u32)arg;
+    uint32_t status = (uint32_t)arg;
     zcl_zllTouchLinkNetworkStartReq_t *startParams = &g_zllTouchLink.networkStartInfo->params.networkStartCmd;
     zcl_zllTouchLinkNetworkStartResp_t startResp = {0};
 
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     memcpy(&dstEp, &g_zllTouchLink.networkStartInfo->initiatorEpInfo, sizeof(epInfo_t));
 
     startResp.transId = g_zllTouchLink.transId;
-    startResp.status = (u8)status;
+    startResp.status = (uint8_t)status;
     startResp.nwkUpdateId = NWK_NIB().updateId;
     startResp.logicalChannel = startParams->logicalChannel;
     startResp.panId = startParams->panId;
     memcpy(startResp.epanId, startParams->epanId, 8);
 
     /* send network start response here */
-    u8 seqNo = g_zllTouchLink.networkStartInfo->seqNo;
-    u8 pktLen = sizeof(zcl_zllTouchLinkNetworkStartResp_t);
+    uint8_t seqNo = g_zllTouchLink.networkStartInfo->seqNo;
+    uint8_t pktLen = sizeof(zcl_zllTouchLinkNetworkStartResp_t);
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_NETWORK_START_RSP, TRUE,
-                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, pktLen, (u8 *)&startResp);
+                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, pktLen, (uint8_t *)&startResp);
 
     /*
      * after network start response sent, shall send network leave command if it,s a non-factory new device
      *
      * */
     if (status == SUCCESS) {
-        TL_ZB_TIMER_SCHEDULE(zcl_zllTouchLinkNetworkStartOrJoinNwkLeave, NULL, 100);
+        ZB_TIMER_SCHEDULE(zcl_zllTouchLinkNetworkStartOrJoinNwkLeave, NULL, 100);
     } else {
         zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_FAIL);
     }
@@ -435,11 +435,11 @@ _CODE_ZCL_ static void zcl_zllTouchLinNetworkStartRespCmdSend(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ void zcl_zllTouchLinkNetworkStartRequestHandler(u8 logicChannel)
+_CODE_ZCL_ void zcl_zllTouchLinkNetworkStartRequestHandler(uint8_t logicChannel)
 {
     /* if disable by application */
     if (!g_zllTouchLink.startNetworkAllowed) {
-        TL_SCHEDULE_TASK(zcl_zllTouchLinNetworkStartRespCmdSend, (void *)FAILURE);
+        ZB_SCHEDULE_TASK(zcl_zllTouchLinNetworkStartRespCmdSend, (void *)FAILURE);
         return;
     }
 
@@ -447,16 +447,16 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartRequestHandler(u8 logicChannel)
      * startRespCmd send ->
      * leave(if non-factory New device) ->
      * router start */
-    if (logicChannel >= TL_ZB_MAC_CHANNEL_START && logicChannel <= TL_ZB_MAC_CHANNEL_STOP) {
+    if (logicChannel >= ZB_MAC_CHANNEL_START && logicChannel <= ZB_MAC_CHANNEL_STOP) {
         touchlink_discovery_network(1 << (logicChannel));
     } else {
         touchlink_discovery_network(ZB_ZLL_PRIMARY_CHANNELS_MASK);
     }
 }
 
-_CODE_ZCL_ static s32 zcl_zllRejoinStart(void *arg)
+_CODE_ZCL_ static int32_t zcl_zllRejoinStart(void *arg)
 {
-    u8 chn = (u8)((u32)arg);
+    uint8_t chn = (uint8_t)((uint32_t)arg);
     /* security join */
     zb_rejoinSecModeSet(REJOIN_SECURITY);
     zb_rejoinReq(1 << chn, zdo_cfg_attributes.config_nwk_scan_duration);
@@ -472,13 +472,13 @@ _CODE_ZCL_ static s32 zcl_zllRejoinStart(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ s32 zcl_zllTouchLinkNetworkStartResponseHandler(void *arg)
+_CODE_ZCL_ int32_t zcl_zllTouchLinkNetworkStartResponseHandler(void *arg)
 {
     zcl_zllTouchLinkNetworkStartResp_t *p = (zcl_zllTouchLinkNetworkStartResp_t *)arg;
     if (p->status == SUCCESS) {
         g_zbMacPib.rxOnWhenIdle = g_zllTouchLink.zbInfo.bf.rxOnWihleIdle;
         //wait for target's network is formed
-        TL_ZB_TIMER_SCHEDULE(zcl_zllRejoinStart, (void *)((u32)p->logicalChannel), 3 * 1000);
+        ZB_TIMER_SCHEDULE(zcl_zllRejoinStart, (void *)((uint32_t)p->logicalChannel), 3 * 1000);
     } else {
         zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_NO_SERVER);
     }
@@ -489,7 +489,7 @@ _CODE_ZCL_ s32 zcl_zllTouchLinkNetworkStartResponseHandler(void *arg)
      * zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_SUCC);
      *
      *  */
-    ev_buf_free((u8 *)arg);
+    ev_buf_free((uint8_t *)arg);
     return -1;
 }
 
@@ -502,7 +502,7 @@ _CODE_ZCL_ s32 zcl_zllTouchLinkNetworkStartResponseHandler(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
+_CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(uint8_t cmd)
 {
     /*
      * and then send join-router/join-ed command
@@ -510,7 +510,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
     //zcl_zllTouchLinkNetworkJoinReq_t *joinParams = (zcl_zllTouchLinkNetworkJoinReq_t *)&g_zllTouchLink.networkStartInfo->params.networkJoinCmd;
     zcl_zllTouchLinkNetworkJoinResp_t joinResp = { 0 };
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     memcpy(&dstEp, &g_zllTouchLink.networkStartInfo->initiatorEpInfo, sizeof(epInfo_t));
 
@@ -527,9 +527,9 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
 
     joinResp.transId = g_zllTouchLink.transId;
 
-    u8 seqNo = g_zllTouchLink.networkStartInfo->seqNo;
-    u8 pktLen = sizeof(zcl_zllTouchLinkNetworkJoinResp_t);
-    u8 respCmd = 0xff;
+    uint8_t seqNo = g_zllTouchLink.networkStartInfo->seqNo;
+    uint8_t pktLen = sizeof(zcl_zllTouchLinkNetworkJoinResp_t);
+    uint8_t respCmd = 0xff;
     if (cmd == ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_ROUTER) {
         respCmd = ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_ROUTER_RSP;
     } else if (cmd == ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_END_DEVICE) {
@@ -537,7 +537,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
     }
 
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, respCmd, TRUE,
-                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, pktLen, (u8 *)&joinResp);
+                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, pktLen, (uint8_t *)&joinResp);
 
 
     if (joinResp.status == FAILURE) { /* if disable by application */
@@ -546,7 +546,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
         /*
          * leave network if it's a non-factory new device
          */
-        TL_ZB_TIMER_SCHEDULE(zcl_zllTouchLinkNetworkStartOrJoinNwkLeave, NULL, 100);
+        ZB_TIMER_SCHEDULE(zcl_zllTouchLinkNetworkStartOrJoinNwkLeave, NULL, 100);
     }
 }
 
@@ -559,7 +559,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkJoinRequestHandler(u8 cmd)
  * @param 	arg
  *
  */
-_CODE_ZCL_ s32 zcl_zllTouchLinkNetwokJoinResponseHandler(void *arg)
+_CODE_ZCL_ int32_t zcl_zllTouchLinkNetwokJoinResponseHandler(void *arg)
 {
     zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_SUCC);
     return -1;
@@ -579,20 +579,20 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
 {
     zll_touchLinkScanInfo *peerInfo = &g_zllTouchLink.disc->scanList[g_zllTouchLink.opIdx];
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
-    memcpy((u8 *)&dstEp,(u8 *)&peerInfo->dstEp, sizeof(dstEp));
+    memcpy((uint8_t *)&dstEp,(uint8_t *)&peerInfo->dstEp, sizeof(dstEp));
 
     ZB_TRANSCEIVER_SET_CHANNEL(g_zllTouchLink.touchLinkChan);
 
 #ifdef ZB_SECURITY
     /* generate network key, and encrypt it */
-    u8 encryptedNwkKey[CCM_KEY_SIZE] _attribute_aligned_(4);
+    uint8_t encryptedNwkKey[CCM_KEY_SIZE] _attribute_aligned_(4);
     ll_get_encrypted_network_key(peerInfo->keyIdx, g_zllTouchLink.transId, g_zllTouchLink.respId, encryptedNwkKey);
 #endif
 
     if (!BDB_ATTR().nodeIsOnANetwork) {
-        u8 selfForm = 0;
+        uint8_t selfForm = 0;
         if (g_zllTouchLink.zbInfo.bf.logicDevType == DEVICE_TYPE_ROUTER) {
             /* start new network */
             g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_DISCOVERY;
@@ -629,9 +629,9 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
             startReq.groupIdbegin = APS_GROUP_TABLE_SIZE + 1;
             startReq.groupIdEnd = APS_GROUP_TABLE_SIZE + peerInfo->totalGroupIds + 1;
 
-            u16 nwkAddr = 0;
+            uint16_t nwkAddr = 0;
             if (g_touchlinkAttr.freeNwkAddressRangeBegin == 0x0000) {
-                nwkAddr = tl_zbNwkStochasticAddrCal();
+                nwkAddr = zb_NwkStochasticAddrCal();
                 startReq.initiatorNwkAddr = nwkAddr;
                 startReq.nwkAddr = nwkAddr + 1;
             } else {
@@ -661,7 +661,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
             /* start a timer which life cycle is aplcRxWindowDuration(second)*/
             g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_START;
             zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_NETWORK_START, TRUE,
-                                ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkNetworkStartReq_t), (u8 *)&startReq);
+                                ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkNetworkStartReq_t), (uint8_t *)&startReq);
         }
     } else {
         /*
@@ -682,7 +682,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
         joinReq.groupIdEnd = APS_GROUP_TABLE_SIZE + peerInfo->totalGroupIds + 1;
 
         if (g_touchlinkAttr.freeNwkAddressRangeBegin == 0x0000) {
-            u16 nwkAddr = tl_zbNwkStochasticAddrCal();
+            uint16_t nwkAddr = zb_NwkStochasticAddrCal();
             joinReq.nwkAddr = nwkAddr;
         } else {
             joinReq.nwkAddr = g_touchlinkAttr.freeNwkAddressRangeBegin++;
@@ -697,8 +697,8 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
             }
         }
         peerInfo->nwkAddr = joinReq.nwkAddr;
-        u8 pldLen = sizeof(zcl_zllTouchLinkNetworkJoinReq_t);
-        u8 cmd = ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_ROUTER;
+        uint8_t pldLen = sizeof(zcl_zllTouchLinkNetworkJoinReq_t);
+        uint8_t cmd = ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_ROUTER;
         g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_JOIN_ROUTE;
         if (peerInfo->zbInfo.bf.logicDevType == DEVICE_TYPE_END_DEVICE) {
             cmd = ZCL_CMD_ZLL_COMMISSIONING_NETWORK_JOIN_END_DEVICE;
@@ -706,7 +706,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
         }
 
         zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, cmd, TRUE,
-                            ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, pldLen, (u8 *)&joinReq);
+                            ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, pldLen, (uint8_t *)&joinReq);
     }
 
     /*
@@ -715,24 +715,24 @@ _CODE_ZCL_ void zcl_zllTouchLinkNetworkStartOrJoin(void *arg)
      *
      * */
     if (g_zllTouchLink.runTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
     }
-    g_zllTouchLink.runTimer = TL_ZB_TIMER_SCHEDULE(zcl_zllTouchLinkStartNetworkStartOrJoinTimeout, NULL, ZB_RX_WINDOW_DURATION);
+    g_zllTouchLink.runTimer = ZB_TIMER_SCHEDULE(zcl_zllTouchLinkStartNetworkStartOrJoinTimeout, NULL, ZB_RX_WINDOW_DURATION);
 }
 
-s32 zcl_touchLinkDevStartIndicate(void *arg)
+int32_t zcl_touchLinkDevStartIndicate(void *arg)
 {
     /* start router confirm or rejoin confirm */
-    u32 startStatus = (u32)arg;
+    uint32_t startStatus = (uint32_t)arg;
 
     if (startStatus == SUCCESS) {
         if (g_zllTouchLink.zbInfo.bf.logicDevType == DEVICE_TYPE_END_DEVICE) {
             zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_SUCC);
         } else {
             if (g_bdbCtx.role == BDB_COMMISSIONING_ROLE_INITIATOR) {
-                TL_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartOrJoin, NULL);
+                ZB_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartOrJoin, NULL);
             } else {
-                TL_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartDirectJoin, NULL);
+                ZB_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartDirectJoin, NULL);
             }
         }
     } else {
@@ -745,14 +745,14 @@ _CODE_ZCL_ void zcl_zllTouchLinkResetFactoryReq(void *arg)
 {
     zll_touchLinkScanInfo *peerInfo = &g_zllTouchLink.disc->scanList[g_zllTouchLink.opIdx];
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
-    memcpy((u8 *)&dstEp,(u8 *)&peerInfo->dstEp, sizeof(dstEp));
+    memcpy((uint8_t *)&dstEp,(uint8_t *)&peerInfo->dstEp, sizeof(dstEp));
 
     zcl_zllTouchLinkResetFactoryReq_t req;
     req.transId = g_zllTouchLink.transId;
 
     g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_IDENTIFY;
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_RESET_TO_FACTORY_NEW, TRUE,
-                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkResetFactoryReq_t), (u8 *)&req);
+                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkResetFactoryReq_t), (uint8_t *)&req);
 }

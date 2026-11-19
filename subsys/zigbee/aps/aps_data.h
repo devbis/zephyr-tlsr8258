@@ -42,13 +42,13 @@ enum {
 
 typedef struct _attribute_packed_ {
 	zb_buf_t *txBuf;
-	u8 *adu;
-	tl_zb_addr_t dstAddr;
-	u8 addrMode;
-	u8 aduLen;
-	u8 secure;
-	u8 secureNwkLayer;
-	u8 reserved;
+	uint8_t *adu;
+	zb_addr_t dstAddr;
+	uint8_t addrMode;
+	uint8_t aduLen;
+	uint8_t secure;
+	uint8_t secureNwkLayer;
+	uint8_t reserved;
 } aps_cmd_send_req_t;
 
 void aps_nwk_data_confirm_cb(void *arg);
@@ -57,18 +57,18 @@ void aps_interPanDataIndCb(void *arg);
 int apsDuplicatePeriodic(void *arg);
 int apsAckPeriodic(void *arg);
 void aps_data_request(void *arg);
-void aps_cmd_send(void *arg, u8 handle);
+void aps_cmd_send(void *arg, uint8_t handle);
 
-void tl_apsDataIndRegister(apsDataIndCb_t cb);
+void zb_apsDataIndRegister(apsDataIndCb_t cb);
 void apsCleanToStopSecondClock(void);
-u8 aps_duplicate_check(u16 src_addr, u8 aps_counter);
-void apsTxEventPost(aps_tx_cache_list_t *cache, aps_tx_cache_evt_e event, u8 status);
-u8 apsHandleIsExit(u8 handle);
-u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length);
-u8 apsDataFragmentRequest(aps_data_req_t *dataReq, u8 *asdu, u16 length);
+uint8_t aps_duplicate_check(uint16_t src_addr, uint8_t aps_counter);
+void apsTxEventPost(aps_tx_cache_list_t *cache, aps_tx_cache_evt_e event, uint8_t status);
+uint8_t apsHandleIsExit(uint8_t handle);
+uint8_t apsDataRequest(aps_data_req_t *dataReq, uint8_t *asdu, uint8_t length);
+uint8_t apsDataFragmentRequest(aps_data_req_t *dataReq, uint8_t *asdu, uint16_t length);
 
-extern u16 dstPanID;
-extern u8 g_apsTxCacheNum;
-extern u8 deviceInfoRsp;
+extern uint16_t dstPanID;
+extern uint8_t g_apsTxCacheNum;
+extern uint8_t deviceInfoRsp;
 
 #endif

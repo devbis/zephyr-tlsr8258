@@ -8,27 +8,27 @@
 
 void nwkRoutingTabInit(void);
 int nwkRoutingTabPeriodic(void *arg);
-nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(u16 dstAddr);
-nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(u16 dstAddr);
-nwk_routingTabEntry_t *nwkRoutingTabEntryFind(u16 dstAddr);
-nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(u16 dstAddr);
+nwk_routingTabEntry_t *nwkRoutingTabEntryCreate(uint16_t dstAddr);
+nwk_routingTabEntry_t *nwkRoutingTabEntryDstFind(uint16_t dstAddr);
+nwk_routingTabEntry_t *nwkRoutingTabEntryFind(uint16_t dstAddr);
+nwk_routingTabEntry_t *nwkRoutingTabEntryDstActiveGet(uint16_t dstAddr);
 nwk_routingTabEntry_t *nwkRoutingTabGetNextHop(nwk_hdr_t *pNwkHdr);
 void nwkRoutingTabEntryClear(nwk_routingTabEntry_t *entry);
-void nwkRoutingTabEntryDstDel(u16 dstAddr);
-void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, u16 macDstAddr);
-void nwkRouteRepair(zb_buf_t *buf, u16 dstAddr, u16 statusDstAddr, u8 statusCode);
-void nwkSrcRouteRequiredClear(u16 dstAddr);
-u16 nwkSrcRouteReplayNextHop(nwk_hdr_t *pNwkHdr);
-u8 nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr);
+void nwkRoutingTabEntryDstDel(uint16_t dstAddr);
+void nwkRouteMaintenance(nwk_hdr_t *pNwkHdr, uint16_t macDstAddr);
+void nwkRouteRepair(zb_buf_t *buf, uint16_t dstAddr, uint16_t statusDstAddr, uint8_t statusCode);
+void nwkSrcRouteRequiredClear(uint16_t dstAddr);
+uint16_t nwkSrcRouteReplayNextHop(nwk_hdr_t *pNwkHdr);
+uint8_t nwkSourceRoutePacketRelayFilter(nwk_hdr_t *pNwkHdr);
 #if defined(ZB_COORDINATOR_ROLE)
 void nwkRouteRecTabEntryClear(nwk_routeRecordTabEntry_t *entry);
-u8 nwkRouteRecTabActiveNumGet(void);
+uint8_t nwkRouteRecTabActiveNumGet(void);
 nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFreeGet(void);
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFind(u16 nwkAddr);
-bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, u16 nwkAddr);
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(u16 nwkAddr, nwkCmd_t *cmd);
-nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(u16 nwkAddr, nwkCmd_t *cmd);
-void nwkRouteRecTabEntryDstDel(u16 dstAddr);
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryFind(uint16_t nwkAddr);
+bool nwkRouteRecTabPathMatch(nwk_routeRecordTabEntry_t *entry, uint16_t nwkAddr);
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryAddNew(uint16_t nwkAddr, nwkCmd_t *cmd);
+nwk_routeRecordTabEntry_t *nwkRouteRecTabEntryCreat(uint16_t nwkAddr, nwkCmd_t *cmd);
+void nwkRouteRecTabEntryDstDel(uint16_t dstAddr);
 #endif
 
 #endif

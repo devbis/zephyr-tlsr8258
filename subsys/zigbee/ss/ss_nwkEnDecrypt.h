@@ -8,8 +8,8 @@
 
 #include "zb_common.h"
 
-u8 ss_nwkDecryptFrame(void *p, u8 nwkHdrSize, u8 payloadSize, u8 *payloadAddr, nwk_hdr_t *nwkHdr,
-		      u8 lqi);
-u8 ss_nwkSecureFrame(zb_buf_t *src, u8 nwkHdrAuxLen);
+uint8_t ss_nwkDecryptFrame(void *p, uint8_t nwkHdrSize, uint8_t payloadSize, uint8_t *payloadAddr, nwk_hdr_t *nwkHdr,
+		      uint8_t lqi);
+uint8_t ss_nwkSecureFrame(zb_buf_t *src, uint8_t nwkHdrAuxLen);
 
 #endif

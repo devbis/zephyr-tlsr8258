@@ -70,28 +70,28 @@
  *  @brief  Defined for Go To Lift Value command
  */
 typedef struct {
-    u16 liftValue;
+    uint16_t liftValue;
 } zcl_goToLiftValue_t;
 
 /**
  *  @brief  Defined for Go To Lift Percentage command
  */
 typedef struct {
-    u8 perLiftValue;
+    uint8_t perLiftValue;
 } zcl_goToLiftPer_t;
 
 /**
  *  @brief  Defined for Go To Tilt Value command
  */
 typedef struct {
-    u16 tiltValue;
+    uint16_t tiltValue;
 } zcl_goToTilttValue_t;
 
 /**
  *  @brief  Defined for Go To Tilt Percentage command
  */
 typedef struct {
-    u8 perTiltValue;
+    uint8_t perTiltValue;
 } zcl_goToTiltPer_t;
 
 /**
@@ -107,7 +107,7 @@ typedef union {
 
 #if 0
 /* Command callBack Function Type */
-typedef status_t (*zcl_windowCovering_genCmdCb_t)(apsdeDataInd_t *pInd, u8 cmdId, zcl_winCovering_cmdPayload_t *cmdPayload);
+typedef status_t (*zcl_windowCovering_genCmdCb_t)(apsdeDataInd_t *pInd, uint8_t cmdId, zcl_winCovering_cmdPayload_t *cmdPayload);
 
 
 /**
@@ -118,24 +118,24 @@ typedef struct {
 } zcl_WindowCovering_AppCallbacks_t;
 
 
-extern u8 zcl_attr_WindowCoveringType;
-extern u8 zcl_attr_ConfigStatus;
-extern u8 zcl_attr_Mode;
+extern uint8_t zcl_attr_WindowCoveringType;
+extern uint8_t zcl_attr_ConfigStatus;
+extern uint8_t zcl_attr_Mode;
 
 extern const zclAttrInfo_t windowCovering_attrTbl[];
-extern const u8 zcl_windowCovering_attrNum;
+extern const uint8_t zcl_windowCovering_attrNum;
 #endif
 
 
-status_t zcl_windowCovering_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_windowCovering_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_windowCovering_upOpen(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_windowCovering_upOpen(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_windowCovering_upOpenCmdSend(a,b,c)         (zcl_windowCovering_upOpen((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_windowCovering_downClose(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_windowCovering_downClose(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_windowCovering_downCloseCmdSend(a,b,c)      (zcl_windowCovering_downClose((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_windowCovering_stop(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_windowCovering_stop(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_windowCovering_stopCmdSend(a,b,c)           (zcl_windowCovering_stop((a), (b), (c), ZCL_SEQ_NUM))
 
 #endif	/* ZCL_WINDOW_COVERING_H */

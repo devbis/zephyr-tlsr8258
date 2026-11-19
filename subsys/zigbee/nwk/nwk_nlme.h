@@ -6,7 +6,7 @@
 
 #include "zb_common.h"
 
-void nwk_nlmeStartRouterCnf(void *arg, u8 status);
+void nwk_nlmeStartRouterCnf(void *arg, uint8_t status);
 void nwk_startRouterCnfHandler(void *arg);
 void nwk_edScanCnfHandler(void *arg);
 

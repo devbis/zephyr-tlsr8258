@@ -35,19 +35,19 @@ _CODE_SS_ void zdo_ssInfoSaveToFlash(void)
      * ss_ib.nwkSecurMaterialSet[0].key and ss_ib.nwkSecurMaterialSet[1].key
      *
      * */
-    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
+    nv_flashWriteNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss_ib);
 #endif
 }
 
-_CODE_SS_ u8 zdo_ssInfoInit(void)
+_CODE_SS_ uint8_t zdo_ssInfoInit(void)
 {
-    u8 ret = NV_ITEM_NOT_FOUND;
+    uint8_t ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
-    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss_ib);
+    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss_ib);
 #if ZB_COORDINATOR_ROLE
-    ss_ib.keyPairSetNew = (u8 *)g_ssTcKeyPair;
+    ss_ib.keyPairSetNew = (uint8_t *)g_ssTcKeyPair;
 #else
-    ss_ib.keyPairSetNew = (u8 *)&g_ssDevKeyPair;
+    ss_ib.keyPairSetNew = (uint8_t *)&g_ssDevKeyPair;
 #endif
 
     /*
@@ -59,12 +59,12 @@ _CODE_SS_ u8 zdo_ssInfoInit(void)
     return ret;
 }
 
-_CODE_SS_ u8 zdo_ssInfoKeyGet(void)
+_CODE_SS_ uint8_t zdo_ssInfoKeyGet(void)
 {
-    u8 ret = NV_ITEM_NOT_FOUND;
+    uint8_t ret = NV_ITEM_NOT_FOUND;
 #if NV_ENABLE
     ss_info_base_t ss;
-    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (u8 *)&ss);
+    ret = nv_flashReadNew(1, NV_MODULE_APS, NV_ITEM_APS_SSIB, sizeof(ss_ib), (uint8_t *)&ss);
     if (ret == NV_SUCC) {
         ret = ss.activeSecureMaterialIndex;
     }
