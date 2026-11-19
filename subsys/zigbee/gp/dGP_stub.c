@@ -30,42 +30,42 @@ STATIC_ASSERT(sizeof(gp_data_ind_t) == 40);
 #endif
 
 _attribute_no_inline_ void gpDataIndSend(gp_data_ind_entry_t *pEntry);
-_attribute_no_inline_ void gpDataFrameProcess(void *arg, gp_nwkHdr_t *pNwkHdr, u8 appId,
-					      u8 *pGpdAsdu, u8 gpdAsduLen, u32 mic);
+_attribute_no_inline_ void gpDataFrameProcess(void *arg, gp_nwkHdr_t *pNwkHdr, uint8_t appId,
+					      uint8_t *pGpdAsdu, uint8_t gpdAsduLen, uint32_t mic);
 gp_data_ind_entry_t *gpDataIndSecReqEntryAdd(gp_data_ind_t *pGpDataInd);
 
 _attribute_no_inline_ gp_nwkHdrFrameCtrl_t
-gpNwkHdrFrameCtrlBuild(u8 frameType, bool autoComm, u8 appId, u8 secLevel, u8 secKey,
+gpNwkHdrFrameCtrlBuild(uint8_t frameType, bool autoComm, uint8_t appId, uint8_t secLevel, uint8_t secKey,
 		       bool rxAfterTx, bool direction, gp_extNwkFrameCtrl_t *pExtNwkFrameCtrl)
 {
 	gp_nwkHdrFrameCtrl_t nwkFrameCtrl;
-	*((u8 *)&nwkFrameCtrl) = 0;
-	nwkFrameCtrl.frameType = (u8)(frameType & GP_NWK_FC_FRAME_TYPE_MASK);
+	*((uint8_t *)&nwkFrameCtrl) = 0;
+	nwkFrameCtrl.frameType = (uint8_t)(frameType & GP_NWK_FC_FRAME_TYPE_MASK);
 	nwkFrameCtrl.protocolVer = 3;
-	nwkFrameCtrl.autoCommissioning = (u8)((u8)autoComm & 0x01U);
+	nwkFrameCtrl.autoCommissioning = (uint8_t)((uint8_t)autoComm & 0x01U);
 
 	if (pExtNwkFrameCtrl != NULL) {
 		nwkFrameCtrl.nwkFrameCtrlExtension = 1;
-		pExtNwkFrameCtrl->appId = (u8)(appId & GP_EXT_FC_APP_ID_MASK);
-		pExtNwkFrameCtrl->securityLevel = (u8)(secLevel & GP_SEC_LEVEL_FIELD_MASK);
-		pExtNwkFrameCtrl->securityKey = (u8)(secKey != 0U);
-		pExtNwkFrameCtrl->rxAfterTx = (u8)((u8)rxAfterTx & 0x01U);
-		pExtNwkFrameCtrl->direction = (u8)((u8)direction & 0x01U);
+		pExtNwkFrameCtrl->appId = (uint8_t)(appId & GP_EXT_FC_APP_ID_MASK);
+		pExtNwkFrameCtrl->securityLevel = (uint8_t)(secLevel & GP_SEC_LEVEL_FIELD_MASK);
+		pExtNwkFrameCtrl->securityKey = (uint8_t)(secKey != 0U);
+		pExtNwkFrameCtrl->rxAfterTx = (uint8_t)((uint8_t)rxAfterTx & 0x01U);
+		pExtNwkFrameCtrl->direction = (uint8_t)((uint8_t)direction & 0x01U);
 	}
 
 	return nwkFrameCtrl;
 }
 
-u8 gpNwkHdrParse(gp_nwkHdr_t *pNwkHdr, u8 *pGpdu)
+uint8_t gpNwkHdrParse(gp_nwkHdr_t *pNwkHdr, uint8_t *pGpdu)
 {
-	u8 *p = pGpdu + 1;
-	u8 nwkFrameCtrlRaw = pGpdu[0];
-	u8 appId = GP_APP_ID_SRC_ID;
+	uint8_t *p = pGpdu + 1;
+	uint8_t nwkFrameCtrlRaw = pGpdu[0];
+	uint8_t appId = GP_APP_ID_SRC_ID;
 
-	*((u8 *)&pNwkHdr->nwkFrameCtrl) = nwkFrameCtrlRaw;
+	*((uint8_t *)&pNwkHdr->nwkFrameCtrl) = nwkFrameCtrlRaw;
 
 	if (pNwkHdr->nwkFrameCtrl.nwkFrameCtrlExtension) {
-		*((u8 *)&pNwkHdr->extNwkFrameCtrl) = pGpdu[1];
+		*((uint8_t *)&pNwkHdr->extNwkFrameCtrl) = pGpdu[1];
 		appId = pNwkHdr->extNwkFrameCtrl.appId;
 		if ((appId != GP_APP_ID_SRC_ID) && (appId != GP_APP_ID_GPD)) {
 			return 0;
@@ -78,7 +78,7 @@ u8 gpNwkHdrParse(gp_nwkHdr_t *pNwkHdr, u8 *pGpdu)
 		p++;
 	}
 
-	if ((((u8)(nwkFrameCtrlRaw & GP_NWK_FC_FRAME_TYPE_MASK)) | appId) == 0U) {
+	if ((((uint8_t)(nwkFrameCtrlRaw & GP_NWK_FC_FRAME_TYPE_MASK)) | appId) == 0U) {
 		memcpy(&pNwkHdr->gpdSrcId, p, 4);
 		p += 4;
 	} else if (((nwkFrameCtrlRaw & ~GP_NWK_FC_VER_AUTO_MASK) == GP_NWK_FC_MAINT_WITH_EXT) &&
@@ -97,25 +97,25 @@ u8 gpNwkHdrParse(gp_nwkHdr_t *pNwkHdr, u8 *pGpdu)
 		p += 4;
 	}
 
-	return (u8)(p - pGpdu);
+	return (uint8_t)(p - pGpdu);
 }
 
-u8 *gp_gpdfCreat(gp_data_req_t *pGpDataReq, u8 nwkFrameCtrlRaw, u8 extNwkFrameCtrlRaw,
-		 u32 secFrameCounter, u32 mic, u8 *pGpduLen)
+uint8_t *gp_gpdfCreat(gp_data_req_t *pGpDataReq, uint8_t nwkFrameCtrlRaw, uint8_t extNwkFrameCtrlRaw,
+		 uint32_t secFrameCounter, uint32_t mic, uint8_t *pGpduLen)
 {
-	u8 gpdfLen = (u8)(*pGpduLen + 2U);
-	u8 frameType = (u8)(nwkFrameCtrlRaw & GP_NWK_FC_FRAME_TYPE_MASK);
+	uint8_t gpdfLen = (uint8_t)(*pGpduLen + 2U);
+	uint8_t frameType = (uint8_t)(nwkFrameCtrlRaw & GP_NWK_FC_FRAME_TYPE_MASK);
 	bool hasExtNwkFrameCtrl = ((nwkFrameCtrlRaw & GP_NWK_FC_EXT_PRESENT) != 0U);
-	u8 securityLevel = (u8)(extNwkFrameCtrlRaw & GP_EXT_FC_SEC_LEVEL_MASK);
+	uint8_t securityLevel = (uint8_t)(extNwkFrameCtrlRaw & GP_EXT_FC_SEC_LEVEL_MASK);
 	bool hasSecurityField = hasExtNwkFrameCtrl && ((securityLevel == GP_EXT_FC_SEC_LEVEL_2) ||
 						       (securityLevel == GP_EXT_FC_SEC_LEVEL_3));
-	u8 *pGpdu;
-	u8 *p;
+	uint8_t *pGpdu;
+	uint8_t *p;
 
 	if (hasExtNwkFrameCtrl) {
 		gpdfLen++;
 		if (hasSecurityField) {
-			gpdfLen = (u8)(gpdfLen + 8U);
+			gpdfLen = (uint8_t)(gpdfLen + 8U);
 		}
 	}
 
@@ -123,12 +123,12 @@ u8 *gp_gpdfCreat(gp_data_req_t *pGpDataReq, u8 nwkFrameCtrlRaw, u8 extNwkFrameCt
 		if (pGpDataReq->appId == GP_APP_ID_GPD) {
 			gpdfLen++;
 		} else {
-			gpdfLen = (u8)(gpdfLen + 4U);
+			gpdfLen = (uint8_t)(gpdfLen + 4U);
 		}
 	}
 
 	pGpdu = pGpDataReq->gpdAsdu - gpdfLen;
-	gpdfLen = (u8)(gpdfLen + pGpDataReq->gpdAsduLen);
+	gpdfLen = (uint8_t)(gpdfLen + pGpDataReq->gpdAsduLen);
 	*pGpduLen = gpdfLen;
 
 	p = pGpdu;
@@ -142,19 +142,19 @@ u8 *gp_gpdfCreat(gp_data_req_t *pGpDataReq, u8 nwkFrameCtrlRaw, u8 extNwkFrameCt
 		if (pGpDataReq->appId == GP_APP_ID_GPD) {
 			*p++ = pGpDataReq->endpoint;
 		} else {
-			p[0] = (u8)pGpDataReq->gpdId.srcId;
-			p[1] = (u8)(pGpDataReq->gpdId.srcId >> 8);
-			p[2] = (u8)(pGpDataReq->gpdId.srcId >> 16);
-			p[3] = (u8)(pGpDataReq->gpdId.srcId >> 24);
+			p[0] = (uint8_t)pGpDataReq->gpdId.srcId;
+			p[1] = (uint8_t)(pGpDataReq->gpdId.srcId >> 8);
+			p[2] = (uint8_t)(pGpDataReq->gpdId.srcId >> 16);
+			p[3] = (uint8_t)(pGpDataReq->gpdId.srcId >> 24);
 			p += 4;
 		}
 	}
 
 	if (hasSecurityField) {
-		p[0] = (u8)secFrameCounter;
-		p[1] = (u8)(secFrameCounter >> 8);
-		p[2] = (u8)(secFrameCounter >> 16);
-		p[3] = (u8)(secFrameCounter >> 24);
+		p[0] = (uint8_t)secFrameCounter;
+		p[1] = (uint8_t)(secFrameCounter >> 8);
+		p[2] = (uint8_t)(secFrameCounter >> 16);
+		p[3] = (uint8_t)(secFrameCounter >> 24);
 		p += 4;
 	}
 
@@ -162,28 +162,28 @@ u8 *gp_gpdfCreat(gp_data_req_t *pGpDataReq, u8 nwkFrameCtrlRaw, u8 extNwkFrameCt
 	p += pGpDataReq->gpdAsduLen;
 
 	if (hasSecurityField) {
-		p[0] = (u8)mic;
-		p[1] = (u8)(mic >> 8);
-		p[2] = (u8)(mic >> 16);
-		p[3] = (u8)(mic >> 24);
+		p[0] = (uint8_t)mic;
+		p[1] = (uint8_t)(mic >> 8);
+		p[2] = (uint8_t)(mic >> 16);
+		p[3] = (uint8_t)(mic >> 24);
 	}
 
 	return pGpdu;
 }
 
-void gp_gpdfGenerate(gp_data_req_pending_t *pEntry, u8 frameType)
+void gp_gpdfGenerate(gp_data_req_pending_t *pEntry, uint8_t frameType)
 {
 	gp_data_req_t *pGpDataReq = pEntry->buf;
 	cgp_data_req_t *pCgpDataReq = (cgp_data_req_t *)pGpDataReq;
 	gpdId_t gpdId = {0};
 	gp_nwkHdrFrameCtrl_t nwkFrameCtrl;
 	gp_extNwkFrameCtrl_t extNwkFrameCtrl;
-	u8 nwkFrameCtrlRaw;
-	u8 extNwkFrameCtrlRaw = 0;
-	u8 gpMpduLen = 0;
-	u8 gpepHandle = pGpDataReq->gpepHandle;
-	u8 txOptionsRaw = *((u8 *)&pGpDataReq->txOptions);
-	u8 cgpTxOptions = 0;
+	uint8_t nwkFrameCtrlRaw;
+	uint8_t extNwkFrameCtrlRaw = 0;
+	uint8_t gpMpduLen = 0;
+	uint8_t gpepHandle = pGpDataReq->gpepHandle;
+	uint8_t txOptionsRaw = *((uint8_t *)&pGpDataReq->txOptions);
+	uint8_t cgpTxOptions = 0;
 
 	memset(&extNwkFrameCtrl, 0, sizeof(extNwkFrameCtrl));
 	memcpy(&gpdId, &pGpDataReq->gpdId, sizeof(gpdId));
@@ -191,12 +191,12 @@ void gp_gpdfGenerate(gp_data_req_pending_t *pEntry, u8 frameType)
 	if (frameType == GP_NWK_FRAME_TYPE_MAINTENANCE) {
 		nwkFrameCtrl = gpNwkHdrFrameCtrlBuild(GP_NWK_FRAME_TYPE_MAINTENANCE, FALSE, 0, 0, 0,
 						      FALSE, TRUE, NULL);
-		nwkFrameCtrlRaw = *((u8 *)&nwkFrameCtrl);
+		nwkFrameCtrlRaw = *((uint8_t *)&nwkFrameCtrl);
 	} else {
 		nwkFrameCtrl = gpNwkHdrFrameCtrlBuild(frameType, FALSE, pGpDataReq->appId, 0, 0,
 						      FALSE, TRUE, &extNwkFrameCtrl);
-		nwkFrameCtrlRaw = *((u8 *)&nwkFrameCtrl);
-		extNwkFrameCtrlRaw = *((u8 *)&extNwkFrameCtrl);
+		nwkFrameCtrlRaw = *((uint8_t *)&nwkFrameCtrl);
+		extNwkFrameCtrlRaw = *((uint8_t *)&extNwkFrameCtrl);
 	}
 
 	pCgpDataReq->gpMpdu =
@@ -226,17 +226,17 @@ void gp_gpdfGenerate(gp_data_req_pending_t *pEntry, u8 frameType)
 	if ((txOptionsRaw & GP_DATA_REQ_TX_OPT_MAC_ACK) != 0U) {
 		cgpTxOptions |= GP_MCPS_TX_OPT_MAC_ACK;
 	}
-	*((u8 *)&pCgpDataReq->txOptions) = cgpTxOptions;
+	*((uint8_t *)&pCgpDataReq->txOptions) = cgpTxOptions;
 
 	((zb_buf_t *)pGpDataReq)->hdr.handle = gpepHandle;
 	ev_timer_taskPost(cGp_dataReq, pGpDataReq, GP_TX_OFFSET);
 }
 
-void gp_gpdfTransSchedule(u8 frameType, u8 appId, gpdId_t gpdId, u8 endpoint)
+void gp_gpdfTransSchedule(uint8_t frameType, uint8_t appId, gpdId_t gpdId, uint8_t endpoint)
 {
 	gp_data_req_t *pGpDataReq;
-	u8 gpdIdLen = 4;
-	u8 txOptionsRaw;
+	uint8_t gpdIdLen = 4;
+	uint8_t txOptionsRaw;
 
 	if (appId != GP_APP_ID_SRC_ID) {
 		if (appId != GP_APP_ID_GPD) {
@@ -259,9 +259,9 @@ void gp_gpdfTransSchedule(u8 frameType, u8 appId, gpdId_t gpdId, u8 endpoint)
 		return;
 	}
 
-	txOptionsRaw = *((u8 *)&pGpDataReq->txOptions);
-	txOptionsRaw &= (u8) ~(GP_DATA_REQ_TX_OPT_CSMA | GP_DATA_REQ_TX_OPT_MAC_ACK);
-	*((u8 *)&pGpDataReq->txOptions) = txOptionsRaw;
+	txOptionsRaw = *((uint8_t *)&pGpDataReq->txOptions);
+	txOptionsRaw &= (uint8_t) ~(GP_DATA_REQ_TX_OPT_CSMA | GP_DATA_REQ_TX_OPT_MAC_ACK);
+	*((uint8_t *)&pGpDataReq->txOptions) = txOptionsRaw;
 
 	gp_gpdfGenerate(&gpTxQueue, frameType);
 	gpTxQueue.buf = NULL;
@@ -273,7 +273,7 @@ gp_data_req_pending_t gpTxQueue;
 gp_data_ind_entry_t g_gpDataIndSecReqTab[GP_DATA_IND_SEC_REQ_TAB_NUM];
 gp_stubCb_t *gpStubCb = NULL;
 
-static u8 dGpStubHandle = GP_HANDLE_MIN;
+static uint8_t dGpStubHandle = GP_HANDLE_MIN;
 
 _attribute_no_inline_ void gpTxQueueListClear(gp_data_req_pending_t *pEntry)
 {
@@ -338,11 +338,11 @@ _attribute_no_inline_ void gpSecReqSend(gp_sec_req_t *pGpSecReq)
 				   pGpSecReq->dgpStubHandle)) {
 		gp_sec_rsp_t *pGpSecRsp = (gp_sec_rsp_t *)pGpSecReq;
 		gpdId_t gpdId = pGpSecReq->gpdId;
-		u32 gpdSecFrameCnt = pGpSecReq->gpdSecFrameCnt;
-		u8 dgpStubHandle = pGpSecReq->dgpStubHandle;
-		u8 appId = pGpSecReq->appId;
-		u8 endpoint = pGpSecReq->endpoint;
-		u8 gpdfSecurityLevel = pGpSecReq->gpdfSecurityLevel;
+		uint32_t gpdSecFrameCnt = pGpSecReq->gpdSecFrameCnt;
+		uint8_t dgpStubHandle = pGpSecReq->dgpStubHandle;
+		uint8_t appId = pGpSecReq->appId;
+		uint8_t endpoint = pGpSecReq->endpoint;
+		uint8_t gpdfSecurityLevel = pGpSecReq->gpdfSecurityLevel;
 
 		memset(pGpSecRsp, 0, sizeof(gp_sec_rsp_t));
 		pGpSecRsp->gpdId = gpdId;
@@ -352,7 +352,7 @@ _attribute_no_inline_ void gpSecReqSend(gp_sec_req_t *pGpSecReq)
 		pGpSecRsp->appId = appId;
 		pGpSecRsp->endpoint = endpoint;
 		pGpSecRsp->gpdfSecurityLevel = gpdfSecurityLevel;
-		tl_zbTaskPost(gpSecRsp, pGpSecRsp);
+		zb_TaskPost(gpSecRsp, pGpSecRsp);
 		return;
 	}
 
@@ -364,7 +364,7 @@ void gpSecRsp(void *arg)
 	gp_sec_rsp_t *pGpSecRsp = (gp_sec_rsp_t *)arg;
 	gp_data_ind_entry_t *pEntry = NULL;
 
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		if (g_gpDataIndSecReqTab[i].used &&
 		    (g_gpDataIndSecReqTab[i].dGpStubHandle == pGpSecRsp->dgpStubHandle)) {
 			pEntry = &g_gpDataIndSecReqTab[i];
@@ -379,9 +379,9 @@ void gpSecRsp(void *arg)
 
 	gp_data_ind_t *pGpDataInd = pEntry->buf;
 	gpdId_t gpdId = {0};
-	u8 appId = pGpDataInd->appId;
-	u8 endpoint = pGpDataInd->endpoint;
-	u8 rxAfterTx = pGpDataInd->rxAfterTx;
+	uint8_t appId = pGpDataInd->appId;
+	uint8_t endpoint = pGpDataInd->endpoint;
+	uint8_t rxAfterTx = pGpDataInd->rxAfterTx;
 
 	pGpDataInd->gpdfKeyType = pGpSecRsp->gpdfKeyType;
 	if (appId == GP_APP_ID_SRC_ID) {
@@ -403,7 +403,7 @@ void gpSecRsp(void *arg)
 			      pGpDataInd->autoCommissioning, pGpDataInd->rxAfterTx, pGpDataInd->mic,
 			      pGpSecRsp->gpdKey) != SUCCESS) {
 			pGpDataInd->status = GP_DATA_IND_STATUS_AUTH_FAILURE;
-			tl_zbTaskPost((tl_zb_callback_t)gpDataIndSend, pEntry);
+			zb_TaskPost((zb_callback_t)gpDataIndSend, pEntry);
 			break;
 		}
 
@@ -422,11 +422,11 @@ void gpSecRsp(void *arg)
 		pGpDataInd->status = (pGpDataInd->gpdfSecurityLevel == GP_SEC_LEVEL_NO_SECURITY)
 					     ? GP_DATA_IND_STATUS_NO_SECURITY
 					     : GP_DATA_IND_STATUS_SEC_SUCCESS;
-		tl_zbTaskPost((tl_zb_callback_t)gpDataIndSend, pEntry);
+		zb_TaskPost((zb_callback_t)gpDataIndSend, pEntry);
 		break;
 	case GP_SEC_RSP_STATUS_PASS_UNPROCESSED:
 		pGpDataInd->status = GP_DATA_IND_STATUS_UNPROCESSED;
-		tl_zbTaskPost((tl_zb_callback_t)gpDataIndSend, pEntry);
+		zb_TaskPost((zb_callback_t)gpDataIndSend, pEntry);
 		break;
 	default:
 		break;
@@ -463,8 +463,8 @@ _attribute_no_inline_ void gpDataIndSend(gp_data_ind_entry_t *pEntry)
 	gpStubCb->gpDataIndCb(pEntry->buf);
 }
 
-_attribute_no_inline_ void gpDataFrameProcess(void *arg, gp_nwkHdr_t *pNwkHdr, u8 appId,
-					      u8 *pGpdAsdu, u8 gpdAsduLen, u32 mic)
+_attribute_no_inline_ void gpDataFrameProcess(void *arg, gp_nwkHdr_t *pNwkHdr, uint8_t appId,
+					      uint8_t *pGpdAsdu, uint8_t gpdAsduLen, uint32_t mic)
 {
 	dgp_data_ind_t saved;
 	gp_data_ind_t *pGpDataInd = (gp_data_ind_t *)arg;
@@ -534,12 +534,12 @@ _attribute_no_inline_ void gpDataFrameProcess(void *arg, gp_nwkHdr_t *pNwkHdr, u
 	pGpSecReq->gpdSecFrameCnt = pEntry->frameCounter;
 	pGpSecReq->dgpStubHandle = pEntry->dGpStubHandle;
 
-	tl_zbTaskPost((tl_zb_callback_t)gpSecReqSend, pGpSecReq);
+	zb_TaskPost((zb_callback_t)gpSecReqSend, pGpSecReq);
 }
 
 gp_data_ind_entry_t *gpDataIndEntryFreeGet(void)
 {
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		if (!g_gpDataIndSecReqTab[i].used) {
 			return &g_gpDataIndSecReqTab[i];
 		}
@@ -558,12 +558,12 @@ gp_data_ind_entry_t *gpDataIndSecReqEntryAdd(gp_data_ind_t *pGpDataInd)
 
 	pEntry->used = 1;
 	pEntry->buf = pGpDataInd;
-	pEntry->appId = (u8)(pGpDataInd->appId & GP_EXT_FC_APP_ID_MASK);
+	pEntry->appId = (uint8_t)(pGpDataInd->appId & GP_EXT_FC_APP_ID_MASK);
 
 	if (pEntry->appId == GP_APP_ID_SRC_ID) {
 		pEntry->gpdId.srcId = pGpDataInd->srcId;
 	} else {
-		memcpy(&pEntry->gpdId, &pGpDataInd->srcAddr, sizeof(tl_zb_addr_t));
+		memcpy(&pEntry->gpdId, &pGpDataInd->srcAddr, sizeof(zb_addr_t));
 	}
 
 	pEntry->frameCounter = UINT32_MAX;
@@ -579,9 +579,9 @@ gp_data_ind_entry_t *gpDataIndSecReqEntryAdd(gp_data_ind_t *pGpDataInd)
 	return pEntry;
 }
 
-gp_data_ind_entry_t *gpDataIndGet(u8 handle)
+gp_data_ind_entry_t *gpDataIndGet(uint8_t handle)
 {
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		if (g_gpDataIndSecReqTab[i].used &&
 		    (g_gpDataIndSecReqTab[i].dGpStubHandle == handle)) {
 			return &g_gpDataIndSecReqTab[i];
@@ -591,7 +591,7 @@ gp_data_ind_entry_t *gpDataIndGet(u8 handle)
 	return NULL;
 }
 
-u8 dGpStubHandleGet(void)
+uint8_t dGpStubHandleGet(void)
 {
 	dGpStubHandle++;
 	if (dGpStubHandle > GP_HANDLE_MAX) {
@@ -603,7 +603,7 @@ u8 dGpStubHandleGet(void)
 
 _attribute_no_inline_ void gpDataIndSecReqTabInit(void)
 {
-	for (u8 i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
+	for (uint8_t i = 0; i < GP_DATA_IND_SEC_REQ_TAB_NUM; i++) {
 		gpDataIndSecReqEntryClear(&g_gpDataIndSecReqTab[i]);
 	}
 }
@@ -631,8 +631,8 @@ _attribute_no_inline_ void gpTxQueueCheck(gp_data_req_t *pGpDataReq)
 {
 	gp_data_cnf_t gpDataCnf = {0, 0};
 	gp_data_req_t *pQueuedReq = gpTxQueue.buf;
-	u8 appId = pGpDataReq->appId;
-	u8 gpdIdLen = (appId == GP_APP_ID_GPD) ? sizeof(gpdId_t) : sizeof(u32);
+	uint8_t appId = pGpDataReq->appId;
+	uint8_t gpdIdLen = (appId == GP_APP_ID_GPD) ? sizeof(gpdId_t) : sizeof(uint32_t);
 
 	if (gpTxQueue.used && (pQueuedReq->appId == appId) &&
 	    (memcmp(&pQueuedReq->gpdId, &pGpDataReq->gpdId, gpdIdLen) == 0)) {
@@ -697,12 +697,12 @@ void dGp_dataInd(void *arg)
 	dgp_data_ind_t *pDgpDataInd = (dgp_data_ind_t *)arg;
 	gp_nwkHdr_t nwkHdr;
 	gpdId_t gpdId = {0};
-	u8 nwkHdrLen;
-	u8 appId = GP_APP_ID_SRC_ID;
-	u8 *pGpdAsdu;
-	u8 gpdAsduLen;
-	u8 cmdId;
-	u32 mic = 0;
+	uint8_t nwkHdrLen;
+	uint8_t appId = GP_APP_ID_SRC_ID;
+	uint8_t *pGpdAsdu;
+	uint8_t gpdAsduLen;
+	uint8_t cmdId;
+	uint32_t mic = 0;
 
 	memset(&nwkHdr, 0, sizeof(nwkHdr));
 	nwkHdrLen = gpNwkHdrParse(&nwkHdr, pDgpDataInd->gpMpdu);
@@ -730,11 +730,11 @@ void dGp_dataInd(void *arg)
 	pGpdAsdu = pDgpDataInd->gpMpdu + nwkHdrLen;
 	if (nwkHdr.nwkFrameCtrl.nwkFrameCtrlExtension &&
 	    (nwkHdr.extNwkFrameCtrl.securityLevel > GP_SEC_LEVEL_RESERVED)) {
-		gpdAsduLen = (u8)(pDgpDataInd->gpMpduLen - nwkHdrLen - 4U);
-		mic = (u32)pGpdAsdu[gpdAsduLen] | ((u32)pGpdAsdu[gpdAsduLen + 1] << 8) |
-		      ((u32)pGpdAsdu[gpdAsduLen + 2] << 16) | ((u32)pGpdAsdu[gpdAsduLen + 3] << 24);
+		gpdAsduLen = (uint8_t)(pDgpDataInd->gpMpduLen - nwkHdrLen - 4U);
+		mic = (uint32_t)pGpdAsdu[gpdAsduLen] | ((uint32_t)pGpdAsdu[gpdAsduLen + 1] << 8) |
+		      ((uint32_t)pGpdAsdu[gpdAsduLen + 2] << 16) | ((uint32_t)pGpdAsdu[gpdAsduLen + 3] << 24);
 	} else {
-		gpdAsduLen = (u8)(pDgpDataInd->gpMpduLen - nwkHdrLen);
+		gpdAsduLen = (uint8_t)(pDgpDataInd->gpMpduLen - nwkHdrLen);
 	}
 
 	cmdId = pGpdAsdu[0];
@@ -753,8 +753,8 @@ void dGp_dataInd(void *arg)
 	}
 
 	if (nwkHdr.nwkFrameCtrl.nwkFrameCtrlExtension) {
-		u8 securityLevel =
-			(u8)(*((u8 *)&nwkHdr.extNwkFrameCtrl) & GP_EXT_FC_SEC_LEVEL_MASK);
+		uint8_t securityLevel =
+			(uint8_t)(*((uint8_t *)&nwkHdr.extNwkFrameCtrl) & GP_EXT_FC_SEC_LEVEL_MASK);
 
 		if (securityLevel == GP_EXT_FC_SEC_LEVEL_1) {
 			zb_buf_free((zb_buf_t *)arg);
@@ -773,7 +773,7 @@ void dGp_dataInd(void *arg)
 
 void cGpDataCnfHandler(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	uint8_t *buf = (uint8_t *)arg;
 	gp_data_cnf_t gpDataCnf = {
 		.status = GP_DATA_CNF_STATUS_GPDF_SENDING_FINALIZED,
 		.gpepHandle = buf[1],

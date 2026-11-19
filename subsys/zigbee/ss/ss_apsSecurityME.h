@@ -16,7 +16,7 @@ extern ss_tc_keyPair_t g_ssTcKeyPair[];
 extern ss_dev_keyPair_t g_ssDevKeyPair;
 #endif
 
-u8 ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair);
+uint8_t ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair);
 bool ss_securityModeIsDistributed(void);
 
 #if defined(ZB_COORDINATOR_ROLE)
@@ -34,7 +34,7 @@ void ss_apsmeTransportKeyReq(void *arg);
 void ss_apsmeSwitchKeyReq(void *arg);
 #if defined(ZB_COORDINATOR_ROLE)
 void ss_apsUpdateDeviceCmdHandle(void *arg);
-u8 ss_apsVerifyKeyCmdValid(void *keyPair, u8 keyType);
+uint8_t ss_apsVerifyKeyCmdValid(void *keyPair, uint8_t keyType);
 void ss_apsVerifyKeyCmdHandle(void *arg);
 void ss_apsRequestKeyCmdHandle(void *arg);
 #endif

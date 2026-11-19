@@ -115,43 +115,43 @@
  *  @brief  Definition format for move to level command
  */
 typedef struct {
-    u8 level;                   //!< new level to move to
-    u16 transitionTime;         //!< time to take to move to the new level (in tenth of a second)
-    u8 optPresent;              //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t level;                   //!< new level to move to
+    uint16_t transitionTime;         //!< time to take to move to the new level (in tenth of a second)
+    uint8_t optPresent;              //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } moveToLvl_t;
 
 /**
  *  @brief  Definition format for move command
  */
 typedef struct {
-    u8 moveMode;                //!< move mode.
-    u8 rate;                    //!< rate of movement in steps per second
-    u8 optPresent;              //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t moveMode;                //!< move mode.
+    uint8_t rate;                    //!< rate of movement in steps per second
+    uint8_t optPresent;              //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } move_t;
 
 /**
  *  @brief  Definition format for step command
  */
 typedef struct {
-    u8 stepMode;                //!< step mode
-    u8 stepSize;                //!< number of levels to step
-    u16 transitionTime;         //!< time, in 1/10th of a second, to take to perform the step
-    u8 optPresent;              //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t stepMode;                //!< step mode
+    uint8_t stepSize;                //!< number of levels to step
+    uint16_t transitionTime;         //!< time, in 1/10th of a second, to take to perform the step
+    uint8_t optPresent;              //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } step_t;
 
 /**
  *  @brief  Definition format for stop command
  */
 typedef struct {
-    u8 optPresent;              //!< options field present
-    u8 optionsMask;
-    u8 optionsOverride;
+    uint8_t optPresent;              //!< options field present
+    uint8_t optionsMask;
+    uint8_t optionsOverride;
 } stop_t;
 
 /**
@@ -172,7 +172,7 @@ typedef union {
 /**
  *  @brief  Definition for move to level command callback
  */
-typedef void (*zcl_levelCb_t)(u8 cmdId, zcl_level_cmdPayload_t *cmdPayload);
+typedef void (*zcl_levelCb_t)(uint8_t cmdId, zcl_level_cmdPayload_t *cmdPayload);
 
 /**
  *  @brief  App layer should use this structure to register LEVEL clusters callbacks
@@ -195,31 +195,31 @@ typedef struct {
  */
 typedef struct {
 #ifdef ZCL_ATTR_REMAINING_TIME_ENABLE
-    u16 remainingTime;          //!< the time remaining until the current command is complete
+    uint16_t remainingTime;          //!< the time remaining until the current command is complete
 #endif
 #ifdef ZCL_ATTR_ONOFF_TRANS_TIME_ENABLE
-    u16 onOffTransTime;         //!< the time taken to move to or from the target level
+    uint16_t onOffTransTime;         //!< the time taken to move to or from the target level
 #endif
 #ifdef ZCL_ATTR_ON_TRANS_ENABLE
-    u16 onTransitionTime;       //!< determines the value that the CurrentLevelattribute is set to
+    uint16_t onTransitionTime;       //!< determines the value that the CurrentLevelattribute is set to
 #endif
 #ifdef ZCL_ATTR_OFF_TRANS_ENABLE
-    u16 offTransitionTime;      //!< determines the value that the CurrentLevelattribute is set to
+    uint16_t offTransitionTime;      //!< determines the value that the CurrentLevelattribute is set to
 #endif
 #ifdef ZCL_ATTR_CURRENT_LEVEL_ENABLE
-    u8 curLevel;                //!< the current level of this device
+    uint8_t curLevel;                //!< the current level of this device
 #endif
 #ifdef ZCL_ATTR_ON_LEVEL_ENABLE
-    u8 onLevel;                 //!< determines the value that the CurrentLevelattribute is set to
+    uint8_t onLevel;                 //!< determines the value that the CurrentLevelattribute is set to
 #endif
 #ifdef ZCL_ATTR_DEFAULT_MOVE_RATE_ENABLE
-    u8 defaultMoveRate;
+    uint8_t defaultMoveRate;
 #endif
 #ifdef ZCL_ATTR_OPTIONS_ENABLE
-    u8 options;
+    uint8_t options;
 #endif
 #ifdef ZCL_ATTR_START_UP_CURRENT_LEVEL_ENABLE
-    u8 startUpCurrentLevel;
+    uint8_t startUpCurrentLevel;
 #endif
 } zcl_levelAttr_t;
 
@@ -236,7 +236,7 @@ extern zcl_levelAttr_t zcl_attr_level;
  */
 extern const zclAttrInfo_t level_attrTbl[];
 
-extern const u8 zcl_level_attrNum;
+extern const uint8_t zcl_level_attrNum;
 
 /** @} end of group ZCL_LEVEL_Variables */
 #endif
@@ -254,7 +254,7 @@ extern const u8 zcl_level_attrNum;
  *
  * @return      Status
  */
-status_t zcl_level_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_level_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 /**
@@ -269,7 +269,7 @@ status_t zcl_level_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttr
  *
  * @return      status_t
  */
-status_t zcl_level_move2level(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, moveToLvl_t *pMove2Level);
+status_t zcl_level_move2level(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, moveToLvl_t *pMove2Level);
 #define zcl_level_move2levelCmd(a,b,c,d)                (zcl_level_move2level((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_MOVE_TO_LEVEL, (d)))
 #define zcl_level_move2levelWithOnOffCmd(a,b,c,d)       (zcl_level_move2level((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_MOVE_TO_LEVEL_WITH_ON_OFF, (d)))
 
@@ -285,7 +285,7 @@ status_t zcl_level_move2level(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultR
  *
  * @return      status_t
  */
-status_t zcl_level_move(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, move_t *pMove);
+status_t zcl_level_move(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, move_t *pMove);
 #define zcl_level_moveCmd(a,b,c,d)                      (zcl_level_move((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_MOVE, (d)))
 #define zcl_level_moveWithOnOffCmd(a,b,c,d)             (zcl_level_move((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_MOVE_WITH_ON_OFF, (d)))
 
@@ -301,7 +301,7 @@ status_t zcl_level_move(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8
  *
  * @return      status_t
  */
-status_t zcl_level_step(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, step_t *pStep);
+status_t zcl_level_step(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, step_t *pStep);
 #define zcl_level_stepCmd(a,b,c,d)                      (zcl_level_step((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_STEP, (d)))
 #define zcl_level_stepWithOnOffCmd(a,b,c,d)             (zcl_level_step((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_STEP_WITH_ON_OFF, (d)))
 
@@ -317,7 +317,7 @@ status_t zcl_level_step(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8
  *
  * @return      status_t
  */
-status_t zcl_level_stop(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, stop_t *pStop);
+status_t zcl_level_stop(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, stop_t *pStop);
 #define zcl_level_stopCmd(a,b,c,d)                      (zcl_level_stop((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_STOP, (d)))
 #define zcl_level_stopWithOnOffCmd(a,b,c,d)             (zcl_level_stop((a), (b), (c), ZCL_SEQ_NUM, ZCL_CMD_LEVEL_STOP_WITH_ON_OFF, (d)))
 

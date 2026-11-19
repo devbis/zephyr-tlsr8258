@@ -63,21 +63,21 @@ zcl_wwahAttr_t g_zcl_wwahAttrs = {
 
 /* Attribute record list */
 const zclAttrInfo_t wwah_attrTbl[] = {
-    { ZCL_ATTRID_WWAH_DISABLE_OTA_DOWNGRADES,                  ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.disableOTADowngrades },
-    { ZCL_ATTRID_WWAH_MGMT_LEAVE_WITHOUT_REJOIN_ENABLED,       ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.mgmtLeaveWithoutRejoinEnabled },
-    { ZCL_ATTRID_WWAH_NWK_RETRY_COUNT,                         ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.nwkRetryCount },
-    { ZCL_ATTRID_WWAH_MAC_RETRY_COUNT,                         ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.macRetryCount },
-    { ZCL_ATTRID_WWAH_ROUTER_CHECK_IN_ENABLED,                 ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.routerCheckInEnabled },
-    { ZCL_ATTRID_WWAH_TOUCHLINK_INTERPAN_ENABLED,              ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.touchlinkInterpanEnabled },
-    { ZCL_ATTRID_WWAH_PARENT_CLASSIFICATION_ENABLED,           ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.parentClassificationEnabled },
-    { ZCL_ATTRID_WWAH_CONFIGURATION_MODE_ENABLED,              ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.configurationModeEnabled },
-    { ZCL_ATTRID_WWAH_CURRENT_DEBUG_REPORT_ID,                 ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.currentDebugReportID },
-    { ZCL_ATTRID_WWAH_TC_SECURITY_ON_NWK_KEY_ROTATION_ENABLED, ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.tcSecurityOnNwkKeyRotationEnabled },
-    { ZCL_ATTRID_WWAH_PENDING_NWK_UPDATE_CHANNEL,              ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.pendingNwkUpdateChannel },
-    { ZCL_ATTRID_WWAH_PENDING_NWK_UPDATE_PANID,                ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.pendingNwkUpdatePanID },
-    { ZCL_ATTRID_WWAH_OTA_MAX_OFFLINE_DURATION,                ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (u8*)&g_zcl_wwahAttrs.otaMaxOfflineDuration },
+    { ZCL_ATTRID_WWAH_DISABLE_OTA_DOWNGRADES,                  ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.disableOTADowngrades },
+    { ZCL_ATTRID_WWAH_MGMT_LEAVE_WITHOUT_REJOIN_ENABLED,       ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.mgmtLeaveWithoutRejoinEnabled },
+    { ZCL_ATTRID_WWAH_NWK_RETRY_COUNT,                         ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.nwkRetryCount },
+    { ZCL_ATTRID_WWAH_MAC_RETRY_COUNT,                         ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.macRetryCount },
+    { ZCL_ATTRID_WWAH_ROUTER_CHECK_IN_ENABLED,                 ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.routerCheckInEnabled },
+    { ZCL_ATTRID_WWAH_TOUCHLINK_INTERPAN_ENABLED,              ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.touchlinkInterpanEnabled },
+    { ZCL_ATTRID_WWAH_PARENT_CLASSIFICATION_ENABLED,           ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.parentClassificationEnabled },
+    { ZCL_ATTRID_WWAH_CONFIGURATION_MODE_ENABLED,              ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.configurationModeEnabled },
+    { ZCL_ATTRID_WWAH_CURRENT_DEBUG_REPORT_ID,                 ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.currentDebugReportID },
+    { ZCL_ATTRID_WWAH_TC_SECURITY_ON_NWK_KEY_ROTATION_ENABLED, ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.tcSecurityOnNwkKeyRotationEnabled },
+    { ZCL_ATTRID_WWAH_PENDING_NWK_UPDATE_CHANNEL,              ZCL_DATA_TYPE_UINT8,   ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.pendingNwkUpdateChannel },
+    { ZCL_ATTRID_WWAH_PENDING_NWK_UPDATE_PANID,                ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.pendingNwkUpdatePanID },
+    { ZCL_ATTRID_WWAH_OTA_MAX_OFFLINE_DURATION,                ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (uint8_t*)&g_zcl_wwahAttrs.otaMaxOfflineDuration },
 
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,                      ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (u8*)&zcl_attr_global_clusterRevision },
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION,                      ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ, (uint8_t*)&zcl_attr_global_clusterRevision },
 };
 
 #define ZCL_WWAH_ATTR_NUM       sizeof(wwah_attrTbl) / sizeof(zclAttrInfo_t)
@@ -90,6 +90,6 @@ const zcl_specClusterInfo_t g_wwahClusterList[] = {
     {ZCL_CLUSTER_WWAH, MANUFACTURER_CODE_AMAZON, ZCL_WWAH_ATTR_NUM, wwah_attrTbl, zcl_wwah_register, zcl_wwahCb},
 };
 
-u8 WWAH_CB_CLUSTER_NUM = (sizeof(g_wwahClusterList) / sizeof(g_wwahClusterList[0]));
+uint8_t WWAH_CB_CLUSTER_NUM = (sizeof(g_wwahClusterList) / sizeof(g_wwahClusterList[0]));
 
 #endif /* ZCL_WWAH */

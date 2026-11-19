@@ -55,47 +55,47 @@
  */
 typedef struct {
     bool boolPara;
-    u16 u16Para;
+    uint16_t u16Para;
 } zcl_mulOutput_priorityArray_t;
 
 
 #if 0
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_STATE_TEXT_ENABLE
-extern u8 zcl_attr_mulOutput_stateText[];
+extern uint8_t zcl_attr_mulOutput_stateText[];
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_DESCRIPTION_ENABLE
-extern u8 zcl_attr_mulOutput_description[];
+extern uint8_t zcl_attr_mulOutput_description[];
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_NUM_OF_STATES_ENABLE
-extern u16 zcl_attr_mulOutput_numOfStates;
+extern uint16_t zcl_attr_mulOutput_numOfStates;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_OUT_OF_SERVICE_ENABLE
 extern bool zcl_attr_mulOutput_outOfService;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_PRESENT_VALUE_ENABLE
-extern u16 zcl_attr_mulOutput_presentValue;
+extern uint16_t zcl_attr_mulOutput_presentValue;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_PRIORITY_ARRAY_ENABLE
 extern zcl_mulOutput_priorityArray_t zcl_attr_mulOutput_priorityArray[];
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_RELIABLILITY_ENABLE
-extern u8 zcl_attr_mulOutput_reliability;
+extern uint8_t zcl_attr_mulOutput_reliability;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_RELINQUISH_DEFAULT_ENABLE
-extern u16 zcl_attr_mulOutput_relinquishdDfault;
+extern uint16_t zcl_attr_mulOutput_relinquishdDfault;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_STATUS_FLAGS_ENABLE
-extern u8 zcl_attr_mulOutput_statusFlags;
+extern uint8_t zcl_attr_mulOutput_statusFlags;
 #endif
 #ifdef ZCL_MULTISTATE_OUTPUT_ATTR_APP_TYPE_ENABLE
-extern u32 zcl_attr_mulOutput_appType;
+extern uint32_t zcl_attr_mulOutput_appType;
 #endif
 
 extern const zclAttrInfo_t multistate_output_attrTbl[];
-extern const u8 zcl_multistate_output_attrNum;
+extern const uint8_t zcl_multistate_output_attrNum;
 #endif
 
 
-status_t zcl_multistate_output_Attribute_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_multistate_output_Attribute_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_MULTISTATE_OUTPUT_H */

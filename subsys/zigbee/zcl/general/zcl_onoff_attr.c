@@ -67,24 +67,24 @@ zcl_onoff_attr_t g_zclOnOffAttr = {
 /* Attribute record list */
 const zclAttrInfo_t onoff_attrTbl[] = {
 #ifdef ZCL_ATTR_ONOFF_ENABLE
-    { ZCL_ATTRID_ONOFF,                   ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE, (u8*)&g_zclOnOffAttr.onOff},
+    { ZCL_ATTRID_ONOFF,                   ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ | ACCESS_CONTROL_REPORTABLE, (uint8_t*)&g_zclOnOffAttr.onOff},
 #endif
 #ifdef ZCL_ATTR_GLOBAL_SCENE_CONTROL_ENABLE
-    { ZCL_ATTRID_GLOBAL_SCENE_CONTROL,    ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ,                             (u8*)&g_zclOnOffAttr.globalSceneControl},
+    { ZCL_ATTRID_GLOBAL_SCENE_CONTROL,    ZCL_DATA_TYPE_BOOLEAN, ACCESS_CONTROL_READ,                             (uint8_t*)&g_zclOnOffAttr.globalSceneControl},
 #endif
 #ifdef ZCL_ATTR_ON_TIME_ENABLE
-    { ZCL_ATTRID_ON_TIME,                 ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&g_zclOnOffAttr.onTime},
+    { ZCL_ATTRID_ON_TIME,                 ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&g_zclOnOffAttr.onTime},
 #endif
 #ifdef ZCL_ATTR_OFF_WAIT_TIME_ENABLE
-    { ZCL_ATTRID_OFF_WAIT_TIME,           ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&g_zclOnOffAttr.offWaitTime},
+    { ZCL_ATTRID_OFF_WAIT_TIME,           ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&g_zclOnOffAttr.offWaitTime},
 #endif
 #ifdef ZCL_ATTR_START_UP_ONOFF_ENABLE
-    { ZCL_ATTRID_START_UP_ONOFF,          ZCL_DATA_TYPE_ENUM8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (u8*)&g_zclOnOffAttr.startUpOnOff},
+    { ZCL_ATTRID_START_UP_ONOFF,          ZCL_DATA_TYPE_ENUM8,   ACCESS_CONTROL_READ | ACCESS_CONTROL_WRITE,      (uint8_t*)&g_zclOnOffAttr.startUpOnOff},
 #endif
-    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (u8*)&zcl_attr_global_clusterRevision},
+    { ZCL_ATTRID_GLOBAL_CLUSTER_REVISION, ZCL_DATA_TYPE_UINT16,  ACCESS_CONTROL_READ,                             (uint8_t*)&zcl_attr_global_clusterRevision},
 };
 
-const u8 zcl_onOff_attrNum = (sizeof(onoff_attrTbl) / sizeof(zclAttrInfo_t));
+const uint8_t zcl_onOff_attrNum = (sizeof(onoff_attrTbl) / sizeof(zclAttrInfo_t));
 
 nv_sts_t zcl_onOff_saveAttr(void)
 {

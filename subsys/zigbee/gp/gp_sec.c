@@ -13,22 +13,22 @@
 STATIC_ASSERT(sizeof(gp_nwkHdrFrameCtrl_t) == 1);
 STATIC_ASSERT(sizeof(gp_extNwkFrameCtrl_t) == 1);
 
-u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoint,
-	     u32 secFrameCounter, u8 gpdAsduLen, u8 *gpdAsdu, bool autoComm, bool rxAfterTx,
-	     u32 mic, u8 *pKey)
+uint8_t gpCcmStar(uint8_t appId, gpdId_t gpdId, uint8_t gpdfSecKey, uint8_t gpdfSecLevel, uint8_t endpoint,
+	     uint32_t secFrameCounter, uint8_t gpdAsduLen, uint8_t *gpdAsdu, bool autoComm, bool rxAfterTx,
+	     uint32_t mic, uint8_t *pKey)
 {
-	u8 nonce[13];
-	u8 *aStr;
-	u8 *gpdAsduCpy;
-	u8 aStrLen;
-	u8 *pHdr;
+	uint8_t nonce[13];
+	uint8_t *aStr;
+	uint8_t *gpdAsduCpy;
+	uint8_t aStrLen;
+	uint8_t *pHdr;
 	gp_nwkHdrFrameCtrl_t nwkFrameCtrl;
 	gp_extNwkFrameCtrl_t extNwkFrameCtrl;
 
 	aStr = NULL;
 	gpdAsduCpy = NULL;
-	*((u8 *)&nwkFrameCtrl) = 0;
-	*((u8 *)&extNwkFrameCtrl) = 0;
+	*((uint8_t *)&nwkFrameCtrl) = 0;
+	*((uint8_t *)&extNwkFrameCtrl) = 0;
 
 	if (gpdfSecLevel == GP_SEC_LEVEL_NO_SECURITY) {
 		return SUCCESS;
@@ -36,10 +36,10 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 
 	nonce[12] = 5;
 	if (appId == GP_APP_ID_SRC_ID) {
-		nonce[4] = (u8)gpdId.srcId;
-		nonce[5] = (u8)(gpdId.srcId >> 8);
-		nonce[6] = (u8)(gpdId.srcId >> 16);
-		nonce[7] = (u8)(gpdId.srcId >> 24);
+		nonce[4] = (uint8_t)gpdId.srcId;
+		nonce[5] = (uint8_t)(gpdId.srcId >> 8);
+		nonce[6] = (uint8_t)(gpdId.srcId >> 16);
+		nonce[7] = (uint8_t)(gpdId.srcId >> 24);
 		nonce[0] = nonce[4];
 		nonce[1] = nonce[5];
 		nonce[2] = nonce[6];
@@ -52,10 +52,10 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 		return FAILURE;
 	}
 
-	nonce[8] = (u8)secFrameCounter;
-	nonce[9] = (u8)(secFrameCounter >> 8);
-	nonce[10] = (u8)(secFrameCounter >> 16);
-	nonce[11] = (u8)(secFrameCounter >> 24);
+	nonce[8] = (uint8_t)secFrameCounter;
+	nonce[9] = (uint8_t)(secFrameCounter >> 8);
+	nonce[10] = (uint8_t)(secFrameCounter >> 16);
+	nonce[11] = (uint8_t)(secFrameCounter >> 24);
 
 	nwkFrameCtrl = gpNwkHdrFrameCtrlBuild(GP_NWK_FRAME_TYPE_DATA, autoComm, appId, gpdfSecLevel,
 					      gpdfSecKey, rxAfterTx, FALSE, &extNwkFrameCtrl);
@@ -63,7 +63,7 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 	if (gpdfSecLevel == GP_SEC_LEVEL_4BFC_4BMIC_ENCRYPTION) {
 		aStr = ev_buf_allocate(aStrLen);
 	} else if (gpdfSecLevel == GP_SEC_LEVEL_4BFC_4BMIC) {
-		aStrLen = (u8)(aStrLen + gpdAsduLen);
+		aStrLen = (uint8_t)(aStrLen + gpdAsduLen);
 		aStr = ev_buf_allocate(aStrLen);
 	} else {
 		return FAILURE;
@@ -73,30 +73,30 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 		return FAILURE;
 	}
 
-	aStr[0] = *((u8 *)&nwkFrameCtrl);
-	aStr[1] = *((u8 *)&extNwkFrameCtrl);
+	aStr[0] = *((uint8_t *)&nwkFrameCtrl);
+	aStr[1] = *((uint8_t *)&extNwkFrameCtrl);
 	pHdr = &aStr[2];
 
 	if (appId == GP_APP_ID_SRC_ID) {
-		pHdr[0] = (u8)gpdId.srcId;
-		pHdr[1] = (u8)(gpdId.srcId >> 8);
-		pHdr[2] = (u8)(gpdId.srcId >> 16);
-		pHdr[3] = (u8)(gpdId.srcId >> 24);
+		pHdr[0] = (uint8_t)gpdId.srcId;
+		pHdr[1] = (uint8_t)(gpdId.srcId >> 8);
+		pHdr[2] = (uint8_t)(gpdId.srcId >> 16);
+		pHdr[3] = (uint8_t)(gpdId.srcId >> 24);
 		pHdr += 4;
 	} else {
 		*pHdr++ = endpoint;
 	}
 
-	pHdr[0] = (u8)secFrameCounter;
-	pHdr[1] = (u8)(secFrameCounter >> 8);
-	pHdr[2] = (u8)(secFrameCounter >> 16);
-	pHdr[3] = (u8)(secFrameCounter >> 24);
+	pHdr[0] = (uint8_t)secFrameCounter;
+	pHdr[1] = (uint8_t)(secFrameCounter >> 8);
+	pHdr[2] = (uint8_t)(secFrameCounter >> 16);
+	pHdr[3] = (uint8_t)(secFrameCounter >> 24);
 
 	if (gpdfSecLevel == GP_SEC_LEVEL_4BFC_4BMIC) {
 		memcpy(pHdr + 4, gpdAsdu, gpdAsduLen);
-		aes_ccmDecTran(4, pKey, nonce, NULL, 0, aStr, aStrLen, (u8 *)&mic);
+		aes_ccmDecTran(4, pKey, nonce, NULL, 0, aStr, aStrLen, (uint8_t *)&mic);
 		gpdfSecLevel =
-			aes_ccmDecAuthTran(4, pKey, nonce, NULL, 0, aStr, aStrLen, (u8 *)&mic);
+			aes_ccmDecAuthTran(4, pKey, nonce, NULL, 0, aStr, aStrLen, (uint8_t *)&mic);
 		ev_buf_free(aStr);
 		return (gpdfSecLevel == RET_OK) ? SUCCESS : FAILURE;
 	}
@@ -111,8 +111,8 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 		memcpy(gpdAsduCpy, gpdAsdu, gpdAsduLen);
 	}
 
-	aes_ccmDecTran(4, pKey, nonce, gpdAsdu, gpdAsduLen, aStr, aStrLen, (u8 *)&mic);
-	if (aes_ccmDecAuthTran(4, pKey, nonce, gpdAsdu, gpdAsduLen, aStr, aStrLen, (u8 *)&mic) !=
+	aes_ccmDecTran(4, pKey, nonce, gpdAsdu, gpdAsduLen, aStr, aStrLen, (uint8_t *)&mic);
+	if (aes_ccmDecAuthTran(4, pKey, nonce, gpdAsdu, gpdAsduLen, aStr, aStrLen, (uint8_t *)&mic) !=
 	    RET_OK) {
 		if ((gpdAsduCpy != NULL) && (gpdAsduLen != 0U)) {
 			memcpy(gpdAsdu, gpdAsduCpy, gpdAsduLen);
@@ -131,13 +131,13 @@ u8 gpCcmStar(u8 appId, gpdId_t gpdId, u8 gpdfSecKey, u8 gpdfSecLevel, u8 endpoin
 	return gpdfSecKey;
 }
 
-u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCounter, u8 *mic,
-		  u8 *pKey, bool enOrDecrypt)
+uint8_t gpdKeyWithTCLK(uint8_t appId, gpdId_t gpdId, uint8_t dataLen, uint8_t *pData, uint32_t frameCounter, uint8_t *mic,
+		  uint8_t *pKey, bool enOrDecrypt)
 {
-	u8 nonce[13] = {0};
+	uint8_t nonce[13] = {0};
 	gpdId_t nonceId;
-	u32 nonceCounter;
-	u32 aStr;
+	uint32_t nonceCounter;
+	uint32_t aStr;
 
 	nonceCounter = 0;
 	aStr = 0;
@@ -147,10 +147,10 @@ u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCount
 		nonceCounter = frameCounter;
 		if (!enOrDecrypt) {
 			nonce[12] = 5;
-			nonce[4] = (u8)gpdId.srcId;
-			nonce[5] = (u8)(gpdId.srcId >> 8);
-			nonce[6] = (u8)(gpdId.srcId >> 16);
-			nonce[7] = (u8)(gpdId.srcId >> 24);
+			nonce[4] = (uint8_t)gpdId.srcId;
+			nonce[5] = (uint8_t)(gpdId.srcId >> 8);
+			nonce[6] = (uint8_t)(gpdId.srcId >> 16);
+			nonce[7] = (uint8_t)(gpdId.srcId >> 24);
 			nonce[0] = nonce[4];
 			nonce[1] = nonce[5];
 			nonce[2] = nonce[6];
@@ -158,8 +158,8 @@ u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCount
 			nonceCounter = gpdId.srcId;
 			COPY_U32TOBUFFER(nonce + 8, nonceCounter);
 
-			aes_ccmDecTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4, mic);
-			return (aes_ccmDecAuthTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4,
+			aes_ccmDecTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4, mic);
+			return (aes_ccmDecAuthTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4,
 						   mic) == RET_OK)
 				       ? SUCCESS
 				       : FAILURE;
@@ -169,7 +169,7 @@ u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCount
 			return FAILURE;
 		}
 
-		memcpy((u8 *)&aStr, &gpdId, sizeof(u32));
+		memcpy((uint8_t *)&aStr, &gpdId, sizeof(uint32_t));
 		nonceCounter = frameCounter;
 		if (!enOrDecrypt) {
 			nonceCounter = gpdId.srcId;
@@ -180,10 +180,10 @@ u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCount
 	nonce[12] = 5;
 
 	if (appId == GP_APP_ID_SRC_ID) {
-		nonce[4] = (u8)gpdId.srcId;
-		nonce[5] = (u8)(gpdId.srcId >> 8);
-		nonce[6] = (u8)(gpdId.srcId >> 16);
-		nonce[7] = (u8)(gpdId.srcId >> 24);
+		nonce[4] = (uint8_t)gpdId.srcId;
+		nonce[5] = (uint8_t)(gpdId.srcId >> 8);
+		nonce[6] = (uint8_t)(gpdId.srcId >> 16);
+		nonce[7] = (uint8_t)(gpdId.srcId >> 24);
 	} else if (appId == GP_APP_ID_GPD) {
 		memcpy(nonce, &nonceId, sizeof(gpdId_t));
 		if (!enOrDecrypt) {
@@ -197,19 +197,19 @@ u8 gpdKeyWithTCLK(u8 appId, gpdId_t gpdId, u8 dataLen, u8 *pData, u32 frameCount
 	COPY_U32TOBUFFER(nonce + 8, nonceCounter);
 
 	if (enOrDecrypt) {
-		if (aes_ccmAuthTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4, mic) !=
+		if (aes_ccmAuthTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4, mic) !=
 		    RET_OK) {
 			return FAILURE;
 		}
 
-		aes_ccmEncTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4, mic);
+		aes_ccmEncTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4, mic);
 		return SUCCESS;
 	}
 
 decrypt:
 	COPY_U32TOBUFFER(nonce + 8, nonceCounter);
-	aes_ccmDecTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4, mic);
-	return (aes_ccmDecAuthTran(4, pKey, nonce, pData, dataLen, (u8 *)&aStr, 4, mic) == RET_OK)
+	aes_ccmDecTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4, mic);
+	return (aes_ccmDecAuthTran(4, pKey, nonce, pData, dataLen, (uint8_t *)&aStr, 4, mic) == RET_OK)
 		       ? SUCCESS
 		       : FAILURE;
 }

@@ -81,7 +81,7 @@ static af_endpoint_descriptor_t aed[MAX_ACTIVE_EP_NUMBER];
 static af_endpoint_descriptor_t zdo_epDesc;
 
 //The number of available active endpoint numbers, used for simple descriptor and active ep response
-static u8 available_active_ep_num = 0;
+static uint8_t available_active_ep_num = 0;
 
 
 /**************************************************************************************************
@@ -95,8 +95,8 @@ _CODE_AF_ void af_init(void)
 {
     available_active_ep_num = 0;
 
-    memset((u8 *)aed, 0, sizeof(aed));
-    memset((u8 *)&zdo_epDesc, 0, sizeof(zdo_epDesc));
+    memset((uint8_t *)aed, 0, sizeof(aed));
+    memset((uint8_t *)&zdo_epDesc, 0, sizeof(zdo_epDesc));
 }
 
 /****************************************************************************************************
@@ -108,7 +108,7 @@ _CODE_AF_ void af_init(void)
  */
 _CODE_AF_ void af_powerDescriptorSet(power_descriptor_t *value)
 {
-    memcpy((u8 *)&pdt, value, sizeof(*value));
+    memcpy((uint8_t *)&pdt, value, sizeof(*value));
 }
 
 /****************************************************************************************************
@@ -121,7 +121,7 @@ _CODE_AF_ void af_powerDescriptorSet(power_descriptor_t *value)
 _CODE_AF_ void af_powerDescPowerModeUpdate(power_mode_t mode)
 {
 #if defined(ZB_ED_ROLE) && (ZB_ED_ROLE == TRUE)
-    pdt.current_power_mode = (u8)mode;
+    pdt.current_power_mode = (uint8_t)mode;
 #endif
 }
 
@@ -134,7 +134,7 @@ _CODE_AF_ void af_powerDescPowerModeUpdate(power_mode_t mode)
  */
 _CODE_AF_ void af_nodeDescriptorSet(node_descriptor_t *value)
 {
-    memcpy((u8 *)&ndt, value, sizeof(*value));
+    memcpy((uint8_t *)&ndt, value, sizeof(*value));
 }
 
 /****************************************************************************************************
@@ -144,7 +144,7 @@ _CODE_AF_ void af_nodeDescriptorSet(node_descriptor_t *value)
  *
  * @return	none
  */
-_CODE_AF_ void af_nodeDescManuCodeUpdate(u16 manuCode)
+_CODE_AF_ void af_nodeDescManuCodeUpdate(uint16_t manuCode)
 {
     ndt.mcL8 = LO_UINT16(manuCode);
     ndt.mcH8 = HI_UINT16(manuCode);
@@ -173,7 +173,7 @@ _CODE_AF_ void af_nodeDescRxOnWhenIdleUpdate(bool enable)
  *
  * @return	none
  */
-_CODE_AF_ void af_nodeDescStackRevisionSet(u8 revision)
+_CODE_AF_ void af_nodeDescStackRevisionSet(uint8_t revision)
 {
     ndt.server_mask &= (~(0x7f << 9));
     ndt.server_mask |= (revision << 9);
@@ -186,9 +186,9 @@ _CODE_AF_ void af_nodeDescStackRevisionSet(u8 revision)
  *
  * @return	revision
  */
-_CODE_AF_ u8 af_nodeDescStackRevisionGet(void)
+_CODE_AF_ uint8_t af_nodeDescStackRevisionGet(void)
 {
-    return ((u8)((ndt.server_mask & 0xfe00) >> 9));
+    return ((uint8_t)((ndt.server_mask & 0xfe00) >> 9));
 }
 
 /****************************************************************************************************
@@ -198,7 +198,7 @@ _CODE_AF_ u8 af_nodeDescStackRevisionGet(void)
  *
  * @return	revision
  */
-_CODE_AF_ u8 af_nodeMacCapabilityGet(void)
+_CODE_AF_ uint8_t af_nodeMacCapabilityGet(void)
 {
     return ndt.mac_capability_flag;
 }
@@ -223,9 +223,9 @@ _CODE_AF_ device_type_t af_nodeDevTypeGet(void)
  *
  * @return	length of the simple descriptor info
  */
-_CODE_AF_ u8 af_simpleDescriptorCopy(u8 *dst, af_simple_descriptor_t *sd)
+_CODE_AF_ uint8_t af_simpleDescriptorCopy(uint8_t *dst, af_simple_descriptor_t *sd)
 {
-    u8 *ptr = dst;
+    uint8_t *ptr = dst;
 
     *ptr++ = sd->endpoint;
     COPY_U16TOBUFFER(ptr, sd->app_profile_id);
@@ -237,19 +237,19 @@ _CODE_AF_ u8 af_simpleDescriptorCopy(u8 *dst, af_simple_descriptor_t *sd)
     *ptr++ = sd->app_dev_ver & 0x0f;
     *ptr++ = sd->app_in_cluster_count;
 
-    for (u8 i = 0; i < sd->app_in_cluster_count; i++) {
+    for (uint8_t i = 0; i < sd->app_in_cluster_count; i++) {
         *ptr++ = LO_UINT16(sd->app_in_cluster_lst[i]);
         *ptr++ = HI_UINT16(sd->app_in_cluster_lst[i]);
     }
 
     *ptr++ = sd->app_out_cluster_count;
 
-    for (u8 j = 0; j < sd->app_out_cluster_count; j++) {
+    for (uint8_t j = 0; j < sd->app_out_cluster_count; j++) {
         *ptr++ = LO_UINT16(sd->app_out_cluster_lst[j]);
         *ptr++ = HI_UINT16(sd->app_out_cluster_lst[j]);
     }
 
-    return (u8)(ptr - dst);
+    return (uint8_t)(ptr - dst);
 }
 
 /****************************************************************************************************
@@ -261,7 +261,7 @@ _CODE_AF_ u8 af_simpleDescriptorCopy(u8 *dst, af_simple_descriptor_t *sd)
  */
 _CODE_AF_ void af_nodeDescriptorCopy(node_descriptor_t *dst)
 {
-    memcpy((u8 *)dst, (u8 *)&ndt, sizeof(ndt));
+    memcpy((uint8_t *)dst, (uint8_t *)&ndt, sizeof(ndt));
 }
 
 /****************************************************************************************************
@@ -273,7 +273,7 @@ _CODE_AF_ void af_nodeDescriptorCopy(node_descriptor_t *dst)
  */
 _CODE_AF_ void af_powerDescriptorCopy(power_descriptor_t *dst)
 {
-    memcpy((u8 *)dst, (u8 *)&pdt, sizeof(pdt));
+    memcpy((uint8_t *)dst, (uint8_t *)&pdt, sizeof(pdt));
 }
 
 /**************************************************************************************************
@@ -283,7 +283,7 @@ _CODE_AF_ void af_powerDescriptorCopy(power_descriptor_t *dst)
  *
  * @return	available EP
  */
-_CODE_AF_ u8 af_availableEpNumGet(void)
+_CODE_AF_ uint8_t af_availableEpNumGet(void)
 {
     return available_active_ep_num;
 }
@@ -319,9 +319,9 @@ _CODE_AF_ af_endpoint_descriptor_t *af_zdoSimpleDescriptorGet(void)
  *
  * @return	point to the simple descriptor info
  */
-_CODE_AF_ af_simple_descriptor_t *af_simpleDescGet(u8 ep)
+_CODE_AF_ af_simple_descriptor_t *af_simpleDescGet(uint8_t ep)
 {
-    for (u8 i = 0; i < available_active_ep_num; i++) {
+    for (uint8_t i = 0; i < available_active_ep_num; i++) {
         if (aed[i].ep == ep) {
             return aed[i].correspond_simple_desc;
         }
@@ -330,7 +330,7 @@ _CODE_AF_ af_simple_descriptor_t *af_simpleDescGet(u8 ep)
     return NULL;
 }
 
-_CODE_AF_ bool af_profileMatchedLocal(u16 profileID, u8 ep)
+_CODE_AF_ bool af_profileMatchedLocal(uint16_t profileID, uint8_t ep)
 {
     if ((ep == ZDO_EP) && (profileID == ZDO_PROFILE_ID)) {
         return TRUE;
@@ -340,7 +340,7 @@ _CODE_AF_ bool af_profileMatchedLocal(u16 profileID, u8 ep)
         return TRUE;
     }
 
-    for (u8 i = 0; i < available_active_ep_num; i++) {
+    for (uint8_t i = 0; i < available_active_ep_num; i++) {
         if (((aed[i].ep == ep) || (ep == 0xFF)) &&
             ((aed[i].correspond_simple_desc->app_profile_id == profileID) || (profileID == WILDCARD_PROFILE_ID))) {
             return TRUE;
@@ -350,17 +350,17 @@ _CODE_AF_ bool af_profileMatchedLocal(u16 profileID, u8 ep)
     return FALSE;
 }
 
-_CODE_AF_ bool af_clusterMatchedLocal(u16 clusterID, u8 ep)
+_CODE_AF_ bool af_clusterMatchedLocal(uint16_t clusterID, uint8_t ep)
 {
-    for (u8 i = 0; i < available_active_ep_num; i++) {
+    for (uint8_t i = 0; i < available_active_ep_num; i++) {
         if (aed[i].ep == ep) {
-            for (u8 j = 0; j < aed[i].correspond_simple_desc->app_in_cluster_count; j++) {
+            for (uint8_t j = 0; j < aed[i].correspond_simple_desc->app_in_cluster_count; j++) {
                 if (aed[i].correspond_simple_desc->app_in_cluster_lst[j] == clusterID) {
                     return TRUE;
                 }
             }
 
-            for (u8 j = 0; j < aed[i].correspond_simple_desc->app_out_cluster_count; j++) {
+            for (uint8_t j = 0; j < aed[i].correspond_simple_desc->app_out_cluster_count; j++) {
                 if (aed[i].correspond_simple_desc->app_out_cluster_lst[j] == clusterID) {
                     return TRUE;
                 }
@@ -371,19 +371,19 @@ _CODE_AF_ bool af_clusterMatchedLocal(u16 clusterID, u8 ep)
     return FALSE;
 }
 
-_CODE_AF_ bool af_clsuterIdMatched(u16 clusterID, af_simple_descriptor_t *pSimpleDesc)
+_CODE_AF_ bool af_clsuterIdMatched(uint16_t clusterID, af_simple_descriptor_t *pSimpleDesc)
 {
     if (!pSimpleDesc) {
         return FALSE;
     }
 
-    for (u8 i = 0; i < pSimpleDesc->app_in_cluster_count; i++) {
+    for (uint8_t i = 0; i < pSimpleDesc->app_in_cluster_count; i++) {
         if (clusterID == pSimpleDesc->app_in_cluster_lst[i]) {
             return TRUE;
         }
     }
 
-    for (u8 i = 0; i < pSimpleDesc->app_out_cluster_count; i++) {
+    for (uint8_t i = 0; i < pSimpleDesc->app_out_cluster_count; i++) {
         if (clusterID == pSimpleDesc->app_out_cluster_lst[i]) {
             return TRUE;
         }
@@ -392,7 +392,7 @@ _CODE_AF_ bool af_clsuterIdMatched(u16 clusterID, af_simple_descriptor_t *pSimpl
     return FALSE;
 }
 
-_CODE_AF_ bool af_profileIdMatched(u16 profileID, af_simple_descriptor_t *pSimpleDesc)
+_CODE_AF_ bool af_profileIdMatched(uint16_t profileID, af_simple_descriptor_t *pSimpleDesc)
 {
     if (!pSimpleDesc) {
         return FALSE;
@@ -415,7 +415,7 @@ _CODE_AF_ bool af_profileIdMatched(u16 profileID, af_simple_descriptor_t *pSimpl
  * @return	TRUE: add success
  * 		FALSE: endpoint full, no space, add fail
  */
-_CODE_AF_ bool af_endpointRegister(u8 ep, af_simple_descriptor_t *simple_desc, af_endpoint_cb_t rx_cb, af_dataCnf_cb_t cnfCb)
+_CODE_AF_ bool af_endpointRegister(uint8_t ep, af_simple_descriptor_t *simple_desc, af_endpoint_cb_t rx_cb, af_dataCnf_cb_t cnfCb)
 {
     if (ep == ZDO_EP) {
         zdo_epDesc.ep = ep;
@@ -425,7 +425,7 @@ _CODE_AF_ bool af_endpointRegister(u8 ep, af_simple_descriptor_t *simple_desc, a
         return TRUE;
     }
 
-    for (u8 i = 0; i < MAX_ACTIVE_EP_NUMBER; i++) {
+    for (uint8_t i = 0; i < MAX_ACTIVE_EP_NUMBER; i++) {
         if (aed[i].ep == ep) {
             return FALSE;
         }
@@ -443,13 +443,13 @@ _CODE_AF_ bool af_endpointRegister(u8 ep, af_simple_descriptor_t *simple_desc, a
     return TRUE;
 }
 
-_CODE_AF_ bool af_endpointUnregister(u8 ep)
+_CODE_AF_ bool af_endpointUnregister(uint8_t ep)
 {
-    for (u8 i = 0; i < available_active_ep_num; i++) {
+    for (uint8_t i = 0; i < available_active_ep_num; i++) {
         if (aed[i].ep == ep) {
-            TL_SETSTRUCTCONTENT(aed[i], 0);
+            ZB_SETSTRUCTCONTENT(aed[i], 0);
             if ((i + 1) != available_active_ep_num) {
-                memcpy((u8 *)&aed[i], (u8 *)&aed[i + 1], sizeof(aed[i]) * (available_active_ep_num - i));
+                memcpy((uint8_t *)&aed[i], (uint8_t *)&aed[i + 1], sizeof(aed[i]) * (available_active_ep_num - i));
             }
             available_active_ep_num--;
             return TRUE;

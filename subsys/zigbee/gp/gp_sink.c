@@ -54,7 +54,7 @@ gps_ctx_t g_gpsCtx = {
 /**********************************************************************
  * FUNCTIONS
  */
-void gp_sinkInit(u8 endpoint)
+void gp_sinkInit(uint8_t endpoint)
 {
     g_gpsCtx.gpsAppEndpoint = endpoint;
 
@@ -66,13 +66,13 @@ void gp_sinkInit(u8 endpoint)
     COPY_U24TOBUFFER(zclGpAttr_gpsActiveFunc, GPS_ACTIVE_FUNCTIONALITY);
 }
 
-gpSecRsp_status_t gpSinkSecOperation(u8 appId, gpdId_t gpdId,
-                                     u8 endpoint, u32 gpdSecFrameCnt,
-                                     u8 gpdfSecurityLevel, u8 gpdfKeyType,
-                                     u8 *pKeyType, u8 *pKey)
+gpSecRsp_status_t gpSinkSecOperation(uint8_t appId, gpdId_t gpdId,
+                                     uint8_t endpoint, uint32_t gpdSecFrameCnt,
+                                     uint8_t gpdfSecurityLevel, uint8_t gpdfKeyType,
+                                     uint8_t *pKeyType, uint8_t *pKey)
 {
-    u8 secChkFail = FALSE;
-    u8 epChkFail = FALSE;
+    uint8_t secChkFail = FALSE;
+    uint8_t epChkFail = FALSE;
     gpSecRsp_status_t status = GP_SEC_RSP_STATUS_MATCH;
 
     //A.3.7.3.1.2
@@ -139,12 +139,12 @@ gpSecRsp_status_t gpSinkSecOperation(u8 appId, gpdId_t gpdId,
     }
 }
 
-static gpSecRsp_status_t gpSinkTunneledSecOperation(u8 appId, gpdId_t gpdId,
-                                                    u8 endpoint, u32 gpdSecFrameCnt,
-                                                    u8 secLevel, u8 secKeyType,
-                                                    u8 *pKeyType, u8 *pKey)
+static gpSecRsp_status_t gpSinkTunneledSecOperation(uint8_t appId, gpdId_t gpdId,
+                                                    uint8_t endpoint, uint32_t gpdSecFrameCnt,
+                                                    uint8_t secLevel, uint8_t secKeyType,
+                                                    uint8_t *pKeyType, uint8_t *pKey)
 {
-    u8 gpdfKeyType = (secKeyType >= GP_SEC_KEY_TYPE_OUT_OF_THE_BOX_GPD_KEY) ? 1 : 0;
+    uint8_t gpdfKeyType = (secKeyType >= GP_SEC_KEY_TYPE_OUT_OF_THE_BOX_GPD_KEY) ? 1 : 0;
 
     return gpSinkSecOperation(appId, gpdId, endpoint, gpdSecFrameCnt,
                               secLevel, gpdfKeyType, pKeyType, pKey);
@@ -154,7 +154,7 @@ static void gp_sinkTabNoCompleteEntryClear(void)
 {
     //printf("sinkNoCompleteClear\n");
 
-    for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+    for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
         gpSinkTabEntry_t *pEntry = &g_gpSinkTab.gpSinkTab[i];
 
         if ((pEntry->used) && (!pEntry->complete)) {
@@ -167,7 +167,7 @@ static void gp_sinkTabNoCompleteEntryClear(void)
 static void gpProxyCommissioningModeCmdSend(bool enter, bool involveProxies)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstEp = GREEN_POWER_ENDPOINT;
@@ -177,7 +177,7 @@ static void gpProxyCommissioningModeCmdSend(bool enter, bool involveProxies)
     dstEpInfo.radius = 0;
 
     zcl_gp_proxyCommissioningModeCmd_t commMode;
-    TL_SETSTRUCTCONTENT(commMode, 0);
+    ZB_SETSTRUCTCONTENT(commMode, 0);
 
     commMode.options.bits.action = enter;//enter commissioning
     commMode.options.bits.exitMode = EXIT_ON_FIRST_PAIRING_SUCCESS;
@@ -194,13 +194,13 @@ static void gpProxyCommissioningModeCmdSend(bool enter, bool involveProxies)
     }
 }
 
-static s32 gpMultiSensorCommTimeoutCb(void *arg)
+static int32_t gpMultiSensorCommTimeoutCb(void *arg)
 {
     gpSinkTabEntry_t *pSinkEntry = (gpSinkTabEntry_t *)arg;
 
     //printf("gpMultiCommTimeoutCb: evt = %x\n", g_gpsCtx.gpsMultiSensorCommTimeoutEvt);
 
-    for (u8 i = 0; i < GPS_MULTI_BUF_SIZE_MAX; i++) {
+    for (uint8_t i = 0; i < GPS_MULTI_BUF_SIZE_MAX; i++) {
         if (g_gpsCtx.pMultiSensorCommBuf[i]) {
             ev_buf_free(g_gpsCtx.pMultiSensorCommBuf[i]);
             g_gpsCtx.pMultiSensorCommBuf[i] = NULL;
@@ -225,9 +225,9 @@ static void gpMultiSensorCommTimeoutStop(void)
     //printf("gpMultiCommEvtStop: evt = %x\n", g_gpsCtx.gpsMultiSensorCommTimeoutEvt);
 
     if (g_gpsCtx.gpsMultiSensorCommTimeoutEvt) {
-        TL_ZB_TIMER_CANCEL(&g_gpsCtx.gpsMultiSensorCommTimeoutEvt);
+        ZB_TIMER_CANCEL(&g_gpsCtx.gpsMultiSensorCommTimeoutEvt);
 
-        for (u8 i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
+        for (uint8_t i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
             if (g_gpsCtx.pMultiSensorCommBuf[i]) {
                 ev_buf_free(g_gpsCtx.pMultiSensorCommBuf[i]);
                 g_gpsCtx.pMultiSensorCommBuf[i] = NULL;
@@ -254,11 +254,11 @@ static void gpsCommissioningModeExit(void)
 static void gpsCommissioningWindowTimeoutStop(void)
 {
     if (g_gpsCtx.gpsCommWindowTimeoutEvt) {
-        TL_ZB_TIMER_CANCEL(&g_gpsCtx.gpsCommWindowTimeoutEvt);
+        ZB_TIMER_CANCEL(&g_gpsCtx.gpsCommWindowTimeoutEvt);
     }
 }
 
-static s32 gpsCommissioningWindowTimeoutCb(void *arg)
+static int32_t gpsCommissioningWindowTimeoutCb(void *arg)
 {
     //printf("gpsCommWinTimeout\n");
 
@@ -277,7 +277,7 @@ static s32 gpsCommissioningWindowTimeoutCb(void *arg)
     return -1;
 }
 
-u8 gpsCommissionModeSet(bool action, bool involveProxies)
+uint8_t gpsCommissionModeSet(bool action, bool involveProxies)
 {
     if (zclGpAttr_gpsSecLevel & GPS_INVOLVE_TC) {
         return FAILURE;
@@ -292,7 +292,7 @@ u8 gpsCommissionModeSet(bool action, bool involveProxies)
             gpsCommissioningWindowTimeoutStop();
 
             if (zclGpAttr_gpsCommWindow) {
-                g_gpsCtx.gpsCommWindowTimeoutEvt = TL_ZB_TIMER_SCHEDULE(gpsCommissioningWindowTimeoutCb,
+                g_gpsCtx.gpsCommWindowTimeoutEvt = ZB_TIMER_SCHEDULE(gpsCommissioningWindowTimeoutCb,
                                                                         NULL,
                                                                         zclGpAttr_gpsCommWindow * 1000);
             }
@@ -332,7 +332,7 @@ static status_t gpSinkCommModeCmdProcess(zcl_gp_sinkCommissioningModeCmd_t *pCmd
 static void gpPairingCmdSend(zcl_gp_pairingCmd_t *pCmd)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstEp = GREEN_POWER_ENDPOINT;
     dstEpInfo.profileId = GP_PROFILE_ID;
@@ -347,7 +347,7 @@ static void gpPairingCmdSend(zcl_gp_pairingCmd_t *pCmd)
 static void gpPairingCfgCmdSend(zcl_gp_pairingConfigurationCmd_t *pCmd)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstEp = GREEN_POWER_ENDPOINT;
     dstEpInfo.profileId = GP_PROFILE_ID;
@@ -359,7 +359,7 @@ static void gpPairingCfgCmdSend(zcl_gp_pairingConfigurationCmd_t *pCmd)
     zcl_gp_pairingCfgCmdSend(GREEN_POWER_ENDPOINT, &dstEpInfo, TRUE, pCmd);
 }
 
-static void gpDecommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint)
+static void gpDecommissioningHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint)
 {
     gpSinkTabEntry_t *pSinkEntry = gp_getSinkTabByGpdId(appId, gpdId);
     if (!pSinkEntry) {
@@ -377,7 +377,7 @@ static void gpDecommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint)
         return;
     }
 
-    memset((u8 *)pPairingCmd, 0, sizeof(zcl_gp_pairingCmd_t));
+    memset((uint8_t *)pPairingCmd, 0, sizeof(zcl_gp_pairingCmd_t));
 
     pPairingCmd->options.bits.appId = appId;
     if (pPairingCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
@@ -390,7 +390,7 @@ static void gpDecommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint)
 
     gpPairingCmdSend(pPairingCmd);
 
-    ev_buf_free((u8 *)pPairingCmd);
+    ev_buf_free((uint8_t *)pPairingCmd);
 
     if (g_gpsCtx.gpsInCommMode &&
         pSinkEntry->options.bits.communicationMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
@@ -399,7 +399,7 @@ static void gpDecommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint)
             return;
         }
 
-        memset((u8 *)pCfgCmd, 0, sizeof(zcl_gp_pairingConfigurationCmd_t));
+        memset((uint8_t *)pCfgCmd, 0, sizeof(zcl_gp_pairingConfigurationCmd_t));
 
         pCfgCmd->actions.bits.action = REMOVE_GPD;
         if (pCfgCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
@@ -414,17 +414,17 @@ static void gpDecommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint)
 
         gpPairingCfgCmdSend(pCfgCmd);
 
-        ev_buf_free((u8 *)pCfgCmd);
+        ev_buf_free((uint8_t *)pCfgCmd);
     }
 
     gp_transTabEntryRemove(appId, gpdId, endpoint);
     gp_sinkRemoveEntries(appId, gpdId, endpoint);
 }
 
-static void gpdDataHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                           u8 gpdfSecLevel, u8 gpdfSecKeyType,
-                           u32 gpdSecFrameCnt, u8 gpdCmdId,
-                           u8 dataLen, u8 *pData)
+static void gpdDataHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                           uint8_t gpdfSecLevel, uint8_t gpdfSecKeyType,
+                           uint32_t gpdSecFrameCnt, uint8_t gpdCmdId,
+                           uint8_t dataLen, uint8_t *pData)
 {
     //printf("gpdDataHandler: gpdCmdId = %x, len = %d\n", gpdCmdId, dataLen);
     if (dataLen) {
@@ -500,7 +500,7 @@ static void gpResponseCmdSend(zcl_gp_responseCmd_t *pRspCmd)
     //printf("gpRspSend: cmdId = %x\n", pRspCmd->gpdCmdID);
 
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
     dstEpInfo.dstEp = GREEN_POWER_ENDPOINT;
     dstEpInfo.profileId = GP_PROFILE_ID;
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
@@ -517,12 +517,12 @@ static void gpResponseCmdSend(zcl_gp_responseCmd_t *pRspCmd)
         }
 
         gp_data_req_t gpDataReq;
-        TL_SETSTRUCTCONTENT(gpDataReq, 0);
+        ZB_SETSTRUCTCONTENT(gpDataReq, 0);
 
         gpDataReq.action = TRUE;
         gpDataReq.txOptions.useGpTxQueue = 1;
         gpDataReq.appId = pRspCmd->options.bits.appId;
-        memcpy((u8 *)&gpDataReq.gpdId, (u8 *)&pRspCmd->gpdId, sizeof(gpdId_t));
+        memcpy((uint8_t *)&gpDataReq.gpdId, (uint8_t *)&pRspCmd->gpdId, sizeof(gpdId_t));
         gpDataReq.endpoint = pRspCmd->endpoint;
         gpDataReq.gpdCmdId = pRspCmd->gpdCmdID;
         gpDataReq.gpdAsduLen = pRspCmd->payloadLen;
@@ -534,52 +534,52 @@ static void gpResponseCmdSend(zcl_gp_responseCmd_t *pRspCmd)
     }
 }
 
-static s32 switchToTxChannelDelayCb(void *arg)
+static int32_t switchToTxChannelDelayCb(void *arg)
 {
-    u8 tempMasterTxChannel = (u8)((u32)arg & 0xff);
+    uint8_t tempMasterTxChannel = (uint8_t)((uint32_t)arg & 0xff);
 
-    u8 operationChannel = g_zbMacPib.phyChannelCur - TL_ZB_MAC_CHANNEL_START;
+    uint8_t operationChannel = g_zbMacPib.phyChannelCur - ZB_MAC_CHANNEL_START;
 
     gpSwitchToTransmitChannel(operationChannel, tempMasterTxChannel);
 
     return -1;
 }
 
-static void gpChannelRequestHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                    u16 tempMasterAddr, u8 tempMasterTxChn,
+static void gpChannelRequestHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                    uint16_t tempMasterAddr, uint8_t tempMasterTxChn,
                                     gpd_channelConfigurationCmd_payload_t *pChnCfg)
 {
     //printf("chnReqHandler\n");
 
-    u8 len = sizeof(zcl_gp_responseCmd_t) + sizeof(gpd_channelConfigurationCmd_payload_t);
+    uint8_t len = sizeof(zcl_gp_responseCmd_t) + sizeof(gpd_channelConfigurationCmd_payload_t);
 
     zcl_gp_responseCmd_t *pRsp = (zcl_gp_responseCmd_t *)ev_buf_allocate(len);
     if (!pRsp) {
         return;
     }
 
-    memset((u8 *)pRsp, 0, len);
+    memset((uint8_t *)pRsp, 0, len);
 
     pRsp->options.bits.appId = appId;
-    memcpy((u8 *)&pRsp->gpdId, (u8 *)&gpdId, sizeof(gpdId_t));
+    memcpy((uint8_t *)&pRsp->gpdId, (uint8_t *)&gpdId, sizeof(gpdId_t));
     pRsp->endpoint =  endpoint;
     pRsp->tempMasterShortAddr = tempMasterAddr;
     pRsp->tempMasterTxChannel = tempMasterTxChn;
     pRsp->gpdCmdID = GPDF_CMD_ID_CHANNEL_CONFIGURATION;
     pRsp->payloadLen = sizeof(gpd_channelConfigurationCmd_payload_t);
-    pRsp->pGpdCmdPayload = (u8 *)pRsp + sizeof(zcl_gp_responseCmd_t);
-    memcpy(pRsp->pGpdCmdPayload, (u8 *)&pChnCfg->channel, sizeof(gpd_channelConfigurationCmd_payload_t));
+    pRsp->pGpdCmdPayload = (uint8_t *)pRsp + sizeof(zcl_gp_responseCmd_t);
+    memcpy(pRsp->pGpdCmdPayload, (uint8_t *)&pChnCfg->channel, sizeof(gpd_channelConfigurationCmd_payload_t));
 
     gpResponseCmdSend(pRsp);
 
-    ev_buf_free((u8*)pRsp);
+    ev_buf_free((uint8_t*)pRsp);
 
     if (tempMasterAddr == NIB_NETWORK_ADDRESS()) {
         //wait broadcast send, switch to tx channel.
-        u8 gppTunnelingDelay = gppTunnelingDelayGet(TRUE, 32, TRUE, FALSE);
-        u32 txChn = (u32)tempMasterTxChn;
+        uint8_t gppTunnelingDelay = gppTunnelingDelayGet(TRUE, 32, TRUE, FALSE);
+        uint32_t txChn = (uint32_t)tempMasterTxChn;
         //printf("delay: %d\n", gppTunnelingDelay);
-        TL_ZB_TIMER_SCHEDULE(switchToTxChannelDelayCb, (void *)txChn, gppTunnelingDelay);
+        ZB_TIMER_SCHEDULE(switchToTxChannelDelayCb, (void *)txChn, gppTunnelingDelay);
     }
 }
 
@@ -590,21 +590,21 @@ static void gpChannelReqCmdHandler(zcl_gp_commissioningNotificationCmd_t *pCmd)
     }
 
     gpd_channelRequestCmd_payload_t chnReq;
-    TL_SETSTRUCTCONTENT(chnReq, 0);
+    ZB_SETSTRUCTCONTENT(chnReq, 0);
     chnReq.chTogglingBehavior = pCmd->pGpdCmdPayload[0];
 
     gpd_channelConfigurationCmd_payload_t chnCfg;
-    TL_SETSTRUCTCONTENT(chnCfg, 0);
-    chnCfg.bits.operationChannel = g_zbMacPib.phyChannelCur - TL_ZB_MAC_CHANNEL_START;
+    ZB_SETSTRUCTCONTENT(chnCfg, 0);
+    chnCfg.bits.operationChannel = g_zbMacPib.phyChannelCur - ZB_MAC_CHANNEL_START;
     chnCfg.bits.basic = (!pCmd->options.bits.bidirectionalCap) ? 1 : 0;
 
     gpChannelRequestHandler(pCmd->options.bits.appId, pCmd->gpdId, pCmd->endpoint,
                             pCmd->gppShortAddr, chnReq.bits.rxChNext, &chnCfg);
 }
 
-static u8 gpCommissioningParse(gpd_commissioning_payload_t *pCmd, u8 *gpdPayload)
+static uint8_t gpCommissioningParse(gpd_commissioning_payload_t *pCmd, uint8_t *gpdPayload)
 {
-    u8 *pBuf = gpdPayload;
+    uint8_t *pBuf = gpdPayload;
 
     pCmd->deviceId = *pBuf++;
     pCmd->options.opts = *pBuf++;
@@ -641,7 +641,7 @@ static u8 gpCommissioningParse(gpd_commissioning_payload_t *pCmd, u8 *gpdPayload
     }
     if (pCmd->appInfo.bits.clusterListPresent) {
         pCmd->clusterList = pBuf;
-        pBuf += (((*pBuf) & 0x0f) + ((*pBuf) & 0xf0)) * sizeof(u16) + 1;
+        pBuf += (((*pBuf) & 0x0f) + ((*pBuf) & 0xf0)) * sizeof(uint16_t) + 1;
     }
     if (pCmd->appInfo.bits.switchInfoPresent) {
         pCmd->switchInfo.switchInfoLen = *pBuf++;
@@ -652,14 +652,14 @@ static u8 gpCommissioningParse(gpd_commissioning_payload_t *pCmd, u8 *gpdPayload
     return (pBuf - gpdPayload);
 }
 
-static gpSinkTabEntry_t *gpSinkTableEntryCommUpdate(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                                    bool rxAfterTx, u32 gpdSecFrameCnt,
+static gpSinkTabEntry_t *gpSinkTableEntryCommUpdate(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                                    bool rxAfterTx, uint32_t gpdSecFrameCnt,
                                                     gpd_commissioning_payload_t *pCommissioning)
 {
     gpSinkTabEntry_t *pSinkEntry = NULL;
 
-    u8 sinkAttrMinSecLevel = zclGpAttr_gpsSecLevel & 0x03;
-    u8 protectWithGpLinkkey = zclGpAttr_gpsSecLevel & GPS_PROTECTION_WITH_GPLINKKEY;
+    uint8_t sinkAttrMinSecLevel = zclGpAttr_gpsSecLevel & 0x03;
+    uint8_t protectWithGpLinkkey = zclGpAttr_gpsSecLevel & GPS_PROTECTION_WITH_GPLINKKEY;
 
     if (pCommissioning->options.bits.extOpPresent) {
         if ((pCommissioning->extOptions.bits.secLevelCap == GP_SEC_LEVEL_RESERVED) ||
@@ -681,7 +681,7 @@ static gpSinkTabEntry_t *gpSinkTableEntryCommUpdate(u8 appId, gpdId_t gpdId, u8 
     if (pCommissioning->extOptions.bits.gpdKeyEncrypt && pCommissioning->extOptions.bits.gpdKeyPresent) {
         if (SUCCESS != gpdKeyWithTCLK(appId, gpdId,
                                       SEC_KEY_LEN, pCommissioning->gpdSecKey,
-                                      pCommissioning->gpdOutGoingCounter, (u8 *)&pCommissioning->gpdMIC,
+                                      pCommissioning->gpdOutGoingCounter, (uint8_t *)&pCommissioning->gpdMIC,
                                       zclGpAttr_gpLinkKey, FALSE))
         {
             //printf("gpdKeyWithTCLK FAIL.\n");
@@ -775,7 +775,7 @@ static gpSinkTabEntry_t *gpSinkTableEntryCommUpdate(u8 appId, gpdId_t gpdId, u8 
 static void gpAppDescFollowHandler(gpSinkTabEntry_t *pSinkEntry)
 {
     if (!g_gpsCtx.gpsMultiSensorCommTimeoutEvt) {
-        g_gpsCtx.gpsMultiSensorCommTimeoutEvt = TL_ZB_TIMER_SCHEDULE(gpMultiSensorCommTimeoutCb,
+        g_gpsCtx.gpsMultiSensorCommTimeoutEvt = ZB_TIMER_SCHEDULE(gpMultiSensorCommTimeoutCb,
                                                                      (void *)pSinkEntry,
                                                                      g_gpsCtx.multiSensorCommTime * 1000);
 
@@ -787,9 +787,9 @@ static void gpAppDescFollowHandler(gpSinkTabEntry_t *pSinkEntry)
     }
 }
 
-static u8 gpCommissioningReplyCmdLenGet(gpd_commissioningReply_payload_t *pCmd)
+static uint8_t gpCommissioningReplyCmdLenGet(gpd_commissioningReply_payload_t *pCmd)
 {
-    u8 len = 1;
+    uint8_t len = 1;
 
     if (pCmd->options.bits.panIdPresent) {
         len += 2;
@@ -810,9 +810,9 @@ static u8 gpCommissioningReplyCmdLenGet(gpd_commissioningReply_payload_t *pCmd)
     return len;
 }
 
-static void gpCommissioningReplyFormatBuild(gpd_commissioningReply_payload_t *pCmd, u8 *pBuf)
+static void gpCommissioningReplyFormatBuild(gpd_commissioningReply_payload_t *pCmd, uint8_t *pBuf)
 {
-    u8 *ptr = pBuf;
+    uint8_t *ptr = pBuf;
 
     *ptr++ = pCmd->options.opts;
 
@@ -841,10 +841,10 @@ static void gpCommissioningReplyFormatBuild(gpd_commissioningReply_payload_t *pC
     }
 }
 
-static void gpCommissioningReplyCmdSend(gpSinkTabEntry_t *pSinkEntry, u16 gppShortAddr)
+static void gpCommissioningReplyCmdSend(gpSinkTabEntry_t *pSinkEntry, uint16_t gppShortAddr)
 {
     gpd_commissioningReply_payload_t reply;
-    TL_SETSTRUCTCONTENT(reply, 0);
+    ZB_SETSTRUCTCONTENT(reply, 0);
 
     reply.options.bits.keyType = pSinkEntry->secOptions.bits.secKeyType;
     reply.options.bits.securityLevel = pSinkEntry->secOptions.bits.secLevel;
@@ -862,12 +862,12 @@ static void gpCommissioningReplyCmdSend(gpSinkTabEntry_t *pSinkEntry, u16 gppSho
 
             gpdKeyWithTCLK(pSinkEntry->options.bits.appId, pSinkEntry->gpdId,
                            SEC_KEY_LEN, reply.key,
-                           reply.frameCounter, (u8 *)&reply.keyMIC,
+                           reply.frameCounter, (uint8_t *)&reply.keyMIC,
                            zclGpAttr_gpLinkKey, TRUE);
         }
     }
 
-    u8 payloadLen = gpCommissioningReplyCmdLenGet(&reply);
+    uint8_t payloadLen = gpCommissioningReplyCmdLenGet(&reply);
 
     zcl_gp_responseCmd_t *pRsp = (zcl_gp_responseCmd_t *)ev_buf_allocate(sizeof(zcl_gp_responseCmd_t) + payloadLen);
     if (!pRsp) {
@@ -877,18 +877,18 @@ static void gpCommissioningReplyCmdSend(gpSinkTabEntry_t *pSinkEntry, u16 gppSho
     memset(pRsp, 0, sizeof(zcl_gp_responseCmd_t) + payloadLen);
 
     pRsp->options.bits.appId = pSinkEntry->options.bits.appId;
-    memcpy((u8 *)&pRsp->gpdId, (u8 *)&pSinkEntry->gpdId, sizeof(gpdId_t));
+    memcpy((uint8_t *)&pRsp->gpdId, (uint8_t *)&pSinkEntry->gpdId, sizeof(gpdId_t));
     pRsp->endpoint = pSinkEntry->endpoint;
     pRsp->tempMasterShortAddr = gppShortAddr;
-    pRsp->tempMasterTxChannel = rf_getChannel() - TL_ZB_MAC_CHANNEL_START;
+    pRsp->tempMasterTxChannel = rf_getChannel() - ZB_MAC_CHANNEL_START;
     pRsp->gpdCmdID = GPDF_CMD_ID_COMMISSIONING_REPLY;
     pRsp->payloadLen = payloadLen;
-    pRsp->pGpdCmdPayload = (u8 *)pRsp + sizeof(zcl_gp_responseCmd_t);
+    pRsp->pGpdCmdPayload = (uint8_t *)pRsp + sizeof(zcl_gp_responseCmd_t);
     gpCommissioningReplyFormatBuild(&reply, pRsp->pGpdCmdPayload);
 
     gpResponseCmdSend(pRsp);
 
-    ev_buf_free((u8*)pRsp);
+    ev_buf_free((uint8_t*)pRsp);
 }
 
 static void gpPairingAddSink(gpSinkTabEntry_t *pSinkEntry)
@@ -898,7 +898,7 @@ static void gpPairingAddSink(gpSinkTabEntry_t *pSinkEntry)
         return;
     }
 
-    memset((u8 *)pCmd, 0, sizeof(zcl_gp_pairingCmd_t));
+    memset((uint8_t *)pCmd, 0, sizeof(zcl_gp_pairingCmd_t));
 
     pCmd->options.bits.appId = pSinkEntry->options.bits.appId;
     pCmd->options.bits.addSink = 1;
@@ -952,14 +952,14 @@ static void gpPairingAddSink(gpSinkTabEntry_t *pSinkEntry)
 
         gpPairingCmdSend(pCmd);
     } else if (pCmd->options.bits.commMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
-        for (u8 i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
+        for (uint8_t i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
             pCmd->sinkGroupID = pSinkEntry->groupList[i].groupId;
 
             gpPairingCmdSend(pCmd);
         }
     }
 
-    ev_buf_free((u8 *)pCmd);
+    ev_buf_free((uint8_t *)pCmd);
 }
 
 static void gpPairingCfgAddSink(gpSinkTabEntry_t *pSinkEntry)
@@ -968,8 +968,8 @@ static void gpPairingCfgAddSink(gpSinkTabEntry_t *pSinkEntry)
         return;
     }
 
-    u8 cmdLen = sizeof(zcl_gp_pairingConfigurationCmd_t);
-    u8 groupListLen = pSinkEntry->sinkGroupListCnt * sizeof(gpSinkGroupListItem_t) + 1;
+    uint8_t cmdLen = sizeof(zcl_gp_pairingConfigurationCmd_t);
+    uint8_t groupListLen = pSinkEntry->sinkGroupListCnt * sizeof(gpSinkGroupListItem_t) + 1;
 
     cmdLen += groupListLen;
 
@@ -978,9 +978,9 @@ static void gpPairingCfgAddSink(gpSinkTabEntry_t *pSinkEntry)
         return;
     }
 
-    memset((u8 *)pCmd, 0, cmdLen);
+    memset((uint8_t *)pCmd, 0, cmdLen);
 
-    pCmd->pGroupList = (u8 *)pCmd + sizeof(zcl_gp_pairingConfigurationCmd_t);
+    pCmd->pGroupList = (uint8_t *)pCmd + sizeof(zcl_gp_pairingConfigurationCmd_t);
 
     pCmd->actions.bits.action = EXTEND_SINK_TABLE_ENTRY;
     pCmd->actions.bits.sendGpPairing = 0;
@@ -999,8 +999,8 @@ static void gpPairingCfgAddSink(gpSinkTabEntry_t *pSinkEntry)
 
     pCmd->pGroupList[0] = pSinkEntry->sinkGroupListCnt;
     if (pCmd->pGroupList[0]) {
-        u8 *pData = &pCmd->pGroupList[1];
-        for (u8 i = 0; i < pCmd->pGroupList[0]; i++) {
+        uint8_t *pData = &pCmd->pGroupList[1];
+        for (uint8_t i = 0; i < pCmd->pGroupList[0]; i++) {
             *pData++ = LO_UINT16(pSinkEntry->groupList[i].groupId);
             *pData++ = HI_UINT16(pSinkEntry->groupList[i].groupId);
             *pData++ = LO_UINT16(pSinkEntry->groupList[i].alias);
@@ -1042,7 +1042,7 @@ static void gpPairingCfgAddSink(gpSinkTabEntry_t *pSinkEntry)
 
     gpPairingCfgCmdSend(pCmd);
 
-    ev_buf_free((u8 *)pCmd);
+    ev_buf_free((uint8_t *)pCmd);
 }
 
 static void gpPairingCfgAppDesc(gpSinkTabEntry_t *pSinkEntry)
@@ -1056,7 +1056,7 @@ static void gpPairingCfgAppDesc(gpSinkTabEntry_t *pSinkEntry)
         return;
     }
 
-    memset((u8 *)pCmd, 0, sizeof(zcl_gp_pairingConfigurationCmd_t));
+    memset((uint8_t *)pCmd, 0, sizeof(zcl_gp_pairingConfigurationCmd_t));
 
     pCmd->actions.bits.action = APPLICATION_DESCRIPTION;
     pCmd->actions.bits.sendGpPairing = 0;
@@ -1079,8 +1079,8 @@ static void gpPairingCfgAppDesc(gpSinkTabEntry_t *pSinkEntry)
 
     pCmd->appInfo.info = 0;
 
-    for (u8 i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
-        u8 *pBuf = g_gpsCtx.pMultiSensorCommBuf[i];
+    for (uint8_t i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
+        uint8_t *pBuf = g_gpsCtx.pMultiSensorCommBuf[i];
         if (pBuf) {
             pCmd->reportDescLen = pBuf[0];
             pCmd->pReportDescriptor = &pBuf[1];
@@ -1094,10 +1094,10 @@ static void gpPairingCfgAppDesc(gpSinkTabEntry_t *pSinkEntry)
         }
     }
 
-    ev_buf_free((u8 *)pCmd);
+    ev_buf_free((uint8_t *)pCmd);
 }
 
-static void gpCommissioningFinalization(u8 appId, gpdId_t gpdId, u8 endpoint)
+static void gpCommissioningFinalization(uint8_t appId, gpdId_t gpdId, uint8_t endpoint)
 {
     gpSinkTabEntry_t *pSinkEntry = gp_getSinkTabByGpdId(appId, gpdId);
     if (!pSinkEntry) {
@@ -1105,7 +1105,7 @@ static void gpCommissioningFinalization(u8 appId, gpdId_t gpdId, u8 endpoint)
     }
 
     aps_add_group_req_t addGroupReq;
-    TL_SETSTRUCTCONTENT(addGroupReq, 0);
+    ZB_SETSTRUCTCONTENT(addGroupReq, 0);
 
     if (pSinkEntry->options.bits.communicationMode == GPS_COMM_MODE_GROUP_DGROUPID) {
         addGroupReq.ep = GREEN_POWER_ENDPOINT;
@@ -1118,7 +1118,7 @@ static void gpCommissioningFinalization(u8 appId, gpdId_t gpdId, u8 endpoint)
         gp_sinkGroupListAdd(pSinkEntry, g_gpsCtx.gpsAppEndpoint);
 
         //TODO: add group?
-        for (u8 i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
+        for (uint8_t i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
             addGroupReq.ep = GREEN_POWER_ENDPOINT;
             addGroupReq.group_addr = pSinkEntry->groupList[i].groupId;
 
@@ -1143,7 +1143,7 @@ static void gpCommissioningFinalization(u8 appId, gpdId_t gpdId, u8 endpoint)
      * commissioning is independently triggered.
      */
     if (pSinkEntry->options.bits.communicationMode != GPS_COMM_MODE_LIGHTWEIGHT_UNICAST) {
-        u16 addrAlias = gpAliasSrcAddrDerived(appId, gpdId);
+        uint16_t addrAlias = gpAliasSrcAddrDerived(appId, gpdId);
         gpDevAnnceAliasSend(addrAlias);
     }
 
@@ -1163,10 +1163,10 @@ static void gpCommissioningFinalization(u8 appId, gpdId_t gpdId, u8 endpoint)
     }
 }
 
-static void gpCommissioningHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                   u8 gpdfSecKeyType, u8 gpdfSecLevel,
-                                   u32 gpdSecFrameCnt, bool rxAfterTx,
-                                   u16 tempMasterAddr, gpd_commissioning_payload_t *pCommissioning)
+static void gpCommissioningHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                   uint8_t gpdfSecKeyType, uint8_t gpdfSecLevel,
+                                   uint32_t gpdSecFrameCnt, bool rxAfterTx,
+                                   uint16_t tempMasterAddr, gpd_commissioning_payload_t *pCommissioning)
 {
     //printf("gpCommissionHandler: gpdfKeyType = %x, gpdfSecLvl = %x, gpdfSecFC = %x, rx = %x, masterAddr = %x\n",
     //       gpdfSecKeyType, gpdfSecLevel, gpdSecFrameCnt, rxAfterTx, tempMasterAddr);
@@ -1223,7 +1223,7 @@ static void gpCommissioningCmdHandler(zcl_gp_commissioningNotificationCmd_t *pCm
     }
 
     gpd_commissioning_payload_t commissioning;
-    TL_SETSTRUCTCONTENT(commissioning, 0);
+    ZB_SETSTRUCTCONTENT(commissioning, 0);
 
     commissioning.payloadLen = gpCommissioningParse(&commissioning, pCmd->pGpdCmdPayload);
 
@@ -1233,8 +1233,8 @@ static void gpCommissioningCmdHandler(zcl_gp_commissioningNotificationCmd_t *pCm
                            pCmd->gppShortAddr, &commissioning);
 }
 
-static void gpSuccessHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                             u8 gpdfSecLevel, u8 gpdfSecKeyType, u32 gpdSecFrameCnt)
+static void gpSuccessHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                             uint8_t gpdfSecLevel, uint8_t gpdfSecKeyType, uint32_t gpdSecFrameCnt)
 {
     //printf("gpSuccessHandler: level = %x, keyType = %x, fc = %x\n",
     //       gpdfSecLevel, gpdfSecKeyType, gpdSecFrameCnt);
@@ -1295,9 +1295,9 @@ static void gpDecommissioningCmdHandler(zcl_gp_commissioningNotificationCmd_t *p
     gpDecommissioningHandler(pCmd->options.bits.appId, pCmd->gpdId, pCmd->endpoint);
 }
 
-static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                             bool rxAfterTx, u16 tempMasterAddr,
-                             u8 appDescLen, u8 *pAppDesc, bool wait)
+static void gpAppDescHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                             bool rxAfterTx, uint16_t tempMasterAddr,
+                             uint8_t appDescLen, uint8_t *pAppDesc, bool wait)
 {
     //printf("appDescHandler: descLen = %d, rxAfterTx = %x, masterAddr = %x\n",
     //       appDescLen, rxAfterTx, tempMasterAddr);
@@ -1318,7 +1318,7 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
         return;
     }
 
-    u8 *pData = pAppDesc;
+    uint8_t *pData = pAppDesc;
 
     gpd_appDesc_payload_t appDesc;
 
@@ -1331,9 +1331,9 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
 
     bool lastFrame = wait ? FALSE : TRUE;
 
-    for (u8 i = 0; i < appDesc.numOfReport; i++) {
+    for (uint8_t i = 0; i < appDesc.numOfReport; i++) {
         gpReportDesc_t reportDesc;
-        TL_SETSTRUCTCONTENT(reportDesc, 0);
+        ZB_SETSTRUCTCONTENT(reportDesc, 0);
 
         reportDesc.reportId = *pData++;
         reportDesc.reportOpt.opts = *pData++;
@@ -1351,14 +1351,14 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
         }
 
         if (reportDesc.remainingLen) {
-            u8 *ptr = NULL;
-            s32 remainLen = reportDesc.remainingLen;
+            uint8_t *ptr = NULL;
+            int32_t remainLen = reportDesc.remainingLen;
 
             do {
                 ptr = pData;
 
                 gpDataPointDesc_t dataPoint;
-                TL_SETSTRUCTCONTENT(dataPoint, 0);
+                ZB_SETSTRUCTCONTENT(dataPoint, 0);
 
                 dataPoint.dataPointOpt.opts = *pData++;
                 dataPoint.clusterId = BUILD_U16(pData[0], pData[1]);
@@ -1367,9 +1367,9 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
                     dataPoint.manuId = BUILD_U16(pData[0], pData[1]);
                     pData += 2;
                 }
-                for (u8 j = 0; j < (dataPoint.dataPointOpt.bits.numOfRecords + 1); j++) {
+                for (uint8_t j = 0; j < (dataPoint.dataPointOpt.bits.numOfRecords + 1); j++) {
                     gpAttrRecord_t attrRecord;
-                    TL_SETSTRUCTCONTENT(attrRecord, 0);
+                    ZB_SETSTRUCTCONTENT(attrRecord, 0);
 
                     attrRecord.attrId = BUILD_U16(pData[0], pData[1]);
                     pData += 2;
@@ -1383,7 +1383,7 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
                         attrRecord.attrOffsetWithinReport = *pData++;
                     }
                     if (attrRecord.attrOption.bits.attrValuePresent) {
-                        u8 valueLen = attrRecord.attrOption.bits.remainingLen + 1;
+                        uint8_t valueLen = attrRecord.attrOption.bits.remainingLen + 1;
                         if (attrRecord.attrOption.bits.reported) {
                             valueLen -= 1;
                         }
@@ -1410,8 +1410,8 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
 
     bool bufCached = FALSE;
 
-    for (u8 i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
-        u8 *pCachedBuf = g_gpsCtx.pMultiSensorCommBuf[i];
+    for (uint8_t i = 0; i < g_gpsCtx.multiSensorCommBufSize; i++) {
+        uint8_t *pCachedBuf = g_gpsCtx.pMultiSensorCommBuf[i];
         if ((pCachedBuf[0] == appDescLen) && !memcmp(&pCachedBuf[1], pAppDesc, appDescLen)) {
             bufCached = TRUE;
         }
@@ -1421,7 +1421,7 @@ static void gpAppDescHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
     //TODO: if clusterId not support, need cache?
     if (!bufCached) {
         if (g_gpsCtx.multiSensorCommBufSize < GPS_MULTI_BUF_SIZE_MAX) {
-            u8 *pBuf = ev_buf_allocate(appDescLen + 1);
+            uint8_t *pBuf = ev_buf_allocate(appDescLen + 1);
             if (!pBuf) {
                 return;
             }
@@ -1463,11 +1463,11 @@ static void gpApplicationDescCmdHandler(zcl_gp_commissioningNotificationCmd_t *p
                      pCmd->payloadLen, pCmd->pGpdCmdPayload, TRUE);
 }
 
-u8 gpSinkCommNotiDecrypt(zcl_gp_commissioningNotificationCmd_t *pCmd)
+uint8_t gpSinkCommNotiDecrypt(zcl_gp_commissioningNotificationCmd_t *pCmd)
 {
-    u8 gpdKey[16] = {0};
-    u8 gpdKeyType = 0;
-    u8 sta = SUCCESS;
+    uint8_t gpdKey[16] = {0};
+    uint8_t gpdKeyType = 0;
+    uint8_t sta = SUCCESS;
 
     gpSecRsp_status_t status = gpSinkTunneledSecOperation(pCmd->options.bits.appId, pCmd->gpdId,
                                                           pCmd->endpoint, pCmd->gpdSecFrameCnt,
@@ -1479,7 +1479,7 @@ u8 gpSinkCommNotiDecrypt(zcl_gp_commissioningNotificationCmd_t *pCmd)
             return SUCCESS;
         }
 
-        u8 *gpdAsdu = ev_buf_allocate(pCmd->payloadLen + 1);
+        uint8_t *gpdAsdu = ev_buf_allocate(pCmd->payloadLen + 1);
         if (!gpdAsdu) {
             return FAILURE;
         }
@@ -1491,7 +1491,7 @@ u8 gpSinkCommNotiDecrypt(zcl_gp_commissioningNotificationCmd_t *pCmd)
             memcpy(&gpdAsdu[1], pCmd->pGpdCmdPayload, pCmd->payloadLen);
         }
 
-        u8 gpdfSecKey = (pCmd->options.bits.secKeyType >= GP_SEC_KEY_TYPE_OUT_OF_THE_BOX_GPD_KEY) ? 1 : 0;
+        uint8_t gpdfSecKey = (pCmd->options.bits.secKeyType >= GP_SEC_KEY_TYPE_OUT_OF_THE_BOX_GPD_KEY) ? 1 : 0;
 
         sta = gpCcmStar(pCmd->options.bits.appId, pCmd->gpdId,
                         gpdfSecKey, pCmd->options.bits.secLevel,
@@ -1559,7 +1559,7 @@ static void gpSinkPairingSend(zcl_gp_pairingConfigurationCmd_t *pCmd, gpSinkTabE
 {
     if (pCmd->actions.bits.action <= REPLACE_SINK_TABLE_ENTRY) {
         if (pSinkEntry->options.bits.communicationMode != GPS_COMM_MODE_LIGHTWEIGHT_UNICAST) {
-            u16 addrAlias = gpAliasSrcAddrDerived(pCmd->options.bits.appId, pCmd->gpdId);
+            uint16_t addrAlias = gpAliasSrcAddrDerived(pCmd->options.bits.appId, pCmd->gpdId);
             gpDevAnnceAliasSend(addrAlias);
         }
     }
@@ -1569,7 +1569,7 @@ static void gpSinkPairingSend(zcl_gp_pairingConfigurationCmd_t *pCmd, gpSinkTabE
         return;
     }
 
-    memset((u8 *)pPairingCmd, 0, sizeof(zcl_gp_pairingCmd_t));
+    memset((uint8_t *)pPairingCmd, 0, sizeof(zcl_gp_pairingCmd_t));
 
     pPairingCmd->options.bits.appId = pCmd->options.bits.appId;
     if (pPairingCmd->options.bits.appId == GP_APP_ID_SRC_ID) {
@@ -1606,12 +1606,12 @@ static void gpSinkPairingSend(zcl_gp_pairingConfigurationCmd_t *pCmd, gpSinkTabE
         gpPairingCmdSend(pPairingCmd);
     } else {
         if (pPairingCmd->options.bits.commMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
-            u8 groupListCnt = 0;
+            uint8_t groupListCnt = 0;
 
             if (pPairingCmd->options.bits.addSink) {
                 groupListCnt = pSinkEntry->sinkGroupListCnt;
 
-                for (u8 i = 0; i < groupListCnt; i++) {
+                for (uint8_t i = 0; i < groupListCnt; i++) {
                     pPairingCmd->sinkGroupID = pSinkEntry->groupList[i].groupId;
                     pPairingCmd->assignedAlias = pSinkEntry->groupList[i].alias;
                     pPairingCmd->options.bits.assignedAliasPresent = (pPairingCmd->assignedAlias == 0xffff) ? 0 : 1;
@@ -1620,9 +1620,9 @@ static void gpSinkPairingSend(zcl_gp_pairingConfigurationCmd_t *pCmd, gpSinkTabE
                 }
             } else {
                 groupListCnt = (pCmd->pGroupList[0] > SINK_GROUP_LIST_NUM) ? SINK_GROUP_LIST_NUM : pCmd->pGroupList[0];
-                u8 *ptr = &pCmd->pGroupList[1];
+                uint8_t *ptr = &pCmd->pGroupList[1];
 
-                for (u8 i = 0; i < groupListCnt; i++) {
+                for (uint8_t i = 0; i < groupListCnt; i++) {
                     pPairingCmd->sinkGroupID = BUILD_U16(ptr[0], ptr[1]);
                     pPairingCmd->assignedAlias = BUILD_U16(ptr[2], ptr[3]);
                     ptr += 4;
@@ -1643,7 +1643,7 @@ static void gpSinkPairingSend(zcl_gp_pairingConfigurationCmd_t *pCmd, gpSinkTabE
         }
     }
 
-    ev_buf_free((u8 *)pPairingCmd);
+    ev_buf_free((uint8_t *)pPairingCmd);
 }
 
 static status_t gpSinkPairingCfgActionHandler(zcl_gp_pairingConfigurationCmd_t *pCmd)
@@ -1741,14 +1741,14 @@ static status_t gpSinkTabEntryCfgHandler(zcl_gp_pairingConfigurationCmd_t *pCmd)
     }
 
     aps_add_group_req_t addGroupReq;
-    TL_SETSTRUCTCONTENT(addGroupReq, 0);
+    ZB_SETSTRUCTCONTENT(addGroupReq, 0);
 
     if (pCmd->options.bits.commMode == GPS_COMM_MODE_GROUP_PRE_COMMISSIONED_GROUPID) {
         pSinkEntry->sinkGroupListCnt = (pCmd->pGroupList[0] > SINK_GROUP_LIST_NUM) ? SINK_GROUP_LIST_NUM
                                                                                    : pCmd->pGroupList[0];
         if (pSinkEntry->sinkGroupListCnt) {
-            u8 *ptr = &pCmd->pGroupList[1];
-            for (u8 i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
+            uint8_t *ptr = &pCmd->pGroupList[1];
+            for (uint8_t i = 0; i < pSinkEntry->sinkGroupListCnt; i++) {
                 pSinkEntry->groupList[i].groupId = BUILD_U16(ptr[0], ptr[1]);
                 pSinkEntry->groupList[i].alias = BUILD_U16(ptr[2], ptr[3]);
                 ptr += 4;
@@ -1805,7 +1805,7 @@ static void gpSinkPairingRemoveHandler(zcl_gp_pairingConfigurationCmd_t *pCmd)
             }
         }
 
-        u8 rmEndPoint = (pCmd->actions.bits.action == REMOVE_A_PAIRING) ? pSinkEntry->endpoint : 0xFF;
+        uint8_t rmEndPoint = (pCmd->actions.bits.action == REMOVE_A_PAIRING) ? pSinkEntry->endpoint : 0xFF;
 
         gp_transTabEntryRemove(pCmd->options.bits.appId, pCmd->gpdId, rmEndPoint);
         gp_sinkRemoveEntries(pCmd->options.bits.appId, pCmd->gpdId, rmEndPoint);
@@ -1868,7 +1868,7 @@ static status_t gpPairingCfgCmdProcess(zcl_gp_pairingConfigurationCmd_t *pCmd)
 static void gpSinkTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_sinkTabReqCmd_t *pCmd)
 {
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
@@ -1876,9 +1876,9 @@ static void gpSinkTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_sink
     dstEpInfo.profileId = pAddrInfo->profileId;
 
     zcl_gp_sinkTabRspCmd_t sinkTabRspCmd;
-    TL_SETSTRUCTCONTENT(sinkTabRspCmd, 0);
+    ZB_SETSTRUCTCONTENT(sinkTabRspCmd, 0);
 
-    u8 *pBuf = NULL;
+    uint8_t *pBuf = NULL;
 
     sinkTabRspCmd.totalTabEntries = gp_getSinkTabEntryTotalNum();
 
@@ -1895,8 +1895,8 @@ static void gpSinkTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_sink
     if (pCmd->options.bits.reqType == REQUEST_TABLE_ENTRIES_BY_GPD_ID) {
         gpSinkTabEntry_t *pEntry = gp_getSinkTabByGpdId(pCmd->options.bits.appId, pCmd->gpdId);
         if (pEntry) {
-            u8 len = gp_getSinkTabEntryLen(pEntry);
-            pBuf = (u8 *)ev_buf_allocate(len);
+            uint8_t len = gp_getSinkTabEntryLen(pEntry);
+            pBuf = (uint8_t *)ev_buf_allocate(len);
             if (!pBuf) {
                 return;
             }
@@ -1920,11 +1920,11 @@ static void gpSinkTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_sink
         sinkTabRspCmd.status = ZCL_STA_NOT_FOUND;
         sinkTabRspCmd.startIdx = pCmd->index;
 
-        u8 entryLen = 0;
-        u8 maxEntryLen = 0;
-        u8 activeEntryCnt = 0;
+        uint8_t entryLen = 0;
+        uint8_t maxEntryLen = 0;
+        uint8_t activeEntryCnt = 0;
 
-        for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+        for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
             maxEntryLen = entryLen;
 
             if (g_gpSinkTab.gpSinkTab[i].used) {
@@ -1946,21 +1946,21 @@ static void gpSinkTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_sink
         activeEntryCnt = 0;
         sinkTabRspCmd.entriesLen = entryLen;
 
-        u8 entriesCnt = sinkTabRspCmd.entriesCnt;
+        uint8_t entriesCnt = sinkTabRspCmd.entriesCnt;
 
         if (entryLen) {
             sinkTabRspCmd.status = ZCL_STA_SUCCESS;
 
-            pBuf = (u8 *)ev_buf_allocate(entryLen);
+            pBuf = (uint8_t *)ev_buf_allocate(entryLen);
             if (!pBuf) {
                 return;
             }
 
             memset(pBuf, 0, entryLen);
 
-            u8 *ptr = pBuf;
+            uint8_t *ptr = pBuf;
 
-            for (u8 i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
+            for (uint8_t i = 0; i < zclGpAttr_gpsMaxSinkTabEntries; i++) {
                 if (g_gpSinkTab.gpSinkTab[i].used) {
                     activeEntryCnt++;
 
@@ -1991,7 +1991,7 @@ static void gpTransTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_tra
     status_t status = ZCL_STA_NOT_FOUND;
 
     epInfo_t dstEpInfo;
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstAddr.shortAddr = pAddrInfo->srcAddr;
@@ -1999,20 +1999,20 @@ static void gpTransTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_tra
     dstEpInfo.profileId = pAddrInfo->profileId;
 
     zcl_gp_transTabRspCmd_t transTabRspCmd;
-    TL_SETSTRUCTCONTENT(transTabRspCmd, 0);
+    ZB_SETSTRUCTCONTENT(transTabRspCmd, 0);
 
-    u8 *pBuf = NULL;
+    uint8_t *pBuf = NULL;
 
-    u8 entryLen = 0;
-    u8 totalLen = 0;
-    u8 activeEntryCnt = 0;
-    u8 appId = 0xff;
+    uint8_t entryLen = 0;
+    uint8_t totalLen = 0;
+    uint8_t activeEntryCnt = 0;
+    uint8_t appId = 0xff;
 
     transTabRspCmd.startIdx = pCmd->startIdx;
     transTabRspCmd.totalNumOfEntries = gp_transTabNumGet();
 
     if (transTabRspCmd.totalNumOfEntries) {
-        for (u8 i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
+        for (uint8_t i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
             if (g_gpTransTab.transTab[i].used) {
                 activeEntryCnt++;
 
@@ -2040,21 +2040,21 @@ static void gpTransTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_tra
 
         activeEntryCnt = 0;
 
-        u8 entriesCnt = transTabRspCmd.entriesCnt;
+        uint8_t entriesCnt = transTabRspCmd.entriesCnt;
 
         //printf("totalLen = %d\n", totalLen);
 
         if (totalLen) {
-            pBuf = (u8 *)ev_buf_allocate(totalLen);
+            pBuf = (uint8_t *)ev_buf_allocate(totalLen);
             if (!pBuf) {
                 return;
             }
 
             memset(pBuf, 0, totalLen);
 
-            u8 *ptr = pBuf;
+            uint8_t *ptr = pBuf;
 
-            for (u8 i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
+            for (uint8_t i = 0; i < GPS_MAX_TRANS_TABLE_ENTRIES; i++) {
                 if (g_gpTransTab.transTab[i].used) {
                     activeEntryCnt++;
 
@@ -2089,8 +2089,8 @@ static void gpTransTabReqCmdProcess(zclIncomingAddrInfo_t *pAddrInfo, zcl_gp_tra
     }
 }
 
-static void gpTransTabUpdateHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
-                                    u8 action, gpTranslation_t *pTranslation)
+static void gpTransTabUpdateHandler(uint8_t appId, gpdId_t gpdId, uint8_t endpoint,
+                                    uint8_t action, gpTranslation_t *pTranslation)
 {
     //printf("transTabUpdate: action = %x, gpdCmd = %x, zbEp = %x, cluster = %x, profile = %x\n",
     //       action, pTranslation->gpdCmdId, pTranslation->endpoint, pTranslation->cluster, pTranslation->profile);
@@ -2131,10 +2131,10 @@ static void gpTransTabUpdateHandler(u8 appId, gpdId_t gpdId, u8 endpoint,
 
 static status_t gpTransTabUpdateCmdProcess(zcl_gp_transTabUpdateCmd_t *pCmd)
 {
-    u8 *pData = pCmd->pBuf;
-    u8 *ptr = NULL;
-    s32 remainLen = pCmd->bufLen;
-    u8 transCnt = pCmd->options.bits.numOfTrans;
+    uint8_t *pData = pCmd->pBuf;
+    uint8_t *ptr = NULL;
+    int32_t remainLen = pCmd->bufLen;
+    uint8_t transCnt = pCmd->options.bits.numOfTrans;
 
     //printf("gpTransUpdateCmd: action = %x, num = %d\n", pCmd->options.bits.action, pCmd->options.bits.numOfTrans);
 
@@ -2146,7 +2146,7 @@ static status_t gpTransTabUpdateCmdProcess(zcl_gp_transTabUpdateCmd_t *pCmd)
         ptr = pData;
 
         gpTranslation_t translation;
-        TL_SETSTRUCTCONTENT(translation, 0);
+        ZB_SETSTRUCTCONTENT(translation, 0);
 
         if (transCnt--) {
             translation.index = *pData++;
@@ -2182,7 +2182,7 @@ static status_t gpTransTabUpdateCmdProcess(zcl_gp_transTabUpdateCmd_t *pCmd)
     return ZCL_STA_SUCCESS;
 }
 
-status_t zcl_gpClientCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload)
+status_t zcl_gpClientCmdHandler(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload)
 {
     status_t status = ZCL_STA_SUCCESS;
 
@@ -2224,12 +2224,12 @@ static void gpsGpdfChannelReqCmdHandler(gp_data_ind_t *pGpDataInd)
     }
 
     gpd_channelRequestCmd_payload_t chnReq;
-    TL_SETSTRUCTCONTENT(chnReq, 0);
+    ZB_SETSTRUCTCONTENT(chnReq, 0);
     chnReq.chTogglingBehavior = pGpDataInd->gpdAsdu[1];
 
     gpd_channelConfigurationCmd_payload_t chnCfg;
-    TL_SETSTRUCTCONTENT(chnCfg, 0);
-    chnCfg.bits.operationChannel = g_zbMacPib.phyChannelCur - TL_ZB_MAC_CHANNEL_START;
+    ZB_SETSTRUCTCONTENT(chnCfg, 0);
+    chnCfg.bits.operationChannel = g_zbMacPib.phyChannelCur - ZB_MAC_CHANNEL_START;
     chnCfg.bits.basic = 1;
 
     gpdId_t gpdId;
@@ -2257,7 +2257,7 @@ static void gpsGpdfCommissioningCmdHandler(gp_data_ind_t *pGpDataInd)
     }
 
     gpd_commissioning_payload_t commissioning;
-    TL_SETSTRUCTCONTENT(commissioning, 0);
+    ZB_SETSTRUCTCONTENT(commissioning, 0);
 
     commissioning.payloadLen = gpCommissioningParse(&commissioning, &pGpDataInd->gpdAsdu[1]);
 
@@ -2329,8 +2329,8 @@ static void gpsGpdfDataHandler(gp_data_ind_t *pGpDataInd)
         ZB_64BIT_ADDR_COPY(gpdId.gpdIeeeAddr, pGpDataInd->srcAddr.extAddr);
     }
 
-    u8 dataLen = pGpDataInd->gpdAsduLen - 1;//first byte is cmdId.
-    u8 *pData = NULL;
+    uint8_t dataLen = pGpDataInd->gpdAsduLen - 1;//first byte is cmdId.
+    uint8_t *pData = NULL;
     if (dataLen) {
         pData = &pGpDataInd->gpdAsdu[1];
     }
@@ -2350,8 +2350,8 @@ static void gpsGpdfAppDescCmdHandler(gp_data_ind_t *pGpDataInd)
         ZB_64BIT_ADDR_COPY(gpdId.gpdIeeeAddr, pGpDataInd->srcAddr.extAddr);
     }
 
-    u8 dataLen = pGpDataInd->gpdAsduLen - 1;//first byte is cmdId.
-    u8 *pData = NULL;
+    uint8_t dataLen = pGpDataInd->gpdAsduLen - 1;//first byte is cmdId.
+    uint8_t *pData = NULL;
     if (dataLen) {
         pData = &pGpDataInd->gpdAsdu[1];
     }

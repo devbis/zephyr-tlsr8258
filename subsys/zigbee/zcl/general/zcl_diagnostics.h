@@ -70,11 +70,11 @@
  *  @brief  External variable for GP Attribute info table
  */
 extern const zclAttrInfo_t diagnostics_attrTbl[];
-extern const u8 zcl_diagnostics_attrNum;
+extern const uint8_t zcl_diagnostics_attrNum;
 #endif
 
 
-status_t zcl_diagnostics_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_diagnostics_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 #endif	/* ZCL_DIAGNOSTICS_H */
