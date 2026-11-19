@@ -117,8 +117,8 @@
 #define FLASH_ADDR_OF_F_CFG_INFO_4M     0x3FE000
 
 /************************************************************************/
-extern u32 g_u32MacFlashAddr;
-extern u32 g_u32CfgFlashAddr;
+extern uint32_t g_u32MacFlashAddr;
+extern uint32_t g_u32CfgFlashAddr;
 
 #define MAC_BASE_ADD                    (g_u32MacFlashAddr)
 #define FACTORY_CFG_BASE_ADD            (g_u32CfgFlashAddr)
@@ -263,32 +263,32 @@ typedef enum {
 
 /* sector info(4Bytes) + index info(8Bytes) + index info(8Bytes) + ... */
 typedef struct {
-    u16 usedFlag;
-    u8  idName;
-    u8  opSect;    //crcCheckBit(6bits) + opSect(2bits)
+    uint16_t usedFlag;
+    uint8_t  idName;
+    uint8_t  opSect;    //crcCheckBit(6bits) + opSect(2bits)
 } nv_sect_info_t;
 
 typedef struct {
-    u32 offset;
-    u16 size;
-    u8  itemId;
-    u8  usedState;
+    uint32_t offset;
+    uint16_t size;
+    uint8_t  itemId;
+    uint8_t  usedState;
 #if defined(MCU_CORE_B91) || defined(MCU_CORE_B92) || defined(MCU_CORE_TL721X) || defined(MCU_CORE_TL321X)
-    u8  resv[8];   //PUYA flash only supports re-write 64 times
+    uint8_t  resv[8];   //PUYA flash only supports re-write 64 times
 #endif
 } nv_info_idx_t;
 
 /* item:  item_hdr(8Bytes) + payload*/
 typedef struct {
-    u32 checkSum;
-    u16 size;
-    u8  itemId;
-    u8  used;
+    uint32_t checkSum;
+    uint16_t size;
+    uint8_t  itemId;
+    uint8_t  used;
 } itemHdr_t;
 
 typedef struct _attribute_packed_ {
-    u16 opIndex;
-    u8 	opSect;
+    uint16_t opIndex;
+    uint8_t 	opSect;
 } itemIfno_t;
 
 //If OTA enabled, the maximum space used for nv module t is 56K, thus the item num cannot over 14
@@ -418,17 +418,17 @@ typedef enum {
 
 
 nv_sts_t nv_resetAll(void);
-nv_sts_t nv_resetModule(u8 modules);
-nv_sts_t nv_flashWriteNew(u8 single, u16 id, u8 itemId, u16 len, u8 *buf);
-nv_sts_t nv_flashReadNew(u8 single, u8 id, u8 itemId, u16 len, u8 *buf);
-nv_sts_t nv_itemDeleteByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx);
-nv_sts_t nv_flashSingleItemRemove(u8 id, u8 itemId, u16 len);
-nv_sts_t nv_flashReadByIndex(u8 id, u8 itemId, u8 opSect, u16 opIdx, u16 len, u8 *buf);
-void nv_itemLengthCheckAdd(u8 itemId, u16 len);
+nv_sts_t nv_resetModule(uint8_t modules);
+nv_sts_t nv_flashWriteNew(uint8_t single, uint16_t id, uint8_t itemId, uint16_t len, uint8_t *buf);
+nv_sts_t nv_flashReadNew(uint8_t single, uint8_t id, uint8_t itemId, uint16_t len, uint8_t *buf);
+nv_sts_t nv_itemDeleteByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx);
+nv_sts_t nv_flashSingleItemRemove(uint8_t id, uint8_t itemId, uint16_t len);
+nv_sts_t nv_flashReadByIndex(uint8_t id, uint8_t itemId, uint8_t opSect, uint16_t opIdx, uint16_t len, uint8_t *buf);
+void nv_itemLengthCheckAdd(uint8_t itemId, uint16_t len);
 nv_sts_t nv_resetToFactoryNew(void);
 bool nv_facrotyNewRstFlagCheck(void);
 void nv_facrotyNewRstFlagSet(void);
 void nv_facrotyNewRstFlagClear(void);
-nv_sts_t nv_nwkFrameCountSaveToFlash(u32 frameCount);
-nv_sts_t nv_nwkFrameCountFromFlash(u32 *frameCount);
-nv_sts_t nv_flashSingleItemSizeGet(u8 id, u8 itemId, u16 *len);
+nv_sts_t nv_nwkFrameCountSaveToFlash(uint32_t frameCount);
+nv_sts_t nv_nwkFrameCountFromFlash(uint32_t *frameCount);
+nv_sts_t nv_flashSingleItemSizeGet(uint8_t id, uint8_t itemId, uint16_t *len);

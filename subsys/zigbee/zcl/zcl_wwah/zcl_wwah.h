@@ -98,27 +98,27 @@
 
 
 typedef struct {
-    u16 *pClusterID;
-    u8 numOfClustersToExempt;
+    uint16_t *pClusterID;
+    uint8_t numOfClustersToExempt;
 } clustersToExempt_t;
 
 typedef struct {
-    u16 clusterID;
+    uint16_t clusterID;
 } zcl_wwah_apsLinkKeyAuthQueryCmd_t;
 
 typedef struct {
-    u32 maxBackoffTimeInSeconds;
-    u8 firstBackoffTimeInSeconds;
-    u8 backoffSequenceCommonRatio;
-    u8 maxReDeliveryAttepts;
+    uint32_t maxBackoffTimeInSeconds;
+    uint8_t firstBackoffTimeInSeconds;
+    uint8_t backoffSequenceCommonRatio;
+    uint8_t maxReDeliveryAttepts;
 } zcl_wwah_enableAppEvtRetryAlgorithmCmd_t;
 
 typedef struct {
-    u16 fastRejoinTimeoutInSeconds;
-    u16 durationBetweenEachRejoinInSeconds;
-    u16 fastRejoinFirstBackoffInSeconds;
-    u16 maxBackoffTimeInSeconds;
-    u16 maxBackoffIterations;
+    uint16_t fastRejoinTimeoutInSeconds;
+    uint16_t durationBetweenEachRejoinInSeconds;
+    uint16_t fastRejoinFirstBackoffInSeconds;
+    uint16_t maxBackoffTimeInSeconds;
+    uint16_t maxBackoffIterations;
 } zcl_wwah_enableRejoinAlgorithmCmd_t;
 
 typedef enum {
@@ -128,24 +128,24 @@ typedef enum {
 } enrollmentMode_t;
 
 typedef struct {
-    u8 enrollmentMode;//enrollmentMode_t
+    uint8_t enrollmentMode;//enrollmentMode_t
 } zcl_wwah_setIasZoneEnrollmentMethodCmd_t;
 
 typedef struct{
-    u16 checkInInterval;
+    uint16_t checkInInterval;
 }zcl_wwah_enablePeriodicRouterCheckInsCmd_t;
 
 typedef struct {
-    u8 waitTime;
+    uint8_t waitTime;
 } zcl_wwah_setMacPollFailureWaitTimeCmd_t;
 
 typedef struct {
-    u16 panID;
-    u8 channel;
+    uint16_t panID;
+    uint8_t channel;
 } zcl_wwah_setPendingNwkUpdateCmd_t;
 
 typedef struct {
-    u8 debugReportID;
+    uint8_t debugReportID;
 } zcl_wwah_debugReportQueryCmd_t;
 
 typedef struct {
@@ -153,12 +153,12 @@ typedef struct {
 } zcl_wwah_surveyBeaconsCmd_t;
 
 typedef struct {
-    u16 *pClusterID;
-    u8 numOfClusters;
+    uint16_t *pClusterID;
+    uint8_t numOfClusters;
 } zcl_wwah_useTrustCenterForClusterCmd_t;
 
 typedef struct {
-    u16 clusterID;
+    uint16_t clusterID;
     bool status;
 } zcl_wwah_apsLinkKeyAuthQueryRspCmd_t;
 
@@ -178,49 +178,49 @@ typedef enum {
 } powerNotiReason_t;
 
 typedef struct {
-    u8 *pManuPowerNotiReason;
-    u16 manuID;
-    u8 powerNotiReason;//powerNotiReason_t
-    u8 manuPowerNotiReasonLen;
+    uint8_t *pManuPowerNotiReason;
+    uint16_t manuID;
+    uint8_t powerNotiReason;//powerNotiReason_t
+    uint8_t manuPowerNotiReasonLen;
 } zcl_wwah_poweringNotificationCmd_t;
 
 typedef struct {
     addrExt_t deviceEUI64;
-    u16 deviceShort;
+    uint16_t deviceShort;
 } zcl_wwah_shortAddrChangeCmd_t;
 
 typedef struct {
-    u8 currentPowerMode:4;
-    u8 availablePowerSrcs:4;
-    u8 currentPowerSrc:4;
-    u8 currentPowerSrcLevel:4;
+    uint8_t currentPowerMode:4;
+    uint8_t availablePowerSrcs:4;
+    uint8_t currentPowerSrc:4;
+    uint8_t currentPowerSrcLevel:4;
 } zcl_wwah_powerDescChangeCmd_t;
 
 typedef struct {
-    u32 sizeOfReport;
-    u8 dbgReportID;
+    uint32_t sizeOfReport;
+    uint8_t dbgReportID;
 } zcl_wwah_newDbgReportNotiCmd_t;
 
 typedef struct {
-    u8 *pReportData;
-    u8 dbgReportID;
-    u8 reportDataLen;
+    uint8_t *pReportData;
+    uint8_t dbgReportID;
+    uint8_t reportDataLen;
 } zcl_wwah_dbgReportQueryRspCmd_t;
 
 typedef struct {
-    u16 *pClusterID;
-    u8 numOfClusters;
+    uint16_t *pClusterID;
+    uint8_t numOfClusters;
 } zcl_wwah_tcForClusterServerQueryRspCmd_t;
 
 typedef struct {
-    u16 deviceShort;
-    s8 rssi;
-    u8 classificationMask;
+    uint16_t deviceShort;
+    int8_t rssi;
+    uint8_t classificationMask;
 } beaconSurvey_t;
 
 typedef struct {
     beaconSurvey_t *pBeacon;
-    u8 numOfBeacons;
+    uint8_t numOfBeacons;
 } zcl_wwah_surveyBeaconsRspCmd_t;
 
 
@@ -232,19 +232,19 @@ typedef enum {
 } apsLinkKeyAuthStatus_t;
 
 typedef struct _attribute_packed_ {
-    u16 clusterID[CLUSTER_ID_MAX_NUM];
-    u8 num;
-    u8 status;//apsLinkKeyAuthStatus_t
+    uint16_t clusterID[CLUSTER_ID_MAX_NUM];
+    uint8_t num;
+    uint8_t status;//apsLinkKeyAuthStatus_t
 } wwah_apsLinkKeyAuthInfo_t;
 
 typedef struct _attribute_packed_ {
-    u16 clusterID[CLUSTER_ID_MAX_NUM];
-    u8 num;
+    uint16_t clusterID[CLUSTER_ID_MAX_NUM];
+    uint8_t num;
 } wwah_apsAcksRequireInfo_t;
 
 typedef struct _attribute_packed_ {
-    u16 clusterID[CLUSTER_ID_MAX_NUM];
-    u8 num;
+    uint16_t clusterID[CLUSTER_ID_MAX_NUM];
+    uint8_t num;
 } wwah_useTCForClusterInfo_t;
 
 extern wwah_apsLinkKeyAuthInfo_t g_zcl_apsLinkKeyAuthInfo;
@@ -257,28 +257,28 @@ extern wwah_useTCForClusterInfo_t g_zcl_useTCForClusterInfo;
  */
 extern bool zcl_attr_wwah_disableOTADowngrades;
 extern bool zcl_attr_wwah_mgmtLeaveWithoutRejoinEnabled;
-extern u8 zcl_attr_wwah_nwkRetryCount;
-extern u8 zcl_attr_wwah_macRetryCount;
+extern uint8_t zcl_attr_wwah_nwkRetryCount;
+extern uint8_t zcl_attr_wwah_macRetryCount;
 extern bool zcl_attr_wwah_routerCheckInEnabled;
 extern bool zcl_attr_wwah_touchlinkInterpanEnabled;
 extern bool zcl_attr_wwah_parentClassificationEnabled;
 extern bool zcl_attr_wwah_appEvtRetryEnabled;
-extern u8 zcl_attr_wwah_appEvtRetryQueueSize;
+extern uint8_t zcl_attr_wwah_appEvtRetryQueueSize;
 extern bool zcl_attr_wwah_rejoinEnabled;
-extern u8 zcl_attr_wwah_macPollFailureWaitTime;
+extern uint8_t zcl_attr_wwah_macPollFailureWaitTime;
 extern bool zcl_attr_wwah_configurationModeEnabled;
-extern u8 zcl_attr_wwah_currentDebugReportID;
+extern uint8_t zcl_attr_wwah_currentDebugReportID;
 extern bool zcl_attr_wwah_tcSecurityOnNwkKeyRotationEnabled;
 extern bool zcl_attr_wwah_badParentRecoveryEnabled;
-extern u8 zcl_attr_wwah_pendingNwkUpdateChannel;
-extern u16 zcl_attr_wwah_pendingNwkUpdatePanID;
-extern u16 zcl_attr_wwah_otaMaxOfflineDuration;
+extern uint8_t zcl_attr_wwah_pendingNwkUpdateChannel;
+extern uint16_t zcl_attr_wwah_pendingNwkUpdatePanID;
+extern uint16_t zcl_attr_wwah_otaMaxOfflineDuration;
 
 /**
  *  @brief  External variable for WWAH Attribute info table
  */
 extern const zclAttrInfo_t wwah_attrTbl[];
-extern const u8 zcl_wwah_attrNum;
+extern const uint8_t zcl_wwah_attrNum;
 #endif
 
 
@@ -287,120 +287,120 @@ bool zcl_wwah_getRouterCheckedFlag(void);
 status_t zcl_wwah_acceptCheck(zclIncoming_t *pInMsg);
 
 
-status_t zcl_wwah_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_wwah_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
-status_t zcl_wwah_enableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd);
+status_t zcl_wwah_enableApsLinkKeyAuthCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd);
 #define zcl_wwah_enableApsLinkKeyAuthCmdSend(a,b,c,d)   (zcl_wwah_enableApsLinkKeyAuthCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_disableApsLinkKeyAuthCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd);
+status_t zcl_wwah_disableApsLinkKeyAuthCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd);
 #define zcl_wwah_disableApsLinkKeyAuthCmdSend(a,b,c,d)  (zcl_wwah_disableApsLinkKeyAuthCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_apsLinkKeyAuthQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_apsLinkKeyAuthQueryCmd_t *pCmd);
+status_t zcl_wwah_apsLinkKeyAuthQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_apsLinkKeyAuthQueryCmd_t *pCmd);
 #define zcl_wwah_apsLinkKeyAuthQueryCmdSend(a,b,c,d)    (zcl_wwah_apsLinkKeyAuthQueryCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_requestNewApsLinkKeyCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_requestNewApsLinkKeyCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_requestNewApsLinkKeyCmdSend(a,b,c)     (zcl_wwah_requestNewApsLinkKeyCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableAppEvtRetryAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enableAppEvtRetryAlgorithmCmd_t *pCmd);
+status_t zcl_wwah_enableAppEvtRetryAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enableAppEvtRetryAlgorithmCmd_t *pCmd);
 #define zcl_wwah_enableAppEvtRetryAlgorithmCmdSend(a,b,c,d)     (zcl_wwah_enableAppEvtRetryAlgorithmCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_disableAppEvtRetryAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableAppEvtRetryAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableAppEvtRetryAlgorithmCmdSend(a,b,c)      (zcl_wwah_disableAppEvtRetryAlgorithmCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_requestTimeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_requestTimeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_requestTimeCmdSend(a,b,c)      (zcl_wwah_requestTimeCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableRejoinAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enableRejoinAlgorithmCmd_t *pCmd);
+status_t zcl_wwah_enableRejoinAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enableRejoinAlgorithmCmd_t *pCmd);
 #define zcl_wwah_enableRejoinAlgorithmCmdSend(a,b,c,d)  (zcl_wwah_enableRejoinAlgorithmCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_disableRejoinAlgorithmCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableRejoinAlgorithmCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableRejoinAlgorithmCmdSend(a,b,c)   (zcl_wwah_disableRejoinAlgorithmCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_setIasZoneEnrollmentMethodCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setIasZoneEnrollmentMethodCmd_t *pCmd);
+status_t zcl_wwah_setIasZoneEnrollmentMethodCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setIasZoneEnrollmentMethodCmd_t *pCmd);
 #define zcl_wwah_setIasZoneEnrollmentMethodCmdSend(a,b,c,d)     (zcl_wwah_setIasZoneEnrollmentMethodCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_clearBindingTableCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_clearBindingTableCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_clearBindingTableCmdSend(a,b,c)        (zcl_wwah_clearBindingTableCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enablePeriodicRouterCheckInsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCmd);
+status_t zcl_wwah_enablePeriodicRouterCheckInsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_enablePeriodicRouterCheckInsCmd_t *pCmd);
 #define zcl_wwah_enablePeriodicRouterCheckInsCmdSend(a,b,c,d)   (zcl_wwah_enablePeriodicRouterCheckInsCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_disablePeriodicRouterCheckInsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disablePeriodicRouterCheckInsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disablePeriodicRouterCheckInsCmdSend(a,b,c)    (zcl_wwah_disablePeriodicRouterCheckInsCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_setMacPollFailureWaitTimeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setMacPollFailureWaitTimeCmd_t *pCmd);
+status_t zcl_wwah_setMacPollFailureWaitTimeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setMacPollFailureWaitTimeCmd_t *pCmd);
 #define zcl_wwah_setMacPollFailureWaitTimeCmdSend(a,b,c,d)      (zcl_wwah_setMacPollFailureWaitTimeCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_setPendingNwkUpdateCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_setPendingNwkUpdateCmd_t *pCmd);
+status_t zcl_wwah_setPendingNwkUpdateCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_setPendingNwkUpdateCmd_t *pCmd);
 #define zcl_wwah_setPendingNwkUpdateCmdSend(a,b,c,d)    (zcl_wwah_setPendingNwkUpdateCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_requireApsAcksOnUnicastsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, clustersToExempt_t *pCmd);
+status_t zcl_wwah_requireApsAcksOnUnicastsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, clustersToExempt_t *pCmd);
 #define zcl_wwah_requireApsAcksOnUnicastsCmdSend(a,b,c,d)       (zcl_wwah_requireApsAcksOnUnicastsCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_removeApsAcksOnUnicastsRequirementCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_removeApsAcksOnUnicastsRequirementCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_removeApsAcksOnUnicastsRequirementCmdSend(a,b,c)       (zcl_wwah_removeApsAcksOnUnicastsRequirementCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_apsAckRequirementQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_apsAckRequirementQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_apsAckRequirementQueryCmdSend(a,b,c)   (zcl_wwah_apsAckRequirementQueryCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_debugReportQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_debugReportQueryCmd_t *pCmd);
+status_t zcl_wwah_debugReportQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_debugReportQueryCmd_t *pCmd);
 #define zcl_wwah_debugReportQueryCmdSend(a,b,c,d)       (zcl_wwah_debugReportQueryCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_surveyBeaconsCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_surveyBeaconsCmd_t *pCmd);
+status_t zcl_wwah_surveyBeaconsCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_surveyBeaconsCmd_t *pCmd);
 #define zcl_wwah_surveyBeaconsCmdSend(a,b,c,d)          (zcl_wwah_surveyBeaconsCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_disableOtaDowngradesCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableOtaDowngradesCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableOtaDowngradesCmdSend(a,b,c)     (zcl_wwah_disableOtaDowngradesCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_disableMgmtLeaveWithoutRejoinCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableMgmtLeaveWithoutRejoinCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableMgmtLeaveWithoutRejoinCmdSend(a,b,c)    (zcl_wwah_disableMgmtLeaveWithoutRejoinCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_disableTouchlinkInterpanMsgCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableTouchlinkInterpanMsgCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableTouchlinkInterpanMsgCmdSend(a,b,c)      (zcl_wwah_disableTouchlinkInterpanMsgCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableParentClassificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_enableParentClassificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_enableParentClassificationCmdSend(a,b,c)       (zcl_wwah_enableParentClassificationCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_disableParentClassificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableParentClassificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableParentClassificationCmdSend(a,b,c)      (zcl_wwah_disableParentClassificationCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableTcSecurityOnNwkKeyRotationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_enableTcSecurityOnNwkKeyRotationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_enableTcSecurityOnNwkKeyRotationCmdSend(a,b,c) (zcl_wwah_enableTcSecurityOnNwkKeyRotationCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableBadParentRecoveryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_enableBadParentRecoveryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_enableBadParentRecoveryCmdSend(a,b,c)  (zcl_wwah_enableBadParentRecoveryCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_disableBadParentRecoveryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableBadParentRecoveryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableBadParentRecoveryCmdSend(a,b,c) (zcl_wwah_disableBadParentRecoveryCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_enableConfigurationModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_enableConfigurationModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_enableConfigurationModeCmdSend(a,b,c)  (zcl_wwah_enableConfigurationModeCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_disableConfigurationModeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_disableConfigurationModeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_disableConfigurationModeCmdSend(a,b,c) (zcl_wwah_disableConfigurationModeCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_useTrustCenterForClusterCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_useTrustCenterForClusterCmd_t *pCmd);
+status_t zcl_wwah_useTrustCenterForClusterCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_useTrustCenterForClusterCmd_t *pCmd);
 #define zcl_wwah_useTrustCenterForClusterCmdSend(a,b,c,d)       (zcl_wwah_useTrustCenterForClusterCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_trustCenterForClusterServerQueryCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo);
+status_t zcl_wwah_trustCenterForClusterServerQueryCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo);
 #define zcl_wwah_trustCenterForClusterServerQueryCmdSend(a,b,c) (zcl_wwah_trustCenterForClusterServerQueryCmd((a), (b), (c), ZCL_SEQ_NUM))
 
-status_t zcl_wwah_poweringOffNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd);
+status_t zcl_wwah_poweringOffNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd);
 #define zcl_wwah_poweringOffNotificationCmdSend(a,b,c,d)        (zcl_wwah_poweringOffNotificationCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_poweringOnNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd);
+status_t zcl_wwah_poweringOnNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_poweringNotificationCmd_t *pCmd);
 #define zcl_wwah_poweringOnNotificationCmdSend(a,b,c,d) (zcl_wwah_poweringOnNotificationCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_shortAddrChangeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_shortAddrChangeCmd_t *pCmd);
+status_t zcl_wwah_shortAddrChangeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_shortAddrChangeCmd_t *pCmd);
 #define zcl_wwah_shortAddrChangeCmdSend(a,b,c,d)        (zcl_wwah_shortAddrChangeCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_powerDescriptorChangeCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_powerDescChangeCmd_t *pCmd);
+status_t zcl_wwah_powerDescriptorChangeCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_powerDescChangeCmd_t *pCmd);
 #define zcl_wwah_powerDescriptorChangeCmdSend(a,b,c,d)  (zcl_wwah_powerDescriptorChangeCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_newDebugReportNotificationCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_newDbgReportNotiCmd_t *pCmd);
+status_t zcl_wwah_newDebugReportNotificationCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_newDbgReportNotiCmd_t *pCmd);
 #define zcl_wwah_newDebugReportNotificationCmdSend(a,b,c,d)     (zcl_wwah_newDebugReportNotificationCmd((a), (b), (c), ZCL_SEQ_NUM, (d)))
 
-status_t zcl_wwah_surveyBeaconsRspCmd(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_wwah_surveyBeaconsRspCmd_t *pCmd);
+status_t zcl_wwah_surveyBeaconsRspCmd(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_wwah_surveyBeaconsRspCmd_t *pCmd);
 #define zcl_wwah_surveyBeaconsRspCmdSend(a,b,c,d,e)     (zcl_wwah_surveyBeaconsRspCmd((a), (b), (c), (d), (e)))
 
 #endif	/* ZCL_WWAH_H */

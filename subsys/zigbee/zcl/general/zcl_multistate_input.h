@@ -49,35 +49,35 @@
 
 #if 0
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATE_TEXT_ENABLE
-extern u8 zcl_attr_mulInput_stateText[];
+extern uint8_t zcl_attr_mulInput_stateText[];
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_DESCRIPTION_ENABLE
-extern u8 zcl_attr_mulInput_description[];
+extern uint8_t zcl_attr_mulInput_description[];
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_NUM_OF_STATES_ENABLE
-extern u16 zcl_attr_mulInput_numOfStates;
+extern uint16_t zcl_attr_mulInput_numOfStates;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_OUT_OF_SERVICE_ENABLE
 extern bool zcl_attr_mulInput_outOfService;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_PRESENT_VALUE_ENABLE
-extern u16 zcl_attr_mulInput_presentValue;
+extern uint16_t zcl_attr_mulInput_presentValue;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_RELIABLILITY_ENABLE
-extern u8 zcl_attr_mulInput_reliability;
+extern uint8_t zcl_attr_mulInput_reliability;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_STATUS_FLAGS_ENABLE
-extern u8 zcl_attr_mulInput_statusFlags;
+extern uint8_t zcl_attr_mulInput_statusFlags;
 #endif
 #ifdef ZCL_MULTISTATE_INPUT_ATTR_APP_TYPE_ENABLE
-extern u32 zcl_attr_mulInput_appType;
+extern uint32_t zcl_attr_mulInput_appType;
 #endif
 
 extern const zclAttrInfo_t multistate_input_attrTbl[];
-extern const u8 zcl_multistate_input_attrNum;
+extern const uint8_t zcl_multistate_input_attrNum;
 #endif
 
 
-status_t zcl_multistate_input_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_multistate_input_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_MULTISTATE_INPUT_H */

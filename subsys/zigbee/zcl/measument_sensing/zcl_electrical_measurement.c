@@ -51,21 +51,21 @@
 static status_t zcl_electricalMeasure_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_electricalMeasure_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_electricalMeasure_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_MS_ELECTRICAL_MEASUREMENT, manuCode, attrNum, attrTbl, zcl_electricalMeasure_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfo(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfo(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_MS_ELECTRICAL_MEASUREMENT, ZCL_CMD_GET_PROFILE_INFO, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfile(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getMeasurementProfileCmd_t *pReq)
+_CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfile(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getMeasurementProfileCmd_t *pReq)
 {
-    u8 buf[7];
-    u8 *pBuf = buf;
+    uint8_t buf[7];
+    uint8_t *pBuf = buf;
 
     *pBuf++ = LO_UINT16(pReq->attrID);
     *pBuf++ = HI_UINT16(pReq->attrID);
@@ -76,19 +76,19 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfile(u8 srcEp, epInfo
     *pBuf++ = pReq->numberOfIntervals;
 
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_MS_ELECTRICAL_MEASUREMENT, ZCL_CMD_GET_MEASUREMENT_PROFILE, TRUE,
-                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                       ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 }
 
-_CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getProfileInfoRspCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getProfileInfoRspCmd_t *pRsp)
 {
-    u8 len = 1 + 1 + 1 + pRsp->maxNumberOfIntervals * 2;
+    uint8_t len = 1 + 1 + 1 + pRsp->maxNumberOfIntervals * 2;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pRsp->profileCnt;
     *pBuf++ = pRsp->profileIntervalPeriod;
@@ -99,23 +99,23 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoRsp(u8 srcEp, epInfo_t *
     }
 
     zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_MS_ELECTRICAL_MEASUREMENT, ZCL_CMD_GET_PROFILE_INFO_RESPONSE, TRUE,
-                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 
     ev_buf_free(buf);
 
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, zcl_electricalMeasure_getMeasurementProfileRspCmd_t *pRsp)
+_CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, zcl_electricalMeasure_getMeasurementProfileRspCmd_t *pRsp)
 {
-    u8 len = 4 + 1 + 1 + 1 + 1 + pRsp->numberOfIntervals * 2;
+    uint8_t len = 4 + 1 + 1 + 1 + 1 + pRsp->numberOfIntervals * 2;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = U32_BYTE0(pRsp->startTime);
     *pBuf++ = U32_BYTE1(pRsp->startTime);
@@ -131,7 +131,7 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRsp(u8 srcEp, epI
     }
 
     zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_MS_ELECTRICAL_MEASUREMENT, ZCL_CMD_GET_MEASUREMENT_PROFILE_RESPONSE, TRUE,
-                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (u8)(pBuf - buf), buf);
+                ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, (uint8_t)(pBuf - buf), buf);
 
     ev_buf_free(buf);
 
@@ -140,9 +140,9 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRsp(u8 srcEp, epI
 
 _CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    //u8 *pData = pInMsg->pData; //this command has no payload.
+    //uint8_t *pData = pInMsg->pData; //this command has no payload.
     if (pInMsg->clusterAppCb) {
     	status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
     } else {
@@ -154,9 +154,9 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoPrc(zclIncoming_t *pInMs
 
 _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfilePrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_electricalMeasure_getMeasurementProfileCmd_t getMeasurementProfileCmd;
@@ -176,9 +176,9 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfilePrc(zclIncoming_t
 
 _CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_electricalMeasure_getProfileInfoRspCmd_t getProfileInfoRspCmd;
@@ -197,9 +197,9 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getProfileInfoRspPrc(zclIncoming_t *pI
 
 _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
-    u8 *pData = pInMsg->pData;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         zcl_electricalMeasure_getMeasurementProfileRspCmd_t getMeasurementProfileRspCmd;
@@ -221,7 +221,7 @@ _CODE_ZCL_ status_t zcl_electricalMeasure_getMeasurementProfileRspPrc(zclIncomin
 
 _CODE_ZCL_ static status_t zcl_electricalMeasure_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GET_PROFILE_INFO:
@@ -240,7 +240,7 @@ _CODE_ZCL_ static status_t zcl_electricalMeasure_clientCmdHandler(zclIncoming_t 
 
 _CODE_ZCL_ static status_t zcl_electricalMeasure_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_GET_PROFILE_INFO_RESPONSE:

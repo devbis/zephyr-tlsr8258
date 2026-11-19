@@ -24,7 +24,7 @@ typedef enum {
 	ZDO_NWK_MGR_STATE_ED_SCAN = 7,
 } zdo_nwk_mgr_state_t;
 
-u8 zdo_mgmt_nwk_flag = 0;
+uint8_t zdo_mgmt_nwk_flag = 0;
 zdo_nwk_manager_t g_zdo_nwk_manager = {0};
 
 #if UINTPTR_MAX == UINT32_MAX
@@ -46,7 +46,7 @@ STATIC_ASSERT(OFFSETOF(zdo_nwk_manager_t, state) == 37);
 STATIC_ASSERT(sizeof(zdo_nwk_manager_t) == 0x26);
 #endif
 static void zdo_startup_complete(void *arg);
-static void zdo_startDeviceCnf(void *arg, u8 status);
+static void zdo_startDeviceCnf(void *arg, uint8_t status);
 
 #if defined(ZB_ROUTER_ROLE)
 _attribute_no_inline_ static void zdo_nlme_start_router_req(void *arg)
@@ -58,7 +58,7 @@ _attribute_no_inline_ static void zdo_nlme_start_router_req(void *arg)
 	req->batteryLifeExt = 0;
 
 	zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_START_ROUTER;
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_START_ROUTER_REQ, arg);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_START_ROUTER_REQ, arg);
 }
 #endif
 
@@ -76,7 +76,7 @@ static zdo_status_t zdo_nlmeNwkDiscReq(void *arg)
 	req = (nlme_nwkDisc_req_t *)buf;
 	req->scanChannels = zdo_nwk_mngr()->scanChannels;
 	req->scanDuration = zdo_nwk_mngr()->scanDuration;
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_NWK_DISCOVERY_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_NWK_DISCOVERY_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -98,11 +98,11 @@ static zdo_status_t zdo_nlme_edScan(void *arg)
 
 	req->scanChannels = zdo_nwk_mngr()->scanChannels;
 	req->scanDuration = zdo_nwk_mngr()->scanDuration;
-	return tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ED_SCAN_REQ, arg);
+	return zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ED_SCAN_REQ, arg);
 }
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-zdo_status_t zdo_nlmePermitJoinReq(u8 permitDuration)
+zdo_status_t zdo_nlmePermitJoinReq(uint8_t permitDuration)
 {
 	zb_buf_t *buf = zb_buf_allocate();
 	nlme_permitJoining_req_t *req;
@@ -113,7 +113,7 @@ zdo_status_t zdo_nlmePermitJoinReq(u8 permitDuration)
 
 	req = (nlme_permitJoining_req_t *)buf;
 	req->permitDuration = permitDuration;
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_PERMIT_JOINING_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_PERMIT_JOINING_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -131,7 +131,7 @@ zdo_status_t zdo_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq)
 	}
 
 	memcpy(buf, pRouteDiscReq, sizeof(*pRouteDiscReq));
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -149,7 +149,7 @@ void zdo_manyToOneRouteDisc(void *arg)
 	req->dstAddrMode = 0;
 	req->radius = g_zbNIB.concentratorRadius;
 	req->noRouteCache = (NWK_ROUTE_RECORD_TABLE_SIZE == 0U);
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, arg);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_ROUTE_DISCOVERY_REQ, arg);
 }
 #endif
 
@@ -166,7 +166,7 @@ zdo_status_t zdo_nwkRouterStart(void)
 		return ZDO_INSUFFICIENT_SPACE;
 	}
 
-	*(u8 *)&g_zbNIB.capabilityInfo = af_nodeMacCapabilityGet();
+	*(uint8_t *)&g_zbNIB.capabilityInfo = af_nodeMacCapabilityGet();
 	zdo_nlme_start_router_req(buf);
 	return ZDO_SUCCESS;
 }
@@ -174,7 +174,7 @@ zdo_status_t zdo_nwkRouterStart(void)
 void zdo_nlme_start_router_confirm(void *arg)
 {
 	nlme_startRouter_cnf_t *cnf = (nlme_startRouter_cnf_t *)arg;
-	u8 status = cnf->status;
+	uint8_t status = cnf->status;
 
 	if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_START_ROUTER) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -187,17 +187,17 @@ void zdo_nlme_start_router_confirm(void *arg)
 		zb_buf_t *buf = zb_buf_allocate();
 
 		if (buf != NULL) {
-			tl_zbTaskPost(zdo_manyToOneRouteDisc, buf);
+			zb_TaskPost(zdo_manyToOneRouteDisc, buf);
 		}
 	}
 #endif
 }
 
-zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
+zdo_status_t zdo_nwkFormationStart(uint32_t scanChannels, uint8_t scanDuration)
 {
 	nlme_nwkFormation_req_t *req;
 #if defined(ZB_ROUTER_ROLE) && !defined(ZB_COORDINATOR_ROLE)
-	u16 nwkAddr = g_zbNIB.nwkAddr;
+	uint16_t nwkAddr = g_zbNIB.nwkAddr;
 #endif
 
 	if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
@@ -218,7 +218,7 @@ zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
 
 	if (nwkAddr == NWK_BROADCAST_RESERVED) {
 		do {
-			nwkAddr = (u16)drv_u32Rand();
+			nwkAddr = (uint16_t)drv_u32Rand();
 		} while (nwkAddr == 0U || nwkAddr == NWK_BROADCAST_RESERVED ||
 			 ZB_NWK_IS_ADDRESS_BROADCAST(nwkAddr));
 		req->distributedNwkAddr = nwkAddr;
@@ -237,21 +237,21 @@ zdo_status_t zdo_nwkFormationStart(u32 scanChannels, u8 scanDuration)
 	zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_FORMATION;
 	zdo_nwk_mngr()->scanChannels = scanChannels;
 	zdo_nwk_mngr()->scanDuration = scanDuration;
-	*(u8 *)&g_zbNIB.capabilityInfo = af_nodeMacCapabilityGet();
+	*(uint8_t *)&g_zbNIB.capabilityInfo = af_nodeMacCapabilityGet();
 
 	if (!ZB_EXTPANID_IS_ZERO(aps_ib.aps_use_ext_panid)) {
 		ZB_EXTPANID_COPY(g_zbNIB.extPANId, aps_ib.aps_use_ext_panid);
 	}
 
-	tl_zbAdditionNeighborReset();
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_NWK_FORMATION_REQ, req);
+	zb_AdditionNeighborReset();
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_NWK_FORMATION_REQ, req);
 	return ZDO_SUCCESS;
 }
 
 void zdo_network_formation_confirm(void *arg)
 {
 	nlme_nwkFormation_cnf_t *cnf = (nlme_nwkFormation_cnf_t *)arg;
-	u8 status = cnf->status;
+	uint8_t status = cnf->status;
 
 	if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_FORMATION) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -264,14 +264,14 @@ void zdo_network_formation_confirm(void *arg)
 		zb_buf_t *buf = zb_buf_allocate();
 
 		if (buf != NULL) {
-			tl_zbTaskPost(zdo_manyToOneRouteDisc, buf);
+			zb_TaskPost(zdo_manyToOneRouteDisc, buf);
 		}
 	}
 #endif
 }
 #endif
 
-static void zdo_startDeviceCnf(void *arg, u8 status)
+static void zdo_startDeviceCnf(void *arg, uint8_t status)
 {
 	zdo_start_device_confirm_t *cnf = (zdo_start_device_confirm_t *)arg;
 
@@ -287,7 +287,7 @@ static void zdo_startDeviceCnf(void *arg, u8 status)
 	}
 
 	zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_IDLE;
-	tl_zbTaskPost(zdo_startup_complete, arg);
+	zb_TaskPost(zdo_startup_complete, arg);
 }
 static zdo_status_t zdo_nwkRejoinReqSend(void *arg)
 {
@@ -300,13 +300,13 @@ static zdo_status_t zdo_nwkRejoinReqSend(void *arg)
 	}
 
 	zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_REJOIN;
-	tl_zbAdditionNeighborReset();
+	zb_AdditionNeighborReset();
 
 	req = (nlme_join_req_t *)buf;
 	req->rejoinNwk = NLME_REJOIN_METHOD_REJOIN;
 	req->scanChannels = zdo_nwk_mngr()->scanChannels;
 	req->scanDuration = zdo_nwk_mngr()->scanDuration;
-	*(u8 *)&req->capabilityInfo = af_nodeMacCapabilityGet();
+	*(uint8_t *)&req->capabilityInfo = af_nodeMacCapabilityGet();
 	req->securityEnabled = (aps_ib.aps_use_insecure_join & 0x01U) == 0U;
 
 	if (ZB_EXTPANID_IS_ZERO(aps_ib.aps_use_ext_panid)) {
@@ -315,7 +315,7 @@ static zdo_status_t zdo_nwkRejoinReqSend(void *arg)
 		ZB_EXTPANID_COPY(req->extPANId, aps_ib.aps_use_ext_panid);
 	}
 
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
 	return ZDO_SUCCESS;
 }
 static int zdo_nwkRejoinBackOffCb(void *arg)
@@ -323,12 +323,12 @@ static int zdo_nwkRejoinBackOffCb(void *arg)
 	(void)arg;
 
 	if (zdo_af_get_rejoin_duration() != 0) {
-		u8 rejoinCnt = zdo_nwk_mngr()->rejoinCnt;
-		u8 rejoinTimes = zdo_af_get_rejoin_times();
+		uint8_t rejoinCnt = zdo_nwk_mngr()->rejoinCnt;
+		uint8_t rejoinTimes = zdo_af_get_rejoin_times();
 
 		if (rejoinCnt < rejoinTimes) {
 			zdo_nwk_mngr()->rejoinCnt++;
-			u32 rejoinDuration = zdo_af_get_rejoin_duration();
+			uint32_t rejoinDuration = zdo_af_get_rejoin_duration();
 
 			zdo_nwkRejoinReqSend(NULL);
 			return (int)(rejoinDuration * 1000U);
@@ -336,12 +336,12 @@ static int zdo_nwkRejoinBackOffCb(void *arg)
 
 		zdo_nwk_mngr()->rejoinCnt = 0;
 	} else {
-		u8 rejoinTimes = zdo_af_get_rejoin_times();
+		uint8_t rejoinTimes = zdo_af_get_rejoin_times();
 
 		zdo_nwk_mngr()->rejoinCnt = rejoinTimes;
 		if (rejoinTimes < zdo_af_get_rejoin_times()) {
 			zdo_nwk_mngr()->rejoinCnt++;
-			u32 rejoinDuration = zdo_af_get_rejoin_duration();
+			uint32_t rejoinDuration = zdo_af_get_rejoin_duration();
 
 			zdo_nwkRejoinReqSend(NULL);
 			return (int)(rejoinDuration * 1000U);
@@ -356,13 +356,13 @@ static int zdo_nwkRejoinBackOffCb(void *arg)
 	}
 
 	if (zdo_af_get_rejoin_backoff_iteration() == 0) {
-		u16 iter = zdo_nwk_mngr()->backoffIter;
+		uint16_t iter = zdo_nwk_mngr()->backoffIter;
 		if (iter != ZDO_REJOIN_BACKOFF_ITER_MAX) {
 			iter++;
 			zdo_nwk_mngr()->backoffIter = iter;
 		}
 	} else {
-		u16 iter = zdo_nwk_mngr()->backoffIter;
+		uint16_t iter = zdo_nwk_mngr()->backoffIter;
 		if (iter >= zdo_af_get_rejoin_backoff_iteration()) {
 			zdo_nwk_mngr()->backoffTime = 0;
 			iter = 0;
@@ -374,7 +374,7 @@ static int zdo_nwkRejoinBackOffCb(void *arg)
 		zdo_nwk_mngr()->backoffTime = zdo_af_get_max_rejoin_backoff_time();
 	} else {
 		zdo_nwk_mngr()->backoffTime =
-			(u16)(zdo_af_get_rejoin_backoff_time() * zdo_nwk_mngr()->backoffIter);
+			(uint16_t)(zdo_af_get_rejoin_backoff_time() * zdo_nwk_mngr()->backoffIter);
 	}
 
 	zdo_nwkRejoinReqSend(NULL);
@@ -382,8 +382,8 @@ static int zdo_nwkRejoinBackOffCb(void *arg)
 }
 static int zdo_auth_check_timer_cb(void *arg)
 {
-	tl_zbNwkAddrMapInit();
-	tl_zbNeighborTableInit();
+	zb_NwkAddrMapInit();
+	zb_NeighborTableInit();
 	zdo_startDeviceCnf(arg, ZDO_NOT_AUTHORIZED);
 	zdo_nwk_mngr()->savedBuf = NULL;
 	zdo_nwk_mngr()->authEvt = NULL;
@@ -395,7 +395,7 @@ bool zb_isUnderRejoinMode(void)
 	return zdo_nwk_mngr()->state == ZDO_NWK_MGR_STATE_REJOIN;
 }
 
-zdo_status_t zdo_reset_req(u8 arg)
+zdo_status_t zdo_reset_req(uint8_t arg)
 {
 	zb_buf_t *buf = zb_buf_allocate();
 	nlme_reset_req_t *req;
@@ -405,7 +405,7 @@ zdo_status_t zdo_reset_req(u8 arg)
 
 	req = (nlme_reset_req_t *)buf;
 	req->warmStart = arg;
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_RESET_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_RESET_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -420,7 +420,7 @@ void zdo_reset_confirm_cb(void *arg)
 
 	zb_buf_free((zb_buf_t *)arg);
 }
-zdo_status_t zdo_nlmeEdScanReq(u32 scanChannels, u8 scanDuration, u8 scanCount)
+zdo_status_t zdo_nlmeEdScanReq(uint32_t scanChannels, uint8_t scanDuration, uint8_t scanCount)
 {
 	if (scanCount == 0 || zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
 		return ZDO_INVALID_REQUEST;
@@ -442,7 +442,7 @@ zdo_status_t zdo_nlmeEdScanReq(u32 scanChannels, u8 scanDuration, u8 scanCount)
 void zdo_nlme_ed_scan_confirm(void *arg)
 {
 	if (zdo_nwk_mngr()->state == ZDO_NWK_MGR_STATE_ED_SCAN) {
-		u8 scanCount = (u8)(zdo_nwk_mngr()->scanCount - 1U);
+		uint8_t scanCount = (uint8_t)(zdo_nwk_mngr()->scanCount - 1U);
 
 		zdo_nwk_mngr()->scanCount = scanCount;
 		if (scanCount != 0) {
@@ -452,8 +452,8 @@ void zdo_nlme_ed_scan_confirm(void *arg)
 
 		zdo_nwk_mngr()->state = ZDO_NWK_MGR_STATE_IDLE;
 		if ((zdo_mgmt_nwk_flag & ZDO_MGMT_NWK_FLAG_ED_SCAN) != 0U) {
-			zdo_mgmt_nwk_flag &= (u8)~ZDO_MGMT_NWK_FLAG_ED_SCAN;
-			tl_zbTaskPost(zdo_nwkUpdateNotifyRespSend, arg);
+			zdo_mgmt_nwk_flag &= (uint8_t)~ZDO_MGMT_NWK_FLAG_ED_SCAN;
+			zb_TaskPost(zdo_nwkUpdateNotifyRespSend, arg);
 			return;
 		}
 	}
@@ -464,7 +464,7 @@ void zdo_nlme_ed_scan_confirm(void *arg)
 void zdo_nlme_sync_confirm(void *arg)
 {
 	nlme_sync_cnf_t cnf;
-	u8 status = ((nlme_sync_cnf_t *)arg)->status;
+	uint8_t status = ((nlme_sync_cnf_t *)arg)->status;
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdoNlmeSyncCnfCb != NULL) {
 		cnf.status = status;
@@ -478,7 +478,7 @@ void zdo_nlme_sync_confirm(void *arg)
 	zb_buf_free((zb_buf_t *)arg);
 }
 
-u8 zdo_syncReq(void)
+uint8_t zdo_syncReq(void)
 {
 	zb_buf_t *buf = zb_buf_allocate();
 	nlme_sync_req_t *req;
@@ -488,7 +488,7 @@ u8 zdo_syncReq(void)
 
 	req = (nlme_sync_req_t *)buf;
 	req->track = false;
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_SYNC_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_SYNC_REQ, buf);
 	return RET_OK;
 }
 
@@ -500,7 +500,7 @@ static int pollRateCb(void *arg)
 	return 0;
 }
 
-u8 zdo_set_pollRate(u32 rate)
+uint8_t zdo_set_pollRate(uint32_t rate)
 {
 	if (g_zbInfo.macPib.rxOnWhenIdle != 0U) {
 		return ZDO_NOT_SUPPORTED;
@@ -568,7 +568,7 @@ static void zdo_startup_complete(void *arg)
 #endif
 		g_zbNwkCtx.is_factory_new = 0;
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-		tl_zbNwkLinkStatusStart();
+		zb_NwkLinkStatusStart();
 #endif
 	} else {
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
@@ -578,7 +578,7 @@ static void zdo_startup_complete(void *arg)
 			g_zbNwkCtx.joined_pro = 0;
 		}
 
-		tl_zbNwkLinkStatusStop();
+		zb_NwkLinkStatusStop();
 #else
 		if (g_zbNwkCtx.is_factory_new) {
 			ZB_IEEE_ADDR_ZERO(ss_ib.trust_center_address);
@@ -592,7 +592,7 @@ static void zdo_startup_complete(void *arg)
 	}
 
 	g_zbNwkCtx.user_state = NLME_IDLE;
-	tl_zbAdditionNeighborReset();
+	zb_AdditionNeighborReset();
 
 	if (zdoAppIndCbLst != NULL && zdoAppIndCbLst->zdpStartDevCnfCb != NULL) {
 		zdoAppIndCbLst->zdpStartDevCnfCb(cnf);
@@ -602,8 +602,8 @@ static void zdo_startup_complete(void *arg)
 }
 void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 {
-	u16 shortAddr = (u16)-1;
-	u16 addrMapIdx = 0;
+	uint16_t shortAddr = (uint16_t)-1;
+	uint16_t addrMapIdx = 0;
 
 #if defined(ZB_COORDINATOR_ROLE)
 	if (!rejoin) {
@@ -611,7 +611,7 @@ void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 	}
 #endif
 
-	if (tl_zbShortAddrByExtAddr(&shortAddr, nodeIeeeAddr, &addrMapIdx) != RET_OK) {
+	if (zb_ShortAddrByExtAddr(&shortAddr, nodeIeeeAddr, &addrMapIdx) != RET_OK) {
 		return;
 	}
 
@@ -627,14 +627,14 @@ void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 #endif
 
 	{
-		tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr(nodeIeeeAddr);
+		zb_normal_neighbor_entry_t *entry = nwk_neTblGetByExtAddr(nodeIeeeAddr);
 
 		if (entry != NULL) {
 			zb_addrForNeighbor_t addrInfo;
 
 			memset(&addrInfo, 0, sizeof(addrInfo));
-			addrInfo.shortAddr = tl_zbshortAddrByIdx(entry->addrmapIdx);
-			tl_zbExtAddrByIdx(entry->addrmapIdx, addrInfo.extAddr);
+			addrInfo.shortAddr = zb_shortAddrByIdx(entry->addrmapIdx);
+			zb_ExtAddrByIdx(entry->addrmapIdx, addrInfo.extAddr);
 			/* Deliberate deviation from the vendor object: it ORs the relationship
 			 * into an uninitialised stack byte, so the device type that
 			 * nwk_nodeAddrInfoDelete() tests for the end device timeout purge is
@@ -644,26 +644,26 @@ void zdo_nlmeForgetDev(addrExt_t nodeIeeeAddr, bool rejoin)
 			addrInfo.relationship = entry->relationship;
 
 			(void)nwk_nodeAddrInfoDelete(&addrInfo);
-			tl_zbNeighborTableDelete(entry);
+			zb_NeighborTableDelete(entry);
 			return;
 		}
 	}
 
-	tl_zbNwkAddrMapDelete(addrMapIdx);
+	zb_NwkAddrMapDelete(addrMapIdx);
 }
 void zdo_nlme_leave_indication_cb(void *arg)
 {
 	nlme_leave_ind_t ind;
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-	u16 shortAddr = 0;
-	u16 addrMapIdx = 0;
-	tl_zb_normal_neighbor_entry_t *entry;
+	uint16_t shortAddr = 0;
+	uint16_t addrMapIdx = 0;
+	zb_normal_neighbor_entry_t *entry;
 #endif
 
 	memcpy(&ind, arg, sizeof(ind));
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
-	entry = tl_zbNeighborTableSearchFromExtAddr(&shortAddr, ind.deviceAddr, &addrMapIdx);
+	entry = zb_NeighborTableSearchFromExtAddr(&shortAddr, ind.deviceAddr, &addrMapIdx);
 	if (!g_zbNwkCtx.is_tc && !ind.rejoin && entry != NULL &&
 	    !ZB_IEEE_ADDR_IS_INVALID(ss_ib.trust_center_address) &&
 	    entry->relationship == NEIGHBOR_IS_CHILD) {
@@ -673,7 +673,7 @@ void zdo_nlme_leave_indication_cb(void *arg)
 		ZB_IEEE_ADDR_COPY(req->devAddr, ind.deviceAddr);
 		req->devShortAddr = shortAddr;
 		req->status = SS_DEV_LEFT;
-		tl_zbTaskPost(ss_apsmeUpdateDevReq, req);
+		zb_TaskPost(ss_apsmeUpdateDevReq, req);
 		goto notify_leave;
 	}
 #endif
@@ -696,7 +696,7 @@ zdo_status_t zdo_nlmeLeaveReq(void *arg)
 	}
 
 	memcpy(buf, arg, sizeof(nlme_leave_req_t));
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_LEAVE_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_LEAVE_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -734,13 +734,13 @@ zdo_status_t zdo_nwkAssocJoinStart(void)
 	req = (nlme_join_req_t *)buf;
 	req->rejoinNwk = NLME_REJOIN_METHOD_ASSOCIATION;
 	ZB_EXTPANID_COPY(req->extPANId, aps_ib.aps_use_ext_panid);
-	*(u8 *)&req->capabilityInfo = af_nodeMacCapabilityGet();
+	*(uint8_t *)&req->capabilityInfo = af_nodeMacCapabilityGet();
 	req->securityEnabled = FALSE;
 
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
 	return ZDO_SUCCESS;
 }
-zdo_status_t zdo_nwkRejoinStart(u32 scanChannels, u8 scanDuration)
+zdo_status_t zdo_nwkRejoinStart(uint32_t scanChannels, uint8_t scanDuration)
 {
 	if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
 		return ZDO_INVALID_REQUEST;
@@ -822,18 +822,18 @@ void zdo_nlme_leave_confirm_cb(void *arg)
 		zdo_nwkRejoinWithBackOffStop();
 		g_zbNwkCtx.user_state = NLME_LEAVING;
 #if defined(ZB_ROUTER_ROLE)
-		tl_zbNwkLinkStatusStop();
+		zb_NwkLinkStatusStop();
 #else
 		zdo_set_pollRate(0);
 		keepaliveMsgSendStop();
 #endif
 		{
 #if defined(ZB_ROUTER_ROLE)
-			u32 delayMs = (g_zbNIB.passiveAckTimeout / 1000U) << 2;
+			uint32_t delayMs = (g_zbNIB.passiveAckTimeout / 1000U) << 2;
 #elif defined(ZB_COORDINATOR_ROLE)
-			u32 delayMs = (g_zbNIB.nwkBroadcastDeliveryTime / 1000U) << 2;
+			uint32_t delayMs = (g_zbNIB.nwkBroadcastDeliveryTime / 1000U) << 2;
 #else
-			u32 delayMs = ZDO_SELF_LEAVE_DELAY_MS;
+			uint32_t delayMs = ZDO_SELF_LEAVE_DELAY_MS;
 #endif
 			ev_timer_taskPost(zdo_selfLeaveProcessCb, (void *)(uintptr_t)rejoin,
 					  delayMs);
@@ -845,7 +845,7 @@ void zdo_nlme_leave_confirm_cb(void *arg)
 		zdo_nlmeForgetDev(cnf.deviceAddr, rejoin);
 	}
 }
-zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
+zdo_status_t zdo_nwkRejoinWithBackOff(uint32_t scanChannels, uint8_t scanDuration)
 {
 	if (zdo_nwk_mngr()->state != ZDO_NWK_MGR_STATE_IDLE) {
 		return ZDO_INVALID_REQUEST;
@@ -872,7 +872,7 @@ zdo_status_t zdo_nwkRejoinWithBackOff(u32 scanChannels, u8 scanDuration)
 	zdo_nwk_mngr()->backoffEvt = evt;
 	return ZDO_SUCCESS;
 }
-zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
+zdo_status_t zdo_nwkDirectJoinStart(uint32_t scanChannels, uint8_t scanDuration)
 {
 	zb_buf_t *buf;
 	nlme_join_req_t *req;
@@ -900,7 +900,7 @@ zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
 	req->rejoinNwk = NLME_REJOIN_METHOD_DIRECT;
 	req->scanChannels = scanChannels;
 	req->scanDuration = scanDuration;
-	*(u8 *)&req->capabilityInfo = af_nodeMacCapabilityGet();
+	*(uint8_t *)&req->capabilityInfo = af_nodeMacCapabilityGet();
 	req->securityEnabled = FALSE;
 
 	if (ZB_EXTPANID_IS_ZERO(aps_ib.aps_use_ext_panid)) {
@@ -909,7 +909,7 @@ zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
 		ZB_EXTPANID_COPY(req->extPANId, aps_ib.aps_use_ext_panid);
 	}
 
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_JOIN_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -917,9 +917,9 @@ zdo_status_t zdo_nwkDirectJoinStart(u32 scanChannels, u8 scanDuration)
 typedef struct _attribute_packed_ {
 	addrExt_t srcAddr;
 	addrExt_t devAddr;
-	u16 devShortAddr;
-	u8 useParent;
-	u8 rejoinNwk;
+	uint16_t devShortAddr;
+	uint8_t useParent;
+	uint8_t rejoinNwk;
 	bool secureRejoin;
 } zdo_child_auth_req_t;
 
@@ -934,7 +934,7 @@ zdo_status_t zdo_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq)
 	}
 
 	memcpy(buf, pReq, sizeof(*pReq));
-	tl_zbPrimitivePost(TL_Q_HIGH2NWK, NWK_NLME_DIRECT_JOIN_REQ, buf);
+	zb_PrimitivePost(ZB_Q_HIGH2NWK, NWK_NLME_DIRECT_JOIN_REQ, buf);
 	return ZDO_SUCCESS;
 }
 
@@ -962,8 +962,8 @@ void zdo_nlme_join_indication(void *arg)
 void zdo_nlme_status_indication(void *arg)
 {
 	const zdo_nwk_status_ind_t *statusInd = (const zdo_nwk_status_ind_t *)arg;
-	u16 shortAddr = statusInd->shortAddr;
-	u8 status = statusInd->status;
+	uint16_t shortAddr = statusInd->shortAddr;
+	uint8_t status = statusInd->status;
 
 #if defined(ZB_ROUTER_ROLE) || defined(ZB_COORDINATOR_ROLE)
 	bool notifyApp = (status == NWK_COMMAND_STATUS_BAD_FRAME_COUNTER ||
@@ -976,7 +976,7 @@ void zdo_nlme_status_indication(void *arg)
 			if (status == NWK_COMMAND_STATUS_SOURCE_ROUTE_FAILURE) {
 				nwkRouteRecTabEntryDstDel(shortAddr);
 			}
-			tl_zbTaskPost(zdo_manyToOneRouteDisc, arg);
+			zb_TaskPost(zdo_manyToOneRouteDisc, arg);
 			return;
 		} else {
 			zb_buf_free((zb_buf_t *)arg);
@@ -985,7 +985,7 @@ void zdo_nlme_status_indication(void *arg)
 	}
 #endif
 	if (status == NWK_COMMAND_STATUS_ADDRESS_CONFLICT) {
-		tl_zbNwkStatusAddrConflictInd(arg);
+		zb_NwkStatusAddrConflictInd(arg);
 		return;
 	}
 
@@ -1058,9 +1058,9 @@ void zdo_nlme_status_indication(void *arg)
 
 void zdo_nlme_join_confirm(void *arg)
 {
-	u8 state = zdo_nwk_mngr()->state;
+	uint8_t state = zdo_nwk_mngr()->state;
 	const nlme_join_cnf_t *joinCnf = (const nlme_join_cnf_t *)arg;
-	u8 status = joinCnf->status;
+	uint8_t status = joinCnf->status;
 
 	if (state != ZDO_NWK_MGR_STATE_ASSOC_JOIN && state != ZDO_NWK_MGR_STATE_REJOIN &&
 	    state != ZDO_NWK_MGR_STATE_DIRECT_JOIN) {
@@ -1136,7 +1136,7 @@ zdo_status_t zdo_nwkDiscoveryStart(nlme_nwkDisc_req_t *pReq, nwkDiscoveryUserCb_
 		return ZDO_INVALID_REQUEST;
 	}
 
-	tl_zbAdditionNeighborReset();
+	zb_AdditionNeighborReset();
 	zdo_nwk_mngr()->scanChannels = pReq->scanChannels;
 	zdo_nwk_mngr()->scanDuration = pReq->scanDuration;
 	zdo_nwk_mngr()->nwkDiscAttempt = 0;
@@ -1158,7 +1158,7 @@ void zdo_nwkDiscoveryStop(void)
 void zdo_nlme_network_discovery_confirm_cb(void *arg)
 {
 	nwkDiscoveryUserCb_t cb;
-	u8 attempt;
+	uint8_t attempt;
 
 	zb_buf_free((zb_buf_t *)arg);
 
@@ -1173,7 +1173,7 @@ void zdo_nlme_network_discovery_confirm_cb(void *arg)
 		return;
 	}
 
-	attempt = (u8)(zdo_nwk_mngr()->nwkDiscAttempt + 1U);
+	attempt = (uint8_t)(zdo_nwk_mngr()->nwkDiscAttempt + 1U);
 	zdo_nwk_mngr()->nwkDiscAttempt = attempt;
 	if (attempt < zdo_af_get_scan_attempts()) {
 		zdo_nwk_mngr()->discEvt = ev_timer_taskPost(zdo_nwkDiscReqTimerCb, NULL,

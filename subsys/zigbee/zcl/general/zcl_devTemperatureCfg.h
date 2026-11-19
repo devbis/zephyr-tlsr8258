@@ -68,22 +68,22 @@
 /**
  *  @brief  External variable for device temperature Attribute
  */
-extern s16 zcl_attr_curTemp;
-extern s16 zcl_attr_minTempExp;
-extern s16 zcl_attr_maxTempExp;
-extern u16 zcl_attr_overTempTotal;
-extern u8  zcl_attr_tempAlarmMask;
-extern s16 zcl_attr_lowTempThreshold;
-extern s16 zcl_attr_highTempThreshold;
-extern u24 zcl_attr_lowTripPoint;
-extern u24 zcl_attr_highTripPoint;
+extern int16_t zcl_attr_curTemp;
+extern int16_t zcl_attr_minTempExp;
+extern int16_t zcl_attr_maxTempExp;
+extern uint16_t zcl_attr_overTempTotal;
+extern uint8_t  zcl_attr_tempAlarmMask;
+extern int16_t zcl_attr_lowTempThreshold;
+extern int16_t zcl_attr_highTempThreshold;
+extern uint32_t zcl_attr_lowTripPoint;
+extern uint32_t zcl_attr_highTripPoint;
 
 /**
  *  @brief  External variable for device temperature Attribute table
  */
 extern const zclAttrInfo_t dev_temp_cfg_attrTbl[];
 
-extern const u8 zcl_dev_temp_cfg_attrNum;
+extern const uint8_t zcl_dev_temp_cfg_attrNum;
 
 /** @} end of group ZCL_DEVICE_TEMPERATURE_Variables */
 #endif
@@ -102,7 +102,7 @@ extern const u8 zcl_dev_temp_cfg_attrNum;
  *
  * @return      Status
  */
-status_t zcl_devTemperatureCfg_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_devTemperatureCfg_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 
 

@@ -61,22 +61,22 @@ void ll_zllAttrClr(void)
     g_touchlinkAttr.freeGroupAddressRangeEnd = 0x00;
 }
 
-void ll_dataSendCnfCb(u8 st, u8 handle)
+void ll_dataSendCnfCb(uint8_t st, uint8_t handle)
 {
 
 }
 
 #ifdef ZB_SECURITY
 
-void ll_calculate_AES_input(u8 *AES_key, TOUCHLINK_KEY_TYPE algorithm, u8 *transaction_id, u8 *response_id)
+void ll_calculate_AES_input(uint8_t *AES_key, TOUCHLINK_KEY_TYPE algorithm, uint8_t *transaction_id, uint8_t *response_id)
 {
-    u8 pos = 0;
-    u8 *byte_0_3;
-    u8 *byte_8_11;
+    uint8_t pos = 0;
+    uint8_t *byte_0_3;
+    uint8_t *byte_8_11;
 
     if (algorithm == DEVELOPMENT_KEY) {
-        byte_0_3 = (u8 *)"PhLi";
-        byte_8_11 = (u8 *)"CLSN";
+        byte_0_3 = (uint8_t *)"PhLi";
+        byte_8_11 = (uint8_t *)"CLSN";
     } else {
         byte_0_3 = transaction_id;
         byte_8_11 = response_id;
@@ -87,13 +87,13 @@ void ll_calculate_AES_input(u8 *AES_key, TOUCHLINK_KEY_TYPE algorithm, u8 *trans
     memcpy(AES_key + pos, response_id, 4);
 }
 
-void ll_decrypt_network_key(u8 key_index, u8 *encrypted_network_key, u32 transactionID, u32 responseID)
+void ll_decrypt_network_key(uint8_t key_index, uint8_t *encrypted_network_key, uint32_t transactionID, uint32_t responseID)
 {
-    u8 transaction_ID[4];
-    u8 response_ID[4];
-    u8 AES_input[CCM_KEY_SIZE] _attribute_aligned_(4) ;
-    u8 transport_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
-    u8 network_key[CCM_KEY_SIZE] _attribute_aligned_(4) = {0};
+    uint8_t transaction_ID[4];
+    uint8_t response_ID[4];
+    uint8_t AES_input[CCM_KEY_SIZE] _attribute_aligned_(4) ;
+    uint8_t transport_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
+    uint8_t network_key[CCM_KEY_SIZE] _attribute_aligned_(4) = {0};
 
     transaction_ID[0] = U32_BYTE3(transactionID);
     transaction_ID[1] = U32_BYTE2(transactionID);
@@ -124,13 +124,13 @@ void ll_decrypt_network_key(u8 key_index, u8 *encrypted_network_key, u32 transac
     }
 }
 
-void ll_get_encrypted_network_key(u8 key_index, u32 transactionID, u32 responseID, u8 *encrypted_network_key)
+void ll_get_encrypted_network_key(uint8_t key_index, uint32_t transactionID, uint32_t responseID, uint8_t *encrypted_network_key)
 {
-    u8 transaction_ID[4];
-    u8 response_ID[4];
-    u8 AES_input[CCM_KEY_SIZE] _attribute_aligned_(4) ;
-    u8 transport_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
-    u8 network_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
+    uint8_t transaction_ID[4];
+    uint8_t response_ID[4];
+    uint8_t AES_input[CCM_KEY_SIZE] _attribute_aligned_(4) ;
+    uint8_t transport_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
+    uint8_t network_key[CCM_KEY_SIZE] _attribute_aligned_(4) ;
 
     transaction_ID[0] = U32_BYTE3(transactionID);
     transaction_ID[1] = U32_BYTE2(transactionID);

@@ -52,7 +52,7 @@ zcl_alarmTable_t g_zcl_alarmTab[ZCL_ALARM_TABLE_NUM];
 static status_t zcl_alarm_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_alarm_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_alarm_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_GEN_ALARMS, manuCode, attrNum, attrTbl, zcl_alarm_cmdHandler, cb);
 }
@@ -63,25 +63,25 @@ _CODE_ZCL_ void zcl_alarm_clearAlarmEntry(zcl_alarmTable_t *pAlarmTab)
     if (pAlarmTab) {
         pAlarmTab->used = 0;
         pAlarmTab->endpoint = 0xfe;
-        memset((u8 *)&pAlarmTab->alarm, 0, sizeof(zcl_alarmEntry_t));
+        memset((uint8_t *)&pAlarmTab->alarm, 0, sizeof(zcl_alarmEntry_t));
     }
 }
 
 _CODE_ZCL_ void zcl_alarm_alarmTabClear(void)
 {
-    for (u8 i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
         zcl_alarmTable_t *pAlarmTab = &g_zcl_alarmTab[i];
 
         zcl_alarm_clearAlarmEntry(pAlarmTab);
     }
 }
 
-_CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findEarliestAlarmEntry(u8 endpoint)
+_CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findEarliestAlarmEntry(uint8_t endpoint)
 {
     zcl_alarmTable_t *pAlarmTab = NULL;
-    u32 t = 0xffffffff;
+    uint32_t t = 0xffffffff;
 
-    for (u8 i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
         zcl_alarmTable_t *pEntry = &g_zcl_alarmTab[i];
 
         if (pEntry->used && (pEntry->endpoint == endpoint)) {
@@ -95,9 +95,9 @@ _CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findEarliestAlarmEntry(u8 endpoint)
     return pAlarmTab;
 }
 
-_CODE_ZCL_ void zcl_alarm_removeAllAlarmEntries(u8 endpoint)
+_CODE_ZCL_ void zcl_alarm_removeAllAlarmEntries(uint8_t endpoint)
 {
-    for (u8 i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
         zcl_alarmTable_t *pAlarmTab = &g_zcl_alarmTab[i];
 
         if (pAlarmTab->used && (pAlarmTab->endpoint == endpoint)) {
@@ -108,7 +108,7 @@ _CODE_ZCL_ void zcl_alarm_removeAllAlarmEntries(u8 endpoint)
 
 _CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_getFreeAlarmTabEntry(void)
 {
-    for (u8 i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
         zcl_alarmTable_t *pAlarmTab = &g_zcl_alarmTab[i];
 
         if (!pAlarmTab->used) {
@@ -119,9 +119,9 @@ _CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_getFreeAlarmTabEntry(void)
     return NULL;
 }
 
-_CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findAlarmTab(u8 endpoint, u8 alarmCode, u16 clusterId)
+_CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findAlarmTab(uint8_t endpoint, uint8_t alarmCode, uint16_t clusterId)
 {
-    for (u8 i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
+    for (uint8_t i = 0; i < ZCL_ALARM_TABLE_NUM; i++) {
         zcl_alarmTable_t *pAlarmTab = &g_zcl_alarmTab[i];
 
         if (pAlarmTab->used && (pAlarmTab->endpoint == endpoint) &&
@@ -134,7 +134,7 @@ _CODE_ZCL_ zcl_alarmTable_t *zcl_alarm_findAlarmTab(u8 endpoint, u8 alarmCode, u
     return NULL;
 }
 
-_CODE_ZCL_ status_t zcl_alarm_AddAlarmTab(u8 endpoint, u8 alarmCode, u16 clusterId, u32 timeStamp)
+_CODE_ZCL_ status_t zcl_alarm_AddAlarmTab(uint8_t endpoint, uint8_t alarmCode, uint16_t clusterId, uint32_t timeStamp)
 {
     zcl_alarmTable_t *pAlarmTab = zcl_alarm_getFreeAlarmTabEntry();
     if (pAlarmTab) {
@@ -150,11 +150,11 @@ _CODE_ZCL_ status_t zcl_alarm_AddAlarmTab(u8 endpoint, u8 alarmCode, u16 cluster
     return ZCL_STA_SUCCESS;
 }
 
-_CODE_ZCL_ u8 zcl_alarm_getAlarmRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, getAlarmRsp_t *pGetAlarmRsp)
+_CODE_ZCL_ uint8_t zcl_alarm_getAlarmRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, getAlarmRsp_t *pGetAlarmRsp)
 {
-    u8 buf[8];
+    uint8_t buf[8];
 
-    u8 *pBuf = buf;
+    uint8_t *pBuf = buf;
 
     *pBuf++ = pGetAlarmRsp->status;
     if (pGetAlarmRsp->status == ZCL_STA_SUCCESS) {
@@ -171,9 +171,9 @@ _CODE_ZCL_ u8 zcl_alarm_getAlarmRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDe
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, pBuf - buf, buf);
 }
 
-_CODE_ZCL_ status_t zcl_alarm_alarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, alarm_t *pAlarm)
+_CODE_ZCL_ status_t zcl_alarm_alarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, alarm_t *pAlarm)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = pAlarm->alarmCode;
     buf[1] = LO_UINT16(pAlarm->clusterId);
@@ -183,9 +183,9 @@ _CODE_ZCL_ status_t zcl_alarm_alarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDe
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_alarm_resetAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, resetAlarm_t *pResetAlarm)
+_CODE_ZCL_ status_t zcl_alarm_resetAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, resetAlarm_t *pResetAlarm)
 {
-    u8 buf[3];
+    uint8_t buf[3];
 
     buf[0] = pResetAlarm->alarmCode;
     buf[1] = LO_UINT16(pResetAlarm->clusterId);
@@ -195,19 +195,19 @@ _CODE_ZCL_ status_t zcl_alarm_resetAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disa
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 3, buf);
 }
 
-_CODE_ZCL_ status_t zcl_alarm_resetAllAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_alarm_resetAllAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ALARMS, ZCL_CMD_ALARM_RESET_ALL, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_alarm_getAlarm(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_alarm_getAlarm(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ALARMS, ZCL_CMD_ALARM_GET_ALARM, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
 }
 
-_CODE_ZCL_ status_t zcl_alarm_resetAlarmLog(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo)
+_CODE_ZCL_ status_t zcl_alarm_resetAlarmLog(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_GEN_ALARMS, ZCL_CMD_ALARM_RESET_ALARM_LOG, TRUE,
                        ZCL_FRAME_CLIENT_SERVER_DIR, disableDefaultRsp, 0, seqNo, 0, NULL);
@@ -215,8 +215,8 @@ _CODE_ZCL_ status_t zcl_alarm_resetAlarmLog(u8 srcEp, epInfo_t *pDstEpInfo, u8 d
 
 _CODE_ZCL_ static status_t zcl_alarm_resetAlarmPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         resetAlarm_t resetAlarm;
@@ -234,7 +234,7 @@ _CODE_ZCL_ static status_t zcl_alarm_resetAlarmPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_resetAllAlarmsPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
@@ -247,15 +247,15 @@ _CODE_ZCL_ static status_t zcl_alarm_resetAllAlarmsPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_getAlarmPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
-    u8 endpoint = pApsdeInd->indInfo.dst_ep;
+    uint8_t endpoint = pApsdeInd->indInfo.dst_ep;
 
     if (pInMsg->clusterAppCb) {
         pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, NULL);
 
         getAlarmRsp_t getAlarmRsp;
-        TL_SETSTRUCTCONTENT(getAlarmRsp, 0);
+        ZB_SETSTRUCTCONTENT(getAlarmRsp, 0);
 
         zcl_alarmTable_t *pEntry = zcl_alarm_findEarliestAlarmEntry(endpoint);
         if (pEntry) {
@@ -268,7 +268,7 @@ _CODE_ZCL_ static status_t zcl_alarm_getAlarmPrc(zclIncoming_t *pInMsg)
         }
 
         epInfo_t dstEp;
-        TL_SETSTRUCTCONTENT(dstEp, 0);
+        ZB_SETSTRUCTCONTENT(dstEp, 0);
 
         dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
         dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -292,7 +292,7 @@ _CODE_ZCL_ static status_t zcl_alarm_getAlarmPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_resetAlarmLogPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
 
     if (pInMsg->clusterAppCb) {
@@ -309,8 +309,8 @@ _CODE_ZCL_ static status_t zcl_alarm_resetAlarmLogPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_alarmPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         alarm_t alarm;
@@ -328,8 +328,8 @@ _CODE_ZCL_ static status_t zcl_alarm_alarmPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_getAlarmRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
-    u8 *pData = pInMsg->pData;
+    uint8_t status = ZCL_STA_SUCCESS;
+    uint8_t *pData = pInMsg->pData;
 
     if (pInMsg->clusterAppCb) {
         getAlarmRsp_t getAlarmRsp;
@@ -352,7 +352,7 @@ _CODE_ZCL_ static status_t zcl_alarm_getAlarmRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ALARM_RESET_ALARM:
@@ -377,7 +377,7 @@ _CODE_ZCL_ static status_t zcl_alarm_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_alarm_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_ALARM_ALARM:

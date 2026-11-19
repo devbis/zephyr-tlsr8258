@@ -11,7 +11,7 @@
 #define AF_IND_ASDU_LEN_SIZE 2U
 #define AF_IND_ASDU_OFFSET   (sizeof(aps_data_ind_t) + AF_IND_ASDU_LEN_SIZE)
 
-u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 *cmdPld, u8 *apsCnt)
+uint8_t af_dataSend(uint8_t srcEp, epInfo_t *pDstEpInfo, uint16_t clusterId, uint16_t cmdPldLen, uint8_t *cmdPld, uint8_t *apsCnt)
 {
 	aps_data_req_t req;
 
@@ -66,7 +66,7 @@ u8 af_dataSend(u8 srcEp, epInfo_t *pDstEpInfo, u16 clusterId, u16 cmdPldLen, u8 
 		return apsDataFragmentRequest(&req, cmdPld, cmdPldLen);
 	}
 
-	return apsDataRequest(&req, cmdPld, (u8)cmdPldLen);
+	return apsDataRequest(&req, cmdPld, (uint8_t)cmdPldLen);
 }
 
 void af_dataCnfHandler(void *arg)
@@ -74,12 +74,12 @@ void af_dataCnfHandler(void *arg)
 	apsdeDataConf_t *cnf = (apsdeDataConf_t *)arg;
 	af_endpoint_descriptor_t *zdoEp = af_zdoSimpleDescriptorGet();
 	af_endpoint_descriptor_t *epList = af_epDescriptorGet();
-	u8 epNum = af_availableEpNumGet();
+	uint8_t epNum = af_availableEpNumGet();
 
 	if (zdoEp->cb_cnf != NULL && cnf->srcEndpoint == ZDO_EP) {
 		zdoEp->cb_cnf(arg);
 	} else {
-		for (u8 i = 0; i < epNum; i++) {
+		for (uint8_t i = 0; i < epNum; i++) {
 			if (epList[i].cb_cnf != NULL && epList[i].ep == cnf->srcEndpoint) {
 				epList[i].cb_cnf(arg);
 				break;
@@ -87,16 +87,16 @@ void af_dataCnfHandler(void *arg)
 		}
 	}
 
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }
 
 void af_aps_data_entry(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	af_endpoint_descriptor_t *epList;
-	u8 epNum;
+	uint8_t epNum;
 	aps_data_ind_t *stagingInd;
-	u16 stagingSize;
+	uint16_t stagingSize;
 
 	if (ind->dst_ep == ZDO_EP) {
 		af_endpoint_descriptor_t *zdoEp;
@@ -124,7 +124,7 @@ void af_aps_data_entry(void *arg)
 	 * the low byte of asduLength (af_aps_data_entry offsets 0x5e-0x68), so an ASDU of
 	 * 219 bytes or more wraps the size and the copy overflows the buffer.
 	 */
-	stagingSize = (u16)(sizeof(*ind) + AF_IND_ASDU_LEN_SIZE + ind->asduLength);
+	stagingSize = (uint16_t)(sizeof(*ind) + AF_IND_ASDU_LEN_SIZE + ind->asduLength);
 	stagingInd = (aps_data_ind_t *)ev_buf_allocate(stagingSize);
 	if (stagingInd == NULL) {
 		zb_buf_free((zb_buf_t *)arg);
@@ -132,14 +132,14 @@ void af_aps_data_entry(void *arg)
 	}
 
 	memcpy(stagingInd, ind, sizeof(*stagingInd));
-	COPY_U16TOBUFFER((u8 *)stagingInd + sizeof(*stagingInd), ind->asduLength);
-	memcpy((u8 *)stagingInd + AF_IND_ASDU_OFFSET, ind->asdu, ind->asduLength);
+	COPY_U16TOBUFFER((uint8_t *)stagingInd + sizeof(*stagingInd), ind->asduLength);
+	memcpy((uint8_t *)stagingInd + AF_IND_ASDU_OFFSET, ind->asdu, ind->asduLength);
 	/* Deliberate deviation from the vendor object: it leaves asdu pointing at the
 	 * receive buffer that is freed after the callback; point it at the copy.
 	 */
-	stagingInd->asdu = (u8 *)stagingInd + AF_IND_ASDU_OFFSET;
+	stagingInd->asdu = (uint8_t *)stagingInd + AF_IND_ASDU_OFFSET;
 
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		af_endpoint_descriptor_t *ep = &epList[i];
 		af_simple_descriptor_t *simple = ep->correspond_simple_desc;
 
@@ -187,11 +187,11 @@ void af_aps_data_entry(void *arg)
 		 * the receive buffer, which is freed after the loop. Each copy owns its ASDU, so
 		 * point it at the copy.
 		 */
-		callbackInd->asdu = (u8 *)callbackInd + AF_IND_ASDU_OFFSET;
+		callbackInd->asdu = (uint8_t *)callbackInd + AF_IND_ASDU_OFFSET;
 		ep->cb_rx(callbackInd);
 	}
 
-	ev_buf_free((u8 *)stagingInd);
+	ev_buf_free((uint8_t *)stagingInd);
 	zb_buf_free((zb_buf_t *)arg);
 }
 
@@ -199,9 +199,9 @@ void af_aps_data_fragment_entry(void *arg)
 {
 	aps_data_ind_t *ind = (aps_data_ind_t *)arg;
 	af_endpoint_descriptor_t *epList = af_epDescriptorGet();
-	u8 epNum = af_availableEpNumGet();
+	uint8_t epNum = af_availableEpNumGet();
 
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		af_endpoint_descriptor_t *ep = &epList[i];
 		af_simple_descriptor_t *simple = ep->correspond_simple_desc;
 
@@ -226,5 +226,5 @@ void af_aps_data_fragment_entry(void *arg)
 		return;
 	}
 
-	ev_buf_free((u8 *)arg);
+	ev_buf_free((uint8_t *)arg);
 }

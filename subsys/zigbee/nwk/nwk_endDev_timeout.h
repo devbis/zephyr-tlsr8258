@@ -8,7 +8,7 @@
 #include "nwk_consts.h"
 
 typedef struct {
-	u32 timeout;
+	uint32_t timeout;
 	addrExt_t extAddr;
 } nwk_endDevTimeout_nv_t;
 

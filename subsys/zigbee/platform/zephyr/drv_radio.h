@@ -97,7 +97,7 @@
 /* rx buffer clear */
 #define ZB_RADIO_RX_BUF_CLEAR(p)                do{ \
                                                     p[12] = 0; \
-                                                    *((u32*)p) = 0; \
+                                                    *((uint32_t*)p) = 0; \
                                                 }while(0)
 
 /* set rx mode, maximum receiver buffer size, enable Rx/Tx interrupt */
@@ -112,7 +112,7 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
+                                                    uint8_t *p = pBuf; \
                                                     p[0] = len + 1; \
                                                     p[1] = 0; \
                                                     p[2] = 0; \
@@ -158,8 +158,8 @@
 #define ZB_TIMER_INIT()                         drv_hwTmr_init(TIMER_IDX_3, TIMER_MODE_SCLK)
 
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
-                                                    s16 minEd = -106; \
-                                                    s16 maxEd = -58;  /* maxGain */ \
+                                                    int16_t minEd = -106; \
+                                                    int16_t maxEd = -58;  /* maxGain */ \
                                                     if(mode == RF_GAIN_MODE_AUTO){ \
                                                         maxEd = -6;   /* AGC */ \
                                                     } \
@@ -273,7 +273,7 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
+                                                    uint8_t *p = pBuf; \
                                                     p[0] = len + 1; \
                                                     p[1] = 0; \
                                                     p[2] = 0; \
@@ -323,8 +323,8 @@
 #if 1
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
                                                     (void)mode; \
-                                                    s16 minEd = -99; \
-                                                    s16 maxEd = -15;  /* AGC */ \
+                                                    int16_t minEd = -99; \
+                                                    int16_t maxEd = -15;  /* AGC */ \
                                                     if(rssi > maxEd){rssi = maxEd;} \
                                                     if(rssi < minEd){rssi = minEd;} \
                                                     lqi = 255 * (rssi - minEd) / (maxEd - minEd); \
@@ -453,7 +453,7 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
+                                                    uint8_t *p = pBuf; \
                                                     p[0] = len + 1; \
                                                     p[1] = 0; \
                                                     p[2] = 0; \
@@ -503,8 +503,8 @@
 #if 1
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
                                                     (void)mode; \
-                                                    s16 minEd = -99; \
-                                                    s16 maxEd = -15;  /* AGC */ \
+                                                    int16_t minEd = -99; \
+                                                    int16_t maxEd = -15;  /* AGC */ \
                                                     if(rssi > maxEd){rssi = maxEd;} \
                                                     if(rssi < minEd){rssi = minEd;} \
                                                     lqi = 255 * (rssi - minEd) / (maxEd - minEd); \
@@ -637,8 +637,8 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
-                                                    u32 txLen = rf_tx_packet_dma_len(len + 1); \
+                                                    uint8_t *p = pBuf; \
+                                                    uint32_t txLen = rf_tx_packet_dma_len(len + 1); \
                                                     p[3] = (txLen >> 24) & 0xFF; \
                                                     p[2] = (txLen >> 16) & 0xFF; \
                                                     p[1] = (txLen >> 8) & 0xFF; \
@@ -690,8 +690,8 @@
 #if 1
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
                                                     (void)mode; \
-                                                    s16 minEd = -99; \
-                                                    s16 maxEd = -15;  /* AGC */ \
+                                                    int16_t minEd = -99; \
+                                                    int16_t maxEd = -15;  /* AGC */ \
                                                     if(rssi > maxEd){rssi = maxEd;} \
                                                     if(rssi < minEd){rssi = minEd;} \
                                                     lqi = 255 * (rssi - minEd) / (maxEd - minEd); \
@@ -825,8 +825,8 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
-                                                    u32 txLen = rf_tx_packet_dma_len(len + 1); \
+                                                    uint8_t *p = pBuf; \
+                                                    uint32_t txLen = rf_tx_packet_dma_len(len + 1); \
                                                     p[3] = (txLen >> 24) & 0xFF; \
                                                     p[2] = (txLen >> 16) & 0xFF; \
                                                     p[1] = (txLen >> 8) & 0xFF; \
@@ -878,8 +878,8 @@
 #if 1
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
                                                     (void)mode; \
-                                                    s16 minEd = -99; \
-                                                    s16 maxEd = -15;  /* AGC */ \
+                                                    int16_t minEd = -99; \
+                                                    int16_t maxEd = -15;  /* AGC */ \
                                                     if(rssi > maxEd){rssi = maxEd;} \
                                                     if(rssi < minEd){rssi = minEd;} \
                                                     lqi = 255 * (rssi - minEd) / (maxEd - minEd); \
@@ -1013,8 +1013,8 @@
                                                 }while(0)
 
 #define ZB_RADIO_DMA_HDR_BUILD(pBuf, len)       do{ \
-                                                    u8 *p = pBuf; \
-                                                    u32 txLen = rf_tx_packet_dma_len(len + 1); \
+                                                    uint8_t *p = pBuf; \
+                                                    uint32_t txLen = rf_tx_packet_dma_len(len + 1); \
                                                     p[3] = (txLen >> 24) & 0xFF; \
                                                     p[2] = (txLen >> 16) & 0xFF; \
                                                     p[1] = (txLen >> 8) & 0xFF; \
@@ -1070,8 +1070,8 @@
 #if 1
 #define ZB_RADIO_RSSI_TO_LQI(mode, rssi, lqi)   do{ \
                                                     (void)mode; \
-                                                    s16 minEd = -99; \
-                                                    s16 maxEd = -15;  /* AGC */ \
+                                                    int16_t minEd = -99; \
+                                                    int16_t maxEd = -15;  /* AGC */ \
                                                     if(rssi > maxEd){rssi = maxEd;} \
                                                     if(rssi < minEd){rssi = minEd;} \
                                                     lqi = 255 * (rssi - minEd) / (maxEd - minEd); \

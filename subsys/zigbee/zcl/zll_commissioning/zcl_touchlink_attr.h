@@ -57,41 +57,41 @@ typedef enum {
  */
 
 typedef struct {
-    u16 magicNum;
+    uint16_t magicNum;
     bool isFactoryNew;
-    u8 currentChannel;
-    u16 panId;
-    u16 nwkAddr;
+    uint8_t currentChannel;
+    uint16_t panId;
+    uint16_t nwkAddr;
     addrExt_t ieeeAddr;
     extPANId_t extPanId;
-    u8 parentRef;
-    u16 freeNwkAddressRangeBegin;
-    u16 freeNwkAddressRangeEnd;
-    u16 freeGroupAddressRangeBegin;
-    u16 freeGroupAddressRangeEnd;
-    u16 base_neighbor_used;
-    u16 ext_neighbor_used;
-    u8 child_num;
-    u8 ed_child_num;
-    u16 n_elements;
-    u16 n_sorted_elements;
+    uint8_t parentRef;
+    uint16_t freeNwkAddressRangeBegin;
+    uint16_t freeNwkAddressRangeEnd;
+    uint16_t freeGroupAddressRangeBegin;
+    uint16_t freeGroupAddressRangeEnd;
+    uint16_t base_neighbor_used;
+    uint16_t ext_neighbor_used;
+    uint8_t child_num;
+    uint8_t ed_child_num;
+    uint16_t n_elements;
+    uint16_t n_sorted_elements;
 
 #ifdef ZB_SECURITY
     ss_material_set_t secur_material_set[SECUR_N_SECUR_MATERIAL];
-    u8 active_key_seq_number;
-    u8 security_level:4;
-    u8 secure_all_frames:1;
-    u8 active_secur_material_i:2;
+    uint8_t active_key_seq_number;
+    uint8_t security_level:4;
+    uint8_t secure_all_frames:1;
+    uint8_t active_secur_material_i:2;
 #endif
 } zll_nv_params_t;
 
 typedef struct {
     /*   Define Address range values even if this device is not address
      * assignment capable with value Zero.*/
-    u16 freeNwkAddressRangeBegin;       /* Start of range of network addresses this device can assign to its child devices */
-    u16 freeNwkAddressRangeEnd;         /* End of range of network addresses this device can assign  to its child devices */
-    u16 freeGroupAddressRangeBegin;     /* Start of range of network addresses this device can assign to its child devices */
-    u16 freeGroupAddressRangeEnd;       /* End of range of network addresses this device can assign  to its child devices */
+    uint16_t freeNwkAddressRangeBegin;       /* Start of range of network addresses this device can assign to its child devices */
+    uint16_t freeNwkAddressRangeEnd;         /* End of range of network addresses this device can assign  to its child devices */
+    uint16_t freeGroupAddressRangeBegin;     /* Start of range of network addresses this device can assign to its child devices */
+    uint16_t freeGroupAddressRangeEnd;       /* End of range of network addresses this device can assign  to its child devices */
 } touchlink_attr_t;
 
 /**
@@ -103,9 +103,9 @@ typedef struct {
  * Public Functions
  */
 void ll_reset(void);
-void ll_get_encrypted_network_key(u8 key_index, u32 transaction_ID,
-                                  u32 response_ID, u8 *encrypted_network_key);
-void ll_decrypt_network_key(u8 key_index, u8 *encrypted_network_key,
-                            u32 transaction_ID, u32 response_ID);
+void ll_get_encrypted_network_key(uint8_t key_index, uint32_t transaction_ID,
+                                  uint32_t response_ID, uint8_t *encrypted_network_key);
+void ll_decrypt_network_key(uint8_t key_index, uint8_t *encrypted_network_key,
+                            uint32_t transaction_ID, uint32_t response_ID);
 
 #endif	/* ZCL_TOUCHLINK_ATTR_H */

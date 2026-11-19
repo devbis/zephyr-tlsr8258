@@ -37,14 +37,14 @@
 
 extern zcl_zllCommission_t g_zllCommission;
 extern bool scanReqProfileInterop;
-u8 reset2FactoryFlag = 0;
+uint8_t reset2FactoryFlag = 0;
 
 _CODE_ZCL_ void zcl_zllTouchLinkDiscoveryStop(void);
 _CODE_ZCL_ void zcl_zllTouchLinkDiscoveryStart(void);
 
-s32 zcl_touchLinkIdentifyRequestDone(void *arg)
+int32_t zcl_touchLinkIdentifyRequestDone(void *arg)
 {
-    u32 sta = (u32)arg;
+    uint32_t sta = (uint32_t)arg;
     zcl_zllTouchLinkFinish(sta);
     return -1;
 }
@@ -61,9 +61,9 @@ _CODE_ZCL_ static void zcl_zllTouchLinkIdentifyRequest(void *arg)
 {
     zll_touchLinkScanInfo *peerInfo = &g_zllTouchLink.disc->scanList[g_zllTouchLink.opIdx];
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
-    memcpy((u8 *)&dstEp,(u8 *)&peerInfo->dstEp, sizeof(dstEp));
+    memcpy((uint8_t *)&dstEp,(uint8_t *)&peerInfo->dstEp, sizeof(dstEp));
 
     zcl_zllTouchLinkIdentifyReq_t req;
     req.transId = g_zllTouchLink.transId;
@@ -71,7 +71,7 @@ _CODE_ZCL_ static void zcl_zllTouchLinkIdentifyRequest(void *arg)
 
     g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_IDENTIFY;
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_IDENTIFY, TRUE,
-                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkIdentifyReq_t), (u8 *)&req);
+                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkIdentifyReq_t), (uint8_t *)&req);
 
     if (BDB_ATTR().nodeIsOnANetwork) {
         if (ZB_EXTPANID_CMP(peerInfo->epanId, NWK_NIB().extPANId)) {
@@ -86,7 +86,7 @@ _CODE_ZCL_ static void zcl_zllTouchLinkIdentifyRequest(void *arg)
                 networkUpdateCmd.panId = NWK_NIB().panId;
                 networkUpdateCmd.nwkAddr = NWK_NIB().nwkAddr;
                 zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_NETWORK_UPDATE, TRUE,
-                                    ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkNetworkUpdateReq_t), (u8 *)&networkUpdateCmd);
+                                    ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkNetworkUpdateReq_t), (uint8_t *)&networkUpdateCmd);
             }
 
             if (peerInfo->nwkUpdateId > NWK_NIB().updateId) {
@@ -94,7 +94,7 @@ _CODE_ZCL_ static void zcl_zllTouchLinkIdentifyRequest(void *arg)
                 zdo_nlmeChannelShift(peerInfo->logicalChannel);
             }
             /* channel restore */
-            TL_ZB_TIMER_SCHEDULE(zcl_touchLinkIdentifyRequestDone, (void *)ZCL_ZLL_TOUCH_LINK_STA_EXIST, 5);
+            ZB_TIMER_SCHEDULE(zcl_touchLinkIdentifyRequestDone, (void *)ZCL_ZLL_TOUCH_LINK_STA_EXIST, 5);
             return;
         }
 
@@ -111,7 +111,7 @@ _CODE_ZCL_ static void zcl_zllTouchLinkIdentifyRequest(void *arg)
         return;
     }
 
-    TL_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartOrJoin, NULL);
+    ZB_SCHEDULE_TASK(zcl_zllTouchLinkNetworkStartOrJoin, NULL);
 }
 
 /*
@@ -126,16 +126,16 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequest(void *arg)
 {
     zll_touchLinkScanInfo *peerInfo = &g_zllTouchLink.disc->scanList[g_zllTouchLink.opIdx];
     epInfo_t dstEp;
-    TL_SETSTRUCTCONTENT(dstEp, 0);
+    ZB_SETSTRUCTCONTENT(dstEp, 0);
 
-    memcpy((u8 *)&dstEp,(u8 *)&peerInfo->dstEp, sizeof(dstEp));
+    memcpy((uint8_t *)&dstEp,(uint8_t *)&peerInfo->dstEp, sizeof(dstEp));
 
     /* send Device Information request */
     zcl_zllTouchLinkDeviceInfoReq_t req;
     req.transId = g_zllTouchLink.transId;
-    req.startIdx = (u8)((u32)arg);
+    req.startIdx = (uint8_t)((uint32_t)arg);
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, &dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_DEVICE_INFORMATION, TRUE,
-                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkDeviceInfoReq_t), (u8 *)&req);
+                        ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0, g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkDeviceInfoReq_t), (uint8_t *)&req);
 
     g_zllTouchLink.state = ZCL_ZLL_COMMISSION_STATE_TOUCHLINK_DEVICE_INFO_EXCHANGE;
 }
@@ -148,16 +148,16 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequest(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,u8 startEpIdx)
+_CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,uint8_t startEpIdx)
 {
     /*
      * send Device Information Response here
      * */
     af_endpoint_descriptor_t *aed = af_epDescriptorGet();
-    u8 MatchEpnumOnce = 0;
-    u8 totalMatchEpnum = 0;
-    u8 matchEpIdx[MAX_ACTIVE_EP_NUMBER] = {0};
-    for (u8 i = 0; i < af_availableEpNumGet(); i++) {
+    uint8_t MatchEpnumOnce = 0;
+    uint8_t totalMatchEpnum = 0;
+    uint8_t matchEpIdx[MAX_ACTIVE_EP_NUMBER] = {0};
+    for (uint8_t i = 0; i < af_availableEpNumGet(); i++) {
         if (af_clsuterIdMatched(ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, aed[i].correspond_simple_desc)) {
             matchEpIdx[totalMatchEpnum++] = i;
         }
@@ -168,7 +168,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,
         MatchEpnumOnce = (MatchEpnumOnce >= 5) ? 5 : MatchEpnumOnce;
     }
 
-    u8 len = MatchEpnumOnce * sizeof(zcl_zllDeviceInfoRec_t) + sizeof(zcl_zllTouchLinkDeviceInfoResp_t);
+    uint8_t len = MatchEpnumOnce * sizeof(zcl_zllDeviceInfoRec_t) + sizeof(zcl_zllTouchLinkDeviceInfoResp_t);
     zcl_zllTouchLinkDeviceInfoResp_t *resp = (zcl_zllTouchLinkDeviceInfoResp_t *)ev_buf_allocate(len);
     if (resp) {
         memset(resp, 0, len);
@@ -178,8 +178,8 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,
         resp->startIdx = startEpIdx;
         if (MatchEpnumOnce > 0) {
             zcl_zllDeviceInfoRec_t *rec = resp->rec;
-            for (u8 i = 0; i < MatchEpnumOnce; i++) {
-                u8 epIdx = matchEpIdx[startEpIdx + i];
+            for (uint8_t i = 0; i < MatchEpnumOnce; i++) {
+                uint8_t epIdx = matchEpIdx[startEpIdx + i];
                 rec->deviceId = aed[epIdx].correspond_simple_desc->app_dev_id;
                 rec->epId = aed[epIdx].ep;
                 rec->groupIdCnt = 0;
@@ -196,8 +196,8 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationRequestHandler(epInfo_t *dstEp,
         }
 
         zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, dstEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_DEVICE_INFORMATION_RSP, TRUE,
-                            ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, g_zllTouchLink.seqNo++, len, (u8 *)resp);
-        ev_buf_free((u8 *)resp);
+                            ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, g_zllTouchLink.seqNo++, len, (uint8_t *)resp);
+        ev_buf_free((uint8_t *)resp);
     }
 }
 
@@ -213,10 +213,10 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationResponseHandler(zcl_zllTouchLin
 {
     if (devInfoResp->startIdx + devInfoResp->deviceInfoRecordCnt >= devInfoResp->numOfSubdevices) {
         /* send identify request */
-        TL_SCHEDULE_TASK(zcl_zllTouchLinkIdentifyRequest, NULL);
+        ZB_SCHEDULE_TASK(zcl_zllTouchLinkIdentifyRequest, NULL);
     } else {
-        u32 nextIndex = devInfoResp->startIdx + devInfoResp->deviceInfoRecordCnt;
-        TL_SCHEDULE_TASK(zcl_zllTouchLinkDeviceInformationRequest, (void*)nextIndex);
+        uint32_t nextIndex = devInfoResp->startIdx + devInfoResp->deviceInfoRecordCnt;
+        ZB_SCHEDULE_TASK(zcl_zllTouchLinkDeviceInformationRequest, (void*)nextIndex);
     }
 }
 
@@ -228,7 +228,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkDeviceInformationResponseHandler(zcl_zllTouchLin
  * @param 	NULL
  *
  */
-_CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
+_CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, uint8_t seqNo)
 {
 #if (ZB_ED_ROLE)
     /* if it's under rejoin mode, exit */
@@ -244,8 +244,8 @@ _CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
     zcl_zllTouchLinkDiscoveryStop();
 
     zcl_zllTouchLinkScanResp_t resp;
-    TL_SETSTRUCTCONTENT(resp,0);
-    u8 scanRespLen = sizeof(zcl_zllTouchLinkScanResp_t) - sizeof(zcl_zllSubdeviceInfo_t);
+    ZB_SETSTRUCTCONTENT(resp,0);
+    uint8_t scanRespLen = sizeof(zcl_zllTouchLinkScanResp_t) - sizeof(zcl_zllSubdeviceInfo_t);
 
     resp.transId = g_zllTouchLink.transId;
     resp.rssiCorrection = 0; //This value should be pre-configured
@@ -286,7 +286,7 @@ _CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
 
     af_endpoint_descriptor_t *aed = af_epDescriptorGet();
 
-    for (u8 i = 0; i < af_availableEpNumGet(); i++) {
+    for (uint8_t i = 0; i < af_availableEpNumGet(); i++) {
         if (af_clsuterIdMatched(ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, aed[i].correspond_simple_desc)) {
             resp.numOfSubdevices++;
         }
@@ -296,7 +296,7 @@ _CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
      *  only present if no of sub devices is 1.
      *   Now only one end point is supported on a device, don't add this if multiple End Points are present in this device   */
     if (1 == resp.numOfSubdevices) {
-        for (u8 i = 0; i < af_availableEpNumGet(); i++) {
+        for (uint8_t i = 0; i < af_availableEpNumGet(); i++) {
             if (af_clsuterIdMatched(ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, aed[i].correspond_simple_desc)) {
                 resp.subDevInfo.epId = aed[i].ep;
                 if (scanReqProfileInterop) {
@@ -321,13 +321,13 @@ _CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
 
     /* Send Response to Originator ,should be Unicast */
     zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId, srcEp, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING, ZCL_CMD_ZLL_COMMISSIONING_SCAN_RSP, TRUE,
-                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, scanRespLen, (u8 *)&resp);
+                        ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, 0, seqNo, scanRespLen, (uint8_t *)&resp);
 
     /* start a timer which is used during the whole touch link */
     if (g_zllTouchLink.transIdLifeTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
     }
-    g_zllTouchLink.transIdLifeTimer = TL_ZB_TIMER_SCHEDULE(zcl_zllTouchLinkTimeout, NULL, ZB_INTER_PAN_TRANS_ID_LIFETIME);
+    g_zllTouchLink.transIdLifeTimer = ZB_TIMER_SCHEDULE(zcl_zllTouchLinkTimeout, NULL, ZB_INTER_PAN_TRANS_ID_LIFETIME);
 
     /* bdb set as BDB_STATE_COMMISSIONING_TOUCHLINK status */
     if (g_zllCommission.appCb->touchLinkCallback) {
@@ -343,17 +343,17 @@ _CODE_ZCL_  void zcl_zllTouchLinkScanRequestHandler(epInfo_t *srcEp, u8 seqNo)
  * @param 	resp the target information from scan response command
  *
  */
-_CODE_ZCL_ void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *resp, epInfo_t *dstEp, u8 lqi)
+_CODE_ZCL_ void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *resp, epInfo_t *dstEp, uint8_t lqi)
 {
     zcl_zllTouchLinkScanResp_t *p = resp;
 
-    u8 idx = g_zllTouchLink.disc->targetNum;
+    uint8_t idx = g_zllTouchLink.disc->targetNum;
     if (idx >= g_zllTouchLink.scanListNum) {
         return;// ZCL_STA_INVALID_VALUE;
     }
 
 #ifdef ZB_SECURITY
-    u16 matched_algorithms = 0;
+    uint16_t matched_algorithms = 0;
     if ((matched_algorithms = p->keyBitmask & (1 << g_zllTouchLink.keyType)) == 0) {
         return;// ZCL_STA_INVALID_VALUE;
     }
@@ -363,7 +363,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *
 
     /* check if the response by the same node with different respId */
     zll_touchLinkScanInfo *list = &g_zllTouchLink.disc->scanList[0];
-    u8 i = 0;
+    uint8_t i = 0;
     for (i = 0; i < idx; i++) {
         if (ZB_64BIT_ADDR_CMP(list->dstEp.dstAddr.extAddr, dstEp->dstAddr.extAddr)) {
             if (p->respId != list->respId) {
@@ -389,13 +389,13 @@ _CODE_ZCL_ void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *
     scanInfo->respId = p->respId;
     scanInfo->nwkUpdateId = p->nwkUpdateId;
     scanInfo->infoLqi = lqi;
-    memcpy((u8 *)&scanInfo->dstEp, (u8 *)dstEp, sizeof(epInfo_t));
+    memcpy((uint8_t *)&scanInfo->dstEp, (uint8_t *)dstEp, sizeof(epInfo_t));
     if (scanInfo->numOfSubdevices == 1) {
         memcpy(&scanInfo->devInfo, &p->subDevInfo, sizeof(zcl_zllSubdeviceInfo_t));
     }
 
 #ifdef ZB_SECURITY
-    //u8 i = 0;
+    //uint8_t i = 0;
     for (i = 0; i <= CERTIFICATION_KEY; i++) {
         if ((matched_algorithms & (1 << i)) && ((i == DEVELOPMENT_KEY) || (i == MASTER_KEY) || (i == CERTIFICATION_KEY))) {
             scanInfo->keyIdx = i;
@@ -404,7 +404,7 @@ _CODE_ZCL_ void zcl_zllTouchLinkScanResponseHandler(zcl_zllTouchLinkScanResp_t *
 #endif
 }
 
-s32 resetDeviceTouchLinkDone()
+int32_t resetDeviceTouchLinkDone()
 {
     zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_SUCC);
     return -1;
@@ -425,7 +425,7 @@ _CODE_ZCL_ static void zcl_zllTouchLinkDiscoverydone(void *arg)
     if (pDisc->targetNum) {
         g_zllTouchLink.opIdx = 0;
         zll_touchLinkScanInfo *pScanInfo = &pDisc->scanList[g_zllTouchLink.opIdx];
-        u32 i = 0;
+        uint32_t i = 0;
         for (i = 0; i < pDisc->targetNum; i++) {
             if (pScanInfo->zllInfo.bf.priorityReq) {
                 g_zllTouchLink.opIdx = i;
@@ -437,8 +437,8 @@ _CODE_ZCL_ static void zcl_zllTouchLinkDiscoverydone(void *arg)
 
         if ((i >= pDisc->targetNum) && (pDisc->targetNum > 1)) {
             pScanInfo = &pDisc->scanList[0];
-            u8 lqiMax = pScanInfo->infoLqi;
-            for (u32 n = 1; n < pDisc->targetNum; n++) {
+            uint8_t lqiMax = pScanInfo->infoLqi;
+            for (uint32_t n = 1; n < pDisc->targetNum; n++) {
                 if (lqiMax < pScanInfo->infoLqi) {
                     lqiMax = pScanInfo->infoLqi;
                     g_zllTouchLink.opIdx = n;
@@ -464,15 +464,15 @@ _CODE_ZCL_ static void zcl_zllTouchLinkDiscoverydone(void *arg)
         if (reset2FactoryFlag) {
             zcl_zllTouchLinkResetFactoryReq(NULL);
             //the channel will change in zcl_zllTouchLinkFinish, wait the reset information to send successfully.
-            TL_ZB_TIMER_SCHEDULE(resetDeviceTouchLinkDone, NULL, 1000);
+            ZB_TIMER_SCHEDULE(resetDeviceTouchLinkDone, NULL, 1000);
             return;
         }
 
         if (pScanInfo->numOfSubdevices > 1) {
-            u32 start_idx = 0;
-            TL_SCHEDULE_TASK(zcl_zllTouchLinkDeviceInformationRequest, (void *)start_idx);
+            uint32_t start_idx = 0;
+            ZB_SCHEDULE_TASK(zcl_zllTouchLinkDeviceInformationRequest, (void *)start_idx);
         } else {
-            TL_SCHEDULE_TASK(zcl_zllTouchLinkIdentifyRequest, NULL);
+            ZB_SCHEDULE_TASK(zcl_zllTouchLinkIdentifyRequest, NULL);
         }
     } else {
         zcl_zllTouchLinkFinish(ZCL_ZLL_TOUCH_LINK_STA_NO_SERVER);
@@ -487,13 +487,13 @@ _CODE_ZCL_ static void zcl_zllTouchLinkDiscoverydone(void *arg)
  * @param 	arg
  *
  */
-_CODE_ZCL_ static s32 zcl_touchLinkScanStart(void *arg)
+_CODE_ZCL_ static int32_t zcl_touchLinkScanStart(void *arg)
 {
     zcl_zllTouckLinkDisc_t *pDisc = g_zllTouchLink.disc;
     epInfo_t dstEpInfo;
-    u32 i = 0;
+    uint32_t i = 0;
 
-    TL_SETSTRUCTCONTENT(dstEpInfo, 0);
+    ZB_SETSTRUCTCONTENT(dstEpInfo, 0);
 
     dstEpInfo.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     dstEpInfo.dstEp = 0;
@@ -506,7 +506,7 @@ _CODE_ZCL_ static s32 zcl_touchLinkScanStart(void *arg)
         pDisc->scanCnt = 5;
     }
     if (g_zllTouchLink.IsFirstChannel || pDisc->scanCnt == 0) {
-        for (i = TL_ZB_MAC_CHANNEL_START; i < TL_ZB_MAC_CHANNEL_STOP+1; i++) {
+        for (i = ZB_MAC_CHANNEL_START; i < ZB_MAC_CHANNEL_STOP+1; i++) {
             if (pDisc->unscannedChannelMask & (1 << i)) {
                 pDisc->currentScannChannel = i;
                 g_zllTouchLink.IsFirstChannel = 0;
@@ -519,7 +519,7 @@ _CODE_ZCL_ static s32 zcl_touchLinkScanStart(void *arg)
         pDisc->scanCnt--;
     }
 
-    if (i == TL_ZB_MAC_CHANNEL_STOP+1) {
+    if (i == ZB_MAC_CHANNEL_STOP+1) {
         pDisc->primaryChannelScanComplete = 1;
     }
 
@@ -534,7 +534,7 @@ _CODE_ZCL_ static s32 zcl_touchLinkScanStart(void *arg)
         scanReq.zllInfo.byte = g_zllTouchLink.zllInfo.byte;
         zcl_sendInterPANCmd(g_zllTouchLink.devInfo.epId , &dstEpInfo, ZCL_CLUSTER_TOUCHLINK_COMMISSIONING,
                             ZCL_CMD_ZLL_COMMISSIONING_SCAN, TRUE, ZCL_FRAME_CLIENT_SERVER_DIR, TRUE, 0,
-                            g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkScanReq_t), (u8 *)&scanReq);
+                            g_zllTouchLink.seqNo++, sizeof(zcl_zllTouchLinkScanReq_t), (uint8_t *)&scanReq);
     } else {
         if (g_zllTouchLink.vDoPrimaryScan) {
             g_zllTouchLink.vDoPrimaryScan = 0;
@@ -544,7 +544,7 @@ _CODE_ZCL_ static s32 zcl_touchLinkScanStart(void *arg)
                 return ZB_SCAN_TIME_BASE_DURATION;
             }
         }
-        TL_SCHEDULE_TASK(zcl_zllTouchLinkDiscoverydone, NULL);
+        ZB_SCHEDULE_TASK(zcl_zllTouchLinkDiscoverydone, NULL);
         g_zllTouchLink.runTimer = NULL;
         return -1;
     }
@@ -564,15 +564,15 @@ _CODE_ZCL_ void zcl_zllTouchLinkDiscoveryStart(void)
 {
     /* start a timer which is used during touch link discovery */
     if (g_zllTouchLink.runTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
     }
-    g_zllTouchLink.runTimer = TL_ZB_TIMER_SCHEDULE(zcl_touchLinkScanStart, NULL, 5);
+    g_zllTouchLink.runTimer = ZB_TIMER_SCHEDULE(zcl_touchLinkScanStart, NULL, 5);
 
     /* start a timer which is used during the whole touch link */
     if (g_zllTouchLink.transIdLifeTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
     }
-    g_zllTouchLink.transIdLifeTimer = TL_ZB_TIMER_SCHEDULE(zcl_zllTouchLinkTimeout, NULL, ZB_INTER_PAN_TRANS_ID_LIFETIME);
+    g_zllTouchLink.transIdLifeTimer = ZB_TIMER_SCHEDULE(zcl_zllTouchLinkTimeout, NULL, ZB_INTER_PAN_TRANS_ID_LIFETIME);
 }
 
 /*
@@ -586,15 +586,15 @@ _CODE_ZCL_ void zcl_zllTouchLinkDiscoveryStart(void)
 _CODE_ZCL_ void zcl_zllTouchLinkDiscoveryStop(void)
 {
     if (g_zllTouchLink.runTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.runTimer);
     }
 
     if (g_zllTouchLink.transIdLifeTimer) {
-        TL_ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
+        ZB_TIMER_CANCEL(&g_zllTouchLink.transIdLifeTimer);
     }
 
     if (g_zllTouchLink.disc) {
-        ev_buf_free((u8 *)g_zllTouchLink.disc);
+        ev_buf_free((uint8_t *)g_zllTouchLink.disc);
         g_zllTouchLink.disc = NULL;
     }
 }

@@ -14,14 +14,14 @@
 #include "zb_nwk_core.h"
 #include <stdint.h>
 
-u16 dstPanID = 0;
-u8 g_apsTxCacheNum = 0;
+uint16_t dstPanID = 0;
+uint8_t g_apsTxCacheNum = 0;
 static apsDataIndCb_t g_apsDataIndCb;
-u8 T_DBG_fgmt[16] = {0};
-u8 apsDuplicateCheckFlag = 0;
-u8 T_DBG_fgmtCnf[8] = {0};
-u8 T_DBG_fgmtBlk[8] = {0};
-u8 T_DBG_fgmtTout = 0;
+uint8_t T_DBG_fgmt[16] = {0};
+uint8_t apsDuplicateCheckFlag = 0;
+uint8_t T_DBG_fgmtCnf[8] = {0};
+uint8_t T_DBG_fgmtBlk[8] = {0};
+uint8_t T_DBG_fgmtTout = 0;
 
 enum {
 	APS_FRAGMENT_RCV_TIMEOUT_MS_PER_ACK = 1000U,
@@ -30,43 +30,43 @@ enum {
 };
 
 typedef struct _attribute_packed_ {
-	u8 seqNum;
-	u8 status;
+	uint8_t seqNum;
+	uint8_t status;
 	addrExt_t extAddr;
-	u16 shortAddr;
+	uint16_t shortAddr;
 } aps_nwk_addr_rsp_hdr_t;
 
 typedef apsDataFragmentTransWin_t aps_fragment_tx_win_t;
 
 typedef struct _attribute_packed_ {
 	union {
-		u16 addr_short;
+		uint16_t addr_short;
 		addrExt_t addr_long;
 	} dstAddr;
 	union {
 		struct _attribute_packed_ {
-			u8 dstAddrMode;
-			u8 dstEndpoint;
-			u8 srcEndpoint;
+			uint8_t dstAddrMode;
+			uint8_t dstEndpoint;
+			uint8_t srcEndpoint;
 		} af;
 		struct _attribute_packed_ {
-			u8 dstEndpoint;
-			u8 srcEndpoint;
-			u8 dstAddrMode;
+			uint8_t dstEndpoint;
+			uint8_t srcEndpoint;
+			uint8_t dstAddrMode;
 		} extConfirm;
 	} ep;
-	u8 status;
-	u8 pad[4]; /* unused bytes between status and handle */
-	u8 handle;
-	u8 apsCnt;
-	u16 clusterId;
+	uint8_t status;
+	uint8_t pad[4]; /* unused bytes between status and handle */
+	uint8_t handle;
+	uint8_t apsCnt;
+	uint16_t clusterId;
 } aps_confirm_buf_t;
 
 /* Local packed overlay for fragment reassembly. */
 typedef struct _attribute_packed_ {
 	aps_data_ind_t ind;
-	u16 copiedLen;
-	u8 asdu[];
+	uint16_t copiedLen;
+	uint8_t asdu[];
 } aps_fragment_reassembly_t;
 
 /* Layout contract */
@@ -119,27 +119,27 @@ static inline apsDataFragmentRcvWin_t *aps_frag_rcv_win(void)
 static inline bool aps_fragment_ack_window_ready(const aps_fragment_tx_win_t *win)
 {
 	return win->activeListNum == aps_ib.aps_max_window_size ||
-	       (u8)(win->curBlockNum + 1U) == win->totalBlockNum;
+	       (uint8_t)(win->curBlockNum + 1U) == win->totalBlockNum;
 }
 
-static inline u8 aps_cache_state(const aps_tx_cache_list_t *cache)
+static inline uint8_t aps_cache_state(const aps_tx_cache_list_t *cache)
 {
 	return cache->state;
 }
 
-static inline void aps_cache_state_set(aps_tx_cache_list_t *cache, u8 state)
+static inline void aps_cache_state_set(aps_tx_cache_list_t *cache, uint8_t state)
 {
 	cache->state = state;
 }
 
 static inline aps_rx_hdr_t *aps_rx_hdr(void *arg)
 {
-	return (aps_rx_hdr_t *)((u8 *)arg + sizeof(nlde_data_ind_t));
+	return (aps_rx_hdr_t *)((uint8_t *)arg + sizeof(nlde_data_ind_t));
 }
 
 static void aps_indPrimBuild(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	uint8_t *buf = (uint8_t *)arg;
 	nlde_data_ind_t in;
 	aps_rx_hdr_t hdr;
 	aps_data_ind_t *out = (aps_data_ind_t *)arg;
@@ -160,7 +160,7 @@ static void aps_indPrimBuild(void *arg)
 	out->src_short_addr = in.srcAddr;
 	out->srcMacAddr = in.srcMacAddr;
 	out->asdu = in.nsdu + hdr.hdrLen;
-	out->asduLength = (u16)(in.nsduLen - hdr.hdrLen);
+	out->asduLength = (uint16_t)(in.nsduLen - hdr.hdrLen);
 	/* Deliberate deviation from the vendor object: it never fills rx_tick. */
 	out->rx_tick = in.rxTime;
 	out->lqi = in.lqi;
@@ -171,7 +171,7 @@ static void aps_indPrimBuild(void *arg)
 	    APS_FRAME_CTRL_DELIVERY_MODE_GROUP) {
 		out->dst_addr_mode = APS_SHORT_GROUPADDR_NOEP;
 		/* The group address is the one of the APS header. */
-		out->dst_addr = (u16)(hdr.dstEp | ((u16)hdr.dstAddrHi << 8));
+		out->dst_addr = (uint16_t)(hdr.dstEp | ((uint16_t)hdr.dstAddrHi << 8));
 	} else {
 		out->dst_addr_mode = APS_SHORT_DSTADDR_WITHEP;
 		out->dst_addr = in.dstAddr;
@@ -190,7 +190,7 @@ static void aps_conf(void *arg)
 	aps_confirm_buf_t *buf = (aps_confirm_buf_t *)arg;
 
 	if (buf->handle < APS_CMD_HANDLE_TRANSPORT_KEY) {
-		u8 *cnf = ev_buf_allocate(sizeof(aps_confirm_buf_t));
+		uint8_t *cnf = ev_buf_allocate(sizeof(aps_confirm_buf_t));
 
 		if (cnf == NULL) {
 			return;
@@ -198,7 +198,7 @@ static void aps_conf(void *arg)
 
 		memset(cnf, 0, sizeof(aps_confirm_buf_t));
 		memcpy(cnf, buf, sizeof(aps_confirm_buf_t));
-		tl_zbTaskPost(af_dataCnfHandler, cnf);
+		zb_TaskPost(af_dataCnfHandler, cnf);
 		return;
 	}
 
@@ -208,7 +208,7 @@ static void aps_conf(void *arg)
 	}
 
 	if (buf->handle == APS_CMD_HANDLE_SWITCH_KEY) {
-		ss_tcSwitchKey((u8)(ss_ib.activeKeySeqNum + 1U));
+		ss_tcSwitchKey((uint8_t)(ss_ib.activeKeySeqNum + 1U));
 		return;
 	}
 
@@ -226,15 +226,15 @@ static void aps_conf(void *arg)
 	}
 
 	{
-		u16 idx = 0;
-		u16 shortAddr = 0;
+		uint16_t idx = 0;
+		uint16_t shortAddr = 0;
 
-		if (tl_zbShortAddrByExtAddr(&shortAddr, g_zbInfo.macPib.extAddress, &idx) ==
+		if (zb_ShortAddrByExtAddr(&shortAddr, g_zbInfo.macPib.extAddress, &idx) ==
 		    RET_OK) {
-			u16 localShort = g_zbInfo.macPib.shortAddress;
+			uint16_t localShort = g_zbInfo.macPib.shortAddress;
 
 			if (shortAddr != localShort) {
-				tl_zbNwkAddrMapAdd(localShort, g_zbInfo.macPib.extAddress, &idx);
+				zb_NwkAddrMapAdd(localShort, g_zbInfo.macPib.extAddress, &idx);
 				zb_info_save(NULL);
 			}
 		}
@@ -256,7 +256,7 @@ static int endDevTimeoutReq(void *arg)
 	return -1;
 #endif
 }
-static void aps_txCacheAsNoShortAddr(addrExt_t extAddr, u8 *seqNo)
+static void aps_txCacheAsNoShortAddr(addrExt_t extAddr, uint8_t *seqNo)
 {
 	zdo_nwk_addr_req_t req;
 
@@ -280,11 +280,11 @@ static void apsDataFragmentRcvWinClear(void)
 
 	win->evBuf = NULL;
 
-	for (u8 i = 0; i < APS_FRAG_RCV_SLOTS; i++) {
+	for (uint8_t i = 0; i < APS_FRAG_RCV_SLOTS; i++) {
 		aps_rcv_info_t *slot = &aps_frag_rcv_win()->rcvInfo[i];
 
 		if (slot->state != APS_RCV_FRAGMENT_IDLE && slot->validBufNum != 0U) {
-			for (u8 j = 0; j < slot->validBufNum; j++) {
+			for (uint8_t j = 0; j < slot->validBufNum; j++) {
 				zb_buf_t *frag = (zb_buf_t *)slot->buf[j];
 
 				if (frag != NULL) {
@@ -316,7 +316,7 @@ static void apsRcvingWindowHandling(void *arg)
 	}
 
 	if (slot->validBufNum != 0U) {
-		for (u8 i = 0; i < slot->validBufNum; i++) {
+		for (uint8_t i = 0; i < slot->validBufNum; i++) {
 			zb_buf_t *frag = (zb_buf_t *)slot->buf[i];
 
 			if (frag == NULL) {
@@ -330,13 +330,13 @@ static void apsRcvingWindowHandling(void *arg)
 			}
 
 			{
-				u16 offset = reassemblyObj->copiedLen;
+				uint16_t offset = reassemblyObj->copiedLen;
 				aps_data_ind_t *fragInd = (aps_data_ind_t *)frag;
-				u16 fragLen = fragInd->asduLength;
-				u8 *asdu = fragInd->asdu;
+				uint16_t fragLen = fragInd->asduLength;
+				uint8_t *asdu = fragInd->asdu;
 
 				memcpy(reassemblyObj->asdu + offset, asdu, fragLen);
-				offset = (u16)(offset + fragLen);
+				offset = (uint16_t)(offset + fragLen);
 				reassemblyObj->copiedLen = offset;
 				reassemblyObj->ind.asduLength = offset;
 			}
@@ -355,7 +355,7 @@ static void apsRcvingWindowHandling(void *arg)
 
 	if (win->blockNumProcessed == win->totalBlockNum) {
 		reassemblyObj->ind.asdu = reassemblyObj->asdu;
-		tl_zbTaskPost(af_aps_data_fragment_entry, reassemblyObj);
+		zb_TaskPost(af_aps_data_fragment_entry, reassemblyObj);
 		apsDataFragmentRcvWinClear();
 	}
 }
@@ -389,15 +389,15 @@ static int aps_data_fragment_process_timeout(void *arg)
 	win->rcvWinTimeoutEvt = NULL;
 	return -1;
 }
-static u8 aps_ack_send(const aps_rx_hdr_t *hdr, u8 securityUse, u8 blockAck)
+static uint8_t aps_ack_send(const aps_rx_hdr_t *hdr, uint8_t securityUse, uint8_t blockAck)
 {
 	zb_buf_t *buf = zb_buf_allocate();
 	nlde_data_req_t *req;
-	u8 auxHdr[8] = {0};
-	u8 *payload;
-	u8 payloadLen;
-	u8 baseLen;
-	u8 fc;
+	uint8_t auxHdr[8] = {0};
+	uint8_t *payload;
+	uint8_t payloadLen;
+	uint8_t baseLen;
+	uint8_t fc;
 
 	if (buf == NULL) {
 		return APS_STATUS_INTERNAL_BUF_FULL;
@@ -420,10 +420,10 @@ static u8 aps_ack_send(const aps_rx_hdr_t *hdr, u8 securityUse, u8 blockAck)
 		    APS_FRAME_CTRL_FRAME_TYPE_COMMAND &&
 	    (hdr->frameCtrl & APS_FRAME_CTRL_SECURITY) != 0U) {
 		fc |= APS_FRAME_CTRL_SECURITY;
-		payloadLen = (u8)(payloadLen + ss_apsEnAuxHdrFill(auxHdr, NULL, 0));
+		payloadLen = (uint8_t)(payloadLen + ss_apsEnAuxHdrFill(auxHdr, NULL, 0));
 	}
 
-	TL_BUF_INITIAL_ALLOC(buf, payloadLen, payload, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, payloadLen, payload, uint8_t *);
 	if (payload == NULL) {
 		zb_buf_free(buf);
 		return APS_STATUS_INTERNAL_BUF_FULL;
@@ -457,7 +457,7 @@ static u8 aps_ack_send(const aps_rx_hdr_t *hdr, u8 securityUse, u8 blockAck)
 	if ((hdr->frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK) !=
 		    APS_FRAME_CTRL_FRAME_TYPE_COMMAND &&
 	    (hdr->frameCtrl & APS_FRAME_CTRL_SECURITY) != 0U) {
-		u8 auxLen = (u8)(payloadLen - baseLen);
+		uint8_t auxLen = (uint8_t)(payloadLen - baseLen);
 
 		memcpy(payload + baseLen, auxHdr, auxLen);
 	}
@@ -485,11 +485,11 @@ static u8 aps_ack_send(const aps_rx_hdr_t *hdr, u8 securityUse, u8 blockAck)
 		}
 	}
 
-	tl_zbNwkNldeDataRequest(buf);
+	zb_NwkNldeDataRequest(buf);
 	return 0;
 }
 
-static void aps_txCacheConfirm(void *arg, u8 status)
+static void aps_txCacheConfirm(void *arg, uint8_t status)
 {
 	aps_tx_cache_list_t *cache = (aps_tx_cache_list_t *)arg;
 	aps_fragment_tx_win_t *win;
@@ -538,7 +538,7 @@ static void aps_txCacheConfirm(void *arg, u8 status)
 
 		if (win->activeListNum >= aps_ib.aps_max_window_size &&
 		    win->ackBit == APS_FRAG_ACK_ALL) {
-			for (u8 i = 0; i < win->activeListNum; i++) {
+			for (uint8_t i = 0; i < win->activeListNum; i++) {
 				aps_tx_cache_list_t *pending = win->list[i];
 
 				/* The vendor object does not test the entry; a hole in the list
@@ -568,7 +568,7 @@ static void aps_txCacheConfirm(void *arg, u8 status)
 	}
 
 	{
-		u8 delay = aps_ib.aps_interframe_delay;
+		uint8_t delay = aps_ib.aps_interframe_delay;
 
 		if (delay == 0U) {
 			delay = APS_FRAG_INTERFRAME_DELAY_DEFAULT_MS;
@@ -593,13 +593,13 @@ fragment_done:
 
 	if (win->used != 0U) {
 		if (win->payload != NULL) {
-			ev_buf_free((u8 *)win->payload);
+			ev_buf_free((uint8_t *)win->payload);
 		}
 		if (win->req != NULL) {
-			ev_buf_free((u8 *)win->req);
+			ev_buf_free((uint8_t *)win->req);
 		}
 
-		for (u8 i = 0; i < win->activeListNum; i++) {
+		for (uint8_t i = 0; i < win->activeListNum; i++) {
 			aps_tx_cache_list_t *pending = win->list[i];
 
 			if (pending == NULL) {
@@ -629,7 +629,7 @@ fragment_done:
 	g_apsTxCacheNum--;
 }
 
-static u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
+static uint8_t apsTxDataSendStart(aps_tx_cache_list_t *cache)
 {
 	zb_buf_t *buf;
 	zb_buf_t *src;
@@ -647,20 +647,20 @@ static u8 apsTxDataSendStart(aps_tx_cache_list_t *cache)
 		return 1;
 	}
 
-	TL_COPY_BUF(buf, src);
+	ZB_COPY_BUF(buf, src);
 	req = (nlde_data_req_t *)buf;
 	nsduOffset = (size_t)(req->nsdu - src->buf);
 	req->nsdu = buf->buf + nsduOffset;
 
 	if (cache->interPAN) {
-		(void)tl_zbNwkInterPanDataReq(buf);
+		(void)zb_NwkInterPanDataReq(buf);
 	} else {
-		tl_zbNwkNldeDataRequest(buf);
+		zb_NwkNldeDataRequest(buf);
 	}
 
 	return 0;
 }
-void tl_apsDataIndRegister(apsDataIndCb_t cb)
+void zb_apsDataIndRegister(apsDataIndCb_t cb)
 {
 	g_apsDataIndCb = cb;
 }
@@ -675,7 +675,7 @@ void apsCleanToStopSecondClock(void)
 		return;
 	}
 
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (!cache->used) {
@@ -709,10 +709,10 @@ int apsDuplicatePeriodic(void *arg)
 	{
 		bool anyClock = FALSE;
 
-		u32 usedNum = 0;
+		uint32_t usedNum = 0;
 
-		for (u32 i = 0; usedNum < g_nwkAddrMap.validNum; i++) {
-			tl_zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[i];
+		for (uint32_t i = 0; usedNum < g_nwkAddrMap.validNum; i++) {
+			zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[i];
 
 			if (!entry->used) {
 				continue;
@@ -736,18 +736,18 @@ int apsDuplicatePeriodic(void *arg)
 	return 0;
 }
 
-u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
+uint8_t aps_duplicate_check(uint16_t src_addr, uint8_t aps_counter)
 {
-	u16 idx;
+	uint16_t idx;
 
 	/* The vendor library creates the mapping when it is missing. */
-	if (tl_addrByShort(src_addr, 1, 0, &idx) != RET_OK) {
+	if (zb_addrByShort(src_addr, 1, 0, &idx) != RET_OK) {
 		return 0;
 	}
 
 	{
-		tl_zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[idx];
-		u8 duplicate = 0U;
+		zb_addr_map_entry_t *entry = &g_nwkAddrMap.addrMap[idx];
+		uint8_t duplicate = 0U;
 
 		/* The result is 1 only when the stored counter equals the
 		 * received one (a logical NOT of their difference).  Reading it as the
@@ -761,17 +761,17 @@ u8 aps_duplicate_check(u16 src_addr, u8 aps_counter)
 
 		entry->aps_dup_cnt = aps_counter;
 		entry->aps_dup_clock =
-			(u8)(((APS_ACK_EXPIRY * APS_MAX_FRAME_RETRIES) + 1U) & APS_DUP_CLOCK_MASK);
+			(uint8_t)(((APS_ACK_EXPIRY * APS_MAX_FRAME_RETRIES) + 1U) & APS_DUP_CLOCK_MASK);
 		apsDuplicateCheckFlag = 1;
 		return duplicate;
 	}
 }
 static void aps_data_indication_process(void *arg)
 {
-	u8 *buf = (u8 *)arg;
+	uint8_t *buf = (uint8_t *)arg;
 	aps_rx_hdr_t *hdr = aps_rx_hdr(buf);
-	u8 frameType;
-	u8 frameCtrl;
+	uint8_t frameType;
+	uint8_t frameCtrl;
 
 	if ((hdr->frameCtrl & APS_FRAME_CTRL_SECURITY) != 0U) {
 		if (ss_apsDecryptFrame(arg) != RET_OK) {
@@ -786,11 +786,11 @@ static void aps_data_indication_process(void *arg)
 		apsDataFragmentRcvWin_t *win = aps_frag_rcv_win();
 		aps_rcv_info_t *slot = NULL;
 		aps_rx_hdr_t ackHdr;
-		u8 extHdr = hdr->extHdr;
-		u8 securityUse = networkInd->securityUse;
-		u8 maxWindow;
-		u8 blockNum;
-		u8 slotIndex;
+		uint8_t extHdr = hdr->extHdr;
+		uint8_t securityUse = networkInd->securityUse;
+		uint8_t maxWindow;
+		uint8_t blockNum;
+		uint8_t slotIndex;
 		bool sendAck;
 
 		if ((hdr->frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK) !=
@@ -809,8 +809,8 @@ static void aps_data_indication_process(void *arg)
 		}
 
 		if (win->used == 0U) {
-			u8 *reassembly;
-			u8 totalBlocks;
+			uint8_t *reassembly;
+			uint8_t totalBlocks;
 
 			if (win->evBuf != NULL) {
 				T_DBG_fgmt[1]++;
@@ -819,16 +819,16 @@ static void aps_data_indication_process(void *arg)
 			}
 
 			if (extHdr == APS_EXT_FRAME_CTRL_FIRST) {
-				u16 payloadBytes;
+				uint16_t payloadBytes;
 
 				totalBlocks = hdr->blockNum;
-				payloadBytes = (u16)((u16)totalBlocks *
-						     (u16)(networkInd->nsduLen - hdr->hdrLen));
+				payloadBytes = (uint16_t)((uint16_t)totalBlocks *
+						     (uint16_t)(networkInd->nsduLen - hdr->hdrLen));
 				reassembly =
 					(payloadBytes == 0U)
 						? long_ev_buf_get()
 						: ev_buf_allocate(
-							  (u16)(payloadBytes +
+							  (uint16_t)(payloadBytes +
 								sizeof(aps_fragment_reassembly_t)));
 			} else {
 				totalBlocks = 0;
@@ -868,8 +868,8 @@ static void aps_data_indication_process(void *arg)
 		if (extHdr == APS_EXT_FRAME_CTRL_FIRST) {
 			win->totalBlockNum = hdr->blockNum;
 			hdr->blockNum = 0;
-			if ((u16)((u16)win->totalBlockNum *
-				  (u16)(networkInd->nsduLen - hdr->hdrLen)) >
+			if ((uint16_t)((uint16_t)win->totalBlockNum *
+				  (uint16_t)(networkInd->nsduLen - hdr->hdrLen)) >
 			    APS_FRAGMENT_REASSEMBLY_MAX_PAYLOAD) {
 				/* Deliberate deviation from the vendor object: it only clears the
 				 * window pointer here and leaks the reassembly buffer that was just
@@ -898,7 +898,7 @@ static void aps_data_indication_process(void *arg)
 		}
 
 		if (slot != NULL) {
-			if ((u16)slot->validBufNum + slot->minBlockNum <= blockNum) {
+			if ((uint16_t)slot->validBufNum + slot->minBlockNum <= blockNum) {
 				T_DBG_fgmt[5]++;
 				zb_buf_free((zb_buf_t *)arg);
 				return;
@@ -916,7 +916,7 @@ static void aps_data_indication_process(void *arg)
 				slot = &win->rcvInfo[1];
 			}
 
-			if (slot == NULL || (u16)win->curRcvMinBlockNum + maxWindow <= blockNum) {
+			if (slot == NULL || (uint16_t)win->curRcvMinBlockNum + maxWindow <= blockNum) {
 				T_DBG_fgmt[6]++;
 				zb_buf_free((zb_buf_t *)arg);
 				return;
@@ -927,8 +927,8 @@ static void aps_data_indication_process(void *arg)
 			slot->validBufNum = maxWindow;
 			slot->minBlockNum = win->curRcvMinBlockNum;
 			slot->ackBit = APS_FRAG_ACK_ALL;
-			for (u8 i = 0; i < maxWindow; i++) {
-				slot->ackBit &= (u8) ~(1U << i);
+			for (uint8_t i = 0; i < maxWindow; i++) {
+				slot->ackBit &= (uint8_t) ~(1U << i);
 			}
 
 			if (win->curRcvMinBlockNum == 0U) {
@@ -936,31 +936,31 @@ static void aps_data_indication_process(void *arg)
 				win->waitCnt = 0;
 				win->rcvWinTimeoutEvt = ev_timer_taskPost(
 					aps_data_fragment_process_timeout, NULL,
-					(u32)APS_ACK_EXPIRY * APS_FRAGMENT_RCV_TIMEOUT_MS_PER_ACK);
+					(uint32_t)APS_ACK_EXPIRY * APS_FRAGMENT_RCV_TIMEOUT_MS_PER_ACK);
 			}
 		}
 
 		if (slot == NULL) {
 			/* A block of an already acknowledged window: repeat its acknowledgement. */
 			T_DBG_fgmt[0xd]++;
-			ackHdr.blockNum = (u8)(win->curRcvMinBlockNum - maxWindow);
+			ackHdr.blockNum = (uint8_t)(win->curRcvMinBlockNum - maxWindow);
 			(void)aps_ack_send(&ackHdr, securityUse, APS_FRAG_ACK_ALL);
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
 
 		T_DBG_fgmtBlk[2] = win->totalBlockNum;
-		slotIndex = (u8)(blockNum % slot->validBufNum);
+		slotIndex = (uint8_t)(blockNum % slot->validBufNum);
 		if (slot->buf[slotIndex] != NULL) {
 			zb_buf_free((zb_buf_t *)arg);
 		} else {
 			slot->buf[slotIndex] = (void *)arg;
-			slot->ackBit |= (u8)(1U << slotIndex);
-			if (win->totalBlockNum != 0U && blockNum == (u8)(win->totalBlockNum - 1U)) {
+			slot->ackBit |= (uint8_t)(1U << slotIndex);
+			if (win->totalBlockNum != 0U && blockNum == (uint8_t)(win->totalBlockNum - 1U)) {
 				T_DBG_fgmt[8]++;
-				for (u16 b = win->totalBlockNum;
-				     b < (u16)slot->minBlockNum + slot->validBufNum; b++) {
-					slot->ackBit |= (u8)(1U << (b % slot->validBufNum));
+				for (uint16_t b = win->totalBlockNum;
+				     b < (uint16_t)slot->minBlockNum + slot->validBufNum; b++) {
+					slot->ackBit |= (uint8_t)(1U << (b % slot->validBufNum));
 				}
 			}
 		}
@@ -980,7 +980,7 @@ static void aps_data_indication_process(void *arg)
 			win->waitCnt = 0;
 			win->rcvWinTimeoutEvt = ev_timer_taskPost(
 				aps_data_fragment_process_timeout, NULL,
-				(u32)APS_ACK_EXPIRY * APS_FRAGMENT_RCV_TIMEOUT_MS_PER_ACK);
+				(uint32_t)APS_ACK_EXPIRY * APS_FRAGMENT_RCV_TIMEOUT_MS_PER_ACK);
 		}
 
 		T_DBG_fgmtBlk[4] = win->totalBlockNum;
@@ -988,8 +988,8 @@ static void aps_data_indication_process(void *arg)
 			T_DBG_fgmt[0xa]++;
 			slot->state = APS_RCV_FRAGMENT_HANDLING;
 			win->curRcvMinBlockNum =
-				(u8)(win->curRcvMinBlockNum + aps_ib.aps_max_window_size);
-			tl_zbTaskPost((tl_zb_callback_t)apsRcvingWindowHandling, slot);
+				(uint8_t)(win->curRcvMinBlockNum + aps_ib.aps_max_window_size);
+			zb_TaskPost((zb_callback_t)apsRcvingWindowHandling, slot);
 		}
 		T_DBG_fgmtBlk[5] = win->totalBlockNum;
 		return;
@@ -1008,7 +1008,7 @@ static void aps_data_indication_process(void *arg)
 	}
 
 	frameCtrl = hdr->frameCtrl;
-	frameType = (u8)(frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK);
+	frameType = (uint8_t)(frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK);
 	aps_indPrimBuild(arg);
 
 	if (g_apsDataIndCb != NULL) {
@@ -1026,22 +1026,22 @@ static void aps_data_indication_process(void *arg)
 	}
 
 	if ((frameCtrl & APS_FRAME_CTRL_DELIVERY_MODE_MASK) == APS_FRAME_CTRL_DELIVERY_MODE_GROUP) {
-		tl_zbTaskPost((tl_zb_callback_t)aps_process_group_addressed_packet, arg);
+		zb_TaskPost((zb_callback_t)aps_process_group_addressed_packet, arg);
 		return;
 	}
 
-	tl_zbTaskPost(af_aps_data_entry, arg);
+	zb_TaskPost(af_aps_data_entry, arg);
 }
 void aps_interPanDataIndCb(void *arg)
 {
 	zb_mscp_data_ind_t *macInd = (zb_mscp_data_ind_t *)arg;
 	aps_data_ind_t localInd;
 	aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
-	u8 *apsPayload = macInd->msdu + 2;
-	u8 apsPayloadLen = (u8)(macInd->msduLength - 2U);
-	u8 hdrLen;
+	uint8_t *apsPayload = macInd->msdu + 2;
+	uint8_t apsPayloadLen = (uint8_t)(macInd->msduLength - 2U);
+	uint8_t hdrLen;
 	af_endpoint_descriptor_t *epList;
-	u8 epNum;
+	uint8_t epNum;
 
 	dstPanID = macInd->srcPanId;
 
@@ -1069,24 +1069,24 @@ void aps_interPanDataIndCb(void *arg)
 	localInd.cluster_id = hdr->clusterId;
 	localInd.profile_id = hdr->profileId;
 	localInd.asdu = apsPayload + hdrLen;
-	localInd.asduLength = (u16)(apsPayloadLen - hdrLen);
+	localInd.asduLength = (uint16_t)(apsPayloadLen - hdrLen);
 
 	epList = af_epDescriptorGet();
 	epNum = af_availableEpNumGet();
-	for (u8 i = 0; i < epNum; i++) {
+	for (uint8_t i = 0; i < epNum; i++) {
 		if (!af_clsuterIdMatched(localInd.cluster_id, epList[i].correspond_simple_desc)) {
 			continue;
 		}
 
 		localInd.dst_ep = epList[i].ep;
 		memcpy(arg, &localInd, sizeof(localInd));
-		tl_zbTaskPost(af_aps_data_entry, arg);
+		zb_TaskPost(af_aps_data_entry, arg);
 		return;
 	}
 
 	zb_buf_free((zb_buf_t *)arg);
 }
-void apsTxEventPost(aps_tx_cache_list_t *cache, aps_tx_cache_evt_e event, u8 status)
+void apsTxEventPost(aps_tx_cache_list_t *cache, aps_tx_cache_evt_e event, uint8_t status)
 {
 	(void)status;
 
@@ -1116,9 +1116,9 @@ void apsTxEventPost(aps_tx_cache_list_t *cache, aps_tx_cache_evt_e event, u8 sta
 	case APX_TX_CACHE_STA_RETRY:
 		if (event == APS_TX_EVENT_RETRY) {
 			if (cache->ackNeed) {
-				u8 retries = cache->retries;
+				uint8_t retries = cache->retries;
 
-				cache->retries = (u8)(retries - 1U);
+				cache->retries = (uint8_t)(retries - 1U);
 				if (retries != 0U) {
 					if (apsTxDataSendStart(cache) == 0U) {
 						cache->apsAckWaitTimeOut = APS_ACK_EXPIRY;
@@ -1162,7 +1162,7 @@ static void apsDataFragmentReSend(void)
 		return;
 	}
 
-	for (u8 i = 0; i < 8; i++) {
+	for (uint8_t i = 0; i < 8; i++) {
 		if (((win->ackBit >> i) & 0x01U) == 0U) {
 			aps_tx_cache_list_t *cache = win->list[i];
 
@@ -1187,7 +1187,7 @@ static int aps_data_fragment_delay(void *arg)
 		if (aps_frag_tx_win()->reSend != 0U) {
 			apsDataFragmentReSend();
 		} else {
-			tl_zbTaskPost(aps_data_fragment, NULL);
+			zb_TaskPost(aps_data_fragment, NULL);
 		}
 	}
 
@@ -1197,15 +1197,15 @@ static int aps_data_fragment_delay(void *arg)
 static void aps_nwk_addr_req_cb(void *arg)
 {
 	aps_nwk_addr_rsp_hdr_t *rsp = (aps_nwk_addr_rsp_hdr_t *)arg;
-	u16 addrMapIdx;
+	uint16_t addrMapIdx;
 
 	if (rsp->status != ZDO_SUCCESS) {
 		return;
 	}
 
-	(void)tl_zbNwkAddrMapAdd(rsp->shortAddr, rsp->extAddr, &addrMapIdx);
+	(void)zb_NwkAddrMapAdd(rsp->shortAddr, rsp->extAddr, &addrMapIdx);
 
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (!cache->used || !cache->addrReqNeed) {
@@ -1227,10 +1227,10 @@ static void aps_nwk_addr_req_cb(void *arg)
 void aps_nwk_data_confirm_cb(void *arg)
 {
 	nlde_data_cnf_t *cnf = (nlde_data_cnf_t *)arg;
-	u8 status = cnf->status;
-	u8 handle = cnf->nsduHandle;
+	uint8_t status = cnf->status;
+	uint8_t handle = cnf->nsduHandle;
 
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (!cache->used || cache->handler != handle) {
@@ -1262,17 +1262,17 @@ void aps_nwk_data_indication_cb(void *arg)
 {
 	nlde_data_ind_t *ind = (nlde_data_ind_t *)arg;
 	aps_rx_hdr_t *hdr = aps_rx_hdr(arg);
-	u8 hdrLen = aps_hdr_parse(ind->nsdu, hdr);
-	u8 frameType;
+	uint8_t hdrLen = aps_hdr_parse(ind->nsdu, hdr);
+	uint8_t frameType;
 
 	hdr->hdrLen = hdrLen;
 	hdr->srcShortAddr = ind->srcAddr;
-	frameType = (u8)(hdr->frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK);
+	frameType = (uint8_t)(hdr->frameCtrl & APS_FRAME_CTRL_FRAME_TYPE_MASK);
 
 	if (ind->dstAddrMode == APS_SHORT_GROUPADDR_NOEP) {
-		hdr->frameCtrl = (u8)((hdr->frameCtrl & (u8)~APS_FRAME_CTRL_DELIVERY_MODE_MASK) |
+		hdr->frameCtrl = (uint8_t)((hdr->frameCtrl & (uint8_t)~APS_FRAME_CTRL_DELIVERY_MODE_MASK) |
 				      APS_FRAME_CTRL_DELIVERY_MODE_GROUP);
-		COPY_U16TOBUFFER((u8 *)&hdr->dstEp, ind->dstAddr);
+		COPY_U16TOBUFFER((uint8_t *)&hdr->dstEp, ind->dstAddr);
 	}
 
 	if (frameType != APS_FRAME_CTRL_FRAME_TYPE_ACK && ind->nsduLen < hdrLen) {
@@ -1290,7 +1290,7 @@ void aps_nwk_data_indication_cb(void *arg)
 
 		win = aps_frag_tx_win();
 
-		for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+		for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 			aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 			if (!cache->used ||
@@ -1309,8 +1309,8 @@ void aps_nwk_data_indication_cb(void *arg)
 			 * frames here and associates the bitmap with the current
 			 * transmission window. */
 			{
-				u8 firstBlock = win->list[0]->blockNum;
-				u8 ackBlock = (firstBlock == win->totalBlockNum) ? 0U : firstBlock;
+				uint8_t firstBlock = win->list[0]->blockNum;
+				uint8_t ackBlock = (firstBlock == win->totalBlockNum) ? 0U : firstBlock;
 
 				if ((hdr->frameCtrl & APS_FRAME_CTRL_EXTENDED_HEADER) == 0U ||
 				    hdr->blockNum != ackBlock) {
@@ -1333,16 +1333,16 @@ void aps_nwk_data_indication_cb(void *arg)
 			cache->retries = APS_MAX_FRAME_RETRIES;
 			cache->ackNeed = 0U;
 			if (win->used != 0U) {
-				u8 ackBit = hdr->ackBit;
+				uint8_t ackBit = hdr->ackBit;
 
 				if (aps_ib.aps_max_window_size < APS_FRAG_WINDOW_MAX) {
-					ackBit |= (u8)(APS_FRAG_ACK_ALL
+					ackBit |= (uint8_t)(APS_FRAG_ACK_ALL
 						       << aps_ib.aps_max_window_size);
 				}
 
 				/* The first block the receiver misses is sent again with an
 				 * acknowledgement request. */
-				for (u8 i = 0;
+				for (uint8_t i = 0;
 				     i < aps_ib.aps_max_window_size && i < APS_FRAG_WINDOW_MAX;
 				     i++) {
 					aps_tx_cache_list_t *missing = win->list[i];
@@ -1375,11 +1375,11 @@ void aps_nwk_data_indication_cb(void *arg)
 		return;
 	}
 
-	tl_zbTaskPost(aps_data_indication_process, arg);
+	zb_TaskPost(aps_data_indication_process, arg);
 }
-_attribute_no_inline_ u8 apsHandleIsExit(u8 handle)
+_attribute_no_inline_ uint8_t apsHandleIsExit(uint8_t handle)
 {
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (cache->used && cache->handler == handle) {
@@ -1390,14 +1390,14 @@ _attribute_no_inline_ u8 apsHandleIsExit(u8 handle)
 	return 0;
 }
 
-aps_tx_cache_list_t *apsTxDataPost(bool ackNeed, bool addrReqNeed, bool interPan, u8 *payload,
+aps_tx_cache_list_t *apsTxDataPost(bool ackNeed, bool addrReqNeed, bool interPan, uint8_t *payload,
 				   apsdeDataConf_t *pCnf)
 {
 	aps_confirm_buf_t *cnf = (aps_confirm_buf_t *)pCnf;
 	aps_confirm_buf_t *confirm = cnf;
 	aps_tx_cache_list_t *freeEntry = NULL;
 
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (cache->used) {
@@ -1437,7 +1437,7 @@ aps_tx_cache_list_t *apsTxDataPost(bool ackNeed, bool addrReqNeed, bool interPan
 	freeEntry->interPAN = interPan ? 1U : 0U;
 	freeEntry->retries = APS_MAX_FRAME_RETRIES;
 	freeEntry->apsAckWaitTimeOut = APS_ACK_EXPIRY;
-	freeEntry->apsAddrWaitTimeout = (s8)((APS_ACK_EXPIRY + 1U) * APS_MAX_FRAME_RETRIES);
+	freeEntry->apsAddrWaitTimeout = (int8_t)((APS_ACK_EXPIRY + 1U) * APS_MAX_FRAME_RETRIES);
 	g_apsTxCacheNum++;
 
 	return freeEntry;
@@ -1449,21 +1449,21 @@ void aps_data_request(void *arg)
 	aps_confirm_buf_t cnf;
 	aps_tx_cache_list_t *cache;
 	addrExt_t *extAddr = NULL;
-	u8 auxHdr[16] = {0};
-	u8 *asdu;
-	u8 *nsdu;
-	u8 frameCtrl;
-	u8 baseLen;
-	u8 headerLen;
-	u8 auxLen = 0;
-	u8 tx;
-	u8 ackNeed;
-	u8 addrReqNeed = 0;
-	u8 interPan;
-	u8 extFrameCtrl;
-	u8 blockNum;
-	u16 dstAddr = 0;
-	u16 addrMapIdx = 0;
+	uint8_t auxHdr[16] = {0};
+	uint8_t *asdu;
+	uint8_t *nsdu;
+	uint8_t frameCtrl;
+	uint8_t baseLen;
+	uint8_t headerLen;
+	uint8_t auxLen = 0;
+	uint8_t tx;
+	uint8_t ackNeed;
+	uint8_t addrReqNeed = 0;
+	uint8_t interPan;
+	uint8_t extFrameCtrl;
+	uint8_t blockNum;
+	uint16_t dstAddr = 0;
+	uint16_t addrMapIdx = 0;
 	addrExt_t requestedExt = {0};
 
 	if (req == NULL || req->asdu == NULL) {
@@ -1489,8 +1489,8 @@ void aps_data_request(void *arg)
 	    req->dst_addr_mode != APS_SHORT_DSTADDR_WITHEP &&
 	    req->dst_addr_mode != APS_LONG_DSTADDR_WITHEP) {
 		bind_dst_list_tbl *bindList;
-		u16 bindSize =
-			(u16)(8U + ((u16)APS_BINDING_TABLE_SIZE * (u16)sizeof(bind_dst_list)));
+		uint16_t bindSize =
+			(uint16_t)(8U + ((uint16_t)APS_BINDING_TABLE_SIZE * (uint16_t)sizeof(bind_dst_list)));
 		aps_status_t status;
 
 		if (req->extFrameCtrl != 0U) {
@@ -1508,19 +1508,19 @@ void aps_data_request(void *arg)
 		status = aps_search_dst_from_bind_tbl(req, bindList);
 		if (status != APS_STATUS_SUCCESS) {
 			cnf.status = status;
-			ev_buf_free((u8 *)bindList);
+			ev_buf_free((uint8_t *)bindList);
 			aps_conf(&cnf);
 			zb_buf_free((zb_buf_t *)arg);
 			return;
 		}
 
-		bindList->txData = (u8 *)req;
+		bindList->txData = (uint8_t *)req;
 		ev_timer_taskPost(bindingTxBack, bindList, 1);
 		return;
 	}
 
 	tx = req->tx_options;
-	interPan = (u8)((tx & APS_TX_OPT_INTRA_PAN) != 0U);
+	interPan = (uint8_t)((tx & APS_TX_OPT_INTRA_PAN) != 0U);
 
 	memset(&nlde, 0, sizeof(nlde));
 	nlde.useAlias = req->useAlias;
@@ -1529,7 +1529,7 @@ void aps_data_request(void *arg)
 	nlde.radius = req->radius;
 	nlde.addrMode = APS_SHORT_DSTADDR_WITHEP;
 	nlde.discoverRoute = g_zbNwkCtx.discoverRoute;
-	nlde.unicastSkipRouting = (u8)((tx & APS_TX_OPT_UNICAST_SKIP_ROUTING) != 0U);
+	nlde.unicastSkipRouting = (uint8_t)((tx & APS_TX_OPT_UNICAST_SKIP_ROUTING) != 0U);
 
 	if (req->dst_addr_mode == APS_SHORT_GROUPADDR_NOEP) {
 		dstAddr = req->aps_addr.dst_group_addr;
@@ -1550,11 +1550,11 @@ void aps_data_request(void *arg)
 			 * so a group frame sent as an APS broadcast keeps its ACK request.
 			 * Group-addressed frames are never acknowledged (APS spec 2.2.4.1.1).
 			 */
-			tx &= (u8) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
+			tx &= (uint8_t) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
 		} else {
 			nlde.dstAddr = GROUP_MESSAGE_SEND_ADDRESS;
 			frameCtrl = APS_FRAME_CTRL_DELIVERY_MODE_GROUP;
-			tx &= (u8) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
+			tx &= (uint8_t) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
 		}
 	} else if (req->dst_addr_mode == APS_SHORT_DSTADDR_WITHEP) {
 		dstAddr = req->aps_addr.dst_short_addr;
@@ -1563,7 +1563,7 @@ void aps_data_request(void *arg)
 		nlde.dstAddr = dstAddr;
 		if (ZB_NWK_IS_ADDRESS_BROADCAST(dstAddr)) {
 			frameCtrl = APS_FRAME_CTRL_DELIVERY_MODE_BROADCAST;
-			tx &= (u8) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
+			tx &= (uint8_t) ~(APS_TX_OPT_ACK_TX | APS_TX_OPT_SECURITY_ENABLED);
 		} else {
 			frameCtrl = 0;
 		}
@@ -1574,7 +1574,7 @@ void aps_data_request(void *arg)
 
 		/* The vendor resolves the extended address only for intra-PAN frames. */
 		if (interPan == 0U) {
-			if (tl_zbShortAddrByExtAddr(&nlde.dstAddr, requestedExt, &addrMapIdx) ==
+			if (zb_ShortAddrByExtAddr(&nlde.dstAddr, requestedExt, &addrMapIdx) ==
 				    NWK_ADDR_LOOKUP_FAILED ||
 			    ZB_NWK_IS_ADDRESS_BROADCAST(nlde.dstAddr)) {
 				/* Keep the extended destination in the NWK request.  The vendor
@@ -1589,9 +1589,9 @@ void aps_data_request(void *arg)
 
 	if (interPan != 0U) {
 		/* Inter-PAN frames have frame type 3 and keep the delivery mode bits. */
-		frameCtrl = (u8)((frameCtrl & (u8)~APS_FRAME_CTRL_FRAME_TYPE_MASK) |
+		frameCtrl = (uint8_t)((frameCtrl & (uint8_t)~APS_FRAME_CTRL_FRAME_TYPE_MASK) |
 				 APS_FRAME_CTRL_FRAME_TYPE_INTERPAN);
-		tx &= (u8)~APS_TX_OPT_ACK_TX;
+		tx &= (uint8_t)~APS_TX_OPT_ACK_TX;
 		if (req->dst_addr_mode == APS_LONG_DSTADDR_WITHEP) {
 			nlde.addrMode = APS_LONG_DSTADDR_WITHEP;
 			ZB_IEEE_ADDR_COPY(nlde.ieeAddr, requestedExt);
@@ -1599,7 +1599,7 @@ void aps_data_request(void *arg)
 	}
 
 	req->tx_options = tx;
-	ackNeed = (u8)((tx & APS_TX_OPT_ACK_TX) != 0U);
+	ackNeed = (uint8_t)((tx & APS_TX_OPT_ACK_TX) != 0U);
 	if (ackNeed != 0U) {
 		frameCtrl |= APS_FRAME_CTRL_ACK_REQUEST;
 	}
@@ -1619,7 +1619,7 @@ void aps_data_request(void *arg)
 			   APS_FRAME_CTRL_DELIVERY_MODE_GROUP)
 				  ? APS_GROUP_HDR_LEN
 				  : APS_DATA_HDR_LEN;
-		headerLen = (u8)(baseLen +
+		headerLen = (uint8_t)(baseLen +
 				 (((frameCtrl & APS_FRAME_CTRL_EXTENDED_HEADER) != 0U) ? 2U : 0U));
 
 		if ((tx & APS_TX_OPT_SECURITY_ENABLED) != 0U) {
@@ -1661,7 +1661,7 @@ void aps_data_request(void *arg)
 
 	nlde.securityEnable = req->enableNWKsecurity;
 	nlde.ndsuHandle = req->handle;
-	nlde.nsduLen = (u8)(req->asdu_length + headerLen + auxLen);
+	nlde.nsduLen = (uint8_t)(req->asdu_length + headerLen + auxLen);
 	nlde.nsdu = nsdu;
 	((zb_buf_t *)arg)->hdr.handle = req->handle;
 	memcpy(arg, &nlde, sizeof(nlde));
@@ -1670,7 +1670,7 @@ void aps_data_request(void *arg)
 		if ((frameCtrl & APS_FRAME_CTRL_DELIVERY_MODE_MASK) != 0U) {
 			cnf.status = APS_STATUS_SECURITY_FAIL;
 			if (extFrameCtrl != 0U) {
-				tl_zbTaskPost(aps_data_fragment, NULL);
+				zb_TaskPost(aps_data_fragment, NULL);
 			} else {
 				aps_conf(&cnf);
 			}
@@ -1679,11 +1679,11 @@ void aps_data_request(void *arg)
 		}
 
 		extAddr = (addrReqNeed != 0U) ? &nlde.ieeAddr
-					      : tl_zbExtAddrPtrByShortAddr(nlde.dstAddr);
+					      : zb_ExtAddrPtrByShortAddr(nlde.dstAddr);
 		if (extAddr == NULL) {
 			cnf.status = APS_STATUS_SECURITY_FAIL;
 			if (extFrameCtrl != 0U) {
-				tl_zbTaskPost(aps_data_fragment, NULL);
+				zb_TaskPost(aps_data_fragment, NULL);
 			} else {
 				aps_conf(&cnf);
 			}
@@ -1691,10 +1691,10 @@ void aps_data_request(void *arg)
 			return;
 		}
 
-		if (ss_apsSecureFrame(arg, (u8)(headerLen + auxLen), headerLen, *extAddr) ==
+		if (ss_apsSecureFrame(arg, (uint8_t)(headerLen + auxLen), headerLen, *extAddr) ==
 		    RET_ERROR) {
 			if (extFrameCtrl != 0U) {
-				tl_zbTaskPost(aps_data_fragment, NULL);
+				zb_TaskPost(aps_data_fragment, NULL);
 				return;
 			}
 			cnf.status = APS_STATUS_SECURITY_FAIL;
@@ -1707,7 +1707,7 @@ void aps_data_request(void *arg)
 	cache = apsTxDataPost(ackNeed, addrReqNeed, interPan, arg, (apsdeDataConf_t *)&cnf);
 	if (cache == NULL) {
 		if (extFrameCtrl != 0U) {
-			tl_zbTaskPost(aps_data_fragment, NULL);
+			zb_TaskPost(aps_data_fragment, NULL);
 			return;
 		}
 		aps_conf(&cnf);
@@ -1749,7 +1749,7 @@ static int bindingTxBack(void *arg)
 		return APS_BINDING_TX_INTERVAL_MS;
 	}
 
-	TL_COPY_BUF(clone, bindList->txData);
+	ZB_COPY_BUF(clone, bindList->txData);
 	srcBuf = (zb_buf_t *)bindList->txData;
 	srcReq = (aps_data_req_t *)bindList->txData;
 	dstReq = (aps_data_req_t *)clone;
@@ -1760,7 +1760,7 @@ static int bindingTxBack(void *arg)
 	if (bindList->txCnt >= bindList->totalCnt) {
 		zb_buf_free(clone);
 		zb_buf_free((zb_buf_t *)bindList->txData);
-		ev_buf_free((u8 *)bindList);
+		ev_buf_free((uint8_t *)bindList);
 		return -1;
 	}
 
@@ -1800,7 +1800,7 @@ static int bindingTxBack(void *arg)
 				dstReq->useAlias ? dstReq->aliasSrcAddr : localInd.dst_addr;
 			localInd.aps_counter = dstReq->apsCnt;
 			memcpy(clone, &localInd, sizeof(localInd));
-			tl_zbTaskPost(af_aps_data_entry, clone);
+			zb_TaskPost(af_aps_data_entry, clone);
 		} else {
 			aps_data_request(clone);
 		}
@@ -1808,7 +1808,7 @@ static int bindingTxBack(void *arg)
 
 	if (bindList->txCnt >= bindList->totalCnt) {
 		zb_buf_free((zb_buf_t *)bindList->txData);
-		ev_buf_free((u8 *)bindList);
+		ev_buf_free((uint8_t *)bindList);
 		return -1;
 	}
 
@@ -1818,7 +1818,7 @@ int apsAckPeriodic(void *arg)
 {
 	(void)arg;
 
-	for (u8 i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
+	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
 		if (!cache->used) {
@@ -1841,23 +1841,23 @@ int apsAckPeriodic(void *arg)
 
 	return 0;
 }
-void aps_cmd_send(void *arg, u8 handle)
+void aps_cmd_send(void *arg, uint8_t handle)
 {
 	aps_cmd_send_req_t *req = (aps_cmd_send_req_t *)arg;
 	aps_confirm_buf_t cnf;
 	nlde_data_req_t *nldereq;
 	aps_tx_cache_list_t *cache;
-	u8 apsCounter;
-	u8 *nsdu;
-	u8 apsHdr[2];
-	u8 auxHdr[16] = {0};
-	u8 auxLen = 0;
-	u8 addrReqNeed = 0;
-	u8 discoverRoute;
-	u8 nwkRadius = 0;
+	uint8_t apsCounter;
+	uint8_t *nsdu;
+	uint8_t apsHdr[2];
+	uint8_t auxHdr[16] = {0};
+	uint8_t auxLen = 0;
+	uint8_t addrReqNeed = 0;
+	uint8_t discoverRoute;
+	uint8_t nwkRadius = 0;
 	addrExt_t *extAddrPtr = NULL;
-	u16 dstShortAddr = 0;
-	u16 idx = 0;
+	uint16_t dstShortAddr = 0;
+	uint16_t idx = 0;
 
 	memset(&cnf, 0, sizeof(cnf));
 
@@ -1876,7 +1876,7 @@ void aps_cmd_send(void *arg, u8 handle)
 		dstShortAddr = req->dstAddr.shortAddr;
 	} else if (req->addrMode == APS_LONG_DSTADDR_WITHEP) {
 		ZB_IEEE_ADDR_COPY(cnf.dstAddr.addr_long, req->dstAddr.extAddr);
-		if (tl_zbShortAddrByExtAddr(&dstShortAddr, req->dstAddr.extAddr, &idx) != RET_OK) {
+		if (zb_ShortAddrByExtAddr(&dstShortAddr, req->dstAddr.extAddr, &idx) != RET_OK) {
 			addrReqNeed = 1;
 		}
 	} else {
@@ -1925,7 +1925,7 @@ void aps_cmd_send(void *arg, u8 handle)
 		memcpy(nsdu + APS_CMD_HDR_LEN, auxHdr, auxLen);
 	}
 	nldereq->nsdu = nsdu;
-	nldereq->nsduLen = (u8)(req->aduLen + APS_CMD_HDR_LEN + auxLen);
+	nldereq->nsduLen = (uint8_t)(req->aduLen + APS_CMD_HDR_LEN + auxLen);
 
 	if (auxLen != 0U) {
 		if (handle == APS_CMD_HANDLE_CMD_TUNNEL) {
@@ -1933,7 +1933,7 @@ void aps_cmd_send(void *arg, u8 handle)
 			 * secured for in front of the APS header. */
 			extAddrPtr = (addrExt_t *)(nsdu - EXT_ADDR_LEN);
 		} else if (req->addrMode == APS_SHORT_DSTADDR_WITHEP) {
-			extAddrPtr = tl_zbExtAddrPtrByShortAddr(req->dstAddr.shortAddr);
+			extAddrPtr = zb_ExtAddrPtrByShortAddr(req->dstAddr.shortAddr);
 			if (extAddrPtr == NULL) {
 				cnf.status = APS_STATUS_SECURITY_FAIL;
 				aps_conf(&cnf);
@@ -1944,7 +1944,7 @@ void aps_cmd_send(void *arg, u8 handle)
 			extAddrPtr = &req->dstAddr.extAddr;
 		}
 
-		if (ss_apsSecureFrame(nldereq, (u8)(APS_CMD_HDR_LEN + auxLen), APS_CMD_HDR_LEN,
+		if (ss_apsSecureFrame(nldereq, (uint8_t)(APS_CMD_HDR_LEN + auxLen), APS_CMD_HDR_LEN,
 				      *extAddrPtr) == RET_ERROR) {
 			cnf.status = APS_STATUS_SECURITY_FAIL;
 			aps_conf(&cnf);
@@ -1956,11 +1956,11 @@ void aps_cmd_send(void *arg, u8 handle)
 			/* Wrap the secured command in a Tunnel command: 2 bytes of APS
 			 * header, the command ID, then the 8-byte target address that
 			 * already sits in front of the secured command. */
-			const u8 wrapLen = APS_TUNNEL_PREFIX_LEN + EXT_ADDR_LEN;
-			u8 *wrap = nldereq->nsdu - wrapLen;
+			const uint8_t wrapLen = APS_TUNNEL_PREFIX_LEN + EXT_ADDR_LEN;
+			uint8_t *wrap = nldereq->nsdu - wrapLen;
 
 			nldereq->nsdu = wrap;
-			nldereq->nsduLen = (u8)(nldereq->nsduLen + wrapLen);
+			nldereq->nsduLen = (uint8_t)(nldereq->nsduLen + wrapLen);
 			wrap[0] = apsHdr[0];
 			wrap[1] = apsHdr[1];
 			wrap[2] = APS_CMD_TUNNEL_ID;
@@ -1968,7 +1968,7 @@ void aps_cmd_send(void *arg, u8 handle)
 	}
 
 	cache = apsTxDataPost((nsdu[0] & APS_FRAME_CTRL_ACK_REQUEST) ? 1U : 0U, addrReqNeed, 0,
-			      (u8 *)req->txBuf, (apsdeDataConf_t *)&cnf);
+			      (uint8_t *)req->txBuf, (apsdeDataConf_t *)&cnf);
 	if (cache == NULL) {
 		aps_conf(&cnf);
 		zb_buf_free(req->txBuf);
@@ -1982,11 +1982,11 @@ void aps_cmd_send(void *arg, u8 handle)
 		aps_txCacheAsNoShortAddr(req->dstAddr.extAddr, &cache->zdpSeqnoAddrReq);
 	}
 }
-u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length)
+uint8_t apsDataRequest(aps_data_req_t *dataReq, uint8_t *asdu, uint8_t length)
 {
 	zb_buf_t *buf = zb_buf_allocate();
 	aps_data_req_t *reqCopy;
-	u8 *asduCopy;
+	uint8_t *asduCopy;
 	size_t reqOffset;
 
 	if (buf == NULL) {
@@ -1994,7 +1994,7 @@ u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length)
 	}
 
 	memset(buf, 0, sizeof(*reqCopy));
-	TL_BUF_INITIAL_ALLOC(buf, length, asduCopy, u8 *);
+	ZB_BUF_INITIAL_ALLOC(buf, length, asduCopy, uint8_t *);
 	if (asduCopy < buf->buf) {
 		zb_buf_free(buf);
 		return 6;
@@ -2020,7 +2020,7 @@ u8 apsDataRequest(aps_data_req_t *dataReq, u8 *asdu, u8 length)
 	reqCopy->asdu = asduCopy;
 	reqCopy->asdu_length = length;
 
-	tl_zbTaskPost(aps_data_request, buf);
+	zb_TaskPost(aps_data_request, buf);
 	return 0;
 }
 static void aps_data_fragment(void *arg)
@@ -2029,9 +2029,9 @@ static void aps_data_fragment(void *arg)
 
 	aps_fragment_tx_win_t *win = aps_frag_tx_win();
 	aps_data_req_t *req;
-	u16 totalLen;
-	u16 offset;
-	u8 fragLen;
+	uint16_t totalLen;
+	uint16_t offset;
+	uint8_t fragLen;
 
 	if (win->used == 0U) {
 		return;
@@ -2051,29 +2051,29 @@ static void aps_data_fragment(void *arg)
 		req->blockNum = win->totalBlockNum;
 	}
 
-	if (win->activeListNum >= (u8)(aps_ib.aps_max_window_size - 1U)) {
+	if (win->activeListNum >= (uint8_t)(aps_ib.aps_max_window_size - 1U)) {
 		req->tx_options |= APS_TX_OPT_ACK_TX;
 	} else {
-		req->tx_options &= (u8)~APS_TX_OPT_ACK_TX;
+		req->tx_options &= (uint8_t)~APS_TX_OPT_ACK_TX;
 	}
 
 	totalLen = win->payloadLen;
-	offset = (u16)(win->curBlockNum * aps_ib.aps_fragment_payload_size);
+	offset = (uint16_t)(win->curBlockNum * aps_ib.aps_fragment_payload_size);
 	if (offset >= totalLen) {
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_APS_FRAGMENT_TRANS);
 	}
 
 	fragLen = aps_ib.aps_fragment_payload_size;
-	if (win->curBlockNum >= (u8)(win->totalBlockNum - 1U)) {
-		fragLen = (u8)(totalLen - offset);
+	if (win->curBlockNum >= (uint8_t)(win->totalBlockNum - 1U)) {
+		fragLen = (uint8_t)(totalLen - offset);
 		req->tx_options |= APS_TX_OPT_ACK_TX;
 		if (aps_ib.aps_fragment_payload_size < fragLen) {
 			ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_APS_FRAGMENT_TRANS);
 		}
 	}
 
-	if (apsDataRequest(req, (u8 *)win->payload + offset, fragLen) != 0U) {
-		u8 delay = aps_ib.aps_interframe_delay;
+	if (apsDataRequest(req, (uint8_t *)win->payload + offset, fragLen) != 0U) {
+		uint8_t delay = aps_ib.aps_interframe_delay;
 
 		if (delay == 0U) {
 			delay = APS_FRAG_INTERFRAME_DELAY_DEFAULT_MS;
@@ -2082,12 +2082,12 @@ static void aps_data_fragment(void *arg)
 	}
 }
 
-u8 apsDataFragmentRequest(aps_data_req_t *dataReq, u8 *asdu, u16 length)
+uint8_t apsDataFragmentRequest(aps_data_req_t *dataReq, uint8_t *asdu, uint16_t length)
 {
 	aps_fragment_tx_win_t *win = aps_frag_tx_win();
-	u8 *payloadCopy;
+	uint8_t *payloadCopy;
 	aps_data_req_t *reqCopy;
-	u8 fragPayload;
+	uint8_t fragPayload;
 
 	if (win->used != 0U || win->req != NULL) {
 		return 4;
@@ -2112,14 +2112,14 @@ u8 apsDataFragmentRequest(aps_data_req_t *dataReq, u8 *asdu, u16 length)
 	win->used = 1;
 	win->reSend = 0;
 	win->ackBit = APS_FRAG_ACK_ALL;
-	win->req = (u8 *)reqCopy;
+	win->req = (uint8_t *)reqCopy;
 	win->payload = payloadCopy;
 	win->payloadLen = length;
 
 	fragPayload = aps_ib.aps_fragment_payload_size;
-	win->totalBlockNum = (u8)((length + fragPayload - 1U) / fragPayload);
+	win->totalBlockNum = (uint8_t)((length + fragPayload - 1U) / fragPayload);
 	win->curBlockNum = 0;
 
-	tl_zbTaskPost(aps_data_fragment, NULL);
+	zb_TaskPost(aps_data_fragment, NULL);
 	return 0;
 }

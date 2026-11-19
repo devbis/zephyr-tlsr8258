@@ -38,22 +38,22 @@ typedef enum {
     SYSTEM_DEEP,                //deep back
 } startup_state_e;
 
-extern u32 sysTimerPerUs;
+extern uint32_t sysTimerPerUs;
 
 startup_state_e drv_platform_init(void);
 
 void drv_enable_irq(void);
-u32 drv_disable_irq(void);
-u32 drv_restore_irq(u32 en);
+uint32_t drv_disable_irq(void);
+uint32_t drv_restore_irq(uint32_t en);
 
 void drv_irqMask_clear(void);
 
-void drv_wd_setInterval(u32 ms);
+void drv_wd_setInterval(uint32_t ms);
 void drv_wd_start(void);
 void drv_wd_clear(void);
 
-u32 drv_u32Rand(void);
-void drv_generateRandomData(u8 *pData, u8 len);
+uint32_t drv_u32Rand(void);
+void drv_generateRandomData(uint8_t *pData, uint8_t len);
 
 void voltage_detect(bool powerOn);
 void drv_vbusWatchdogClose(void);

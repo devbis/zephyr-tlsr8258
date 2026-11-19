@@ -87,9 +87,9 @@ typedef enum {
 } ss_keyAttributes_e;
 
 typedef struct {
-    u8 key[CCM_KEY_SIZE];
-    u8 keySeqNum;
-    u8 keyType;
+    uint8_t key[CCM_KEY_SIZE];
+    uint8_t keySeqNum;
+    uint8_t keyType;
 } ss_material_set_t;
 
 typedef enum {
@@ -111,7 +111,7 @@ typedef struct {
     bool useWhiteList;
     // 0 ~ not support; 1 ~ support but not require; 2 ~ require the use of install code by JD, the useWhiteList would set to TRUE
     //interface need to be supported to input install code to TC
-    u8 allowInstallCode;
+    uint8_t allowInstallCode;
     //Indicates whether or not devices are required to attempt to update their TCLK after joining. In centralized security network,
     //this value must be set to TRUE, the joining device must attempt TCLK update after joining the network.
     bool updateTCLKrequired;
@@ -124,9 +124,9 @@ typedef struct {
     bool allowRejoins;
     //0 ~ never; 1 ~ any device may request; 2 ~ only devices in the apsDeviceKeyPaireSet.
     //Set to 0 in network with higher level protocols for establishing link keys. Set to 1/2 in centralized security networks
-    u8 allowTCLKrequest;
+    uint8_t allowTCLKrequest;
 
-    u8 allowAppLKrequest;
+    uint8_t allowAppLKrequest;
 #endif
 } ss_tcPolicy_t;
 
@@ -145,36 +145,36 @@ typedef enum {
 typedef struct _attribute_packed_ {
     addrExt_t device_address;
 
-    u8 linkKey[CCM_KEY_SIZE];   /* The actual value of the link key. */
+    uint8_t linkKey[CCM_KEY_SIZE];   /* The actual value of the link key. */
 
-    u8 keyAttr;                 //ss_keyAttributes_e
-    u8 apsLinkKeyType;          //ss_linkKeytype_e
-    u8 used;
-    u8 rsv;                     //used as mapping index to stack item
+    uint8_t keyAttr;                 //ss_keyAttributes_e
+    uint8_t apsLinkKeyType;          //ss_linkKeytype_e
+    uint8_t used;
+    uint8_t rsv;                     //used as mapping index to stack item
 
-    u32 outgoingFrameCounter;
-    u32 incomingFrameCounter;
+    uint32_t outgoingFrameCounter;
+    uint32_t incomingFrameCounter;
 } ss_dev_pair_set_t; //36-bytes
 
 typedef struct _attribute_packed_ {
-    u32 ssTimeoutPeriod;
-    u32 outgoingFrameCounter;
-    u32 prevOutgoingFrameCounter;
-    u8 *keyPairSetNew; //16
+    uint32_t ssTimeoutPeriod;
+    uint32_t outgoingFrameCounter;
+    uint32_t prevOutgoingFrameCounter;
+    uint8_t *keyPairSetNew; //16
     ss_material_set_t nwkSecurMaterialSet[SECUR_N_SECUR_MATERIAL]; //36
-    u16 devKeyPairNum;
+    uint16_t devKeyPairNum;
     addrExt_t trust_center_address; //10
-    u8 securityLevel:3;
-    u8 secureAllFresh:1;
-    u8 activeSecureMaterialIndex:2;
-    u8 reserved:2;//flag
-    u8 activeKeySeqNum;
-    u8 preConfiguredKeyType;//ss_preconfiguredKey_e, should be set during init state which used for ZDO auth
+    uint8_t securityLevel:3;
+    uint8_t secureAllFresh:1;
+    uint8_t activeSecureMaterialIndex:2;
+    uint8_t reserved:2;//flag
+    uint8_t activeKeySeqNum;
+    uint8_t preConfiguredKeyType;//ss_preconfiguredKey_e, should be set during init state which used for ZDO auth
     ss_tcPolicy_t tcPolicy; //10
-    u8 *touchLinkKey;
-    u8 *distributeLinkKey;
-    u8 tcLinkKeyType;
-    u8 *tcLinkKey; //13
+    uint8_t *touchLinkKey;
+    uint8_t *distributeLinkKey;
+    uint8_t tcLinkKeyType;
+    uint8_t *tcLinkKey; //13
 } ss_info_base_t; //81 or 85 bytes
 
 
@@ -183,22 +183,22 @@ typedef struct {
     /* The dstAddr is all zeros, means broadcast, for SS_STANDARD_NETWORK_KEY.
      */
     addrExt_t dstAddr;
-    u8 keyType;
-    u8 key[CCM_KEY_SIZE];
-    u8 relayByParent;
-    u8 keySeqNum;
+    uint8_t keyType;
+    uint8_t key[CCM_KEY_SIZE];
+    uint8_t relayByParent;
+    uint8_t keySeqNum;
     addrExt_t partnerAddr; //for application key
-    u8 initiatorFlag;
-    u8 nwkSecurity;
+    uint8_t initiatorFlag;
+    uint8_t nwkSecurity;
 } ss_apsmeTransportKeyReq_t;
 
 //Parameters for APSME-TRANSPORT-KEY.indication primitive
 typedef struct {
     addrExt_t srcAddr;
-    u8 keyType;
-    u8 key[CCM_KEY_SIZE];
+    uint8_t keyType;
+    uint8_t key[CCM_KEY_SIZE];
     union {
-        u8 keySeqNum;
+        uint8_t keySeqNum;
         addrExt_t partnerAddr;
     };
 } ss_apsmeTransportKeyInd_t;
@@ -211,8 +211,8 @@ typedef struct {
     /*The extended 64-bit address of the device
     whose status is being updated.*/
     addrExt_t devAddr;
-    u16 devShortAddr;
-    u8 status;
+    uint16_t devShortAddr;
+    uint8_t status;
 } ss_apsmeUpdateDeviceReq_t;
 
 typedef enum {
@@ -231,8 +231,8 @@ typedef struct {
     /*The extended 64-bit address of the device
     whose status is being updated.*/
     addrExt_t devAddr;
-    u16 devShortAddr;
-    u8 status;//ss_apsmeUpdateDevStatus_e
+    uint16_t devShortAddr;
+    uint8_t status;//ss_apsmeUpdateDevStatus_e
 } ss_apsmeUpdateDeviceInd_t;
 
 //Parameters for APSME-REMOVE-DEVICE.request primitive
@@ -263,31 +263,31 @@ typedef struct {
 //Parameters for APSME-REQUEST-KEY.request primitive
 typedef struct {
     /* The address of the device which the request-key command should be sent. */
-    tl_zb_addr_t dstAddr;
+    zb_addr_t dstAddr;
     /* If the key type is SS_KEYREQ_TYPE_APPLK, this parameter shall indicate an
      * extend 64-bit address of a device that shall receive the same key as the
      * device requesting the key.
      */
     addrExt_t partnerAddr;
     /* ZB_ADDR_16BIT_DEV_OR_BROADCAST or ZB_ADDR_64BIT_DEV. */
-    u8 dstAddrMode;//zb_addr_mode_t
+    uint8_t dstAddrMode;//zb_addr_mode_t
     /* the type of key being requested. */
-    u8 keyType;//ss_keyReqType_e
+    uint8_t keyType;//ss_keyReqType_e
 } ss_apsmeRequestKeyReq_t;
 
 //Parameters for APSME-REQUEST-KEY.indication primitive
 typedef struct {
     /* The address of the device that sent the request-key command. */
-    tl_zb_addr_t srcAddr;
+    zb_addr_t srcAddr;
     /* If the key type is SS_KEYREQ_TYPE_APPLK, this parameter shall indicate an
      * extend 64-bit address of a device that shall receive the same key as the
      * device requesting the key.
      */
     addrExt_t partnerAddr;
     /* ZB_ADDR_16BIT_DEV_OR_BROADCAST or ZB_ADDR_64BIT_DEV. */
-    u8 dstAddrMode;//zb_addr_mode_t
+    uint8_t dstAddrMode;//zb_addr_mode_t
     /* the type of key being requested. */
-    u8 keyType;//ss_keyReqType_e
+    uint8_t keyType;//ss_keyReqType_e
 } ss_apsmeRequestKeyInd_t;
 
 //Parameters for APSME-SWITCH-KEY.request primitive
@@ -299,50 +299,50 @@ typedef struct {
     /* A sequence number assigned to a network key by the TC
      * and used to distinguish network keys.
      */
-    u8 keySeqNum;
+    uint8_t keySeqNum;
 } ss_apsmeSwitchKeyReq_t;
 
 //Parameters for APSME-SWITCH-KEY.indication primitive
 typedef struct {
     addrExt_t srcAddr;
-    u8 keySeqNum;
+    uint8_t keySeqNum;
 } ss_apsmeSwitchKeyInd_t;
 
 //Parameters for APSME-VERIFY-KEY.request primitive
 typedef struct {
     addrExt_t dstAddr;
-    u8 keyType;
+    uint8_t keyType;
 } ss_apsmeVerifyKeyReq_t;
 
 //Parameters for APSME-VERIFY-KEY.indication primitive
 typedef struct {
     addrExt_t srcAddr;
-    u8 hashVal[16];
-    u8 keyType;
+    uint8_t hashVal[16];
+    uint8_t keyType;
 } ss_apsmeVerifyKeyInd_t;
 
 //Parameters for APSME-CONFIRM-KEY.request primitive
 typedef struct {
     addrExt_t dstAddr;
-    u8 keyType;
-    u8 status;
+    uint8_t keyType;
+    uint8_t status;
 } ss_apsmeConfirmKeyReq_t;
 
 //Parameters for APSME-CONFIRM-KEY.indication primitive
 typedef struct {
     addrExt_t srcAddr;
-    u8 keyType;
-    u8 status;
+    uint8_t keyType;
+    uint8_t status;
 } ss_apsmeConfirmKeyInd_t;
 
 typedef struct {
     addrExt_t dstAddr;
-    u8 key[CCM_KEY_SIZE];
+    uint8_t key[CCM_KEY_SIZE];
 } ss_tcUpdateNwkKey_t;
 
 typedef struct {
     ss_dev_pair_set_t keyPair;
-    u32 timeout;
+    uint32_t timeout;
 } ss_tc_keyPair_t;
 
 typedef struct {
@@ -367,20 +367,20 @@ extern ss_tc_keyPair_t g_ssTcKeyPair[];
 extern ss_dev_keyPair_t g_ssDevKeyPair;
 #endif
 
-void ss_mmoHash(u8 *data, u8 len, u8 *result);
-u8 aes_ccmAuthTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen, u8 *result);
-u8 aes_ccmEncTran(u8 M, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen, u8 *result);
-u8 aes_ccmDecTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen, u8 *mic);
-u8 aes_ccmDecAuthTran(u8 micLen, u8 *key, u8 *iv, u8 *mStr, u16 mStrLen, u8 *aStr, u8 aStrLen, u8 *mic);
+void ss_mmoHash(uint8_t *data, uint8_t len, uint8_t *result);
+uint8_t aes_ccmAuthTran(uint8_t M, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *result);
+uint8_t aes_ccmEncTran(uint8_t M, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *result);
+uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic);
+uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic);
 
 
-u16 ss_devKeyPairInfoGet(void);
-u8 ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair);
-u8 ss_devKeyPairDelete(addrExt_t extAddr);
+uint16_t ss_devKeyPairInfoGet(void);
+uint8_t ss_devKeyPairFind(addrExt_t extAddr, ss_dev_pair_set_t *keyPair);
+uint8_t ss_devKeyPairDelete(addrExt_t extAddr);
 void ss_devKeyPairSave(ss_dev_pair_set_t *keyPair);
 
 
-u32 ss_outgoingFrameCntGet(void);
+uint32_t ss_outgoingFrameCntGet(void);
 
 /*
  * @brief 	get the MAC address form key pair table so as to get the information of the node which have joined the network
@@ -394,7 +394,7 @@ u32 ss_outgoingFrameCntGet(void);
  * @param   nodeMacAddrList		the node MAC address list
  *
  * */
-u16 ss_nodeMacAddrFromdevKeyPair(u16 start_idx, u8 num, u8 *validNum, addrExt_t *nodeMacAddrList);
+uint16_t ss_nodeMacAddrFromdevKeyPair(uint16_t start_idx, uint8_t num, uint8_t *validNum, addrExt_t *nodeMacAddrList);
 
 /*
  * @brief 	save ssib to flash
@@ -406,7 +406,7 @@ void zdo_ssInfoSaveToFlash(void);
  * @brief 	get ssib from flash
  *
  * */
-u8 zdo_ssInfoInit(void);
+uint8_t zdo_ssInfoInit(void);
 
 /*
  * @brief 	update ssib to flash
@@ -418,14 +418,14 @@ void zdo_ssInfoUpdate(void);
  * @brief 	get network key index from flash
  *
  * */
-u8 zdo_ssInfoKeyGet(void);
+uint8_t zdo_ssInfoKeyGet(void);
 
 
 /* generate network key, and then store it in the ib table */
-void ss_nwkKeyGenerate(u8 *nwkKey);
+void ss_nwkKeyGenerate(uint8_t *nwkKey);
 
 /* store network key in ib table */
-void ss_nwkKeyStore(u8 *nwkKey);
+void ss_nwkKeyStore(uint8_t *nwkKey);
 
 /*
  * @brief	security configuration
