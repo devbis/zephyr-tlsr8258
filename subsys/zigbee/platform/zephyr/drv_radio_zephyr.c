@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/ieee802154_pkt.h>
@@ -25,6 +26,216 @@ LOG_MODULE_REGISTER(zigbee_radio_zephyr, CONFIG_ZIGBEE_LOG_LEVEL);
 #define ZB_RADIO_CCA_BUSY_RSSI_DBM (-60)
 #define ZB_RADIO_CCA_IDLE_RSSI_DBM (-96)
 #define ZB_RADIO_RSSI_FALLBACK_DBM (-110)
+
+/*
+ * The nRF 802.15.4 driver in this build has no FEM backend, so nothing drives the CTX and CRX
+ * pins of an external PA/LNA. Two PPI channels do it from the radio events: TXREADY enables the
+ * PA and disables the LNA, RXREADY the other way round, so the turnaround to the ACK needs no
+ * software. TXREADY is too late for the preamble, so a frame the stack sends has the PA enabled by
+ * software before the transmit request; only the ACKs the radio sends by itself use TXREADY.
+ */
+#if defined(CONFIG_SOC_SERIES_NRF52) && DT_NODE_EXISTS(DT_NODELABEL(nrf_radio_fem)) && \
+	DT_NODE_HAS_PROP(DT_NODELABEL(nrf_radio_fem), crx_gpios) && \
+	DT_NODE_HAS_PROP(DT_NODELABEL(nrf_radio_fem), ctx_gpios)
+#define ZB_RADIO_FEM_PPI 1
+
+#include <hal/nrf_gpiote.h>
+#include <hal/nrf_ppi.h>
+#include <hal/nrf_radio.h>
+#include <nrfx_gpiote.h>
+#include <gpiote_nrfx.h>
+#include <soc_nrf_common.h>
+
+#define FEM_NODE DT_NODELABEL(nrf_radio_fem)
+/*
+ * PPI channels 12 to 15 and PPI groups 2 and 3; the 802.15.4 driver uses the channels 6 to 11 and
+ * the groups 0 and 1.
+ *
+ * PPI to the SET and CLR tasks of GPIOTE does not trigger them on this chip, PPI to the OUT task
+ * does, and a pin can be driven by one GPIOTE channel only, so the pins are toggled. To make the
+ * toggling safe, two groups of two PPI channels form a state machine: while the front end is in
+ * the receive state, the group "to transmit" is armed and the end of a frame toggles both pins and
+ * swaps the groups; in the transmit state the group "to receive" is armed and RXREADY does the
+ * same. Repeated events cannot toggle a pin twice.
+ */
+#define FEM_PPI_END_A 12U
+#define FEM_PPI_END_B 13U
+#define FEM_PPI_RX_A  14U
+#define FEM_PPI_RX_B  15U
+#define FEM_GRP_TO_TX 2U
+#define FEM_GRP_TO_RX 3U
+
+static const struct gpio_dt_spec fem_ctx = GPIO_DT_SPEC_GET(FEM_NODE, ctx_gpios);
+static const struct gpio_dt_spec fem_crx = GPIO_DT_SPEC_GET(FEM_NODE, crx_gpios);
+static uint8_t fem_ch_pa;
+static uint8_t fem_ch_lna;
+static bool fem_ready;
+
+static uint32_t fem_pin(const struct gpio_dt_spec *spec)
+{
+	return NRF_GPIO_PIN_MAP(DT_PROP(DT_GPIO_CTLR(FEM_NODE, ctx_gpios), port), spec->pin);
+}
+
+static inline NRF_GPIOTE_Type *fem_gpiote(void)
+{
+	return GPIOTE_NRFX_INST_BY_NODE(NRF_DT_GPIOTE_NODE(FEM_NODE, ctx_gpios)).p_reg;
+}
+
+static inline bool fem_pa_high(void)
+{
+	return (NRF_P1->IN & BIT(fem_ctx.pin)) != 0U;
+}
+
+/* Put the front end in the transmit state and arm the way back */
+static void zb_radio_fem_pa_on(void)
+{
+	if (!fem_ready) {
+		return;
+	}
+	nrf_ppi_group_disable(NRF_PPI, FEM_GRP_TO_TX);
+	nrf_gpiote_task_trigger(fem_gpiote(), nrf_gpiote_clr_task_get(fem_ch_lna));
+	nrf_gpiote_task_trigger(fem_gpiote(), nrf_gpiote_set_task_get(fem_ch_pa));
+	nrf_ppi_group_enable(NRF_PPI, FEM_GRP_TO_RX);
+}
+
+/* Put the front end in the receive state and arm the way to transmit */
+static void zb_radio_fem_lna_on(void)
+{
+	if (!fem_ready) {
+		return;
+	}
+	nrf_ppi_group_disable(NRF_PPI, FEM_GRP_TO_RX);
+	nrf_gpiote_task_trigger(fem_gpiote(), nrf_gpiote_clr_task_get(fem_ch_pa));
+	nrf_gpiote_task_trigger(fem_gpiote(), nrf_gpiote_set_task_get(fem_ch_lna));
+	nrf_ppi_group_enable(NRF_PPI, FEM_GRP_TO_TX);
+}
+
+static void zb_radio_fem_init(void)
+{
+	nrfx_gpiote_t *gpiote = &GPIOTE_NRFX_INST_BY_NODE(NRF_DT_GPIOTE_NODE(FEM_NODE, ctx_gpios));
+
+	if (fem_ready) {
+		return;
+	}
+
+	(void)gpio_pin_configure_dt(&fem_ctx, GPIO_OUTPUT_INACTIVE);
+	(void)gpio_pin_configure_dt(&fem_crx, GPIO_OUTPUT_ACTIVE);
+
+	if ((nrfx_gpiote_channel_alloc(gpiote, &fem_ch_pa) != 0) ||
+	    (nrfx_gpiote_channel_alloc(gpiote, &fem_ch_lna) != 0)) {
+		LOG_ERR("front end: no GPIOTE channels");
+		return;
+	}
+
+	nrf_gpiote_task_configure(gpiote->p_reg, fem_ch_pa, fem_pin(&fem_ctx),
+				  NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_LOW);
+	nrf_gpiote_task_configure(gpiote->p_reg, fem_ch_lna, fem_pin(&fem_crx),
+				  NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_HIGH);
+	nrf_gpiote_task_enable(gpiote->p_reg, fem_ch_pa);
+	nrf_gpiote_task_enable(gpiote->p_reg, fem_ch_lna);
+
+	/* The end of any frame: both pins toggle, the "to transmit" group disarms, "to receive" arms */
+	nrf_ppi_channel_endpoint_setup(NRF_PPI, FEM_PPI_END_A,
+				       nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_END),
+				       (uint32_t)&gpiote->p_reg->TASKS_OUT[fem_ch_pa]);
+	nrf_ppi_fork_endpoint_setup(NRF_PPI, FEM_PPI_END_A,
+				    (uint32_t)&gpiote->p_reg->TASKS_OUT[fem_ch_lna]);
+	nrf_ppi_channel_endpoint_setup(NRF_PPI, FEM_PPI_END_B,
+				       nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_END),
+				       (uint32_t)&NRF_PPI->TASKS_CHG[FEM_GRP_TO_TX].DIS);
+	nrf_ppi_fork_endpoint_setup(NRF_PPI, FEM_PPI_END_B,
+				    (uint32_t)&NRF_PPI->TASKS_CHG[FEM_GRP_TO_RX].EN);
+	/* The receiver is ready: both pins toggle back, the groups swap again */
+	nrf_ppi_channel_endpoint_setup(NRF_PPI, FEM_PPI_RX_A,
+				       nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_RXREADY),
+				       (uint32_t)&gpiote->p_reg->TASKS_OUT[fem_ch_pa]);
+	nrf_ppi_fork_endpoint_setup(NRF_PPI, FEM_PPI_RX_A,
+				    (uint32_t)&gpiote->p_reg->TASKS_OUT[fem_ch_lna]);
+	nrf_ppi_channel_endpoint_setup(NRF_PPI, FEM_PPI_RX_B,
+				       nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_RXREADY),
+				       (uint32_t)&NRF_PPI->TASKS_CHG[FEM_GRP_TO_RX].DIS);
+	nrf_ppi_fork_endpoint_setup(NRF_PPI, FEM_PPI_RX_B,
+				    (uint32_t)&NRF_PPI->TASKS_CHG[FEM_GRP_TO_TX].EN);
+	NRF_PPI->CHG[FEM_GRP_TO_TX] = BIT(FEM_PPI_END_A) | BIT(FEM_PPI_END_B);
+	NRF_PPI->CHG[FEM_GRP_TO_RX] = BIT(FEM_PPI_RX_A) | BIT(FEM_PPI_RX_B);
+
+	/* Start in the receive state: the way to transmit is armed */
+	nrf_ppi_channels_disable(NRF_PPI, BIT(FEM_PPI_RX_A) | BIT(FEM_PPI_RX_B));
+	nrf_ppi_channels_enable(NRF_PPI, BIT(FEM_PPI_END_A) | BIT(FEM_PPI_END_B));
+
+	/* Connect the input buffers so that the pin levels can be sampled */
+	NRF_P1->PIN_CNF[fem_ctx.pin] &= ~GPIO_PIN_CNF_INPUT_Msk;
+	NRF_P1->PIN_CNF[fem_crx.pin] &= ~GPIO_PIN_CNF_INPUT_Msk;
+	fem_ready = true;
+}
+
+static uint32_t dbg_ack_pa;
+static uint32_t dbg_ack_lna;
+
+/* Called when the radio starts an ACK: which of the front end pins is high then */
+void zb_radio_dbg_ack_started(void)
+{
+	if (!fem_ready) {
+		return;
+	}
+	if ((NRF_P1->IN & BIT(fem_ctx.pin)) != 0U) {
+		dbg_ack_pa++;
+	}
+	if ((NRF_P1->IN & BIT(fem_crx.pin)) != 0U) {
+		dbg_ack_lna++;
+	}
+}
+
+/* Debug: the levels of the front end pins, bit 0 PA and bit 1 LNA; the arguments are unused */
+uint8_t zb_radio_fem_ppi_ctl(uint8_t enable, uint8_t disable)
+{
+	ARG_UNUSED(enable);
+	ARG_UNUSED(disable);
+	return (uint8_t)((fem_pa_high() ? 1U : 0U) |
+			 ((NRF_P1->IN & BIT(fem_crx.pin)) != 0U ? 2U : 0U));
+}
+
+int zb_radio_fem_debug_set(uint8_t ctx, uint8_t crx)
+{
+	if (!fem_ready) {
+		return -ENODEV;
+	}
+
+	/* The states the pins can be in are the two of the state machine */
+	if ((ctx != 0U) && (crx == 0U)) {
+		zb_radio_fem_pa_on();
+	} else {
+		zb_radio_fem_lna_on();
+	}
+	return 0;
+}
+#else
+uint8_t zb_radio_fem_ppi_ctl(uint8_t enable, uint8_t disable)
+{
+	ARG_UNUSED(enable);
+	ARG_UNUSED(disable);
+	return 0U;
+}
+
+void zb_radio_dbg_ack_started(void)
+{
+}
+
+static inline void zb_radio_fem_pa_on(void)
+{
+}
+
+static inline void zb_radio_fem_lna_on(void)
+{
+}
+
+int zb_radio_fem_debug_set(uint8_t ctx, uint8_t crx)
+{
+	ARG_UNUSED(ctx);
+	ARG_UNUSED(crx);
+	return -ENOTSUP;
+}
+#endif
 
 struct zb_radio_ctx {
 	const struct device *dev;
@@ -397,6 +608,64 @@ static bool zb_radio_live_rssi_sample(int8_t *rssi)
 	return false;
 }
 
+static uint32_t dbg_cmd_ackreq;
+static uint32_t dbg_assoc_req;
+static uint32_t dbg_data_req;
+
+/* Count the MAC commands the stack gets, for finding where a join stops. */
+static void zb_radio_dbg_count(const uint8_t *psdu, uint8_t len)
+{
+	uint16_t fcf;
+	uint8_t off = 3U;
+
+	if (len < 4U) {
+		return;
+	}
+	fcf = (uint16_t)psdu[0] | ((uint16_t)psdu[1] << 8);
+	if ((fcf & 7U) != 3U) {
+		return;
+	}
+	if ((fcf & BIT(5)) != 0U) {
+		dbg_cmd_ackreq++;
+	}
+	if (((fcf >> 10) & 3U) != 0U) {
+		off += 2U + ((((fcf >> 10) & 3U) == 3U) ? 8U : 2U);
+	}
+	if (((fcf >> 14) & 3U) != 0U) {
+		off += (((fcf & BIT(6)) != 0U) ? 0U : 2U) + ((((fcf >> 14) & 3U) == 3U) ? 8U : 2U);
+	}
+	if (off >= len) {
+		return;
+	}
+	if (psdu[off] == 1U) {
+		dbg_assoc_req++;
+	} else if (psdu[off] == 4U) {
+		dbg_data_req++;
+	}
+}
+
+extern uint32_t nrf5_dbg_ack_started;
+
+void zb_radio_dbg_get(uint32_t out[12])
+{
+	out[0] = (uint32_t)atomic_get(&g_radio.rx_irq_count);
+	out[1] = (uint32_t)atomic_get(&g_radio.rx_drop_count);
+	out[2] = (uint32_t)atomic_get(&g_radio.tx_attempts);
+	out[3] = dbg_cmd_ackreq;
+	out[4] = dbg_assoc_req;
+	out[5] = dbg_data_req;
+	out[6] = nrf5_dbg_ack_started;
+#ifdef ZB_RADIO_FEM_PPI
+	out[7] = NRF_PPI->CHEN;
+	out[8] = dbg_ack_pa;
+	out[9] = dbg_ack_lna;
+	out[10] = 0U;
+	out[11] = 0U;
+#else
+	out[7] = out[8] = out[9] = out[10] = out[11] = 0U;
+#endif
+}
+
 static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 {
 	int16_t rssi_clamped;
@@ -416,6 +685,10 @@ static int zb_radio_on_rx_sink(const struct zb_radio_rx_frame_view *frame)
 	rx_psdu = frame->psdu;
 	rx_len = frame->len;
 	rssi_dbm = frame->rssi_dbm;
+
+	if ((rx_psdu != NULL) && (rx_len != 0U)) {
+		zb_radio_dbg_count(rx_psdu, rx_len);
+	}
 
 	if ((rx_psdu == NULL) || (rx_len == 0U)) {
 		atomic_inc(&g_radio.rx_drop_count);
@@ -522,6 +795,9 @@ void zb_radio_init(void)
 	const struct ieee802154_radio_api *api = NULL;
 	int ret;
 
+#ifdef ZB_RADIO_FEM_PPI
+	zb_radio_fem_init();
+#endif
 	memset(&g_radio, 0, sizeof(g_radio));
 	g_radio.trx_state = RF_MODE_OFF;
 	g_radio.tx_power = ZB_DEFAULT_TX_POWER_IDX;
@@ -866,7 +1142,9 @@ static int zb_radio_submit_tx(const uint8_t *psdu, uint8_t psdu_len)
 	zb_radio_filter_sync();
 	atomic_inc(&g_radio.tx_attempts);
 	(void)zb_radio_l2_ack_frame_pending_take();
+	zb_radio_fem_pa_on();
 	ret = g_radio.api->tx(g_radio.dev, tx_mode, pkt, pkt->frags);
+	zb_radio_fem_lna_on();
 	g_radio.last_ack_frame_pending =
 		zb_radio_ack_frame_pending(psdu, psdu_len, zb_radio_l2_ack_frame_pending_take());
 	net_pkt_unref(pkt);
