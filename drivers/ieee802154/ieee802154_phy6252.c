@@ -795,6 +795,9 @@ static __ramfunc void phy6252_ack_received(struct phy6252_data *data, const uint
 	k_sem_give(&data->ack_done);
 }
 
+/* Set when the receiver was already re-armed ahead of the frame processing */
+static bool phy6252_rx_rearmed;
+
 static __ramfunc void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_status)
 {
 	struct phy6252_rx_frame frame;
@@ -819,6 +822,16 @@ static __ramfunc void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_sta
 	}
 	ROM_LL_HW_RST_RFIFO();
 
+	/*
+	 * A capture must hear the acknowledgement that follows a frame by 192 us: re-arm the
+	 * receiver now and process the frame afterwards.
+	 */
+	if (data->promiscuous && (atomic_get(&data->started) != 0) &&
+	    (atomic_get(&data->rx_stopping) == 0)) {
+		phy6252_radio_rx_start();
+		phy6252_rx_rearmed = true;
+	}
+
 	psdu_len = rx_fifo[0];
 	if ((psdu_len < (PHY6252_FCS_LEN + 3U)) || (psdu_len > PHY6252_MAX_PSDU)) {
 		return;
@@ -832,13 +845,17 @@ static __ramfunc void phy6252_rx_irq(struct phy6252_data *data, uint32_t irq_sta
 
 	if (phy6252_is_ack(frame.psdu, mpdu_len)) {
 		phy6252_ack_received(data, frame.psdu, mpdu_len, rssi_dbm);
-		return;
-	}
-	if (!phy6252_filter_frame(data, frame.psdu, mpdu_len)) {
-		return;
-	}
-	if (phy6252_frame_requires_ack(data, frame.psdu, mpdu_len)) {
-		phy6252_send_ack(frame.psdu[2]);
+		/* A capture in promiscuous mode shows the acknowledgements too. */
+		if (!data->promiscuous) {
+			return;
+		}
+	} else {
+		if (!phy6252_filter_frame(data, frame.psdu, mpdu_len)) {
+			return;
+		}
+		if (phy6252_frame_requires_ack(data, frame.psdu, mpdu_len)) {
+			phy6252_send_ack(frame.psdu[2]);
+		}
 	}
 
 	frame.len = psdu_len;
@@ -874,6 +891,11 @@ static __ramfunc void phy6252_radio_isr(const void *arg)
 
 	if (atomic_get(&data->rx_stopping) != 0) {
 		k_sem_give(&data->rx_stopped);
+		phy6252_rx_rearmed = false;
+		return;
+	}
+	if (phy6252_rx_rearmed) {
+		phy6252_rx_rearmed = false;
 		return;
 	}
 	if (atomic_get(&data->started) != 0) {
