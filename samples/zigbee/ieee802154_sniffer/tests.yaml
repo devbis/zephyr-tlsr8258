@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+sample:
+  name: IEEE 802.15.4 sniffer
+tests:
+  sample.zigbee.ieee802154_sniffer:
+    platform_allow: ecb02c
+    build_only: true
+    tags: zigbee
