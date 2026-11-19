@@ -37,26 +37,26 @@ typedef enum {
 typedef struct {
     bool disableOTADowngrades;
     bool mgmtLeaveWithoutRejoinEnabled;
-    u8 nwkRetryCount;
-    u8 macRetryCount;
+    uint8_t nwkRetryCount;
+    uint8_t macRetryCount;
     bool routerCheckInEnabled;
     bool touchlinkInterpanEnabled;
     bool parentClassificationEnabled;
     bool configurationModeEnabled;
-    u8 currentDebugReportID;
+    uint8_t currentDebugReportID;
     bool tcSecurityOnNwkKeyRotationEnabled;
-    u8 pendingNwkUpdateChannel;
-    u16 pendingNwkUpdatePanID;
-    u16 otaMaxOfflineDuration;
+    uint8_t pendingNwkUpdateChannel;
+    uint16_t pendingNwkUpdatePanID;
+    uint16_t otaMaxOfflineDuration;
 } zcl_wwahAttr_t;
 
 
 extern const zcl_specClusterInfo_t g_wwahClusterList[];
-extern u8 WWAH_CB_CLUSTER_NUM;
+extern uint8_t WWAH_CB_CLUSTER_NUM;
 extern zcl_wwahAttr_t g_zcl_wwahAttrs;
 
 
 void wwah_init(wwah_type_e type, af_simple_descriptor_t *simpleDesc);
-status_t zcl_wwahCb(zclIncomingAddrInfo_t *pAddrInfo, u8 cmdId, void *cmdPayload);
+status_t zcl_wwahCb(zclIncomingAddrInfo_t *pAddrInfo, uint8_t cmdId, void *cmdPayload);
 
 #endif /* WWAH_H */

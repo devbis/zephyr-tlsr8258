@@ -25,11 +25,11 @@
 #include <stdint.h>
 #include "ev_timer.h"
 
-u8 g_edBrcSkipParent = 0;
+uint8_t g_edBrcSkipParent = 0;
 nwkDataIndCb_t g_nwkDataIndCb = NULL;
 
 #if !defined(ZB_ROUTER_ROLE)
-u8 quickDataPollCnt = 0;
+uint8_t quickDataPollCnt = 0;
 ev_timer_event_t *quickDataPollTimerEvt = NULL;
 #endif
 
@@ -37,7 +37,7 @@ ev_timer_event_t *quickDataPollTimerEvt = NULL;
 /* The vendor's route-error exit: drop the pending entry together with the
  * copy of the frame it holds, then confirm the frame with ROUTE_ERROR when
  * the upper layer gave it a handle, or free it. */
-static void nwk_fwd_route_error(zb_buf_t *buf, nwk_txDataPendEntry_t *pending, u8 handle)
+static void nwk_fwd_route_error(zb_buf_t *buf, nwk_txDataPendEntry_t *pending, uint8_t handle)
 {
 	if (pending != NULL) {
 		nwkTxDataPendTabEntryClear(pending);
@@ -103,7 +103,7 @@ static inline bool nwk_joined(void)
 }
 
 #if !defined(ZB_ROUTER_ROLE)
-static int tl_zbNwkQuickDataPollCb(void *arg)
+static int zb_NwkQuickDataPollCb(void *arg)
 {
 	(void)arg;
 
@@ -118,23 +118,23 @@ static int tl_zbNwkQuickDataPollCb(void *arg)
 }
 #endif
 
-void tl_nwkDataIndRegister(nwkDataIndCb_t cb)
+void zb_nwkDataIndRegister(nwkDataIndCb_t cb)
 {
 	g_nwkDataIndCb = cb;
 }
 
-void tl_edBrcDataSkipParentSet(bool skip)
+void zb_edBrcDataSkipParentSet(bool skip)
 {
 	g_edBrcSkipParent = skip;
 }
 
-void nwkNldeDataCnf(void *arg, u8 status, u8 nsduHandle)
+void nwkNldeDataCnf(void *arg, uint8_t status, uint8_t nsduHandle)
 {
 	nlde_data_cnf_t *cnf = (nlde_data_cnf_t *)arg;
 
 	cnf->status = status;
 	cnf->nsduHandle = nsduHandle;
-	tl_zbTaskPost(aps_nwk_data_confirm_cb, arg);
+	zb_TaskPost(aps_nwk_data_confirm_cb, arg);
 }
 
 void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
@@ -157,7 +157,7 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
 							     : APS_SHORT_DSTADDR_WITHEP;
 	ind.dstAddr = pNwkHdr->dstAddr;
 	ind.srcAddr = pNwkHdr->srcAddr;
-	ind.nsduLen = (u8)(macInd->msduLength - pNwkHdr->frameHdrLen);
+	ind.nsduLen = (uint8_t)(macInd->msduLength - pNwkHdr->frameHdrLen);
 	ind.nsdu = macInd->msdu + pNwkHdr->frameHdrLen;
 	ind.lqi = macInd->mpduLinkQuality;
 	ind.srcMacAddr = macInd->srcAddr.addr.shortAddr;
@@ -172,14 +172,14 @@ void nwkNldeDataInd(void *arg, nwk_hdr_t *pNwkHdr)
 	if (g_nwkDataIndCb != NULL) {
 		g_nwkDataIndCb(arg);
 	}
-	tl_zbTaskPost(aps_nwk_data_indication_cb, arg);
+	zb_TaskPost(aps_nwk_data_indication_cb, arg);
 }
 
-u8 tl_zbNwkInterPanDataReq(void *arg)
+uint8_t zb_NwkInterPanDataReq(void *arg)
 {
 	nlde_data_req_t *req = (nlde_data_req_t *)arg;
 	zb_mscp_data_req_t macReq;
-	u8 nwkStubHdr[2] = {
+	uint8_t nwkStubHdr[2] = {
 		FRAME_TYPE_INTERPAN | NWK_FC_LOW_PROTO_VER_PRO,
 		0,
 	};
@@ -190,7 +190,7 @@ u8 tl_zbNwkInterPanDataReq(void *arg)
 	macReq.srcAddr.addrMode = ADDR_MODE_EXT;
 	macReq.dstAddr.addrMode = req->addrMode;
 	macReq.msdu = req->nsdu - sizeof(nwkStubHdr);
-	macReq.msduLength = (u8)(req->nsduLen + sizeof(nwkStubHdr));
+	macReq.msduLength = (uint8_t)(req->nsduLen + sizeof(nwkStubHdr));
 	macReq.msduHandle = req->ndsuHandle;
 
 	if (dstPanID == 0U || deviceInfoRsp == 0U) {
@@ -208,16 +208,16 @@ u8 tl_zbNwkInterPanDataReq(void *arg)
 	}
 
 	memcpy(arg, &macReq, sizeof(macReq));
-	tl_zbMacMcpsDataRequestProc(arg);
+	zb_MacMcpsDataRequestProc(arg);
 	return RET_OK;
 }
 
-void tl_zbMacInterPanDataHandle(void *arg)
+void zb_MacInterPanDataHandle(void *arg)
 {
-	tl_zbTaskPost(aps_interPanDataIndCb, arg);
+	zb_TaskPost(aps_interPanDataIndCb, arg);
 }
 
-void tl_zbMacMcpsDataConfirmHandler(void *arg)
+void zb_MacMcpsDataConfirmHandler(void *arg)
 {
 	/*
 	 * The confirm is copied off the buffer first because the buffer itself is
@@ -228,8 +228,8 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 	 */
 	zb_mscp_data_conf_t conf;
 	nwk_hdr_t nwkHdr;
-	u8 handle;
-	u8 status;
+	uint8_t handle;
+	uint8_t status;
 
 	memset(&conf, 0, sizeof(conf));
 	memcpy(&conf, arg, sizeof(conf));
@@ -246,9 +246,9 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 	 * ("32:".."3c:" tests the 0xfff8 mask).
 	 */
 	if (!ZB_NWK_IS_ADDRESS_BROADCAST(nwkHdr.dstAddr)) {
-		u16 macDstAddr = conf.macDstAddr;
+		uint16_t macDstAddr = conf.macDstAddr;
 		nwk_txDataPendEntry_t *pend;
-		tl_zb_normal_neighbor_entry_t *nbr;
+		zb_normal_neighbor_entry_t *nbr;
 
 		pend = nwkTxDataPendTabEntryFind(nwkHdr.srcAddr, nwkHdr.dstAddr, conf.msduHandle,
 						 nwkHdr.seqNum);
@@ -269,9 +269,9 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 					nbr->transFailure = 0;
 					nbr->age = 0;
 				} else if (status == MAC_STA_NO_ACK) {
-					u8 prev = nbr->transFailure;
+					uint8_t prev = nbr->transFailure;
 
-					nbr->transFailure = (u8)(prev + 1U);
+					nbr->transFailure = (uint8_t)(prev + 1U);
 
 					if (prev >= NWKC_TRANSFAILURE_CNT_THRESHOLD) {
 						nbr->outgoingCost = 0;
@@ -294,9 +294,9 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 			} else if (status == MAC_SUCCESS) {
 				route->transFail = 0;
 			} else if (status == MAC_STA_NO_ACK) {
-				u8 prev = route->transFail;
+				uint8_t prev = route->transFail;
 
-				route->transFail = (u8)(prev + 1U);
+				route->transFail = (uint8_t)(prev + 1U);
 
 				if (prev >= NWKC_TRANSFAILURE_CNT_THRESHOLD) {
 					route->transFail = 0;
@@ -315,15 +315,15 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 			endDevMacDataPoll();
 		}
 	} else {
-		u16 shortAddr = conf.macDstAddr;
-		tl_zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
+		uint16_t shortAddr = conf.macDstAddr;
+		zb_normal_neighbor_entry_t *entry = nwk_neTblGetByShortAddr(shortAddr);
 
 		if (entry != NULL && entry->relationship == NEIGHBOR_IS_PARENT &&
 		    status == MAC_STA_NO_ACK) {
 			zb_buf_t *buf = zb_buf_allocate();
 
 			if (buf != NULL) {
-				tl_zbNwkNlmeNwkStatusInd(buf, shortAddr,
+				zb_NwkNlmeNwkStatusInd(buf, shortAddr,
 							 NWK_COMMAND_STATUS_PARENT_LINK_FAILURE);
 			}
 		}
@@ -351,12 +351,12 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 		return;
 #if defined(ZB_ROUTER_ROLE)
 	case NWK_INTERNAL_REJOIN_RESP_CMD_HANDLE:
-		tl_zbMcpsRejoinRespCnfHandler(arg, status, nwkHdr.dstAddr);
+		zb_McpsRejoinRespCnfHandler(arg, status, nwkHdr.dstAddr);
 		return;
 	case NWK_INTERNAL_NETWORK_UPDATE_CMD_PAN_ID_UPDATE_HANDLE:
 		zb_buf_free((zb_buf_t *)arg);
 		if (status == MAC_SUCCESS) {
-			tl_zbNwkPanidConflictSetPanidStart();
+			zb_NwkPanidConflictSetPanidStart();
 		}
 		return;
 	case NWK_INTERNAL_NETWORK_REPORT_CMD_HANDLE:
@@ -377,12 +377,12 @@ void tl_zbMacMcpsDataConfirmHandler(void *arg)
 	}
 }
 
-void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 indirect, u8 *payload, u8 payloadLen)
+void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint16_t nextHop, uint8_t indirect, uint8_t *payload, uint8_t payloadLen)
 {
 	zb_mscp_data_req_t *req;
-	u8 nwkHdrLen;
-	u8 *frameStart;
-	u8 savedHandle;
+	uint8_t nwkHdrLen;
+	uint8_t *frameStart;
+	uint8_t savedHandle;
 	if (buf == NULL || pNwkHdr == NULL || payload == NULL) {
 		return;
 	}
@@ -399,7 +399,7 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 indirect, u8 *pay
 	req->dstAddr.addrMode = ADDR_MODE_SHORT;
 	req->dstAddr.addr.shortAddr = nextHop;
 	req->dstPanId = g_zbInfo.macPib.panId;
-	req->msduLength = (u8)(nwkHdrLen + payloadLen);
+	req->msduLength = (uint8_t)(nwkHdrLen + payloadLen);
 	req->msdu = frameStart;
 	req->msduHandle = savedHandle;
 
@@ -417,26 +417,26 @@ void nwk_tx(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u16 nextHop, u8 indirect, u8 *pay
 
 	if (!nwk_joined() && savedHandle != NWK_INTERNAL_REJOIN_REQ_CMD_HANDLE &&
 	    savedHandle != NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE) {
-		tl_zbMacMcpsDataRequestSendConfirm(buf, MAC_STA_BAD_STATE);
+		zb_MacMcpsDataRequestSendConfirm(buf, MAC_STA_BAD_STATE);
 		return;
 	}
 
 	if (pNwkHdr->frameControl.security) {
 		if (ss_nwkSecureFrame(buf, pNwkHdr->frameHdrLen) != RET_OK) {
 			g_sysDiags.nwkTxEnDecryptFail++;
-			tl_zbMacMcpsDataRequestSendConfirm(buf, NWK_STATUS_DECRYPT_ERROR);
+			zb_MacMcpsDataRequestSendConfirm(buf, NWK_STATUS_DECRYPT_ERROR);
 			return;
 		}
 	}
 
 	g_sysDiags.nwkTxCnt++;
-	tl_zbMacMcpsDataRequestProc(buf);
+	zb_MacMcpsDataRequestProc(buf);
 }
 
-void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen)
+void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, uint8_t *payload, uint8_t payloadLen)
 {
-	u16 nextHop;
-	u8 handle;
+	uint16_t nextHop;
+	uint8_t handle;
 
 	if (buf == NULL) {
 		ZB_EXCEPTION_POST(SYS_EXCEPTTION_ZB_BUFFER_EXCEPTION);
@@ -531,7 +531,7 @@ void nwk_fwdPacket(zb_buf_t *buf, nwk_hdr_t *pNwkHdr, u8 *payload, u8 payloadLen
 				nwkBrcMsgPassiveAckTimeoutStart(trans);
 			} else {
 				if (trans->passiveAckAddr != NULL) {
-					ev_buf_free((u8 *)trans->passiveAckAddr);
+					ev_buf_free((uint8_t *)trans->passiveAckAddr);
 					trans->passiveAckAddr = NULL;
 				}
 				nwkTxDataPendTabEntryClear(trans->entry);
@@ -545,8 +545,8 @@ brc_tx:
 	}
 
 	{
-		tl_zb_normal_neighbor_entry_t *neighbor;
-		tl_zb_normal_neighbor_entry_t *srcNeighbor;
+		zb_normal_neighbor_entry_t *neighbor;
+		zb_normal_neighbor_entry_t *srcNeighbor;
 		nwk_routingTabEntry_t *route;
 		nwk_routeDiscEntry_t *entry;
 
@@ -562,7 +562,7 @@ brc_tx:
 				nwkRouteRecTabEntryFind(pNwkHdr->dstAddr);
 
 			if (record != NULL) {
-				u8 relayCnt = record->relayCnt;
+				uint8_t relayCnt = record->relayCnt;
 
 				pNwkHdr->frameControl.srcRoute = 1;
 				pNwkHdr->srcRouteSubframe.relayCnt = relayCnt;
@@ -570,8 +570,8 @@ brc_tx:
 					pNwkHdr->srcRouteSubframe.relayIdx = 0;
 					nextHop = pNwkHdr->dstAddr;
 				} else {
-					pNwkHdr->srcRouteSubframe.relayIdx = (u8)(relayCnt - 1U);
-					pNwkHdr->srcRouteSubframe.relayList = (u8 *)record->path;
+					pNwkHdr->srcRouteSubframe.relayIdx = (uint8_t)(relayCnt - 1U);
+					pNwkHdr->srcRouteSubframe.relayList = (uint8_t *)record->path;
 					nextHop = record->path[relayCnt - 1U];
 				}
 
@@ -587,7 +587,7 @@ brc_tx:
 #endif
 
 		if (pNwkHdr->frameControl.srcRoute != 0U) {
-			u8 indirect = 0;
+			uint8_t indirect = 0;
 
 			nextHop = nwkSrcRouteReplayNextHop(pNwkHdr);
 			if (pNwkHdr->srcRouteSubframe.relayIdx == 0U) {
@@ -628,7 +628,7 @@ brc_tx:
 			srcNeighbor = nwk_neTblGetByShortAddr(pNwkHdr->srcAddr);
 			if (pNwkHdr->srcAddr == g_zbInfo.nwkNib.nwkAddr ||
 			    (srcNeighbor != NULL &&
-			     (((u8)(srcNeighbor->rxOnWhileIdle | (srcNeighbor->deviceType << 1) |
+			     (((uint8_t)(srcNeighbor->rxOnWhileIdle | (srcNeighbor->deviceType << 1) |
 				    (srcNeighbor->relationship << 4)) &
 			       NWK_NEB_STATUS_MASK) == NWK_NEB_STATUS_ROUTER_CHILD))) {
 				nwkRouteRecordInitiation(pNwkHdr->srcAddr, pNwkHdr->dstAddr);
@@ -671,10 +671,10 @@ brc_tx:
 		    (!nwk_joined() && handle == NWK_INTERNAL_LEAVE_REQ_CMD_HANDLE)) {
 			nextHop = MAC_SHORT_ADDR_BROADCAST;
 		} else {
-			nextHop = tl_zbNeighborParentShortAddrGet();
+			nextHop = zb_NeighborParentShortAddrGet();
 		}
 	} else {
-		nextHop = tl_zbNeighborParentShortAddrGet();
+		nextHop = zb_NeighborParentShortAddrGet();
 	}
 
 	if (nextHop == MAC_ADDR_USE_EXT) {
@@ -690,21 +690,21 @@ brc_tx:
 #endif
 }
 
-void tl_zbMacMcpsDataIndicationHandler(void *arg)
+void zb_MacMcpsDataIndicationHandler(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	zb_mscp_data_ind_t *ind = (zb_mscp_data_ind_t *)arg;
 	nwk_hdr_t nwkHdr;
 	nwkCmd_t cmd;
-	u16 macSrcAddr;
-	u16 macDstAddr;
-	u8 frameType;
-	u8 payloadTotalLen;
-	u8 *payload;
+	uint16_t macSrcAddr;
+	uint16_t macDstAddr;
+	uint8_t frameType;
+	uint8_t payloadTotalLen;
+	uint8_t *payload;
 #if defined(ZB_ROUTER_ROLE)
 	nwk_brcTransRecordEntry_t *brcTrans = NULL;
 	nwk_routingTabEntry_t *activeRoute;
-	tl_zb_normal_neighbor_entry_t *neighbor;
+	zb_normal_neighbor_entry_t *neighbor;
 #endif
 
 #if defined(ZB_ROUTER_ROLE)
@@ -714,12 +714,12 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 	 * Routers and coordinators do this before looking at the user state, so
 	 * a GP frame is posted also while leaving. */
 	if (ind->dstPanId == MAC_PAN_ID_BROADCAST) {
-		u8 frameControl = ind->msdu[0];
-		u8 protocolVersion = (u8)((frameControl >> NWK_FC_LOW_PROTO_VER_SHIFT) &
+		uint8_t frameControl = ind->msdu[0];
+		uint8_t protocolVersion = (uint8_t)((frameControl >> NWK_FC_LOW_PROTO_VER_SHIFT) &
 					  NWK_FC_LOW_PROTO_VER_FIELD_MASK);
 
 		if (protocolVersion == ZB_PROTOCOL_VERSION_GP) {
-			tl_zbTaskPost(cGp_mcpsDataInd, arg);
+			zb_TaskPost(cGp_mcpsDataInd, arg);
 			return;
 		}
 
@@ -752,12 +752,12 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 			return;
 		}
 
-		tl_zbMacInterPanDataHandle(arg);
+		zb_MacInterPanDataHandle(arg);
 		return;
 	}
 
 	if (frameType == FRAME_TYPE_INTERPAN) {
-		tl_zbMacInterPanDataHandle(arg);
+		zb_MacInterPanDataHandle(arg);
 		return;
 	}
 
@@ -780,7 +780,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 	if (ZB_NWK_IS_ADDRESS_BROADCAST(macDstAddr)) {
 #if !defined(ZB_ROUTER_ROLE)
 		if (g_zbInfo.macPib.rxOnWhenIdle != 0U) {
-			if (macSrcAddr != tl_zbNeighborParentShortAddrGet()) {
+			if (macSrcAddr != zb_NeighborParentShortAddrGet()) {
 				g_sysDiags.packetValidateDropCount++;
 				zb_buf_free(buf);
 				return;
@@ -848,7 +848,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 				       ind->mpduLinkQuality) != RET_OK) {
 			return;
 		}
-		payloadTotalLen = (u8)(ind->msduLength - 4U);
+		payloadTotalLen = (uint8_t)(ind->msduLength - 4U);
 	} else {
 		payloadTotalLen = ind->msduLength;
 	}
@@ -868,7 +868,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 
 		switch (cmd.cmdId) {
 		case NWK_CMD_ROUTE_REQUEST:
-			*(u8 *)&cmd.rreq.options = payload[1];
+			*(uint8_t *)&cmd.rreq.options = payload[1];
 			cmd.rreq.routeReqId = payload[2];
 			cmd.rreq.dstAddr = ZB_LE_U16(&payload[3]);
 			cmd.rreq.pathCost = payload[5];
@@ -879,14 +879,14 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 #endif
 			break;
 		case NWK_CMD_ROUTE_REPLY:
-			*(u8 *)&cmd.rrep.options = payload[1];
+			*(uint8_t *)&cmd.rrep.options = payload[1];
 			cmd.rrep.routeReqId = payload[2];
 			cmd.rrep.originatorAddr = ZB_LE_U16(&payload[3]);
 			cmd.rrep.responderAddr = ZB_LE_U16(&payload[5]);
 			cmd.rrep.pathCost = payload[7];
 #if defined(ZB_ROUTER_ROLE)
 			{
-				const u8 *ieee = payload + 8;
+				const uint8_t *ieee = payload + 8;
 
 				if (cmd.rrep.options.originatorIeeeAddr != 0U) {
 					ZB_IEEE_ADDR_COPY(cmd.rrep.originatorIeeeAddr, ieee);
@@ -906,7 +906,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 			cmd.nwkStatus.dstAddr = ZB_LE_U16(&payload[2]);
 			break;
 		case NWK_CMD_LEAVE:
-			*(u8 *)&cmd.leave = payload[1];
+			*(uint8_t *)&cmd.leave = payload[1];
 			break;
 		case NWK_CMD_ROUTE_RECORD:
 			cmd.rrec.relayCnt = payload[1];
@@ -917,19 +917,19 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 			cmd.rejoinRsp.rejoinStatus = payload[3];
 			break;
 		case NWK_CMD_REJOIN_REQUEST:
-			*(u8 *)&cmd.rejoinReq.capabilityInfo = payload[1];
+			*(uint8_t *)&cmd.rejoinReq.capabilityInfo = payload[1];
 			break;
 		case NWK_CMD_LINK_STATUS:
-			*(u8 *)&cmd.linkSt.options = payload[1];
+			*(uint8_t *)&cmd.linkSt.options = payload[1];
 			cmd.linkSt.linkStatusList = (linkStatus_entry_t *)(payload + 2);
 			break;
 		case NWK_CMD_NETWORK_REPORT:
-			*(u8 *)&cmd.nwkReport.options = payload[1];
+			*(uint8_t *)&cmd.nwkReport.options = payload[1];
 			ZB_EXTPANID_COPY(cmd.nwkReport.epid, payload + 2);
 			cmd.nwkReport.panIds = payload + 10;
 			break;
 		case NWK_CMD_NETWORK_UPDATE:
-			*(u8 *)&cmd.nwkUpdate.options = payload[1];
+			*(uint8_t *)&cmd.nwkUpdate.options = payload[1];
 			ZB_EXTPANID_COPY(cmd.nwkUpdate.epid, payload + 2);
 			cmd.nwkUpdate.newPanId = ZB_LE_U16(&payload[11]);
 			cmd.nwkUpdate.updateId = payload[10];
@@ -975,7 +975,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 #if defined(ZB_ROUTER_ROLE)
 	neighbor = nwk_neTblGetByShortAddr(macSrcAddr);
 	if (neighbor != NULL) {
-		neighbor->lqi = tl_nwkGetAverageLqi(neighbor->lqi, ind->mpduLinkQuality);
+		neighbor->lqi = zb_nwkGetAverageLqi(neighbor->lqi, ind->mpduLinkQuality);
 	}
 
 	/* Every broadcast frame, a command as well as data, is looked up in the
@@ -1005,9 +1005,9 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 
 	if (NWK_HEADER_SRC_IEEE_INCLUDE && nwkHdr.frameControl.security &&
 	    nwkHdr.frameControl.srcIEEEAddr != 0U) {
-		u16 addrRef = 0;
+		uint16_t addrRef = 0;
 
-		(void)tl_zbNwkAddrMapAdd(nwkHdr.srcAddr, nwkHdr.srcIeeeAddr, &addrRef);
+		(void)zb_NwkAddrMapAdd(nwkHdr.srcAddr, nwkHdr.srcIeeeAddr, &addrRef);
 	}
 
 	if (frameType == FRAME_TYPE_DATA) {
@@ -1020,7 +1020,7 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 							     ? 1U
 							     : NWK_BRC_JITTER);
 				if (nwkBrcTimerStart(buf, &nwkHdr, payload,
-						     (u8)(payloadTotalLen - nwkHdr.frameHdrLen)) !=
+						     (uint8_t)(payloadTotalLen - nwkHdr.frameHdrLen)) !=
 				    NWK_STATUS_SUCCESS) {
 					nwkBrcTransTabEntryClear(brcTrans);
 					zb_buf_free(buf);
@@ -1059,13 +1059,13 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 		}
 #endif
 
-		nwk_fwdPacket(buf, &nwkHdr, payload, (u8)(payloadTotalLen - nwkHdr.frameHdrLen));
+		nwk_fwdPacket(buf, &nwkHdr, payload, (uint8_t)(payloadTotalLen - nwkHdr.frameHdrLen));
 		return;
 	}
 
 #if defined(ZB_ROUTER_ROLE)
 	if (nwkHdr.frameControl.frameType == FRAME_TYPE_INTERPAN) {
-		tl_zbTaskPost(cGp_mcpsDataInd, arg);
+		zb_TaskPost(cGp_mcpsDataInd, arg);
 		return;
 	}
 #endif
@@ -1097,10 +1097,10 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 		nwkRouteRecordCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 	case NWK_CMD_LINK_STATUS:
-		tl_zbNwkLinkStatusCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkLinkStatusCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 	case NWK_CMD_NETWORK_REPORT:
-		tl_zbNwkReportCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkReportCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 #endif
 #if defined(ZB_ROUTER_ROLE)
@@ -1109,21 +1109,21 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 		return;
 #endif
 	case NWK_CMD_NETWORK_UPDATE:
-		tl_zbNwkNetworkUpdateCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkNetworkUpdateCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 	case NWK_CMD_REJOIN_RESPONSE:
-		tl_zbNwkRejoinRespCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkRejoinRespCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 #if defined(ZB_ROUTER_ROLE)
 	case NWK_CMD_REJOIN_REQUEST:
-		tl_zbNwkRejoinReqCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkRejoinReqCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 #endif
 	case NWK_CMD_LEAVE:
-		tl_zbNwkLeaveReqCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkLeaveReqCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 	case NWK_CMD_NETWORK_STATUS:
-		tl_zbNwkStatusCmdHandler(arg, &nwkHdr, &cmd);
+		zb_NwkStatusCmdHandler(arg, &nwkHdr, &cmd);
 		return;
 	default:
 		zb_buf_free(buf);
@@ -1131,14 +1131,14 @@ void tl_zbMacMcpsDataIndicationHandler(void *arg)
 	}
 }
 
-void tl_zbNwkNldeDataRequestHandler(void *arg)
+void zb_NwkNldeDataRequestHandler(void *arg)
 {
 	zb_buf_t *buf = (zb_buf_t *)arg;
 	nlde_data_req_t *req = (nlde_data_req_t *)arg;
 	nwk_hdr_t nwkHdr;
-	u8 *fc = (u8 *)&nwkHdr.frameControl;
-	u16 srcAddr;
-	u8 radius;
+	uint8_t *fc = (uint8_t *)&nwkHdr.frameControl;
+	uint16_t srcAddr;
+	uint8_t radius;
 	bool multicast;
 
 	/* The vendor library only reads g_zbNwkCtx here: the joined flag and the
@@ -1162,7 +1162,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
 	buf->hdr.handle = req->ndsuHandle;
 
 	fc[0] = (FRAME_TYPE_DATA & NWK_FC_LOW_FRAME_TYPE_MASK) | NWK_FC_LOW_PROTO_VER_PRO;
-	fc[0] |= (u8)(req->discoverRoute << NWK_FC_LOW_DISCOVER_ROUTE_SHIFT);
+	fc[0] |= (uint8_t)(req->discoverRoute << NWK_FC_LOW_DISCOVER_ROUTE_SHIFT);
 	/* NLDE addrMode 1 is group delivery; 2 and 3 are short and extended
 	 * unicast and must not set the NWK multicast bit.  The vendor library
 	 * tests for equality with 1 here, not for a plain nonzero value. */
@@ -1191,7 +1191,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
 
 	radius = req->radius;
 	if (radius == 0U) {
-		radius = (u8)(g_zbInfo.nwkNib.maxDepth << 1);
+		radius = (uint8_t)(g_zbInfo.nwkNib.maxDepth << 1);
 	}
 	nwkHdr.radius = radius;
 
@@ -1202,7 +1202,7 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
 	}
 
 	if (multicast) {
-		u8 nonmemberRadius = req->nonmemberRadius & NWK_MCAST_NONMEMBER_RADIUS_MASK;
+		uint8_t nonmemberRadius = req->nonmemberRadius & NWK_MCAST_NONMEMBER_RADIUS_MASK;
 
 		if (aps_group_search_by_addr(req->dstAddr)) {
 			nwkHdr.mcastControl.multicastMode = 1U;
@@ -1233,8 +1233,8 @@ void tl_zbNwkNldeDataRequestHandler(void *arg)
 			ev_timer_taskCancel(&quickDataPollTimerEvt);
 		}
 		quickDataPollTimerEvt = ev_timer_taskPost(
-			tl_zbNwkQuickDataPollCb, NULL,
-			(((u32)g_zbInfo.macPib.respWaitTime * 15U) << 10) / 1000U);
+			zb_NwkQuickDataPollCb, NULL,
+			(((uint32_t)g_zbInfo.macPib.respWaitTime * 15U) << 10) / 1000U);
 	}
 #endif
 }

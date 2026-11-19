@@ -50,38 +50,38 @@
 
 #if 0
 #ifdef ZCL_BINARY_INPUT_ATTR_ACTIVE_TEXT_ENABLE
-extern u8 zcl_attr_binInput_activeText[];
+extern uint8_t zcl_attr_binInput_activeText[];
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_DESCRIPTIONT_ENABLE
-extern u8 zcl_attr_binInput_description[];
+extern uint8_t zcl_attr_binInput_description[];
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_INACTIVE_TEXT_ENABLE
-extern u8 zcl_attr_binInput_inactiveText[];
+extern uint8_t zcl_attr_binInput_inactiveText[];
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_OUT_OF_SERVICE_ENABLE
 extern bool zcl_attr_binInput_outOfService;
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_POLARITY_ENABLE
-extern u8 zcl_attr_binInput_polarity;
+extern uint8_t zcl_attr_binInput_polarity;
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_PRESENT_VALUE_ENABLE
 extern bool zcl_attr_binInput_presentValue;
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_RELIABILITY_ENABLE
-extern u8 zcl_attr_binInput_reliability;
+extern uint8_t zcl_attr_binInput_reliability;
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_STATUS_FLAGS_ENABLE
-extern u8 zcl_attr_binInput_statusFlags;
+extern uint8_t zcl_attr_binInput_statusFlags;
 #endif
 #ifdef ZCL_BINARY_INPUT_ATTR_APP_TYPE_ENABLE
-extern u32 zcl_attr_binInput_appType;
+extern uint32_t zcl_attr_binInput_appType;
 #endif
 
 extern const zclAttrInfo_t binary_input_attrTbl[];
-extern const u8 zcl_binary_input_attrNum;
+extern const uint8_t zcl_binary_input_attrNum;
 #endif
 
 
-status_t zcl_binary_input_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
+status_t zcl_binary_input_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb);
 
 #endif	/* ZCL_BINARY_INPUT_H */

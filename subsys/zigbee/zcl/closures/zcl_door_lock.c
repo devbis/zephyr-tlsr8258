@@ -51,22 +51,22 @@
 static status_t zcl_doorLock_cmdHandler(zclIncoming_t *pInMsg);
 
 
-_CODE_ZCL_ status_t zcl_doorLock_register(u8 endpoint, u16 manuCode, u8 attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
+_CODE_ZCL_ status_t zcl_doorLock_register(uint8_t endpoint, uint16_t manuCode, uint8_t attrNum, const zclAttrInfo_t attrTbl[], cluster_forAppCb_t cb)
 {
     return zcl_registerCluster(endpoint, ZCL_CLUSTER_CLOSURES_DOOR_LOCK, manuCode, attrNum, attrTbl, zcl_doorLock_cmdHandler, cb);
 }
 
-_CODE_ZCL_ status_t zcl_doorLock_doorLockReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, u8 *pCode)
+_CODE_ZCL_ status_t zcl_doorLock_doorLockReq(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, uint8_t *pCode)
 {
     status_t status = ZCL_STA_SUCCESS;
-    u8 len = pCode[0] + 1;
+    uint8_t len = pCode[0] + 1;
 
-    u8 *buf = (u8 *)ev_buf_allocate(len);
+    uint8_t *buf = (uint8_t *)ev_buf_allocate(len);
     if (!buf) {
         return ZCL_STA_INSUFFICIENT_SPACE;
     }
 
-    for (u8 i = 0; i < len; i++) {
+    for (uint8_t i = 0; i < len; i++) {
         buf[i] = pCode[i];
     }
 
@@ -79,7 +79,7 @@ _CODE_ZCL_ status_t zcl_doorLock_doorLockReq(u8 srcEp, epInfo_t *pDstEpInfo, u8 
     return status;
 }
 
-_CODE_ZCL_ status_t zcl_doorLock_doorLockRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 disableDefaultRsp, u8 seqNo, u8 cmdId, status_t rspStatus)
+_CODE_ZCL_ status_t zcl_doorLock_doorLockRsp(uint8_t srcEp, epInfo_t *pDstEpInfo, uint8_t disableDefaultRsp, uint8_t seqNo, uint8_t cmdId, status_t rspStatus)
 {
     return zcl_sendCmd(srcEp, pDstEpInfo, ZCL_CLUSTER_CLOSURES_DOOR_LOCK, cmdId, TRUE,
                        ZCL_FRAME_SERVER_CLIENT_DIR, disableDefaultRsp, 0, seqNo, 1, &rspStatus);
@@ -88,7 +88,7 @@ _CODE_ZCL_ status_t zcl_doorLock_doorLockRsp(u8 srcEp, epInfo_t *pDstEpInfo, u8 
 
 _CODE_ZCL_ static status_t zcl_doorLock_doorLockReqPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
     apsdeDataInd_t *pApsdeInd = (apsdeDataInd_t*)pInMsg->msg;
 
     if (pInMsg->clusterAppCb) {
@@ -99,7 +99,7 @@ _CODE_ZCL_ static status_t zcl_doorLock_doorLockReqPrc(zclIncoming_t *pInMsg)
     	status = pInMsg->clusterAppCb(&(pInMsg->addrInfo), pInMsg->hdr.cmd, &reqCmd);
 
     	epInfo_t dstEp;
-    	TL_SETSTRUCTCONTENT(dstEp, 0);
+    	ZB_SETSTRUCTCONTENT(dstEp, 0);
 
     	dstEp.dstAddrMode = APS_SHORT_DSTADDR_WITHEP;
     	dstEp.dstAddr.shortAddr = pApsdeInd->indInfo.src_short_addr;
@@ -118,7 +118,7 @@ _CODE_ZCL_ static status_t zcl_doorLock_doorLockReqPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_doorLock_doorLockRspPrc(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     if (pInMsg->clusterAppCb) {
         zcl_doorlockRsp_t rspCmd;
@@ -134,7 +134,7 @@ _CODE_ZCL_ static status_t zcl_doorLock_doorLockRspPrc(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_doorLock_clientCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_LOCK_DOOR:
@@ -152,7 +152,7 @@ _CODE_ZCL_ static status_t zcl_doorLock_clientCmdHandler(zclIncoming_t *pInMsg)
 
 _CODE_ZCL_ static status_t zcl_doorLock_serverCmdHandler(zclIncoming_t *pInMsg)
 {
-    u8 status = ZCL_STA_SUCCESS;
+    uint8_t status = ZCL_STA_SUCCESS;
 
     switch (pInMsg->hdr.cmd) {
     case ZCL_CMD_LOCK_DOOR_RESPONSE:

@@ -150,11 +150,11 @@ enum {
 typedef struct {
     union {
         struct {
-            u8 logicDevType:2;          /*!< logical device type */
-            u8 rxOnWihleIdle:1;         /*!< logical device type */
-            u8 resv:5;                  /*!< reserved */
+            uint8_t logicDevType:2;          /*!< logical device type */
+            uint8_t rxOnWihleIdle:1;         /*!< logical device type */
+            uint8_t resv:5;                  /*!< reserved */
         } bf;
-        u8 byte;
+        uint8_t byte;
     };
 } zll_tlZbInfo_t;
 
@@ -164,15 +164,15 @@ typedef struct {
 typedef struct {
     union {
         struct {
-            u8 factoryNew:1;            /*!< 1: factory new device, 0: non-factory new device*/
-            u8 addrAssign:1;            /*!< Address assignment */
-            u8 resv0:2;	                /*!< reserved */
-            u8 linkInitiator:1;         /*!< touch link initiator */
-            u8 priorityReq:1;           /*!< priority request */
-            u8 resv1:1;                 /*!< reserved */
-            u8 profileInterop:1;        /*!< 1:zigbee3.0,0:ZLL profile*/
+            uint8_t factoryNew:1;            /*!< 1: factory new device, 0: non-factory new device*/
+            uint8_t addrAssign:1;            /*!< Address assignment */
+            uint8_t resv0:2;	                /*!< reserved */
+            uint8_t linkInitiator:1;         /*!< touch link initiator */
+            uint8_t priorityReq:1;           /*!< priority request */
+            uint8_t resv1:1;                 /*!< reserved */
+            uint8_t profileInterop:1;        /*!< 1:zigbee3.0,0:ZLL profile*/
         } bf;
-        u8 byte;
+        uint8_t byte;
     };
 } zll_tlZllInfo_t;
 
@@ -180,11 +180,11 @@ typedef struct {
  *  @brief  Definition for sub-device information
  */
 typedef struct _attribute_packed_ {
-    u8 epId;                            /*!< end-point identifier */
-    u16 profileId;                      /*!< profile identifier */
-    u16 deviceId;                       /*!< device identifier */
-    u8 version;                         /*!< version */
-    u8 groupIdCnt;                      /*!< group identifies count */
+    uint8_t epId;                            /*!< end-point identifier */
+    uint16_t profileId;                      /*!< profile identifier */
+    uint16_t deviceId;                       /*!< device identifier */
+    uint8_t version;                         /*!< version */
+    uint8_t groupIdCnt;                      /*!< group identifies count */
 } zcl_zllSubdeviceInfo_t;
 
 /**
@@ -192,43 +192,43 @@ typedef struct _attribute_packed_ {
  */
 typedef struct {
     addrExt_t deviceAddr;               /*!< device address */
-    u8 epId;                            /*!< end-point identifier */
-    u16 profileId;                      /*!< profile identifier */
-    u16 deviceId;                       /*!< device identifier */
-    u8 version;                         /*!< device identifier */
-    u8 groupIdCnt;                      /*!< group identifies count */
-    u8 sort;                            /*!< sort */
+    uint8_t epId;                            /*!< end-point identifier */
+    uint16_t profileId;                      /*!< profile identifier */
+    uint16_t deviceId;                       /*!< device identifier */
+    uint8_t version;                         /*!< device identifier */
+    uint8_t groupIdCnt;                      /*!< group identifies count */
+    uint8_t sort;                            /*!< sort */
 } zcl_DeviceInfo;
 
 /**
  *  @brief  Definition for target information by touch link discovery
  */
 typedef struct {
-    u32 respId;                         /*!< response identify */
+    uint32_t respId;                         /*!< response identify */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u16 panId;                          /*!< PAN identifier */
-    u16 nwkAddr;                        /*!< network address */
+    uint16_t panId;                          /*!< PAN identifier */
+    uint16_t nwkAddr;                        /*!< network address */
     zll_tlZbInfo_t zbInfo;              /*!< zigbee information */
     zll_tlZllInfo_t zllInfo;            /*!< zll information */
-    u8 logicalChannel;                  /*!< logic channel */
-    u8 numOfSubdevices;                 /*!< sub-devices numbers */
+    uint8_t logicalChannel;                  /*!< logic channel */
+    uint8_t numOfSubdevices;                 /*!< sub-devices numbers */
     epInfo_t dstEp;                     /*!< destine end point */
-    u8 totalGroupIds;                   /*!< total group identifies */
-    u8 keyIdx;                          /*!< key index */
-    u8 nwkUpdateId;                     /*!< nwkUpdateId */
+    uint8_t totalGroupIds;                   /*!< total group identifies */
+    uint8_t keyIdx;                          /*!< key index */
+    uint8_t nwkUpdateId;                     /*!< nwkUpdateId */
     zcl_zllSubdeviceInfo_t devInfo;     /*!< sub-device information */
-    u8 infoLqi;
+    uint8_t infoLqi;
 } zll_touchLinkScanInfo;
 
 /**
  *  @brief  Definition for touch link discovery
  */
 typedef struct {
-    u32 unscannedChannelMask;           /*!< un-scanned channel bit mask */
-    u8 targetNum;                       /*!< target number by touch link discovery */
+    uint32_t unscannedChannelMask;           /*!< un-scanned channel bit mask */
+    uint8_t targetNum;                       /*!< target number by touch link discovery */
     bool primaryChannelScanComplete;    /*!< primary channel scan complete */
-    u8 currentScannChannel;             /*!< current scan channel */
-    u8 scanCnt;                         /*!< scan count */
+    uint8_t currentScannChannel;             /*!< current scan channel */
+    uint8_t scanCnt;                         /*!< scan count */
     zll_touchLinkScanInfo scanList[1];  /*!< pointer to the target information by touch link discovery */
 } zcl_zllTouckLinkDisc_t;
 
@@ -236,7 +236,7 @@ typedef struct {
  *  @brief  Definition for touch link scan request command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
     zll_tlZbInfo_t zbInfo;              /*!< zigbee information */
     zll_tlZllInfo_t zllInfo;            /*!< zll informationn */
 } zcl_zllTouchLinkScanReq_t;
@@ -245,19 +245,19 @@ typedef struct _attribute_packed_ {
  *  @brief  Definition for touch link scan response command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u8 rssiCorrection;                  /*!< RSSI correction */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint8_t rssiCorrection;                  /*!< RSSI correction */
     zll_tlZbInfo_t zbInfo;              /*!< ZigBee information */
     zll_tlZllInfo_t zllInfo;            /*!< Zll information */
-    u16 keyBitmask;                     /*!< Key bit mask */
-    u32 respId;                         /*!< Response identifier */
+    uint16_t keyBitmask;                     /*!< Key bit mask */
+    uint32_t respId;                         /*!< Response identifier */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u8 nwkUpdateId;                     /*!< Network update identifier */
-    u8 logicalChannel;                  /*!< Logical channel */
-    u16 panId;                          /*!< PAN identifier */
-    u16 nwkAddr;                        /*!< Network address */
-    u8 numOfSubdevices;                 /*!< Number of sub-devices */
-    u8 totalGroupIds;                   /*!< Total group identifiers */
+    uint8_t nwkUpdateId;                     /*!< Network update identifier */
+    uint8_t logicalChannel;                  /*!< Logical channel */
+    uint16_t panId;                          /*!< PAN identifier */
+    uint16_t nwkAddr;                        /*!< Network address */
+    uint8_t numOfSubdevices;                 /*!< Number of sub-devices */
+    uint8_t totalGroupIds;                   /*!< Total group identifiers */
     zcl_zllSubdeviceInfo_t subDevInfo;  /*!< sub-device information, only used when numOfSubdevices is 1 */
 } zcl_zllTouchLinkScanResp_t;
 
@@ -265,61 +265,61 @@ typedef struct _attribute_packed_ {
  *  @brief  Definition for touch link network start request command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u8 keyIdx;                          /*!< Key index */
-    u8 encryptedNwkKey[16];             /*!< Encrypted network key */
-    u8 logicalChannel;                  /*!< Logical channel */
-    u16 panId;                          /*!< PAN identifier */
-    u16 nwkAddr;                        /*!< Network address */
-    u16 groupIdbegin;                   /*!< Group identifiers begin */
-    u16 groupIdEnd;                     /*!< Group identifiers end */
-    u16 freeNwkAddrRangeBegin;          /*!< Free network address range begin */
-    u16 freeNwkAddrRangeEnd;            /*!< Free network address range end */
-    u16 freeGroupIdRangeBegin;          /*!< Free group identifier range begin */
-    u16 freeGroupIdRangeEnd;            /*!< Free group identifier range end */
+    uint8_t keyIdx;                          /*!< Key index */
+    uint8_t encryptedNwkKey[16];             /*!< Encrypted network key */
+    uint8_t logicalChannel;                  /*!< Logical channel */
+    uint16_t panId;                          /*!< PAN identifier */
+    uint16_t nwkAddr;                        /*!< Network address */
+    uint16_t groupIdbegin;                   /*!< Group identifiers begin */
+    uint16_t groupIdEnd;                     /*!< Group identifiers end */
+    uint16_t freeNwkAddrRangeBegin;          /*!< Free network address range begin */
+    uint16_t freeNwkAddrRangeEnd;            /*!< Free network address range end */
+    uint16_t freeGroupIdRangeBegin;          /*!< Free group identifier range begin */
+    uint16_t freeGroupIdRangeEnd;            /*!< Free group identifier range end */
     addrExt_t initiatorIeeeAddr;        /*!< Initiator IEEE address */
-    u16 initiatorNwkAddr;               /*!< Initiator network address */
+    uint16_t initiatorNwkAddr;               /*!< Initiator network address */
 } zcl_zllTouchLinkNetworkStartReq_t;
 
 /**
  *  @brief  Definition for touch link network start response command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u8 status;                          /*!< status */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint8_t status;                          /*!< status */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u8 nwkUpdateId;                     /*!< Network update identifier */
-    u8 logicalChannel;                  /*!< Logical channel */
-    u16 panId;                          /*!< PAN identifier */
+    uint8_t nwkUpdateId;                     /*!< Network update identifier */
+    uint8_t logicalChannel;                  /*!< Logical channel */
+    uint16_t panId;                          /*!< PAN identifier */
 } zcl_zllTouchLinkNetworkStartResp_t;
 
 /**
  *  @brief  Definition for touch link network join ED/route request command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u8 keyIdx;                          /*!< Key index */
-    u8 encryptedNwkKey[16];             /*!< Encrypted network key */
-    u8 nwkUpdateId;                     /*!< Network update identifier */
-    u8 logicalChannel;                  /*!< Logical channel */
-    u16 panId;                          /*!< PAN identifier */
-    u16 nwkAddr;                        /*!< Network address */
-    u16 groupIdBegin;                   /*!< Group identifiers begin */
-    u16 groupIdEnd;                     /*!< Group identifiers end */
-    u16 freeNwkAddrRangeBegin;          /*!< Free network address range begin */
-    u16 freeNwkAddrRangeEnd;            /*!< Free network address range end */
-    u16 freeGroupIdRangeBegin;          /*!< Free group identifier range begin */
-    u16 freeGroupIdRangeEnd;            /*!< Free group identifier range end */
+    uint8_t keyIdx;                          /*!< Key index */
+    uint8_t encryptedNwkKey[16];             /*!< Encrypted network key */
+    uint8_t nwkUpdateId;                     /*!< Network update identifier */
+    uint8_t logicalChannel;                  /*!< Logical channel */
+    uint16_t panId;                          /*!< PAN identifier */
+    uint16_t nwkAddr;                        /*!< Network address */
+    uint16_t groupIdBegin;                   /*!< Group identifiers begin */
+    uint16_t groupIdEnd;                     /*!< Group identifiers end */
+    uint16_t freeNwkAddrRangeBegin;          /*!< Free network address range begin */
+    uint16_t freeNwkAddrRangeEnd;            /*!< Free network address range end */
+    uint16_t freeGroupIdRangeBegin;          /*!< Free group identifier range begin */
+    uint16_t freeGroupIdRangeEnd;            /*!< Free group identifier range end */
 } zcl_zllTouchLinkNetworkJoinReq_t;
 
 /**
  *  @brief  Definition for touch link network join ED/route response command format
  */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u8 status;                          /*!< status */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint8_t status;                          /*!< status */
 } zcl_zllTouchLinkNetworkJoinResp_t;
 
 /**
@@ -330,8 +330,8 @@ typedef struct {
         zcl_zllTouchLinkNetworkStartReq_t networkStartCmd;      /*!< touch link network start request */
         zcl_zllTouchLinkNetworkJoinReq_t  networkJoinCmd;       /*!< touch link network join request */
     } params;
-    u8 seqNo;                           /*!< network start/join  request sequence number */
-    u8 joinNetworkMode;                 /*!< network join mode:  start/join route/join ED */
+    uint8_t seqNo;                           /*!< network start/join  request sequence number */
+    uint8_t joinNetworkMode;                 /*!< network join mode:  start/join route/join ED */
     epInfo_t initiatorEpInfo;           /*!< touch link initiator End point information */
 } zcl_zllTouckLinkNetworkStartParams;
 
@@ -341,12 +341,12 @@ typedef struct {
  * */
 typedef struct _attribute_packed_ {
     addrExt_t ieeeAddr;                 /*!< IEEE address */
-    u8 epId;                            /*!< Endpoint identifier */
-    u16 profileId;                      /*!< Profile identifier */
-    u16 deviceId;                       /*!< Device identifier */
-    u8 version;                         /*!< Version */
-    u8 groupIdCnt;                      /*!< Group identifier count */
-    u8 sort;                            /*!< sort */
+    uint8_t epId;                            /*!< Endpoint identifier */
+    uint16_t profileId;                      /*!< Profile identifier */
+    uint16_t deviceId;                       /*!< Device identifier */
+    uint8_t version;                         /*!< Version */
+    uint8_t groupIdCnt;                      /*!< Group identifier count */
+    uint8_t sort;                            /*!< sort */
 } zcl_zllDeviceInfoRec_t;
 
 /*
@@ -354,8 +354,8 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u8 startIdx;                        /*!< start index */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint8_t startIdx;                        /*!< start index */
 } zcl_zllTouchLinkDeviceInfoReq_t;
 
 /*
@@ -363,10 +363,10 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u8 numOfSubdevices;                 /*!< Number of sub devices */
-    u8 startIdx;                        /*!< Start index */
-    u8 deviceInfoRecordCnt;             /*!< Device information record count */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint8_t numOfSubdevices;                 /*!< Number of sub devices */
+    uint8_t startIdx;                        /*!< Start index */
+    uint8_t deviceInfoRecordCnt;             /*!< Device information record count */
     zcl_zllDeviceInfoRec_t rec[];       /*!< Device information record */
 } zcl_zllTouchLinkDeviceInfoResp_t;
 
@@ -375,8 +375,8 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
-    u16 identifyDuration;               /*!< identify duration */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
+    uint16_t identifyDuration;               /*!< identify duration */
 } zcl_zllTouchLinkIdentifyReq_t;
 
 /*
@@ -384,7 +384,7 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
 } zcl_zllTouchLinkResetFactoryReq_t;
 
 /*
@@ -392,16 +392,16 @@ typedef struct {
  *
  * */
 typedef struct _attribute_packed_ {
-    u32 transId;                        /*!< Inter-PAN transaction identifier */
+    uint32_t transId;                        /*!< Inter-PAN transaction identifier */
     addrExt_t epanId;                   /*!< Extended PAN identifier */
-    u8 nwkUpdateId;                     /*!< Network update identifier */
-    u8 logicalChannel;                  /*!< Logical channel */
-    u16 panId;                          /*!< PAN identifier */
-    u16 nwkAddr;                        /*!< Network address */
+    uint8_t nwkUpdateId;                     /*!< Network update identifier */
+    uint8_t logicalChannel;                  /*!< Logical channel */
+    uint16_t panId;                          /*!< PAN identifier */
+    uint16_t nwkAddr;                        /*!< Network address */
 } zcl_zllTouchLinkNetworkUpdateReq_t;
 
 
-typedef void (*zcl_zllTouchLinkAppCallbacks_t)(u8 status, void *arg);
+typedef void (*zcl_zllTouchLinkAppCallbacks_t)(uint8_t status, void *arg);
 
 /** @} end of group zll_commissioning_touch_link_type */
 
@@ -415,11 +415,11 @@ typedef void (*zcl_zllTouchLinkAppCallbacks_t)(u8 status, void *arg);
  *
  * */
 typedef struct _attribute_packed_ {
-    u16 nwkAddr;                        /*!< Network address */
-    u8 epId;                            /*!< end point identifier */
-    u16 profileId;                      /*!< profile identifier */
-    u16 deviceId;                       /*!< device identifier */
-    u8 version;                         /*!< version */
+    uint16_t nwkAddr;                        /*!< Network address */
+    uint8_t epId;                            /*!< end point identifier */
+    uint16_t profileId;                      /*!< profile identifier */
+    uint16_t deviceId;                       /*!< device identifier */
+    uint8_t version;                         /*!< version */
 } zcl_zllEndpointInfo_t;
 
 /*
@@ -432,8 +432,8 @@ typedef struct _attribute_packed_ {
 } zcl_zllUtilityEndpointInfo_t;
 
 typedef struct _attribute_packed_ {
-    u16 groupId;
-    u8 groupType;
+    uint16_t groupId;
+    uint8_t groupType;
 } zcl_groupInfo;
 
 /*
@@ -441,7 +441,7 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct {
-    u8 startIdx;                        /*!< start index */
+    uint8_t startIdx;                        /*!< start index */
 } zcl_zllUtilityGetGroupIdsReq_t;
 
 /*
@@ -449,9 +449,9 @@ typedef struct {
  *
  * */
 typedef struct _attribute_packed_ {
-    u8 total;                           /*!< otal number of group identifiers supported by the 3 device */
-    u8 startIdx;                        /*!< start index */
-    u8 count;                           /*!< the number of entries in the group information record 10 list field */
+    uint8_t total;                           /*!< otal number of group identifiers supported by the 3 device */
+    uint8_t startIdx;                        /*!< start index */
+    uint8_t count;                           /*!< the number of entries in the group information record 10 list field */
     zcl_groupInfo *groupInfoRecord;     /*!< Group information record list */
 } zcl_zllUtilityGetGroupIdsResp_t;
 
@@ -460,7 +460,7 @@ typedef struct _attribute_packed_ {
  *
  * */
 typedef struct {
-    u8 startIdx;                        /*!< start index */
+    uint8_t startIdx;                        /*!< start index */
 } zcl_zllUtilityGetEpListReq_t;
 
 /*
@@ -468,13 +468,13 @@ typedef struct {
  *
  * */
 typedef struct _attribute_packed_ {
-    u8 total;                           /*!< the total number of endpoints supported by the device */
-    u8 startIdx;                        /*!< start index */
-    u8 count;                           /*!< the number of entries in the endpoint information 11 record list field */
+    uint8_t total;                           /*!< the total number of endpoints supported by the device */
+    uint8_t startIdx;                        /*!< start index */
+    uint8_t count;                           /*!< the number of entries in the endpoint information 11 record list field */
     zcl_zllEndpointInfo_t *epInfoRecord;/*!< Endpoint information record list */
 } zcl_zllUtilityGetEpListResp_t;
 
-typedef void (*zcl_zllCommissionUtilityAppCallbacks_t)(u8 cmd, void *arg);
+typedef void (*zcl_zllCommissionUtilityAppCallbacks_t)(uint8_t cmd, void *arg);
 
 /** @} end of group zll_commissioning_utility_type */
 
@@ -510,7 +510,7 @@ typedef struct {
   *
   * @return
   */
-status_t zcl_touchlink_register(u8 endpoint, const zcl_touchlinkAppCallbacks_t *cb);
+status_t zcl_touchlink_register(uint8_t endpoint, const zcl_touchlinkAppCallbacks_t *cb);
 
 /**
  * @brief       network start event indication
@@ -519,7 +519,7 @@ status_t zcl_touchlink_register(u8 endpoint, const zcl_touchlinkAppCallbacks_t *
  *
  * @return
  */
-s32 zcl_touchLinkDevStartIndicate(void *arg);
+int32_t zcl_touchLinkDevStartIndicate(void *arg);
 
 /**
  * @brief       start touch link.
@@ -539,7 +539,7 @@ void zcl_zllTouchLinkDiscoveryStart(void);
  *
  * @return
  */
-void zcl_zllGetGroupIdentifiersRequest(epInfo_t* pDstEpInfo, u8 startIdx);
+void zcl_zllGetGroupIdentifiersRequest(epInfo_t* pDstEpInfo, uint8_t startIdx);
 
 /*
  * @brief	send command of "Get endpoint list request"
@@ -550,7 +550,7 @@ void zcl_zllGetGroupIdentifiersRequest(epInfo_t* pDstEpInfo, u8 startIdx);
  *
  * @return
  */
-void zcl_zllGetEndpointListRequest(epInfo_t* pDstEpInfo, u8 startIdx);
+void zcl_zllGetEndpointListRequest(epInfo_t* pDstEpInfo, uint8_t startIdx);
 
 /*
  * @brief	send the command of " end point Information"
@@ -568,7 +568,7 @@ void zcl_zllEndpointInformation(epInfo_t *dstEp);
  *
  * @return
  */
-void touchlink_lqiThresholdSet(u8 lqi);
+void touchlink_lqiThresholdSet(uint8_t lqi);
 
 /*
  * @brief	set tx power for touch link commission, should be 0dbm
@@ -577,7 +577,7 @@ void touchlink_lqiThresholdSet(u8 lqi);
  *
  * @return
  */
-void touchlink_commissionTxPowerSet(u8 power);
+void touchlink_commissionTxPowerSet(uint8_t power);
 
 /*
  * @brief	set touch link mode
@@ -586,7 +586,7 @@ void touchlink_commissionTxPowerSet(u8 power);
  *
  * @return
  */
-void touchlink_keyModeSet(u8 keyType, u8 *key);
+void touchlink_keyModeSet(uint8_t keyType, uint8_t *key);
 
 /*
  * @brief	touch link initiation
@@ -595,7 +595,7 @@ void touchlink_keyModeSet(u8 keyType, u8 *key);
  *
  * @return
  */
-u8 zcl_touchLinkInit(void);
+uint8_t zcl_touchLinkInit(void);
 
 /*
  * @brief	touch link start

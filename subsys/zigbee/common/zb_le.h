@@ -7,6 +7,6 @@
 #define _ZB_LE_H
 
 /* A 16-bit value that is stored in two octets, least significant octet first, at p. */
-#define ZB_LE_U16(p) ((u16)(p)[0] | ((u16)(p)[1] << 8))
+#define ZB_LE_U16(p) ((uint16_t)(p)[0] | ((uint16_t)(p)[1] << 8))
 
 #endif /* _ZB_LE_H */

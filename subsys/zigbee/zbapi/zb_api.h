@@ -36,8 +36,8 @@
  */
 typedef struct apsdeDataInd_s {
     aps_data_ind_t indInfo;
-    u16 asduLen;
-    u8  asdu[];
+    uint16_t asduLen;
+    uint8_t  asdu[];
 } apsdeDataInd_t;
 
 
@@ -153,7 +153,7 @@ void zb_apsExtPanidSet(extPANId_t panId);
  * @return      Status
  *
  **************************************************************************/
-aps_status_t zb_apsChannelMaskSet(u32 mask);
+aps_status_t zb_apsChannelMaskSet(uint32_t mask);
 
 /***********************************************************************//**
  * @brief       Get channel mask from APS_IB.
@@ -163,7 +163,7 @@ aps_status_t zb_apsChannelMaskSet(u32 mask);
  * @return  	channel mask
  *
  **************************************************************************/
-u32 zb_apsChannelMaskGet(void);
+uint32_t zb_apsChannelMaskGet(void);
 
 /***********************************************************************//**
  * @brief       Get device type
@@ -196,7 +196,7 @@ void zb_getLocalExtAddr(addrExt_t extAddr);
  * @return      2 bytes of short address
  *
  **************************************************************************/
-u16 zb_getLocalShortAddr(void);
+uint16_t zb_getLocalShortAddr(void);
 
 /***********************************************************************//**
  * @brief       Get parent short address
@@ -206,7 +206,7 @@ u16 zb_getLocalShortAddr(void);
  * @return      2 bytes of parent's short address
  *
  **************************************************************************/
-u16 zb_getParentShortAddr(void);
+uint16_t zb_getParentShortAddr(void);
 
 /***********************************************************************//**
  * @brief       Get network short address according to the EXT address
@@ -217,7 +217,7 @@ u16 zb_getParentShortAddr(void);
  * @return      SUCCESS - 0; FAILED - 0xFF
  *
  **************************************************************************/
-u8 zb_getNwkAddrByExtAddr(addrExt_t extAddr, u16 *nwkAddr);
+uint8_t zb_getNwkAddrByExtAddr(addrExt_t extAddr, uint16_t *nwkAddr);
 
 /***********************************************************************//**
  * @brief       Get EXT address according to the network short address
@@ -228,7 +228,7 @@ u8 zb_getNwkAddrByExtAddr(addrExt_t extAddr, u16 *nwkAddr);
  * @return      SUCCESS - 0; FAILED - 0xFF
  *
  **************************************************************************/
-u8 zb_getExtAddrByNwkAddr(u16 nwkAddr, addrExt_t extAddr);
+uint8_t zb_getExtAddrByNwkAddr(uint16_t nwkAddr, addrExt_t extAddr);
 
 /***********************************************************************//**
  * @brief       Set the period time of the network layer link status command.
@@ -239,7 +239,7 @@ u8 zb_getExtAddrByNwkAddr(u16 nwkAddr, addrExt_t extAddr);
  * @return      None
  *
  **************************************************************************/
-void zb_nlmeSetLinkStsPeriod(u8 periodInSec);
+void zb_nlmeSetLinkStsPeriod(uint8_t periodInSec);
 
 /***********************************************************************//**
  * @brief      	Send data request manually, only for End-Device.
@@ -249,7 +249,7 @@ void zb_nlmeSetLinkStsPeriod(u8 periodInSec);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_endDeviceSyncReq(void);
+uint8_t zb_endDeviceSyncReq(void);
 
 /***********************************************************************//**
  * @brief      	Set poll rate, only for End-Device.
@@ -259,7 +259,7 @@ u8 zb_endDeviceSyncReq(void);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_setPollRate(u32 newRate);
+uint8_t zb_setPollRate(uint32_t newRate);
 
 /***********************************************************************//**
  * @brief       Get poll rate, only for End-Device.
@@ -269,7 +269,7 @@ u8 zb_setPollRate(u32 newRate);
  * @return      in millisecond
  *
  **************************************************************************/
-u32 zb_getPollRate(void);
+uint32_t zb_getPollRate(void);
 
 /***********************************************************************//**
  * @brief       Perform network formation request.
@@ -281,7 +281,7 @@ u32 zb_getPollRate(void);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_nwkFormation(u32 scanChannels, u8 scanDuration);
+uint8_t zb_nwkFormation(uint32_t scanChannels, uint8_t scanDuration);
 
 /***********************************************************************//**
  * @brief   	Perform router start to recover network.
@@ -292,7 +292,7 @@ u8 zb_nwkFormation(u32 scanChannels, u8 scanDuration);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_routerStart(void);
+uint8_t zb_routerStart(void);
 
 /***********************************************************************//**
  * @brief       Perform network discovery request.
@@ -305,7 +305,7 @@ u8 zb_routerStart(void);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_nwkDiscovery(u32 scanChannels, u8 scanDuration, nwkDiscoveryUserCb_t cb);
+uint8_t zb_nwkDiscovery(uint32_t scanChannels, uint8_t scanDuration, nwkDiscoveryUserCb_t cb);
 
 /***********************************************************************//**
  * @brief       Cancel network discovery request.
@@ -327,7 +327,7 @@ void zb_nwkDiscoveryStop(void);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_assocJoinReq(void);
+uint8_t zb_assocJoinReq(void);
 
 /***********************************************************************//**
  * @brief       Perform rejoin request.
@@ -339,7 +339,7 @@ u8 zb_assocJoinReq(void);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_rejoinReq(u32 scanChannels, u8 scanDuration);
+uint8_t zb_rejoinReq(uint32_t scanChannels, uint8_t scanDuration);
 
 /***********************************************************************//**
  * @brief       Perform rejoin request with backoff timer.
@@ -354,7 +354,7 @@ u8 zb_rejoinReq(u32 scanChannels, u8 scanDuration);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_rejoinReqWithBackOff(u32 scanChannels, u8 scanDuration);
+uint8_t zb_rejoinReqWithBackOff(uint32_t scanChannels, uint8_t scanDuration);
 
 /***********************************************************************//**
  * @brief       Rejoin with security or insecurity mode.
@@ -364,7 +364,7 @@ u8 zb_rejoinReqWithBackOff(u32 scanChannels, u8 scanDuration);
  * @return      None
  *
  **************************************************************************/
-void zb_rejoinSecModeSet(u8 mode);
+void zb_rejoinSecModeSet(uint8_t mode);
 
 /***********************************************************************//**
  * @brief       Perform direct join request.
@@ -376,7 +376,7 @@ void zb_rejoinSecModeSet(u8 mode);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_directJoinReq(u32 scanChannels, u8 scanDuration);
+uint8_t zb_directJoinReq(uint32_t scanChannels, uint8_t scanDuration);
 
 /***********************************************************************//**
  * @brief   	Accept a remote device as a child node,
@@ -388,7 +388,7 @@ u8 zb_directJoinReq(u32 scanChannels, u8 scanDuration);
  * @return  	RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq);
+uint8_t zb_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq);
 
 /***********************************************************************//**
  * @brief       Set local permit join duration.
@@ -399,7 +399,7 @@ u8 zb_nwkDirectJoinAccept(nlme_directJoin_req_t *pReq);
  * @return      Status
  *
  **************************************************************************/
-u8 zb_nlmePermitJoiningRequest(u8 permitDuration);
+uint8_t zb_nlmePermitJoiningRequest(uint8_t permitDuration);
 
 /***********************************************************************//**
  * @brief       Perform route discovery request.
@@ -410,7 +410,7 @@ u8 zb_nlmePermitJoiningRequest(u8 permitDuration);
  * @return      RET_ILLEGAL_REQUEST or zdo_status_t
  *
  **************************************************************************/
-u8 zb_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq);
+uint8_t zb_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq);
 
 /***********************************************************************//**
  * @brief       Perform leave request.
@@ -420,7 +420,7 @@ u8 zb_routeDiscReq(nlme_routeDisc_req_t *pRouteDiscReq);
  * @return      zdo_status_t
  *
  **************************************************************************/
-u8 zb_nlmeLeaveReq(nlme_leave_req_t *pLeaveReq);
+uint8_t zb_nlmeLeaveReq(nlme_leave_req_t *pLeaveReq);
 
 /***********************************************************************//**
  * @brief       Send address request to target device for short address.
@@ -433,7 +433,7 @@ u8 zb_nlmeLeaveReq(nlme_leave_req_t *pLeaveReq);
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoNwkAddrReq(u16 dstNwkAddr, zdo_nwk_addr_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoNwkAddrReq(uint16_t dstNwkAddr, zdo_nwk_addr_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send address request to target device for IEEE address.
@@ -446,7 +446,7 @@ zdo_status_t zb_zdoNwkAddrReq(u16 dstNwkAddr, zdo_nwk_addr_req_t *pReq, u8 *seqN
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoIeeeAddrReq(u16 dstNwkAddr, zdo_ieee_addr_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoIeeeAddrReq(uint16_t dstNwkAddr, zdo_ieee_addr_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send simple descriptor request.
@@ -459,7 +459,7 @@ zdo_status_t zb_zdoIeeeAddrReq(u16 dstNwkAddr, zdo_ieee_addr_req_t *pReq, u8 *se
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoSimpleDescReq(u16 dstNwkAddr, zdo_simple_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoSimpleDescReq(uint16_t dstNwkAddr, zdo_simple_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send node descriptor request.
@@ -472,7 +472,7 @@ zdo_status_t zb_zdoSimpleDescReq(u16 dstNwkAddr, zdo_simple_descriptor_req_t *pR
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoNodeDescReq(uint16_t dstNwkAddr, zdo_node_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send power descriptor request.
@@ -485,7 +485,7 @@ zdo_status_t zb_zdoNodeDescReq(u16 dstNwkAddr, zdo_node_descriptor_req_t *pReq, 
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoPowerDescReq(u16 dstNwkAddr, zdo_power_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoPowerDescReq(uint16_t dstNwkAddr, zdo_power_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send active endpoint request.
@@ -498,7 +498,7 @@ zdo_status_t zb_zdoPowerDescReq(u16 dstNwkAddr, zdo_power_descriptor_req_t *pReq
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoActiveEpReq(u16 dstNwkAddr, zdo_active_ep_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoActiveEpReq(uint16_t dstNwkAddr, zdo_active_ep_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send match descriptor request.
@@ -511,7 +511,7 @@ zdo_status_t zb_zdoActiveEpReq(u16 dstNwkAddr, zdo_active_ep_req_t *pReq, u8 *se
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoMatchDescReq(u16 dstNwkAddr, zdo_match_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoMatchDescReq(uint16_t dstNwkAddr, zdo_match_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send complex descriptor request.
@@ -524,7 +524,7 @@ zdo_status_t zb_zdoMatchDescReq(u16 dstNwkAddr, zdo_match_descriptor_req_t *pReq
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoComplexDescReq(u16 dstNwkAddr, zdo_complex_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoComplexDescReq(uint16_t dstNwkAddr, zdo_complex_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send user descriptor request.
@@ -537,7 +537,7 @@ zdo_status_t zb_zdoComplexDescReq(u16 dstNwkAddr, zdo_complex_descriptor_req_t *
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoUserDescReq(u16 dstNwkAddr, zdo_user_descriptor_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoUserDescReq(uint16_t dstNwkAddr, zdo_user_descriptor_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send zdo system server discovery request, broadcasting to 0xfffd
@@ -549,7 +549,7 @@ zdo_status_t zb_zdoUserDescReq(u16 dstNwkAddr, zdo_user_descriptor_req_t *pReq, 
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoSystemServerDiscoveryReq(u16 serverMask, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoSystemServerDiscoveryReq(uint16_t serverMask, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send bind request, destination address is based on the srcAddr in the request command
@@ -562,7 +562,7 @@ zdo_status_t zb_zdoSystemServerDiscoveryReq(u16 serverMask, u8 *seqNo, zdo_callb
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoBindUnbindReq(bool isBinding, zdo_bind_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoBindUnbindReq(bool isBinding, zdo_bind_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send end device bind request.
@@ -574,7 +574,7 @@ zdo_status_t zb_zdoBindUnbindReq(bool isBinding, zdo_bind_req_t *pReq, u8 *seqNo
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_zdoEndDeviceBindReq(zdo_edBindReq_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_zdoEndDeviceBindReq(zdo_edBindReq_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send the command of mgmt_permitJoin_req.
@@ -588,7 +588,7 @@ zdo_status_t zb_zdoEndDeviceBindReq(zdo_edBindReq_t *pReq, u8 *seqNo, zdo_callba
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_mgmtPermitJoinReq(u16 dstNwkAddr, u8 permitJoinDuration, u8 tcSignificance, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_mgmtPermitJoinReq(uint16_t dstNwkAddr, uint8_t permitJoinDuration, uint8_t tcSignificance, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief	Send the command of mgmt_leave_req.
@@ -601,7 +601,7 @@ zdo_status_t zb_mgmtPermitJoinReq(u16 dstNwkAddr, u8 permitJoinDuration, u8 tcSi
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_mgmtLeaveReq(u16 dstNwkAddr, zdo_mgmt_leave_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_mgmtLeaveReq(uint16_t dstNwkAddr, zdo_mgmt_leave_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send the command of mgmt_network_update_req.
@@ -613,7 +613,7 @@ zdo_status_t zb_mgmtLeaveReq(u16 dstNwkAddr, zdo_mgmt_leave_req_t *pReq, u8 *seq
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_mgmtNwkUpdateReq(u16 dstNwkAddr, zdo_mgmt_nwk_update_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_mgmtNwkUpdateReq(uint16_t dstNwkAddr, zdo_mgmt_nwk_update_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send the command of mgmt_lqi_req.
@@ -626,7 +626,7 @@ zdo_status_t zb_mgmtNwkUpdateReq(u16 dstNwkAddr, zdo_mgmt_nwk_update_req_t *pReq
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_mgmtLqiReq(u16 dstNwkAddr, zdo_mgmt_lqi_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_mgmtLqiReq(uint16_t dstNwkAddr, zdo_mgmt_lqi_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Send the command mgmt_bind_req.
@@ -639,7 +639,7 @@ zdo_status_t zb_mgmtLqiReq(u16 dstNwkAddr, zdo_mgmt_lqi_req_t *pReq, u8 *seqNo, 
  * @return      Status
  *
  **************************************************************************/
-zdo_status_t zb_mgmtBindReq(u16 dstNwkAddr, zdo_mgmt_bind_req_t *pReq, u8 *seqNo, zdo_callback indCb);
+zdo_status_t zb_mgmtBindReq(uint16_t dstNwkAddr, zdo_mgmt_bind_req_t *pReq, uint8_t *seqNo, zdo_callback indCb);
 
 /***********************************************************************//**
  * @brief       Remove device request command.
@@ -649,7 +649,7 @@ zdo_status_t zb_mgmtBindReq(u16 dstNwkAddr, zdo_mgmt_bind_req_t *pReq, u8 *seqNo
  * @return      Status
  *
  **************************************************************************/
-u8 zb_apsmeRemoveDevReq(ss_apsmeRemoveDeviceReq_t *pRemoveDevReq);
+uint8_t zb_apsmeRemoveDevReq(ss_apsmeRemoveDeviceReq_t *pRemoveDevReq);
 
 /***********************************************************************//**
  * @brief       APSME request key command.
@@ -659,7 +659,7 @@ u8 zb_apsmeRemoveDevReq(ss_apsmeRemoveDeviceReq_t *pRemoveDevReq);
  * @return      Status
  *
  **************************************************************************/
-u8 zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequestKeyReq);
+uint8_t zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequestKeyReq);
 
 /***********************************************************************//**
  * @brief       APSME transport key command.
@@ -669,7 +669,7 @@ u8 zb_apsmeRequestKeyReq(ss_apsmeRequestKeyReq_t *pRequestKeyReq);
  * @return      Status
  *
  **************************************************************************/
-u8 zb_apsmeTransportKeyReq(ss_apsmeTransportKeyReq_t *pTransportKeyReq);
+uint8_t zb_apsmeTransportKeyReq(ss_apsmeTransportKeyReq_t *pTransportKeyReq);
 
 /***********************************************************************//**
  * @brief       APSME switch key command.
@@ -679,7 +679,7 @@ u8 zb_apsmeTransportKeyReq(ss_apsmeTransportKeyReq_t *pTransportKeyReq);
  * @return      Status
  *
  **************************************************************************/
-u8 zb_apsmeSwitchKeyReq(ss_apsmeSwitchKeyReq_t *pSwitchKeyReq);
+uint8_t zb_apsmeSwitchKeyReq(ss_apsmeSwitchKeyReq_t *pSwitchKeyReq);
 
 /***********************************************************************//**
  * @brief       API for Trust center to update NWK key.
@@ -690,7 +690,7 @@ u8 zb_apsmeSwitchKeyReq(ss_apsmeSwitchKeyReq_t *pSwitchKeyReq);
  * @return      Status
  *
  **************************************************************************/
-u8 zb_tcUpdateNwkKey(ss_tcUpdateNwkKey_t *pTcUpdateNwkKey);
+uint8_t zb_tcUpdateNwkKey(ss_tcUpdateNwkKey_t *pTcUpdateNwkKey);
 
 /***********************************************************************//**
  * @brief       Search binding table.
@@ -701,7 +701,7 @@ u8 zb_tcUpdateNwkKey(ss_tcUpdateNwkKey_t *pTcUpdateNwkKey);
  * @return      TRUE or FALSE
  *
  **************************************************************************/
-bool zb_bindingTblSearched(u16 clusterID, u8 srcEp);
+bool zb_bindingTblSearched(uint16_t clusterID, uint8_t srcEp);
 
 /***********************************************************************//**
  * @brief       Send device announce.
@@ -711,7 +711,7 @@ bool zb_bindingTblSearched(u16 clusterID, u8 srcEp);
  * @return      RET_OK or not
  *
  **************************************************************************/
-u8 zb_zdoSendDevAnnance(void);
+uint8_t zb_zdoSendDevAnnance(void);
 
 /***********************************************************************//**
  * @brief       Send parent announce.
@@ -757,7 +757,7 @@ void zb_zdoCbRegister(zdo_appIndCb_t *cb);
  * @return      None
  *
  **************************************************************************/
-void zb_joinAFixedNetwork(u8 channel, u16 panId, u16 shortAddr, u8 *extPanId, u8 *nwkKey, u8 *tcAddr);
+void zb_joinAFixedNetwork(uint8_t channel, uint16_t panId, uint16_t shortAddr, uint8_t *extPanId, uint8_t *nwkKey, uint8_t *tcAddr);
 
 /***********************************************************************//**
  * @brief       Extend PAN ID rejoin. Only for the factory new device.
@@ -780,7 +780,7 @@ void zb_extPanIdRejoin(extPANId_t extPanId);
  * @return      None
  *
  **************************************************************************/
-void zb_preConfigNwkKey(u8 *nwkKey, bool enTransKey);
+void zb_preConfigNwkKey(uint8_t *nwkKey, bool enTransKey);
 
 /***********************************************************************//**
  * @brief       Shift to and save the logic channel.
@@ -790,7 +790,7 @@ void zb_preConfigNwkKey(u8 *nwkKey, bool enTransKey);
  * @return	none
  *
  **************************************************************************/
-void zdo_nlmeChannelShift(u8 ch);
+void zdo_nlmeChannelShift(uint8_t ch);
 
 
 #endif	/* ZB_API_H */

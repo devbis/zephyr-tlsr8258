@@ -6,7 +6,7 @@
 
 #include "zb_common.h"
 
-void nwk_leaveCmdSendCnf(void *arg, u16 dstAddr);
-int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, u8 handle);
+void nwk_leaveCmdSendCnf(void *arg, uint16_t dstAddr);
+int nwkLeaveReqSend(void *arg, nwk_hdr_t *pNwkHdr, nwkCmd_t *cmd, uint8_t handle);
 
 #endif
