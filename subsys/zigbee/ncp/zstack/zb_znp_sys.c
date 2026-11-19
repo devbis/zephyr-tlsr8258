@@ -242,6 +242,45 @@ static void sys_enter_uf2(const uint8_t *d, uint8_t len)
 }
 #endif
 
+#if defined(CONFIG_ZIGBEE_NCP_ZSTACK_FEM_DEBUG)
+static void sys_fem_debug(const uint8_t *d, uint8_t len)
+{
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0xF1U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0xF1U,
+			(zb_radio_fem_debug_set(d[0], d[1]) == 0) ? ZNP_STATUS_SUCCESS :
+								     ZNP_STATUS_FAILURE);
+}
+
+static void sys_fem_ppi(const uint8_t *d, uint8_t len)
+{
+	if (len < 2U) {
+		znp_srsp_status(ZNP_SUBSYS_SYS, 0xF3U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_SYS, 0xF3U, zb_radio_fem_ppi_ctl(d[0], d[1]));
+}
+
+static void sys_radio_counters(const uint8_t *d, uint8_t len)
+{
+	uint32_t c[12];
+	uint8_t rsp[12 * 4];
+
+	ARG_UNUSED(d);
+	ARG_UNUSED(len);
+
+	zb_radio_dbg_get(c);
+	for (size_t i = 0U; i < ARRAY_SIZE(c); i++) {
+		sys_put_le32(c[i], &rsp[i * 4U]);
+	}
+	znp_srsp(ZNP_SUBSYS_SYS, 0xF2U, rsp, sizeof(rsp));
+}
+#endif
+
 static void sys_reset_req(const uint8_t *d, uint8_t len)
 {
 	uint8_t opt = 0U;
@@ -713,6 +752,11 @@ static const struct znp_cmd sys_cmds[] = {
 	{ZNP_SUBSYS_SYS, 0x14U, sys_set_tx_power},
 	{ZNP_SUBSYS_SYS, 0x1CU, sys_nv_read_ext},
 	{ZNP_SUBSYS_SYS, 0x1DU, sys_nv_write_ext},
+#if defined(CONFIG_ZIGBEE_NCP_ZSTACK_FEM_DEBUG)
+	{ZNP_SUBSYS_SYS, 0xF1U, sys_fem_debug},
+	{ZNP_SUBSYS_SYS, 0xF2U, sys_radio_counters},
+	{ZNP_SUBSYS_SYS, 0xF3U, sys_fem_ppi},
+#endif
 #if defined(CONFIG_ZIGBEE_NCP_ZSTACK_PROMICRO_UF2)
 	{ZNP_SUBSYS_SYS, 0xf0U, sys_enter_uf2},
 #endif
