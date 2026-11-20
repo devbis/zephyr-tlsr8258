@@ -555,7 +555,10 @@ int zb_platform_bdb_init_default(void)
 		return 0;
 	}
 
-	(void)zdo_ssInfoInit();
+	if (zdo_ssInfoInit() == NV_SUCC && g_zbNwkCtx.is_factory_new == 0U) {
+		/* Key pairs are stored separately from SSIB and can change after it is saved. */
+		(void)ss_devKeyPairInfoGet();
+	}
 	/*
 	 * bdb_init() is bypassed here (see the ss_zdoInit() note below), so
 	 * bdb_linkKeyCfg() never runs and ss_ib.tcLinkKeyType stays at its
