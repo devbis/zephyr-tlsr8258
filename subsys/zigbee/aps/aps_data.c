@@ -1254,6 +1254,10 @@ void aps_nwk_data_confirm_cb(void *arg)
 	uint8_t status = cnf->status;
 	uint8_t handle = cnf->nsduHandle;
 
+	if (status == MAC_STA_NO_ACK) {
+		status = APS_STATUS_NO_ACK;
+	}
+
 	for (uint8_t i = 0; i < APS_TX_CACHE_TABLE_SIZE; i++) {
 		aps_tx_cache_list_t *cache = &aps_txCache_tbl[i];
 
