@@ -86,7 +86,6 @@ struct zdo_passthrough {
 };
 
 static const struct zdo_passthrough passthrough[] = {
-	{0x01U, 0x0001U, 6U}, /* IEEE_ADDR_REQ: dst, nwk addr, request type, start index */
 	{0x02U, 0x0002U, 4U}, /* NODE_DESC_REQ */
 	{0x03U, 0x0003U, 4U}, /* POWER_DESC_REQ */
 	{0x04U, 0x0004U, 5U}, /* SIMPLE_DESC_REQ */
@@ -105,6 +104,20 @@ static const struct zdo_passthrough passthrough[] = {
 static void zdo_passthrough_req(uint8_t cmd, uint16_t cluster, const uint8_t *d, uint8_t len)
 {
 	znp_srsp_status(ZNP_SUBSYS_ZDO, cmd, zdo_send(znp_get_u16(d), cluster, &d[2], len - 2U));
+}
+
+static void zdo_ieee_addr_req(const uint8_t *d, uint8_t len)
+{
+	/*
+	 * The MT request carries the address of interest, the request type and the start index,
+	 * and is sent to the device that it asks about; there is no separate destination.
+	 */
+	if (len < 4U) {
+		znp_srsp_status(ZNP_SUBSYS_ZDO, 0x01U, ZNP_STATUS_INVALID_PARAMETER);
+		return;
+	}
+
+	znp_srsp_status(ZNP_SUBSYS_ZDO, 0x01U, zdo_send(znp_get_u16(d), 0x0001U, d, 4U));
 }
 
 static void zdo_nwk_addr_req(const uint8_t *d, uint8_t len)
@@ -612,6 +625,7 @@ static void zdo_startup_from_app(const uint8_t *d, uint8_t len)
 
 static const struct znp_cmd zdo_cmds[] = {
 	{ZNP_SUBSYS_ZDO, 0x00U, zdo_nwk_addr_req},
+	{ZNP_SUBSYS_ZDO, 0x01U, zdo_ieee_addr_req},
 	{ZNP_SUBSYS_ZDO, 0x21U, zdo_bind},
 	{ZNP_SUBSYS_ZDO, 0x22U, zdo_unbind},
 	{ZNP_SUBSYS_ZDO, 0x36U, zdo_mgmt_permit_join_req},
@@ -688,6 +702,50 @@ void zb_platform_app_zdo_rx(uint16_t src_addr, bool broadcast, uint16_t cluster_
 		memcpy(p, &payload[1], len - 1U);
 		p += len - 1U;
 		znp_areq(ZNP_SUBSYS_ZDO, ZNP_ZDO_MSG_CB_INCOMING, out, (size_t)(p - out));
+	}
+
+	if ((cluster_id == 0x8000U || cluster_id == 0x8001U) && len >= 12U) {
+		/*
+		 * NWK_addr_rsp and IEEE_addr_rsp: the MT message has no source address, and always
+		 * carries the start index and the number of associated devices, in that order,
+		 * whereas the response over the air has them (number first) only when the request
+		 * asked for the associated devices.
+		 */
+		p = out;
+		memcpy(p, &payload[1], 11U); /* status, IEEE address, network address */
+		p += 11;
+		if (len >= 14U) {
+			*p++ = payload[13];
+			*p++ = payload[12];
+			memcpy(p, &payload[14], len - 14U);
+			p += len - 14U;
+		} else {
+			*p++ = 0U;
+			*p++ = 0U;
+		}
+		znp_areq(ZNP_SUBSYS_ZDO, rsp_cmd(cluster_id), out, (size_t)(p - out));
+		return;
+	}
+
+	if (cluster_id == 0x8004U && len >= 12U && payload[1] == 0U) {
+		/*
+		 * SIMPLE_DESC_RSP: the host parses the descriptor, so the message holds what the
+		 * descriptor declares and nothing after it, with the length it really has. A device
+		 * whose descriptor length covers more than the cluster lists, such as one that pads
+		 * it, would otherwise hand the host trailing bytes it rejects.
+		 */
+		uint8_t in_count = payload[11];
+		size_t out_at = 12U + 2U * in_count;
+
+		if (out_at < len && out_at + 1U + 2U * payload[out_at] <= len) {
+			size_t used = out_at + 1U + 2U * payload[out_at];
+
+			p = znp_put_u16(out, src_addr);
+			memcpy(p, &payload[1], used - 1U);
+			p[3] = (uint8_t)(used - 5U); /* the length byte follows status and address */
+			znp_areq(ZNP_SUBSYS_ZDO, rsp_cmd(cluster_id), out, 2U + used - 1U);
+			return;
+		}
 	}
 
 	if ((cluster_id & ZDO_CLUSTER_RSP_BIT) != 0U) {
