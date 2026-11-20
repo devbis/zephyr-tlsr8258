@@ -349,7 +349,16 @@ static void data_request(uint8_t cmd, uint8_t addr_mode, const uint8_t *addr, ui
 	struct znp_pending *slot = zdo ? NULL : pending_slot_get();
 
 	if (zb_buf_free_count() < ZNP_BUF_RESERVE || (!zdo && slot == NULL)) {
-		znp_srsp_status(ZNP_SUBSYS_AF, cmd, ZNP_STATUS_MEM_ERROR);
+		if (zdo) {
+			znp_srsp_status(ZNP_SUBSYS_AF, cmd, ZNP_STATUS_MEM_ERROR);
+			return;
+		}
+		/*
+		 * Hosts retry a request after a BUFFER_FULL confirmation, but not after an error
+		 * in the immediate response.
+		 */
+		znp_srsp_status(ZNP_SUBSYS_AF, cmd, ZNP_STATUS_SUCCESS);
+		data_confirm(ZNP_STATUS_BUFFER_FULL, src_ep, tsn);
 		return;
 	}
 
