@@ -314,6 +314,11 @@ uint8_t *zb_phyRxBufTozbBuf(uint8_t *rxBuf)
 	return (uint8_t *)zb_buf_allocate();
 }
 
+uint8_t zb_buf_free_count(void)
+{
+	return (uint8_t)k_mem_slab_num_free_get(&zb_buf_slab);
+}
+
 uint8_t zb_buf_rx_free_count(void)
 {
 #if ZB_BUF_SNAPSHOT_POOL
