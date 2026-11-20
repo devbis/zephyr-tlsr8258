@@ -28,6 +28,7 @@
  */
 #include "tl_platform.h"
 #include "zb_common.h"
+#include <errno.h>
 #include <zephyr/zigbee/zb_bootstrap.h>
 
 #define RF_SRX_MODE                             0
@@ -463,18 +464,19 @@ uint8_t rf_stopEDScan(void)
 volatile int8_t T_rssiPeak = 0;
 uint8_t rf_performCCA(void)
 {
-    /*
-     * Zephyr port: mac_csmaStart() calls this with interrupts locked, and
-     * reading the RSSI goes through the Zephyr radio API, which needs them.
-     * The channel is reported idle; the platform then transmits with
-     * IEEE802154_TX_MODE_DIRECT, so no CCA is performed on this port.
-     */
-    if ((rf_busyFlag & TX_BUSY) != 0U) {
-        return PHY_CCA_BUSY;
-    }
+	int ret;
 
-    T_rssiPeak = -110;
-    return PHY_CCA_IDLE;
+	/* The Zephyr radio API requires interrupts enabled while it performs CCA. */
+	ret = zb_radio_cca_check();
+	if (ret == -ENOTSUP) {
+		return PHY_CCA_IDLE;
+	}
+	if ((rf_busyFlag & TX_BUSY) != 0U || ret != 0) {
+		return PHY_CCA_BUSY;
+	}
+
+	T_rssiPeak = -110;
+	return PHY_CCA_IDLE;
 }
 
 void rf802154_tx_ready(uint8_t *buf, uint8_t len)
