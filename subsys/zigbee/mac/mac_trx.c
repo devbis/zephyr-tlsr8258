@@ -134,7 +134,20 @@ static int mac_csmaStart(void *arg)
 	uint32_t r;
 
 	r = drv_disable_irq();
+	if ((rf_busyFlag & TX_BUSY) != 0U) {
+		drv_restore_irq(r);
+		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
+		return -1;
+	}
+	drv_restore_irq(r);
+
 	if (rf_performCCA() != PHY_CCA_IDLE && g_zbInfo.macPib.maxCsmaBackoffs != 0U) {
+		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
+		return -1;
+	}
+
+	r = drv_disable_irq();
+	if ((rf_busyFlag & TX_BUSY) != 0U) {
 		drv_restore_irq(r);
 		zb_TaskPost(mac_trxTask, (void *)MAC_TX_EV_CSMA_BUSY);
 		return -1;

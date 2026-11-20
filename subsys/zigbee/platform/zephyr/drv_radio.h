@@ -64,6 +64,16 @@ void zb_radio_dbg_get(uint32_t out[12]);
 void zb_radio_tx_power_set(uint8_t level);
 /* Set the transmit power in dBm; 0 on success, a negative errno otherwise. */
 int zb_radio_tx_power_dbm_set(int16_t dbm);
+/**
+ * @brief Check whether the radio channel is clear.
+ *
+ * @retval 0 Channel is clear.
+ * @retval -EBUSY Channel is busy.
+ * @retval -ENODEV Radio is unavailable.
+ * @retval -ENOTSUP The driver does not implement CCA.
+ * @retval <0 Other radio error.
+ */
+int zb_radio_cca_check(void);
 int8_t zb_radio_rssi_get(void);
 void zb_radio_tx_start(uint8_t *tx_buf);
 uint8_t zb_radio_tx_done_get(void);
