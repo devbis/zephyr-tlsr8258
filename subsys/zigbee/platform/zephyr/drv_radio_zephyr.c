@@ -588,12 +588,11 @@ static bool zb_radio_live_rssi_sample(int8_t *rssi)
 {
 	int ret;
 
-	if ((rssi == NULL) || (g_radio.dev == NULL) || (g_radio.api == NULL) ||
-	    (g_radio.api->cca == NULL)) {
+	if (rssi == NULL) {
 		return false;
 	}
 
-	ret = g_radio.api->cca(g_radio.dev);
+	ret = zb_radio_cca_check();
 	if (ret == 0) {
 		*rssi = ZB_RADIO_CCA_IDLE_RSSI_DBM;
 		return true;
@@ -606,6 +605,18 @@ static bool zb_radio_live_rssi_sample(int8_t *rssi)
 
 	LOG_DBG("CCA sample unavailable (rc=%d), using RSSI fallback", ret);
 	return false;
+}
+
+int zb_radio_cca_check(void)
+{
+	if ((g_radio.dev == NULL) || (g_radio.api == NULL)) {
+		return -ENODEV;
+	}
+	if (g_radio.api->cca == NULL) {
+		return -ENOTSUP;
+	}
+
+	return g_radio.api->cca(g_radio.dev);
 }
 
 static uint32_t dbg_cmd_ackreq;
