@@ -37,10 +37,18 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZNP_STATUS_APS_NO_ACK   0xB7U
 #define ZNP_STATUS_APS_FAIL     0xB1U
+#define ZNP_STATUS_PASSTHROUGH_MIN 0xC0U
 
 #define ZNP_MAX_ENDPOINTS       16U
 #define ZNP_MAX_CLUSTERS        24U
 #define ZNP_MAX_PENDING         8U
+/*
+ * Buffers kept free for received frames, acknowledgements and the stack's own traffic. A request
+ * that would take them is refused, since the stack then cannot process what the radio delivers.
+ */
+#define ZNP_BUF_RESERVE         8U
+/* A request the stack has not confirmed by then is reported as unacknowledged and its slot reused. */
+#define ZNP_PENDING_TIMEOUT_MS  30000U
 
 /* The endpoint a host addresses inter-PAN frames to, and how long a channel switch lasts. */
 #define ZNP_INTER_PAN_EP        0xFEU
@@ -61,10 +69,12 @@ struct znp_pending {
 	uint8_t aps_cnt;
 	uint8_t src_ep;
 	uint8_t tsn;
+	uint32_t start_ms;
 };
 
 static struct znp_endpoint endpoints[ZNP_MAX_ENDPOINTS];
 static struct znp_pending pending[ZNP_MAX_PENDING];
+uint32_t znp_dbg_last_aps_fail_status;
 
 static uint8_t map_aps_status(uint8_t aps)
 {
@@ -74,6 +84,13 @@ static uint8_t map_aps_status(uint8_t aps)
 	case APS_STATUS_NO_ACK:
 		return ZNP_STATUS_APS_NO_ACK;
 	default:
+		znp_dbg_last_aps_fail_status = aps;
+		/* MAC and NWK statuses (transaction expired, channel access failure, no route) are
+		 * what Z-Stack reports to the host as they are.
+		 */
+		if (aps >= ZNP_STATUS_PASSTHROUGH_MIN) {
+			return aps;
+		}
 		return ZNP_STATUS_APS_FAIL;
 	}
 }
@@ -301,12 +318,49 @@ static uint8_t zdo_frame_send(uint16_t dst, uint16_t cluster, uint8_t radius, co
 	return af_dataSend(ZDO_EP, &ep, cluster, data_len, (uint8_t *)data, aps_cnt);
 }
 
+/* A free slot to track a request, reclaiming one the stack never confirmed. */
+static struct znp_pending *pending_slot_get(void)
+{
+	uint32_t now = k_uptime_get_32();
+
+	for (size_t i = 0; i < ARRAY_SIZE(pending); i++) {
+		if (pending[i].used && (now - pending[i].start_ms) > ZNP_PENDING_TIMEOUT_MS) {
+			pending[i].used = false;
+			data_confirm(ZNP_STATUS_APS_NO_ACK, pending[i].src_ep, pending[i].tsn);
+		}
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(pending); i++) {
+		if (!pending[i].used) {
+			return &pending[i];
+		}
+	}
+
+	return NULL;
+}
+
 static void data_request(uint8_t cmd, uint8_t addr_mode, const uint8_t *addr, uint8_t dst_ep,
 			 uint8_t src_ep, uint16_t cluster, uint8_t tsn, uint8_t options,
 			 uint8_t radius, const uint8_t *data, uint16_t data_len)
 {
 	uint8_t aps_cnt = 0U;
 	uint8_t status;
+	bool zdo = (dst_ep == ZDO_EP && addr_mode != ZNP_ADDR_MODE_GROUP);
+	struct znp_pending *slot = zdo ? NULL : pending_slot_get();
+
+	if (zb_buf_free_count() < ZNP_BUF_RESERVE || (!zdo && slot == NULL)) {
+		if (zdo) {
+			znp_srsp_status(ZNP_SUBSYS_AF, cmd, ZNP_STATUS_MEM_ERROR);
+			return;
+		}
+		/*
+		 * Hosts retry a request after a BUFFER_FULL confirmation, but not after an error
+		 * in the immediate response.
+		 */
+		znp_srsp_status(ZNP_SUBSYS_AF, cmd, ZNP_STATUS_SUCCESS);
+		data_confirm(ZNP_STATUS_BUFFER_FULL, src_ep, tsn);
+		return;
+	}
 
 	if (dst_ep == ZDO_EP && addr_mode != ZNP_ADDR_MODE_GROUP) {
 		status = zdo_frame_send(znp_get_u16(addr), cluster, radius, data, data_len,
@@ -327,18 +381,11 @@ static void data_request(uint8_t cmd, uint8_t addr_mode, const uint8_t *addr, ui
 		return;
 	}
 
-	for (size_t i = 0; i < ARRAY_SIZE(pending); i++) {
-		if (!pending[i].used) {
-			pending[i].used = true;
-			pending[i].aps_cnt = aps_cnt;
-			pending[i].src_ep = src_ep;
-			pending[i].tsn = tsn;
-			return;
-		}
-	}
-
-	/* No room to track it, so confirm right away. */
-	data_confirm(ZNP_STATUS_SUCCESS, src_ep, tsn);
+	slot->used = true;
+	slot->aps_cnt = aps_cnt;
+	slot->src_ep = src_ep;
+	slot->tsn = tsn;
+	slot->start_ms = k_uptime_get_32();
 }
 
 static void af_data_request(const uint8_t *d, uint8_t len)

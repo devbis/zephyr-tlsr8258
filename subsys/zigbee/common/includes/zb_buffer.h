@@ -57,6 +57,8 @@ uint8_t zb_buf_to_ref(zb_buf_t *buf);
 #define ZB_REF_FROM_BUF(p)   zb_buf_to_ref(p)
 
 uint8_t zb_buf_rx_free_count(void);
+/* Free blocks of the buffer pool, whatever the received-frame copies need. */
+uint8_t zb_buf_free_count(void);
 uint8_t *zb_buf_rx_payload_capture(zb_buf_t *buf, const uint8_t *data, uint8_t len);
 /* Copy the received frame captured behind src, see zb_buf_rx_payload_capture(). */
 void zb_buf_rx_snapshot_copy(zb_buf_t *dst, const zb_buf_t *src);
