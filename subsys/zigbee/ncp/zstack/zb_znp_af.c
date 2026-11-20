@@ -37,6 +37,7 @@ LOG_MODULE_DECLARE(zigbee_znp, CONFIG_ZIGBEE_LOG_LEVEL);
 
 #define ZNP_STATUS_APS_NO_ACK   0xB7U
 #define ZNP_STATUS_APS_FAIL     0xB1U
+#define ZNP_STATUS_PASSTHROUGH_MIN 0xC0U
 
 #define ZNP_MAX_ENDPOINTS       16U
 #define ZNP_MAX_CLUSTERS        24U
@@ -73,6 +74,7 @@ struct znp_pending {
 
 static struct znp_endpoint endpoints[ZNP_MAX_ENDPOINTS];
 static struct znp_pending pending[ZNP_MAX_PENDING];
+uint32_t znp_dbg_last_aps_fail_status;
 
 static uint8_t map_aps_status(uint8_t aps)
 {
@@ -82,6 +84,13 @@ static uint8_t map_aps_status(uint8_t aps)
 	case APS_STATUS_NO_ACK:
 		return ZNP_STATUS_APS_NO_ACK;
 	default:
+		znp_dbg_last_aps_fail_status = aps;
+		/* MAC and NWK statuses (transaction expired, channel access failure, no route) are
+		 * what Z-Stack reports to the host as they are.
+		 */
+		if (aps >= ZNP_STATUS_PASSTHROUGH_MIN) {
+			return aps;
+		}
 		return ZNP_STATUS_APS_FAIL;
 	}
 }
