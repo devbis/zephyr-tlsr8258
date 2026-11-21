@@ -1,0 +1,14 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* UART1 of the module is the link to the host of the gateway and carries the NCP protocol of
+ * coordinator_znp.conf.
+ */
+/ {
+	chosen {
+		zigbee,ncp-uart = &uart1;
+		zigbee,aes = &ecb;
+	};
+};
