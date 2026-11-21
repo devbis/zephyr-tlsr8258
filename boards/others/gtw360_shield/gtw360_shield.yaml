@@ -1,0 +1,14 @@
+identifier: gtw360_shield/nrf52840
+name: GTW360 gateway nRF52840 module
+type: mcu
+arch: arm
+ram: 256
+flash: 1024
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - gpio
+  - watchdog
+  - netif:openthread
+vendor: others

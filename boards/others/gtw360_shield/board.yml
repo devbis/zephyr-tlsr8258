@@ -1,0 +1,6 @@
+board:
+  name: gtw360_shield
+  full_name: GTW360 gateway nRF52840 module
+  vendor: others
+  socs:
+  - name: nrf52840
