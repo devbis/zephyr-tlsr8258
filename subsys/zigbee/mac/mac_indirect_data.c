@@ -166,7 +166,6 @@ _attribute_no_inline_ int zb_MacPendingDataSearch(uint8_t addrMode, uint8_t *add
 void zb_MacMlmeDataRequestCb(void *arg)
 {
 	mac_phy_ind_meta_t *meta = (mac_phy_ind_meta_t *)arg;
-	uint8_t *req = (uint8_t *)arg;
 	uint8_t addrMode = meta->srcAddrMode;
 	uint8_t *addr = meta->srcAddr;
 	int8_t pendingCnt = (int8_t)zb_MacPendingDataSearch(addrMode, addr);
@@ -201,20 +200,19 @@ void zb_MacMlmeDataRequestCb(void *arg)
 	}
 
 post_poll_ind:
-	if (listLength(macPendingQueue) == 0) {
-		uint8_t saved[9]; /* address bytes copied from addr, then reused in req */
+	{
+		mac_mlme_poll_ind_t *ind = (mac_mlme_poll_ind_t *)arg;
+		uint8_t saved[sizeof(ind->devAddr)];
 
-		/* Preserve the vendor stack/code shape even though req[0] does not alias addr. */
+		/* The indication reuses the buffer that holds the poll's source address. Copy the
+		 * address first, and store it where the structure declares it: the layout differs
+		 * from the packed one of the vendor build, and the NWK handler reads the structure.
+		 */
 		memcpy(saved, addr, sizeof(saved));
-		req[0] = addrMode;
-		ZB_IEEE_ADDR_COPY(req + 1, saved);
-		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
-		return;
+		ind->addrMode = addrMode;
+		memcpy(&ind->devAddr, saved, sizeof(saved));
+		zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_IND, ind);
 	}
-
-	req[0] = addrMode;
-	ZB_IEEE_ADDR_COPY(req + 1, addr);
-	zb_PrimitivePost(ZB_Q_MAC2NWK, MAC_MLME_POLL_IND, req);
 }
 
 int macIndirPeriodic(void *arg)
