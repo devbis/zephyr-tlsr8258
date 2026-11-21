@@ -201,6 +201,16 @@ jobs:
             role: coordinator
             role_symbol: CONFIG_ZIGBEE_COORDINATOR
             toolchain_variant: gnuarmemb
+          - soc: gtw360
+            board: gtw360_shield/nrf52840
+            role: router
+            role_symbol: CONFIG_ZIGBEE_ROUTER
+            toolchain_variant: gnuarmemb
+          - soc: gtw360
+            board: gtw360_shield/nrf52840
+            role: coordinator
+            role_symbol: CONFIG_ZIGBEE_COORDINATOR
+            toolchain_variant: gnuarmemb
 
     steps:
       - name: Checkout repository
@@ -230,7 +240,7 @@ jobs:
           west zephyr-export
 
       - name: Install the MCUboot image tool dependencies
-        if: matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c'
+        if: matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c' || matrix.soc == 'gtw360'
         run: |
           # imgtool signs the application and needs its own Python packages
           python -m pip install -r ../bootloader/mcuboot/scripts/requirements.txt
@@ -280,7 +290,7 @@ jobs:
           west blobs fetch hal_bouffalolab
 
       - name: Install Arm GNU Toolchain
-        if: matrix.soc == 'nrf52840' || matrix.soc == 'nrf52840_nicenano' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c'
+        if: matrix.soc == 'nrf52840' || matrix.soc == 'nrf52840_nicenano' || matrix.soc == 'efr32mg21' || matrix.soc == 'phy6252' || matrix.soc == 'stm32wba' || matrix.soc == 'stm32wb55' || matrix.soc == 'ecb02c' || matrix.soc == 'gtw360'
         shell: bash
         run: |
           set -euo pipefail
@@ -339,6 +349,9 @@ jobs:
                   -DEXTRA_DTC_OVERLAY_FILE=promicro_nosd.overlay
                   -DCONFIG_ZIGBEE_STACK_SIZE=4096
                 )
+              elif [[ "$SOC" == gtw360 ]]; then
+                # Signed for the MCUboot that is on the gateway
+                cmake_args+=('-DEXTRA_CONF_FILE=router.conf;gtw360_shield_mcuboot.conf')
               else
                 cmake_args+=(-DEXTRA_CONF_FILE=router.conf)
               fi
@@ -380,6 +393,12 @@ jobs:
                 cmake_args+=(
                   "-DEXTRA_CONF_FILE=coordinator_znp.conf;coordinator_znp_weact_stm32wb55_core.conf"
                   "-DEXTRA_DTC_OVERLAY_FILE=$ZEPHYR_BASE/samples/zigbee/zigbee_shell/coordinator_znp_weact_stm32wb55_core.overlay"
+                )
+              elif [[ "$SOC" == gtw360 ]]; then
+                # The host of the gateway talks to UART1; the image is signed for the MCUboot
+                # that is on the gateway.
+                cmake_args+=(
+                  '-DEXTRA_CONF_FILE=coordinator_znp.conf;coordinator_znp_gtw360_shield.conf;gtw360_shield_mcuboot.conf'
                 )
               elif [[ "$SOC" == ecb02c ]]; then
                 # The host talks to UART1, the USB-UART of the module on P2 and P3.
@@ -458,6 +477,15 @@ jobs:
             grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
             grep -Fx 'CONFIG_IEEE802154_STM32WB=y' "$config_file"
           fi
+          if [[ "$SOC" == gtw360 ]]; then
+            grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
+            grep -Fx 'CONFIG_IEEE802154_NRF5=y' "$config_file"
+            # the application slot of the MCUboot on the gateway
+            grep -Fx 'CONFIG_FLASH_LOAD_OFFSET=0x10000' "$config_file"
+          fi
+          if [[ "$ROLE" == coordinator && "$SOC" == gtw360 ]]; then
+            grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ=y' "$config_file"
+          fi
           if [[ "$SOC" == ecb02c ]]; then
             grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
             grep -Fx 'CONFIG_IEEE802154_PHY6252=y' "$config_file"
@@ -479,6 +507,10 @@ jobs:
           firmware_name="${SOC}-${ROLE}.bin"
           if [[ "$SOC" == phy6252 ]]; then
             firmware="$build_dir/zephyr/zephyr.phy6252.bin"
+          elif [[ "$SOC" == gtw360 ]]; then
+            # The MCUboot on the gateway swaps in the signed application: the update image
+            firmware="$build_dir/zephyr/zephyr.signed.bin"
+            firmware_name="${SOC}-${ROLE}-app.signed.bin"
           elif [[ "$SOC" == ecb02c ]]; then
             # MCUboot starts the signed application, which is the update image of the module
             firmware="$build_dir/zephyr/zephyr.signed.bin"
@@ -697,7 +729,7 @@ jobs:
 
           Toolchains:
           - TLSR8258: TC32 LLVM \`$TC32_TOOLCHAIN_VERSION\`
-          - nRF52840, EFR32MG21, STM32WBA, STM32WB55, ECB02C and PB-03F (PHY6252): Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
+          - nRF52840, GTW360, EFR32MG21, STM32WBA, STM32WB55, ECB02C and PB-03F (PHY6252): Arm GNU Toolchain \`$ARM_GNU_TOOLCHAIN_VERSION\`
           - ESP32-C6, ESP32-H2 and BL702: Zephyr SDK with the RISC-V toolchain
 
           The release contains router, end-device, and coordinator images for TLSR8258,
@@ -728,6 +760,11 @@ jobs:
           the PHY62x2 utilities, then use the USB-UART of the module. \`ecb02c-<role>-app.signed.bin\`
           is the application alone, for the serial recovery of MCUboot (mcumgr, within 3 s after
           a reset; the coordinator restarts into it with SYS_RESET_REQ type 0).
+          The release also has router and coordinator images for the nRF52840 module of the
+          GTW360 gateway (gtw360_shield). \`gtw360-<role>-app.signed.bin\` is signed for the
+          MCUboot that is already on the gateway (application slot at 0x10000): flash it
+          with smpflash through that loader. The coordinator carries the Z-Stack protocol on
+          UART1 of the module.
           The BL702 `.bin` files include the native BFNP boot header and can be programmed over UART
           with `bflb-mcu-tool` (`--chipname=bl702 --xtal=32M`).
           The coordinators speak the Z-Stack ZNP protocol, for Zigbee2MQTT (adapter: zstack)
