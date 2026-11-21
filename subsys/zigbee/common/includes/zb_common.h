@@ -432,14 +432,28 @@ aps_binding_entry_t *bindTblEntryGet(void);
  * vendor build gets from -fpack-struct. This port does not link vendor
  * objects, and its translation units also see Zephyr headers, so packing them
  * would break ABI with the kernel rather than buy compatibility. Field offsets
- * still agree; only trailing padding differs, so the size contracts do not
- * hold here and are not enforced.
+ * agree for structures made of u8 members and u8 arrays; where a u16, u32,
+ * pointer or union member follows an odd offset, the natural layout moves it
+ * (mac_mlme_poll_ind_t.devAddr sits at byte 1 packed and at byte 2 here), and
+ * trailing padding differs, so the size contracts do not hold and are not
+ * enforced.
+ *
+ * The imported sources were written for packed structures and sometimes fill
+ * a buffer by byte offset where another function reads it through a
+ * structure, or the other way round. Both sides must use the same layout: fill
+ * a buffer through its structure, and where a raw offset is unavoidable state
+ * it with ZB_ASSERT_FIELD_OFFSET so a layout that moves the field fails to
+ * build.
  *
  * Wire formats are unaffected: the stack builds frames field by field, never
  * by writing a struct out whole.
  */
 #undef STATIC_ASSERT
 #define STATIC_ASSERT(X)
+
+#define ZB_ASSERT_FIELD_OFFSET(type, member, offset)                                              \
+	BUILD_ASSERT(offsetof(type, member) == (offset),                                           \
+		     #type "." #member " is not at the byte offset the code assumes")
 
 #include "zb_buffer.h"
 
