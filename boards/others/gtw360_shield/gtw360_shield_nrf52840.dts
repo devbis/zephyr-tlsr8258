@@ -1,0 +1,119 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <nordic/nrf52840_qiaa.dtsi>
+#include "gtw360_shield_nrf52840-pinctrl.dtsi"
+
+/ {
+	model = "GTW360 gateway nRF52840 module";
+	compatible = "others,gtw360-shield";
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,uart-mcumgr = &uart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,ieee802154 = &ieee802154;
+	};
+
+	aliases {
+		watchdog0 = &wdt0;
+	};
+
+	/* The SKY66112 front end: P1.04 switches the power amplifier on, P1.02 the low noise one. */
+	nrf_radio_fem: skyworks_sky66112 {
+		compatible = "radio-fem-two-ctrl-pins";
+		ctx-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+		crx-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+		ctx-settle-time-us = <23>;
+		crx-settle-time-us = <5>;
+		tx-gain-db = <22>;
+		rx-gain-db = <11>;
+	};
+};
+
+&radio {
+	fem = <&nrf_radio_fem>;
+};
+
+&reg1 {
+	regulator-initial-mode = <NRF5X_REG_MODE_LDO>;
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&uart0 {
+	compatible = "nordic,nrf-uarte";
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&uart1 {
+	compatible = "nordic,nrf-uarte";
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-1 = <&uart1_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&ieee802154 {
+	status = "okay";
+};
+
+/*
+ * The flash map of the MCUboot that is already on the gateway: the loader in the first 64 KiB, an
+ * application slot at 0x10000 and the update slot at 0x80000. The Zigbee storage sits in the tail
+ * of the update slot, which an update image does not reach.
+ */
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00010000>;
+			read-only;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 0x00070000>;
+		};
+
+		slot1_partition: partition@80000 {
+			label = "image-1";
+			reg = <0x00080000 0x00068000>;
+		};
+
+		zigbee_nv_partition: partition@e8000 {
+			label = "zigbee-nv";
+			reg = <0x000e8000 0x00008000>;
+		};
+
+		scratch_partition: partition@f0000 {
+			label = "image-scratch";
+			reg = <0x000f0000 0x00010000>;
+		};
+	};
+};
