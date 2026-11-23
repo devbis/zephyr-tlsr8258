@@ -4,7 +4,8 @@
  */
 
 /*
- * The ASH framing and link layer and the EZSP frame header of the EZSP NCP interface. The CRC,
+ * The ASH framing and link layer, the EZSP frame header and the session that joins them, of the
+ * EZSP NCP interface. The CRC,
  * RST, RSTACK and randomization vectors are the examples of Silicon Labs UG101.
  *
  * Run: west twister -T tests/subsys/zigbee/ezsp -p native_sim/native/64
@@ -17,6 +18,7 @@
 
 #include "zb_ezsp_ash.h"
 #include "zb_ezsp_frame.h"
+#include "zb_ezsp_session.h"
 
 /* What the link sent and delivered. */
 static uint8_t tx_bytes[1024];
@@ -649,4 +651,185 @@ ZTEST(ezsp, test_ctx_reset)
 	zassert_false(c.extended);
 }
 
+/* The session: a host talking ASH and EZSP to it */
+
+static struct ezsp_session sess;
+static uint8_t host_rx[2048];
+static size_t host_rx_len;
+
+static void sess_tx(void *ctx, const uint8_t *bytes, size_t len)
+{
+	ARG_UNUSED(ctx);
+	zassert_true(host_rx_len + len <= sizeof(host_rx));
+	memcpy(&host_rx[host_rx_len], bytes, len);
+	host_rx_len += len;
+}
+
+static void host_send(uint32_t now, uint8_t ctrl, const uint8_t *data, size_t len)
+{
+	uint8_t out[ASH_MAX_ENCODED];
+	size_t n = ash_frame_encode(out, sizeof(out), ctrl, data, len);
+
+	zassert_true(n > 0U);
+	for (size_t i = 0; i < n; i++) {
+		ezsp_session_rx(&sess, now, out[i]);
+	}
+}
+
+/* The next frame the host received, from offset @p from of what it got; 0 when there is none. */
+static size_t host_frame(uint8_t *ctrl, uint8_t *data, size_t *len, size_t *from)
+{
+	struct ash_parser p;
+
+	ash_parser_reset(&p);
+	for (size_t i = *from; i < host_rx_len; i++) {
+		if (ash_parser_feed(&p, host_rx[i]) == ASH_FEED_FRAME) {
+			*ctrl = p.buf[0];
+			*len = p.len - 3U;
+			memcpy(data, &p.buf[1], *len);
+			if ((*ctrl & 0x80U) == 0U) {
+				ash_randomize(data, *len);
+			}
+			*from = i + 1U;
+			return p.len;
+		}
+	}
+
+	return 0U;
+}
+
+static void sess_before(void *fixture)
+{
+	ARG_UNUSED(fixture);
+	host_rx_len = 0U;
+	ezsp_session_init(&sess, sess_tx, NULL);
+}
+
+ZTEST(ezsp_session, test_start_announces)
+{
+	uint8_t ctrl;
+	uint8_t data[8];
+	size_t len;
+	size_t from = 0U;
+
+	ezsp_session_start(&sess);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, ASH_CTRL_RSTACK);
+	zassert_equal(data[1], ASH_RESET_POWER_ON);
+}
+
+ZTEST(ezsp_session, test_version_over_ash)
+{
+	const uint8_t cmd[] = {0x00, 0x00, 0x00, 13};
+	const uint8_t want[] = {0x00, 0x80, 0x00, 13, 2, 0x40, 0x74};
+	uint8_t ctrl;
+	uint8_t data[ASH_MAX_DATA];
+	size_t len;
+	size_t from = 0U;
+
+	host_send(0U, ASH_CTRL_RST, NULL, 0U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, ASH_CTRL_RSTACK);
+
+	host_send(1U, 0x00, cmd, sizeof(cmd));
+	/* The ACK of the command... */
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, 0x81U);
+	/* ...and nothing else until the poll sends the response */
+	zassert_equal(host_frame(&ctrl, data, &len, &from), 0U);
+	ezsp_session_poll(&sess, 2U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	/* DATA frame 0, acknowledging the host frame 0 */
+	zassert_equal(ctrl, 0x01U);
+	zassert_equal(len, sizeof(want));
+	zassert_mem_equal(data, want, sizeof(want));
+	zassert_true(sess.ezsp.extended);
+}
+
+ZTEST(ezsp_session, test_queue_waits_for_the_window)
+{
+	const uint8_t a[] = {0xA1};
+	const uint8_t b[] = {0xB2, 0xB3};
+	uint8_t ctrl;
+	uint8_t data[ASH_MAX_DATA];
+	size_t len;
+	size_t from = 0U;
+
+	host_send(0U, ASH_CTRL_RST, NULL, 0U);
+	host_rx_len = 0U;
+
+	zassert_true(ezsp_session_send(&sess, a, sizeof(a)));
+	zassert_true(ezsp_session_send(&sess, b, sizeof(b)));
+	ezsp_session_poll(&sess, 1U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, 0x00U);
+	zassert_equal(len, sizeof(a));
+
+	/* The second frame waits for the ACK of the first */
+	ezsp_session_poll(&sess, 2U);
+	zassert_equal(host_frame(&ctrl, data, &len, &from), 0U);
+	host_send(3U, 0x81, NULL, 0U);
+	ezsp_session_poll(&sess, 4U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, 0x10U);
+	zassert_equal(len, sizeof(b));
+	zassert_mem_equal(data, b, sizeof(b));
+}
+
+ZTEST(ezsp_session, test_queue_full_drops)
+{
+	const uint8_t f[] = {1};
+
+	for (unsigned int i = 0; i < EZSP_QUEUE_DEPTH; i++) {
+		zassert_true(ezsp_session_send(&sess, f, sizeof(f)));
+	}
+	zassert_false(ezsp_session_send(&sess, f, sizeof(f)));
+	zassert_equal(sess.dropped, 1U);
+	zassert_false(ezsp_session_send(&sess, f, EZSP_MAX_FRAME + 1U));
+}
+
+ZTEST(ezsp_session, test_queue_keeps_order_when_wrapping)
+{
+	uint8_t ctrl;
+	uint8_t data[ASH_MAX_DATA];
+	size_t len;
+	size_t from = 0U;
+
+	host_send(0U, ASH_CTRL_RST, NULL, 0U);
+	host_rx_len = 0U;
+
+	for (uint8_t i = 0; i < 3U * EZSP_QUEUE_DEPTH; i++) {
+		uint8_t seq = (uint8_t)((i + 1U) & 7U);
+
+		ezsp_session_send(&sess, &i, 1U);
+		ezsp_session_poll(&sess, i);
+		zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+		zassert_equal(data[0], i);
+		host_send(i, (uint8_t)(0x80U | seq), NULL, 0U);
+	}
+}
+
+ZTEST(ezsp_session, test_rst_flushes_the_queue_and_format)
+{
+	const uint8_t f[] = {1};
+	uint8_t ctrl;
+	uint8_t data[ASH_MAX_DATA];
+	size_t len;
+	size_t from = 0U;
+
+	host_send(0U, ASH_CTRL_RST, NULL, 0U);
+	sess.ezsp.extended = true;
+	zassert_true(ezsp_session_send(&sess, f, sizeof(f)));
+
+	host_rx_len = 0U;
+	host_send(1U, ASH_CTRL_RST, NULL, 0U);
+	zassert_false(sess.ezsp.extended);
+	ezsp_session_poll(&sess, 2U);
+	/* Only the RSTACK, no frame of the old connection */
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(ctrl, ASH_CTRL_RSTACK);
+	zassert_equal(host_frame(&ctrl, data, &len, &from), 0U);
+}
+
 ZTEST_SUITE(ezsp, NULL, NULL, before, NULL, NULL);
+ZTEST_SUITE(ezsp_session, NULL, NULL, sess_before, NULL, NULL);
