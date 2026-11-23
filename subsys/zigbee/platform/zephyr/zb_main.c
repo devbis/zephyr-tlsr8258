@@ -15,6 +15,8 @@
 #include <zephyr/zigbee/zb_zbhci.h>
 #elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
 #include <zephyr/zigbee/zb_znp.h>
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+#include <zephyr/zigbee/zb_ezsp.h>
 #endif
 #include <string.h>
 #include "zb_radio_smoke.h"
@@ -829,6 +831,10 @@ static void zb_thread_fn(void *a, void *b, void *c)
 		 */
 		if (zb_bootstrap_done) {
 			zb_znp_poll();
+		}
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+		if (zb_bootstrap_done) {
+			zb_ezsp_poll();
 		}
 #endif
 		if (!zb_bootstrap_done) {

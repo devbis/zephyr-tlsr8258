@@ -10,8 +10,8 @@ target_sources(app PRIVATE
   src/app_profile.c
   ../zigbee_shell/src/app_bdb.c
 )
-# With a ZNP host attached, the host interviews the devices that join.
-if(CONFIG_ZIGBEE_COORDINATOR AND NOT CONFIG_ZIGBEE_ZSTACK_NCP)
+# With a ZNP or EZSP host attached, the host interviews the devices that join.
+if(CONFIG_ZIGBEE_COORDINATOR AND NOT CONFIG_ZIGBEE_ZSTACK_NCP AND NOT CONFIG_ZIGBEE_EZSP_NCP)
   target_sources(app PRIVATE src/app_interview.c)
 endif()
 

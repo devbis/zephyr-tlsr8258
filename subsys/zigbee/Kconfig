@@ -527,6 +527,15 @@ config ZIGBEE_NCP_ZSTACK
 	  (zigpy-znp) use to start the network, manage devices and exchange
 	  APS data. Other commands are answered with an error.
 
+config ZIGBEE_NCP_EZSP
+	bool "Silicon Labs EZSP"
+	help
+	  Emulate the serial interface of an EmberZNet coordinator (EZSP
+	  version 13 over ASH), limited to the commands Zigbee2MQTT (adapter:
+	  ember), ZHA (bellows) and homed-zigbee use to start the network,
+	  manage devices and exchange APS data. Other commands are answered
+	  with an invalidCommand error.
+
 endchoice
 
 config ZIGBEE_NCP_ZSTACK_UART_IRQ
@@ -553,6 +562,26 @@ config ZIGBEE_NCP_ZSTACK_FEM_DEBUG
 	  Provide a ZNP command, SYS 0xF1 with the CTX and CRX levels, that sets the
 	  control pins of an external front end module. For bringing up a radio link only.
 
+config ZIGBEE_NCP_EZSP_UART_IRQ
+	bool "Receive the EZSP host UART in the interrupt"
+	depends on ZIGBEE_NCP_EZSP
+	depends on UART_INTERRUPT_DRIVEN
+	help
+	  Collect the bytes of the host UART in a ring from the UART interrupt
+	  instead of reading them from the Zigbee thread. The thread polls the
+	  UART between other work, and a UART with a small receive FIFO loses
+	  the end of a long frame while the stack is busy.
+
+config ZIGBEE_NCP_EZSP_QUEUE_DEPTH
+	int "EZSP frames waiting for the host"
+	depends on ZIGBEE_NCP_EZSP
+	default 4
+	range 1 16
+	help
+	  ASH has one frame in flight, so responses and callbacks wait in a
+	  queue until the host acknowledged the previous frame. Each entry takes
+	  220 bytes. A frame that finds the queue full is dropped.
+
 endif # ZIGBEE_NCP
 
 config ZIGBEE_ZBHCI_UART
@@ -560,6 +589,9 @@ config ZIGBEE_ZBHCI_UART
 
 config ZIGBEE_ZSTACK_NCP
 	def_bool ZIGBEE_NCP_ZSTACK
+
+config ZIGBEE_EZSP_NCP
+	def_bool ZIGBEE_NCP_EZSP
 
 config ZIGBEE_OTA
 	bool "OTA firmware update"
