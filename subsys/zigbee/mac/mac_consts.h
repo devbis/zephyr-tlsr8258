@@ -46,11 +46,8 @@
 #define MAC_BEACON_PEND_SHORT_LEN  2U
 #define MAC_BEACON_PEND_EXT_LEN    8U
 
-/* Beacon indication: it is copied inside the receive buffer, which holds 0xc0 octets, at an offset
- * of at least 30 octets.
- */
+/* Minimum offset for copying a beacon payload inside its RX storage. */
 #define MAC_BEACON_IND_COPY_MIN  30U
-#define MAC_RX_BUF_PAYLOAD_LIMIT 0xc0U
 
 /* Short addresses above 0xfffd are not device addresses (0xfffe: use the extended address). */
 #define MAC_SHORT_ADDR_LAST_DEVICE 0xfffdU

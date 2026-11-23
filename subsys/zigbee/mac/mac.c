@@ -70,7 +70,7 @@ static bool phy_ind_beacon_notify_post(zb_buf_t *buf, zb_mac_mhr_t *mhr, uint8_t
 	 */
 	copyOffset = (payloadLen > (MAC_BEACON_IND_COPY_MIN - 1U)) ? payloadLen
 								   : MAC_BEACON_IND_COPY_MIN;
-	if ((uint32_t)(payload - (uint8_t *)buf) + payloadLen + copyOffset > MAC_RX_BUF_PAYLOAD_LIMIT) {
+	if ((size_t)payloadLen + copyOffset > zb_buf_rx_payload_tailroom(buf, payload)) {
 		return FALSE;
 	}
 
