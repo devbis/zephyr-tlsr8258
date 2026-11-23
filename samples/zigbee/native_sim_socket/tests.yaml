@@ -25,3 +25,7 @@ tests:
     extra_args:
       - EXTRA_CONF_FILE=coordinator_znp.conf
       - EXTRA_DTC_OVERLAY_FILE=coordinator.overlay
+  sample.zigbee.native_sim_socket.coordinator_ezsp:
+    extra_args:
+      - EXTRA_CONF_FILE=coordinator_ezsp.conf
+      - EXTRA_DTC_OVERLAY_FILE=coordinator.overlay

@@ -101,6 +101,7 @@ zephyr_library_include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/platform/zephyr
   ${CMAKE_CURRENT_SOURCE_DIR}/pm
   ${CMAKE_CURRENT_SOURCE_DIR}/ncp/zstack
+  ${CMAKE_CURRENT_SOURCE_DIR}/ncp/ezsp
   ${CMAKE_CURRENT_SOURCE_DIR}/os
   ${CMAKE_CURRENT_SOURCE_DIR}/common
   ${CMAKE_CURRENT_SOURCE_DIR}/common/includes
@@ -251,6 +252,12 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_ZSTACK_NCP
   ncp/zstack/zb_znp_sys.c
   ncp/zstack/zb_znp_zdo.c
   ncp/zstack/zb_znp_af.c
+)
+zephyr_library_sources_ifdef(CONFIG_ZIGBEE_EZSP_NCP
+  ncp/ezsp/zb_ezsp_uart.c
+  ncp/ezsp/zb_ezsp_session.c
+  ncp/ezsp/zb_ezsp_ash.c
+  ncp/ezsp/zb_ezsp_frame.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 # The imported MAC hands Green Power confirms to cGp_dataCnf on every router

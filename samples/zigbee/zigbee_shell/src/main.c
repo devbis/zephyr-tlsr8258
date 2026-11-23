@@ -17,8 +17,12 @@
 #include <zephyr/zigbee/zb_bootstrap.h>
 #include <zephyr/zigbee/zb_channel.h>
 #include <zephyr/zigbee/zb_config.h>
+#if defined(CONFIG_ZIGBEE_ZSTACK_NCP) || defined(CONFIG_ZIGBEE_EZSP_NCP)
 #if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
 #include <zephyr/zigbee/zb_znp.h>
+#else
+#include <zephyr/zigbee/zb_ezsp.h>
+#endif
 
 BUILD_ASSERT(DT_HAS_CHOSEN(zigbee_ncp_uart),
 	     "the board overlay must name the host UART as zigbee,ncp-uart");
@@ -91,7 +95,7 @@ bool zb_platform_app_enable_radio_smoke_probe(void)
 
 bool zb_platform_app_should_start_commissioning(void)
 {
-#if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+#if defined(CONFIG_ZIGBEE_ZSTACK_NCP) || defined(CONFIG_ZIGBEE_EZSP_NCP)
 	/* The host starts network formation. */
 	return false;
 #else
@@ -125,6 +129,13 @@ int main(void)
 
 	if (rc != 0) {
 		LOG_ERR("ZNP UART init failed (%d)", rc);
+	}
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+	/* The board overlay names the UART the EZSP host is attached to. */
+	int rc = zb_ezsp_init(DEVICE_DT_GET(DT_CHOSEN(zigbee_ncp_uart)));
+
+	if (rc != 0) {
+		LOG_ERR("EZSP UART init failed (%d)", rc);
 	}
 #endif
 	if (IS_ENABLED(CONFIG_ZIGBEE_RUN_IN_MAIN)) {

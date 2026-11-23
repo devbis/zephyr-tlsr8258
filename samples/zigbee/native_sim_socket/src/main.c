@@ -11,6 +11,8 @@
 #include <zephyr/zigbee/zb_zbhci.h>
 #elif defined(CONFIG_ZIGBEE_ZSTACK_NCP)
 #include <zephyr/zigbee/zb_znp.h>
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+#include <zephyr/zigbee/zb_ezsp.h>
 #endif
 
 #include "app_bdb.h"
@@ -45,7 +47,7 @@ bool zb_platform_app_enable_radio_smoke_probe(void)
 
 bool zb_platform_app_should_start_commissioning(void)
 {
-#if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
+#if defined(CONFIG_ZIGBEE_ZSTACK_NCP) || defined(CONFIG_ZIGBEE_EZSP_NCP)
 	/* The host starts network formation. */
 	return false;
 #else
@@ -85,6 +87,12 @@ int main(void)
 
 	if (rc != 0) {
 		LOG_ERR("ZNP UART init failed (%d)", rc);
+	}
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+	int rc = zb_ezsp_init(DEVICE_DT_GET(DT_NODELABEL(uart1)));
+
+	if (rc != 0) {
+		LOG_ERR("EZSP UART init failed (%d)", rc);
 	}
 #endif
 
