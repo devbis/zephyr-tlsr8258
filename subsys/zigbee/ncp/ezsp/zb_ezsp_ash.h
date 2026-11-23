@@ -23,6 +23,13 @@
 #define ASH_MAX_ENCODED    (2U * ASH_MAX_RAW + 1U)
 
 #define ASH_ACK_TIMEOUT_MS 800U
+/*
+ * How long an ACK for a DATA frame waits for a frame of ours to carry it. Every EZSP command has
+ * a response, and the response acknowledges the command in its ackNum, as the firmware of a chip
+ * does. A host that takes an ACK on its own for the answer, homed does, would otherwise read the
+ * response too soon.
+ */
+#define ASH_ACK_DELAY_MS   30U
 #define ASH_MAX_RETRIES    4U
 
 /* Special bytes. */
@@ -114,6 +121,9 @@ struct ash_link {
 	/* Number of the DATA frame in flight, or of the next one to send. */
 	uint8_t tx_seq;
 	bool in_flight;
+	/* A DATA frame of the host was taken and no frame carried its ACK yet. */
+	bool ack_pending;
+	uint32_t ack_due;
 	uint8_t retries;
 	uint32_t sent_at;
 	size_t flight_len;

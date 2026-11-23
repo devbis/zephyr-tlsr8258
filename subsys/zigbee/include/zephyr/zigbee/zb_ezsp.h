@@ -12,6 +12,9 @@
  */
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include <zephyr/device.h>
 
 /**
@@ -27,3 +30,10 @@ int zb_ezsp_init(const struct device *uart_dev);
  * Zigbee thread's own loop, never from an ISR.
  */
 void zb_ezsp_poll(void);
+
+/**
+ * Report a BDB commissioning result to the host, for
+ * zb_platform_app_bdb_commissioning_status(). A network formation the host asked for ends in a
+ * stack status callback.
+ */
+void zb_ezsp_bdb_commissioning_status(uint8_t status, bool joined_network);

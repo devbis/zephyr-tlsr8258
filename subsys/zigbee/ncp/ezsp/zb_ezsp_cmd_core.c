@@ -52,6 +52,19 @@ static int cfg_find(const struct ezsp_ctx *c, uint8_t id)
 	return -1;
 }
 
+bool ezsp_config_get(const struct ezsp_ctx *c, uint8_t id, uint16_t *value)
+{
+	int i = cfg_find(c, id);
+
+	if (i < 0) {
+		return false;
+	}
+
+	*value = c->cfg[i].value;
+
+	return true;
+}
+
 static void cmd_get_config(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_wr *out)
 {
 	uint8_t id = ezsp_rd_u8(in);
@@ -149,16 +162,6 @@ static void cmd_set_value(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_wr
 	ezsp_wr_u8(out, EZSP_SUCCESS);
 }
 
-static void cmd_get_extended_value(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_wr *out)
-{
-	ARG_UNUSED(c);
-	(void)ezsp_rd_u8(in);
-	(void)ezsp_rd_u32(in);
-	/* No extended value is kept */
-	ezsp_wr_u8(out, EZSP_ERROR_INVALID_ID);
-	ezsp_wr_u8(out, 0U);
-}
-
 static void cmd_get_policy(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_wr *out)
 {
 	uint8_t id = ezsp_rd_u8(in);
@@ -191,17 +194,39 @@ static void cmd_set_policy(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_w
 	ezsp_wr_u8(out, EZSP_SUCCESS);
 }
 
+/* The number of EmberCounterType values; a host zips the list with them. */
+#define EZSP_COUNTER_TYPES 41U
+
+/*
+ * The counters of the stack are not the ones the host knows, so they read as zero. A host reads
+ * them to see that the NCP is alive and to show diagnostics.
+ */
+static void cmd_read_counters(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_wr *out)
+{
+	ARG_UNUSED(c);
+	ARG_UNUSED(in);
+	for (size_t i = 0; i < EZSP_COUNTER_TYPES; i++) {
+		ezsp_wr_u16(out, 0U);
+	}
+}
+
 /* Configuration IDs of UG100 whose values a host reads at start-up. */
 #define EZSP_CFG_PACKET_BUFFER_COUNT 0x01U
 #define EZSP_CFG_ADDRESS_TABLE_SIZE  0x05U
 #define EZSP_CFG_MULTICAST_TABLE_SIZE 0x06U
 #define EZSP_CFG_STACK_PROFILE       0x0cU
+#define EZSP_CFG_KEY_TABLE_SIZE      0x1eU
 #define EZSP_CFG_SECURITY_LEVEL      0x0dU
 #define EZSP_CFG_TC_ADDRESS_CACHE    0x19U
 #define EZSP_CFG_SUPPORTED_NETWORKS  0x2dU
 
+/* VALUE_VERSION_INFO: the stack version, 7.4.4.0 build 0, as a generally available release. */
+#define EZSP_VALUE_VERSION_INFO 0x11U
+
 void ezsp_core_defaults(struct ezsp_ctx *c)
 {
+	static const uint8_t version_info[] = {0x00, 0x00, 0x07, 0x04, 0x04, 0x00, 0xAA};
+
 	static const struct {
 		uint8_t id;
 		uint16_t value;
@@ -210,6 +235,8 @@ void ezsp_core_defaults(struct ezsp_ctx *c)
 		{EZSP_CFG_ADDRESS_TABLE_SIZE, 16U},
 		{EZSP_CFG_MULTICAST_TABLE_SIZE, 16U},
 		{EZSP_CFG_STACK_PROFILE, 2U},
+		/* The stack keeps no link key table the host could index; a host may grow it */
+		{EZSP_CFG_KEY_TABLE_SIZE, 0U},
 		{EZSP_CFG_SECURITY_LEVEL, 5U},
 		{EZSP_CFG_TC_ADDRESS_CACHE, 2U},
 		{EZSP_CFG_SUPPORTED_NETWORKS, 1U},
@@ -220,17 +247,23 @@ void ezsp_core_defaults(struct ezsp_ctx *c)
 		c->cfg[c->cfg_count].value = defaults[i].value;
 		c->cfg_count++;
 	}
+
+	c->val[c->val_count].id = EZSP_VALUE_VERSION_INFO;
+	c->val[c->val_count].len = sizeof(version_info);
+	memcpy(c->val[c->val_count].data, version_info, sizeof(version_info));
+	c->val_count++;
 }
 
 static const struct ezsp_cmd core_cmds[] = {
 	{EZSP_ID_NOP, cmd_nop},
 	{EZSP_ID_ECHO, cmd_echo},
+	{EZSP_ID_READ_COUNTERS, cmd_read_counters},
+	{EZSP_ID_READ_AND_CLEAR_COUNTERS, cmd_read_counters},
 	{EZSP_ID_SET_MANUFACTURER_CODE, cmd_set_manufacturer_code},
 	{EZSP_ID_GET_CONFIGURATION_VALUE, cmd_get_config},
 	{EZSP_ID_SET_CONFIGURATION_VALUE, cmd_set_config},
 	{EZSP_ID_GET_VALUE, cmd_get_value},
 	{EZSP_ID_SET_VALUE, cmd_set_value},
-	{EZSP_ID_GET_EXTENDED_VALUE, cmd_get_extended_value},
 	{EZSP_ID_GET_POLICY, cmd_get_policy},
 	{EZSP_ID_SET_POLICY, cmd_set_policy},
 };

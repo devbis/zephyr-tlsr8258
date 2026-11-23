@@ -232,6 +232,8 @@ static void link_send_flight(struct ash_link *l, uint32_t now_ms, bool retx)
 	}
 	link_send_frame(l, ctrl, l->flight, l->flight_len);
 	l->sent_at = now_ms;
+	/* The frame carries the ackNum of everything taken so far */
+	l->ack_pending = false;
 }
 
 static void link_fail(struct ash_link *l, uint8_t code)
@@ -275,17 +277,18 @@ static void link_data(struct ash_link *l, uint32_t now_ms, uint8_t ctrl, uint8_t
 {
 	uint8_t frm = (ctrl >> ASH_DATA_FRM_SHIFT) & ASH_NUM_MASK;
 
-	ARG_UNUSED(now_ms);
-
 	link_ack(l, ctrl & ASH_NUM_MASK);
 
 	if (frm == l->rx_seq) {
 		ash_randomize(data, len);
 		l->rx_seq = (l->rx_seq + 1U) & ASH_NUM_MASK;
-		link_send_ack(l);
+		/* A response to this frame, if there is one, carries the ACK */
+		l->ack_pending = true;
+		l->ack_due = now_ms + ASH_ACK_DELAY_MS;
 		l->ops->rx_data(l->ctx, data, len);
 	} else if (frm == ((l->rx_seq - 1U) & ASH_NUM_MASK) && (ctrl & ASH_DATA_RETX) != 0U) {
 		/* A retransmission of a frame already taken: the ACK was lost */
+		l->ack_pending = false;
 		link_send_ack(l);
 	} else {
 		link_send_nak(l);
@@ -306,6 +309,7 @@ static void link_frame(struct ash_link *l, uint32_t now_ms)
 		l->rx_seq = 0U;
 		l->tx_seq = 0U;
 		l->in_flight = false;
+		l->ack_pending = false;
 		l->retries = 0U;
 		link_send_frame(l, ASH_CTRL_RSTACK, rstack, sizeof(rstack));
 		if (l->ops->reset != NULL) {
@@ -356,6 +360,11 @@ void ash_link_feed(struct ash_link *l, uint32_t now_ms, uint8_t byte)
 
 void ash_link_tick(struct ash_link *l, uint32_t now_ms)
 {
+	if (l->connected && l->ack_pending && (int32_t)(now_ms - l->ack_due) >= 0) {
+		l->ack_pending = false;
+		link_send_ack(l);
+	}
+
 	if (!l->connected || !l->in_flight || (now_ms - l->sent_at) < ASH_ACK_TIMEOUT_MS) {
 		return;
 	}

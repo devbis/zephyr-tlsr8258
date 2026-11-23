@@ -118,6 +118,8 @@ void zb_platform_app_bdb_commissioning_status(uint8_t status, bool joinedNetwork
 	app_bdb_commissioning_status(status, joinedNetwork);
 #if defined(CONFIG_ZIGBEE_ZSTACK_NCP)
 	zb_znp_bdb_commissioning_status(status, joinedNetwork);
+#elif defined(CONFIG_ZIGBEE_EZSP_NCP)
+	zb_ezsp_bdb_commissioning_status(status, joinedNetwork);
 #endif
 }
 
