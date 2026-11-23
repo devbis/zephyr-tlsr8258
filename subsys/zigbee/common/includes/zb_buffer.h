@@ -50,6 +50,16 @@ uint8_t *zb_getRxBuf(void);
  * buffer adapter owns the index mapping, so no pool object is exposed.
  */
 zb_buf_t *zb_buf_owner_of(const void *payload);
+/**
+ * Get the writable space after a pointer into a captured RX frame.
+ *
+ * @param buf Buffer that owns the captured frame.
+ * @param payload Pointer into the captured frame.
+ *
+ * @return Number of writable bytes after payload, or 0 if it is not owned by
+ *         buf.
+ */
+size_t zb_buf_rx_payload_tailroom(const zb_buf_t *buf, const uint8_t *payload);
 zb_buf_t *zb_buf_from_ref(uint8_t ref);
 uint8_t zb_buf_to_ref(zb_buf_t *buf);
 
