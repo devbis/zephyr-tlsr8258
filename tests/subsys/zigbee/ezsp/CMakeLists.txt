@@ -12,6 +12,7 @@ target_sources(app PRIVATE
   src/main.c
   ${EZSP_DIR}/zb_ezsp_ash.c
   ${EZSP_DIR}/zb_ezsp_frame.c
+  ${EZSP_DIR}/zb_ezsp_session.c
 )
 
 target_include_directories(app PRIVATE ${EZSP_DIR})
