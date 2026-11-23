@@ -43,5 +43,11 @@ void ezsp_session_start(struct ezsp_session *s);
 void ezsp_session_rx(struct ezsp_session *s, uint32_t now_ms, uint8_t byte);
 /* Retransmit, and send the next queued frame once the window is free. */
 void ezsp_session_poll(struct ezsp_session *s, uint32_t now_ms);
+/*
+ * Queue a callback of the NCP: a frame with the response and asynchronous callback bits, in the
+ * format the host uses, and the sequence number of the last command. Returns false, and drops it,
+ * when the queue is full or the frame does not fit.
+ */
+bool ezsp_session_callback(struct ezsp_session *s, uint16_t id, const uint8_t *params, size_t len);
 /* Queue an EZSP frame for the host. Returns false, and drops it, when the queue is full. */
 bool ezsp_session_send(struct ezsp_session *s, const uint8_t *frame, size_t len);

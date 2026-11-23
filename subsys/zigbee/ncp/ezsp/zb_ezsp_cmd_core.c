@@ -191,6 +191,37 @@ static void cmd_set_policy(struct ezsp_ctx *c, struct ezsp_rd *in, struct ezsp_w
 	ezsp_wr_u8(out, EZSP_SUCCESS);
 }
 
+/* Configuration IDs of UG100 whose values a host reads at start-up. */
+#define EZSP_CFG_PACKET_BUFFER_COUNT 0x01U
+#define EZSP_CFG_ADDRESS_TABLE_SIZE  0x05U
+#define EZSP_CFG_MULTICAST_TABLE_SIZE 0x06U
+#define EZSP_CFG_STACK_PROFILE       0x0cU
+#define EZSP_CFG_SECURITY_LEVEL      0x0dU
+#define EZSP_CFG_TC_ADDRESS_CACHE    0x19U
+#define EZSP_CFG_SUPPORTED_NETWORKS  0x2dU
+
+void ezsp_core_defaults(struct ezsp_ctx *c)
+{
+	static const struct {
+		uint8_t id;
+		uint16_t value;
+	} defaults[] = {
+		{EZSP_CFG_PACKET_BUFFER_COUNT, 36U},
+		{EZSP_CFG_ADDRESS_TABLE_SIZE, 16U},
+		{EZSP_CFG_MULTICAST_TABLE_SIZE, 16U},
+		{EZSP_CFG_STACK_PROFILE, 2U},
+		{EZSP_CFG_SECURITY_LEVEL, 5U},
+		{EZSP_CFG_TC_ADDRESS_CACHE, 2U},
+		{EZSP_CFG_SUPPORTED_NETWORKS, 1U},
+	};
+
+	for (size_t i = 0; i < ARRAY_SIZE(defaults); i++) {
+		c->cfg[c->cfg_count].id = defaults[i].id;
+		c->cfg[c->cfg_count].value = defaults[i].value;
+		c->cfg_count++;
+	}
+}
+
 static const struct ezsp_cmd core_cmds[] = {
 	{EZSP_ID_NOP, cmd_nop},
 	{EZSP_ID_ECHO, cmd_echo},

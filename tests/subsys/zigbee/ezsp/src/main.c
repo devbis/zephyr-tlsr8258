@@ -705,14 +705,14 @@ ZTEST(ezsp, test_config_table_full)
 
 	ezsp_ctx_reset(&c);
 	c.extended = true;
-	for (uint8_t i = 0; i < EZSP_CFG_MAX; i++) {
-		cmd_run(&c, 0x0053, PARAMS(i, 1, 0), out);
+	for (uint8_t id = 0x40; c.cfg_count < EZSP_CFG_MAX; id++) {
+		cmd_run(&c, 0x0053, PARAMS(id, 1, 0), out);
 		zassert_equal(out[5], 0U);
 	}
 	cmd_run(&c, 0x0053, PARAMS(0xF0, 1, 0), out);
 	zassert_equal(out[5], 0x35U);
 	/* An id already there is still writable */
-	cmd_run(&c, 0x0053, PARAMS(3, 7, 0), out);
+	cmd_run(&c, 0x0053, PARAMS(0x40, 7, 0), out);
 	zassert_equal(out[5], 0U);
 }
 
@@ -797,7 +797,9 @@ ZTEST(ezsp, test_short_command_is_invalid)
 	/* and echo that claims more data than it has */
 	zassert_equal(cmd_run(&c, 0x0081, PARAMS(5, 1), out), sizeof(want));
 	zassert_equal(out[5], 0x33U);
-	zassert_equal(c.cfg_count, 0U);
+	/* The short setConfigurationValue changed nothing */
+	cmd_run(&c, 0x0052, PARAMS(0x1a), out);
+	zassert_equal(out[5], 0x37U);
 }
 
 ZTEST(ezsp, test_response_overflow_is_invalid)
@@ -826,7 +828,10 @@ ZTEST(ezsp, test_reset_clears_the_stores)
 	cmd_run(&c, 0x0015, PARAMS(1, 2), out);
 	ezsp_ctx_reset(&c);
 	zassert_false(c.extended);
-	zassert_equal(c.cfg_count, 0U);
+	/* Back to the defaults: id 1 is the packet buffer count */
+	c.extended = true;
+	cmd_run(&c, 0x0052, PARAMS(0x01), out);
+	zassert_equal(out[6], 36U);
 	zassert_equal(c.policy[0], 0U);
 	zassert_equal(c.manufacturer_code, 0U);
 }
@@ -962,6 +967,36 @@ ZTEST(ezsp_session, test_queue_waits_for_the_window)
 	zassert_equal(ctrl, 0x10U);
 	zassert_equal(len, sizeof(b));
 	zassert_mem_equal(data, b, sizeof(b));
+}
+
+ZTEST(ezsp_session, test_callback_frame)
+{
+	uint8_t ctrl;
+	uint8_t data[ASH_MAX_DATA];
+	size_t len;
+	size_t from = 0U;
+	const uint8_t params[] = {0x90};
+	const uint8_t want_ext[] = {0x07, 0x90, 0x01, 0x19, 0x00, 0x90};
+	const uint8_t want_leg[] = {0x07, 0x90, 0x19, 0x90};
+
+	host_send(0U, ASH_CTRL_RST, NULL, 0U);
+	host_rx_len = 0U;
+	sess.ezsp.last_seq = 7U;
+
+	zassert_true(ezsp_session_callback(&sess, 0x0019, params, sizeof(params)));
+	sess.ezsp.extended = true;
+	zassert_true(ezsp_session_callback(&sess, 0x0019, params, sizeof(params)));
+
+	ezsp_session_poll(&sess, 1U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(len, sizeof(want_leg));
+	zassert_mem_equal(data, want_leg, sizeof(want_leg));
+
+	host_send(2U, 0x81, NULL, 0U);
+	ezsp_session_poll(&sess, 3U);
+	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
+	zassert_equal(len, sizeof(want_ext));
+	zassert_mem_equal(data, want_ext, sizeof(want_ext));
 }
 
 ZTEST(ezsp_session, test_queue_full_drops)

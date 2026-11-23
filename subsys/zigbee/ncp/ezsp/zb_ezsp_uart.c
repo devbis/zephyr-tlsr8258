@@ -14,6 +14,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_ezsp.h>
 
+#include "zb_ezsp_internal.h"
 #include "zb_ezsp_session.h"
 
 LOG_MODULE_REGISTER(zigbee_ezsp, CONFIG_ZIGBEE_LOG_LEVEL);
@@ -140,4 +141,13 @@ void zb_ezsp_poll(void)
 
 	ezsp_session_poll(&session, now);
 	tx_drain(EZSP_TX_BURST_BYTES);
+}
+
+bool zb_ezsp_callback(uint16_t id, const uint8_t *params, size_t len)
+{
+	if (ezsp_uart_dev == NULL) {
+		return false;
+	}
+
+	return ezsp_session_callback(&session, id, params, len);
 }
