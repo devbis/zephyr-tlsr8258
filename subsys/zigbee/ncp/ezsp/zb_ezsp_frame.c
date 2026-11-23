@@ -5,13 +5,36 @@
 /* EZSP frame header and the commands that need no stack: version and invalidCommand. */
 #include <string.h>
 
+#include <zephyr/sys/util.h>
+
 #include "zb_ezsp_frame.h"
 
-static const uint8_t invalid_status = EZSP_ERROR_INVALID_COMMAND;
+static const struct ezsp_cmd_set *const cmd_sets[] = {
+	&ezsp_core_cmds,
+};
 
 void ezsp_ctx_reset(struct ezsp_ctx *c)
 {
-	c->extended = false;
+	memset(c, 0, sizeof(*c));
+}
+
+static ezsp_cmd_fn cmd_find(uint16_t id)
+{
+	for (size_t s = 0; s < ARRAY_SIZE(cmd_sets); s++) {
+		for (size_t i = 0; i < cmd_sets[s]->count; i++) {
+			if (cmd_sets[s]->cmds[i].id == id) {
+				return cmd_sets[s]->cmds[i].fn;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+static size_t invalid_command(const struct ezsp_frame *f, uint8_t status, uint8_t *out,
+			      size_t out_size)
+{
+	return ezsp_frame_response(out, out_size, f, EZSP_ID_INVALID_COMMAND, &status, 1U);
 }
 
 bool ezsp_frame_parse(const struct ezsp_ctx *c, const uint8_t *data, size_t len,
@@ -47,6 +70,24 @@ bool ezsp_frame_parse(const struct ezsp_ctx *c, const uint8_t *data, size_t len,
 	return true;
 }
 
+size_t ezsp_frame_header(uint8_t *out, const struct ezsp_frame *cmd, uint16_t id)
+{
+	out[0] = cmd->seq;
+	/* The network index of the command comes back; nothing else of its control byte does */
+	out[1] = (uint8_t)(EZSP_FC_RESPONSE |
+			   (cmd->fc_lo & (EZSP_FC_NETWORK_MASK << EZSP_FC_NETWORK_SHIFT)));
+	if (cmd->extended) {
+		out[2] = EZSP_FC_HI_EXTENDED;
+		out[3] = (uint8_t)(id & 0xFFU);
+		out[4] = (uint8_t)(id >> 8);
+		return EZSP_EXT_HEADER_LEN;
+	}
+
+	out[2] = (uint8_t)id;
+
+	return EZSP_LEG_HEADER_LEN;
+}
+
 size_t ezsp_frame_response(uint8_t *out, size_t out_size, const struct ezsp_frame *cmd, uint16_t id,
 			   const uint8_t *params, size_t params_len)
 {
@@ -56,17 +97,7 @@ size_t ezsp_frame_response(uint8_t *out, size_t out_size, const struct ezsp_fram
 		return 0U;
 	}
 
-	out[0] = cmd->seq;
-	/* The network index of the command comes back; nothing else of its control byte does */
-	out[1] = (uint8_t)(EZSP_FC_RESPONSE |
-			   (cmd->fc_lo & (EZSP_FC_NETWORK_MASK << EZSP_FC_NETWORK_SHIFT)));
-	if (cmd->extended) {
-		out[2] = EZSP_FC_HI_EXTENDED;
-		out[3] = (uint8_t)(id & 0xFFU);
-		out[4] = (uint8_t)(id >> 8);
-	} else {
-		out[2] = (uint8_t)id;
-	}
+	(void)ezsp_frame_header(out, cmd, id);
 	if (params_len > 0U) {
 		memcpy(&out[header], params, params_len);
 	}
@@ -78,6 +109,7 @@ size_t ezsp_handle(struct ezsp_ctx *c, const uint8_t *data, size_t len, uint8_t 
 		   size_t out_size)
 {
 	struct ezsp_frame f;
+	ezsp_cmd_fn fn;
 
 	if (!ezsp_frame_parse(c, data, len, &f)) {
 		return 0U;
@@ -101,5 +133,31 @@ size_t ezsp_handle(struct ezsp_ctx *c, const uint8_t *data, size_t len, uint8_t 
 		return n;
 	}
 
-	return ezsp_frame_response(out, out_size, &f, EZSP_ID_INVALID_COMMAND, &invalid_status, 1U);
+	fn = cmd_find(f.id);
+	if (fn == NULL) {
+		return invalid_command(&f, EZSP_ERROR_INVALID_FRAME_ID, out, out_size);
+	}
+
+	{
+		size_t header = f.extended ? EZSP_EXT_HEADER_LEN : EZSP_LEG_HEADER_LEN;
+		struct ezsp_rd in;
+		struct ezsp_wr wr;
+		size_t n;
+
+		if (header > out_size) {
+			return 0U;
+		}
+		ezsp_rd_init(&in, f.params, f.params_len);
+		ezsp_wr_init(&wr, &out[header], out_size - header);
+		fn(c, &in, &wr);
+		if (in.err) {
+			return invalid_command(&f, EZSP_ERROR_TRUNCATED, out, out_size);
+		}
+		if (wr.err) {
+			return invalid_command(&f, EZSP_ERROR_OVERFLOW, out, out_size);
+		}
+		/* The parameters are in place; the header goes in front of them */
+		n = ezsp_frame_header(out, &f, f.id);
+		return n + wr.len;
+	}
 }

@@ -601,7 +601,7 @@ ZTEST(ezsp, test_unknown_command)
 	struct ezsp_ctx c = {.extended = true};
 	uint8_t out[64];
 	const uint8_t cmd[] = {0x05, 0x00, 0x01, 0x34, 0x12, 0xAA};
-	const uint8_t want[] = {0x05, 0x80, 0x01, 0x58, 0x00, 0x58};
+	const uint8_t want[] = {0x05, 0x80, 0x01, 0x58, 0x00, 0x31};
 
 	zassert_equal(ezsp_run(&c, cmd, sizeof(cmd), out), sizeof(want));
 	zassert_mem_equal(out, want, sizeof(want));
@@ -612,7 +612,7 @@ ZTEST(ezsp, test_unknown_command_legacy)
 	struct ezsp_ctx c;
 	uint8_t out[64];
 	const uint8_t cmd[] = {0x05, 0x00, 0x34};
-	const uint8_t want[] = {0x05, 0x80, 0x58, 0x58};
+	const uint8_t want[] = {0x05, 0x80, 0x58, 0x31};
 
 	ezsp_ctx_reset(&c);
 	zassert_equal(ezsp_run(&c, cmd, sizeof(cmd), out), sizeof(want));
@@ -641,6 +641,194 @@ ZTEST(ezsp, test_response_does_not_fit)
 	const uint8_t cmd[] = {0x00, 0x00, 0x01, 0x00, 0x00, 13};
 
 	zassert_equal(ezsp_handle(&c, cmd, sizeof(cmd), out, sizeof(out)), 0U);
+}
+
+/* Commands of the core set, in the extended format */
+
+static size_t cmd_run(struct ezsp_ctx *c, uint16_t id, const uint8_t *params, size_t plen,
+		      uint8_t *out)
+{
+	uint8_t cmd[64] = {0x09, 0x00, 0x01, (uint8_t)(id & 0xFF), (uint8_t)(id >> 8)};
+
+	memcpy(&cmd[5], params, plen);
+
+	return ezsp_handle(c, cmd, 5U + plen, out, 64U);
+}
+
+#define PARAMS(...) ((const uint8_t[]){__VA_ARGS__}), sizeof((const uint8_t[]){__VA_ARGS__})
+
+ZTEST(ezsp, test_nop_and_echo)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	/* A nop has a response of its own, with no parameters */
+	zassert_equal(cmd_run(&c, 0x0005, NULL, 0U, out), 5U);
+	zassert_equal(out[3], 0x05U);
+
+	zassert_equal(cmd_run(&c, 0x0081, PARAMS(3, 0xAA, 0xBB, 0xCC), out), 9U);
+	zassert_equal(out[5], 3U);
+	zassert_equal(out[8], 0xCCU);
+}
+
+ZTEST(ezsp, test_config_values)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	/* Not set: an invalid id, and a value of 0 */
+	zassert_equal(cmd_run(&c, 0x0052, PARAMS(0x1a), out), 5U + 3U);
+	zassert_equal(out[5], 0x37U);
+
+	zassert_equal(cmd_run(&c, 0x0053, PARAMS(0x1a, 0xC8, 0x00), out), 6U);
+	zassert_equal(out[5], 0U);
+	zassert_equal(cmd_run(&c, 0x0052, PARAMS(0x1a), out), 8U);
+	zassert_equal(out[5], 0U);
+	zassert_equal(out[6], 0xC8U);
+	zassert_equal(out[7], 0U);
+
+	/* A second set replaces it */
+	zassert_equal(cmd_run(&c, 0x0053, PARAMS(0x1a, 0x10, 0x01), out), 6U);
+	zassert_equal(cmd_run(&c, 0x0052, PARAMS(0x1a), out), 8U);
+	zassert_equal(out[6], 0x10U);
+	zassert_equal(out[7], 0x01U);
+}
+
+ZTEST(ezsp, test_config_table_full)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	for (uint8_t i = 0; i < EZSP_CFG_MAX; i++) {
+		cmd_run(&c, 0x0053, PARAMS(i, 1, 0), out);
+		zassert_equal(out[5], 0U);
+	}
+	cmd_run(&c, 0x0053, PARAMS(0xF0, 1, 0), out);
+	zassert_equal(out[5], 0x35U);
+	/* An id already there is still writable */
+	cmd_run(&c, 0x0053, PARAMS(3, 7, 0), out);
+	zassert_equal(out[5], 0U);
+}
+
+ZTEST(ezsp, test_values)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	cmd_run(&c, 0x00AA, PARAMS(0x3a), out);
+	zassert_equal(out[5], 0x37U);
+
+	cmd_run(&c, 0x00AB, PARAMS(0x3a, 2, 0x11, 0x22), out);
+	zassert_equal(out[5], 0U);
+	zassert_equal(cmd_run(&c, 0x00AA, PARAMS(0x3a), out), 5U + 4U);
+	zassert_equal(out[5], 0U);
+	zassert_equal(out[6], 2U);
+	zassert_equal(out[7], 0x11U);
+	zassert_equal(out[8], 0x22U);
+
+	/* Longer than the store keeps */
+	cmd_run(&c, 0x00AB, PARAMS(0x3b, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9), out);
+	zassert_equal(out[5], 0x36U);
+}
+
+ZTEST(ezsp, test_policies)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	cmd_run(&c, 0x0056, PARAMS(0), out);
+	zassert_equal(out[5], 0U);
+	zassert_equal(out[6], 0U);
+
+	cmd_run(&c, 0x0055, PARAMS(0, 0x51), out);
+	zassert_equal(out[5], 0U);
+	cmd_run(&c, 0x0056, PARAMS(0), out);
+	zassert_equal(out[6], 0x51U);
+
+	cmd_run(&c, 0x0055, PARAMS(0x20, 1), out);
+	zassert_equal(out[5], 0x37U);
+	cmd_run(&c, 0x0056, PARAMS(0x20), out);
+	zassert_equal(out[5], 0x37U);
+}
+
+ZTEST(ezsp, test_extended_value_is_refused)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	zassert_equal(cmd_run(&c, 0x0003, PARAMS(1, 0, 0, 0, 0), out), 7U);
+	zassert_equal(out[5], 0x37U);
+}
+
+ZTEST(ezsp, test_manufacturer_code)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	zassert_equal(cmd_run(&c, 0x0015, PARAMS(0x34, 0x12), out), 5U);
+	zassert_equal(c.manufacturer_code, 0x1234U);
+}
+
+ZTEST(ezsp, test_short_command_is_invalid)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+	const uint8_t want[] = {0x09, 0x80, 0x01, 0x58, 0x00, 0x33};
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	/* setConfigurationValue with a value of one byte */
+	zassert_equal(cmd_run(&c, 0x0053, PARAMS(0x1a, 0xC8), out), sizeof(want));
+	zassert_mem_equal(out, want, sizeof(want));
+	/* and echo that claims more data than it has */
+	zassert_equal(cmd_run(&c, 0x0081, PARAMS(5, 1), out), sizeof(want));
+	zassert_equal(out[5], 0x33U);
+	zassert_equal(c.cfg_count, 0U);
+}
+
+ZTEST(ezsp, test_response_overflow_is_invalid)
+{
+	struct ezsp_ctx c;
+	uint8_t out[8];
+	uint8_t cmd[] = {0x09, 0x00, 0x01, 0x81, 0x00, 4, 1, 2, 3, 4};
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	/* The echo needs 5 + 1 + 4 bytes and 8 are given */
+	zassert_equal(ezsp_handle(&c, cmd, sizeof(cmd), out, sizeof(out)), 6U);
+	zassert_equal(out[3], 0x58U);
+	zassert_equal(out[5], 0x34U);
+}
+
+ZTEST(ezsp, test_reset_clears_the_stores)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	cmd_run(&c, 0x0053, PARAMS(1, 2, 0), out);
+	cmd_run(&c, 0x0055, PARAMS(0, 0x51), out);
+	cmd_run(&c, 0x0015, PARAMS(1, 2), out);
+	ezsp_ctx_reset(&c);
+	zassert_false(c.extended);
+	zassert_equal(c.cfg_count, 0U);
+	zassert_equal(c.policy[0], 0U);
+	zassert_equal(c.manufacturer_code, 0U);
 }
 
 ZTEST(ezsp, test_ctx_reset)

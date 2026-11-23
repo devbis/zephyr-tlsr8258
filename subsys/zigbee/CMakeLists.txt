@@ -258,6 +258,7 @@ zephyr_library_sources_ifdef(CONFIG_ZIGBEE_EZSP_NCP
   ncp/ezsp/zb_ezsp_session.c
   ncp/ezsp/zb_ezsp_ash.c
   ncp/ezsp/zb_ezsp_frame.c
+  ncp/ezsp/zb_ezsp_cmd_core.c
 )
 zephyr_library_sources_ifdef(CONFIG_ZIGBEE_OTA ota/ota.c ota/otaEpCfg.c)
 # The imported MAC hands Green Power confirms to cGp_dataCnf on every router
