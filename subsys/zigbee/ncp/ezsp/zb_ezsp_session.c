@@ -23,6 +23,14 @@ static void session_rx_data(void *ctx, const uint8_t *data, size_t len)
 	if (n > 0U) {
 		(void)ezsp_session_send(s, rsp, n);
 	}
+
+	/* What the command set off follows its response */
+	if (s->ezsp.after != NULL) {
+		void (*after)(struct ezsp_ctx *c) = s->ezsp.after;
+
+		s->ezsp.after = NULL;
+		after(&s->ezsp);
+	}
 }
 
 static void session_reset(void *ctx)
@@ -47,6 +55,7 @@ void ezsp_session_init(struct ezsp_session *s,
 	memset(s, 0, sizeof(*s));
 	s->tx = tx;
 	s->tx_ctx = tx_ctx;
+	s->ezsp.session = s;
 	ezsp_ctx_reset(&s->ezsp);
 	ash_link_init(&s->ash, &session_ops, s);
 }
@@ -70,6 +79,30 @@ void ezsp_session_poll(struct ezsp_session *s, uint32_t now_ms)
 		s->head = (uint8_t)((s->head + 1U) % EZSP_QUEUE_DEPTH);
 		s->count--;
 	}
+}
+
+bool ezsp_session_callback(struct ezsp_session *s, uint16_t id, const uint8_t *params, size_t len)
+{
+	uint8_t frame[EZSP_MAX_FRAME];
+	size_t n = 0U;
+
+	if (len + EZSP_EXT_HEADER_LEN > sizeof(frame)) {
+		s->dropped++;
+		return false;
+	}
+
+	frame[n++] = s->ezsp.last_seq;
+	frame[n++] = EZSP_FC_RESPONSE | EZSP_FC_ASYNC_CALLBACK;
+	if (s->ezsp.extended) {
+		frame[n++] = EZSP_FC_HI_EXTENDED;
+		frame[n++] = (uint8_t)(id & 0xFFU);
+		frame[n++] = (uint8_t)(id >> 8);
+	} else {
+		frame[n++] = (uint8_t)id;
+	}
+	memcpy(&frame[n], params, len);
+
+	return ezsp_session_send(s, frame, n + len);
 }
 
 bool ezsp_session_send(struct ezsp_session *s, const uint8_t *frame, size_t len)

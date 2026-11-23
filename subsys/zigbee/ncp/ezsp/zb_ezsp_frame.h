@@ -26,6 +26,7 @@
 
 /* Frame control byte, low. */
 #define EZSP_FC_RESPONSE         0x80U
+#define EZSP_FC_ASYNC_CALLBACK   0x10U
 #define EZSP_FC_NETWORK_SHIFT    5U
 #define EZSP_FC_NETWORK_MASK     0x03U
 /* Frame control byte, high, of the extended format. */
@@ -57,7 +58,15 @@ struct ezsp_frame {
 #define EZSP_VALUE_LEN   8U
 #define EZSP_POLICY_MAX  13U
 
+struct ezsp_session;
+
 struct ezsp_ctx {
+	/* The session this context belongs to; kept over a reset. */
+	struct ezsp_session *session;
+	/* Sequence number of the command being handled, or handled last. */
+	uint8_t last_seq;
+	/* Run once the response of the current command is queued, and then cleared. */
+	void (*after)(struct ezsp_ctx *c);
 	/* Whether the host went on to the extended format. */
 	bool extended;
 	struct {
@@ -94,6 +103,11 @@ struct ezsp_cmd_set {
 
 /* The commands that need nothing from the stack: nop, echo, configuration, values and policies. */
 extern const struct ezsp_cmd_set ezsp_core_cmds;
+/* The commands that act on the stack (zb_ezsp_cmd_net.c); in the build with the stack only. */
+extern const struct ezsp_cmd_set ezsp_net_cmds;
+
+/* Seed the configuration values the host reads before it sets them. */
+void ezsp_core_defaults(struct ezsp_ctx *c);
 
 void ezsp_ctx_reset(struct ezsp_ctx *c);
 

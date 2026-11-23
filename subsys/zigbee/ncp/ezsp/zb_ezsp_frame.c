@@ -11,11 +11,18 @@
 
 static const struct ezsp_cmd_set *const cmd_sets[] = {
 	&ezsp_core_cmds,
+#ifdef CONFIG_ZIGBEE_EZSP_NCP
+	&ezsp_net_cmds,
+#endif
 };
 
 void ezsp_ctx_reset(struct ezsp_ctx *c)
 {
+	struct ezsp_session *session = c->session;
+
 	memset(c, 0, sizeof(*c));
+	c->session = session;
+	ezsp_core_defaults(c);
 }
 
 static ezsp_cmd_fn cmd_find(uint16_t id)
@@ -114,6 +121,8 @@ size_t ezsp_handle(struct ezsp_ctx *c, const uint8_t *data, size_t len, uint8_t 
 	if (!ezsp_frame_parse(c, data, len, &f)) {
 		return 0U;
 	}
+
+	c->last_seq = f.seq;
 
 	if (f.id == EZSP_ID_VERSION) {
 		uint8_t rsp[4] = {EZSP_PROTOCOL_VERSION, EZSP_STACK_TYPE_MESH,
