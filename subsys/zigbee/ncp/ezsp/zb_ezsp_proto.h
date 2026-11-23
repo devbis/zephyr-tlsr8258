@@ -17,6 +17,12 @@
 /* Command and callback IDs. */
 #define EZSP_ID_ADD_ENDPOINT              0x0002U
 #define EZSP_ID_NOP                       0x0005U
+#define EZSP_ID_SEND_UNICAST              0x0034U
+#define EZSP_ID_SEND_BROADCAST            0x0036U
+#define EZSP_ID_SEND_MULTICAST            0x0038U
+#define EZSP_ID_MESSAGE_SENT_HANDLER      0x003FU
+#define EZSP_ID_INCOMING_MESSAGE_HANDLER  0x0045U
+#define EZSP_ID_TRUST_CENTER_JOIN_HANDLER 0x0024U
 #define EZSP_ID_SET_MANUFACTURER_CODE     0x0015U
 #define EZSP_ID_GET_EXTENDED_VALUE        0x0003U
 #define EZSP_ID_GET_CONFIGURATION_VALUE   0x0052U
@@ -28,15 +34,35 @@
 #define EZSP_ID_NETWORK_INIT              0x0017U
 #define EZSP_ID_NETWORK_STATE             0x0018U
 #define EZSP_ID_STACK_STATUS_HANDLER      0x0019U
+#define EZSP_ID_FORM_NETWORK              0x001EU
+#define EZSP_ID_LEAVE_NETWORK             0x0020U
+#define EZSP_ID_PERMIT_JOINING            0x0022U
 #define EZSP_ID_GET_EUI64                 0x0026U
 #define EZSP_ID_GET_NODE_ID               0x0027U
 #define EZSP_ID_GET_NETWORK_PARAMETERS    0x0028U
+#define EZSP_ID_GET_CHILD_DATA            0x004AU
 #define EZSP_ID_SET_SOURCE_ROUTE_DISC     0x005AU
+#define EZSP_ID_GET_MULTICAST_TABLE_ENTRY 0x0063U
+#define EZSP_ID_SET_MULTICAST_TABLE_ENTRY 0x0064U
+#define EZSP_ID_REPLACE_ADDRESS_TABLE_ENTRY 0x0082U
+#define EZSP_ID_GET_ADDRESS_TABLE_EUI64   0x005EU
+#define EZSP_ID_GET_ADDRESS_TABLE_NODE_ID 0x005FU
+#define EZSP_ID_LOOKUP_NODE_ID_BY_EUI64   0x0060U
+#define EZSP_ID_LOOKUP_EUI64_BY_NODE_ID   0x0061U
+#define EZSP_ID_EXPORT_LINK_KEY_BY_INDEX  0x010FU
+#define EZSP_ID_SET_INITIAL_SECURITY_STATE 0x0068U
 #define EZSP_ID_GET_CURRENT_SECURITY_STATE 0x0069U
+#define EZSP_ID_TOKEN_FACTORY_RESET       0x0077U
 #define EZSP_ID_SET_RADIO_POWER           0x0099U
 #define EZSP_ID_CLEAR_KEY_TABLE           0x00B1U
+#define EZSP_ID_IMPORT_TRANSIENT_KEY      0x0111U
 #define EZSP_ID_EXPORT_KEY                0x0114U
 #define EZSP_ID_GET_NETWORK_KEY_INFO      0x0116U
+#define EZSP_ID_READ_AND_CLEAR_COUNTERS   0x0065U
+#define EZSP_ID_READ_COUNTERS             0x00F1U
+#define EZSP_ID_SET_EXTENDED_TIMEOUT      0x007EU
+#define EZSP_ID_GET_EXTENDED_TIMEOUT      0x007FU
+#define EZSP_ID_CLEAR_TRANSIENT_LINK_KEYS 0x006BU
 #define EZSP_ID_ECHO                      0x0081U
 #define EZSP_ID_GET_VALUE                 0x00AAU
 #define EZSP_ID_SET_VALUE                 0x00ABU
@@ -54,15 +80,24 @@
 /* EmberStatus, as the commands before the security manager return it. */
 #define EMBER_SUCCESS                     0x00U
 #define EMBER_BAD_ARGUMENT                0x02U
+#define EMBER_INDEX_OUT_OF_RANGE          0xB1U
+#define EMBER_NOT_FOUND                   0x03U
 #define EMBER_NOT_JOINED                  0x93U
 #define EMBER_NETWORK_UP                  0x90U
 #define EMBER_NETWORK_DOWN                0x91U
 #define EMBER_INVALID_CALL                0x70U
+#define EMBER_DELIVERY_FAILED             0x66U
+#define EMBER_NO_BUFFERS                  0x18U
+#define EMBER_MESSAGE_TOO_LONG            0x74U
+#define EMBER_INVALID_ENDPOINT            0xA3U
+#define EMBER_ERR_FATAL                   0x01U
+#define EMBER_PHY_INVALID_POWER           0x8BU
 
 /* sl_Status, as the security manager commands return it. */
 #define SL_STATUS_OK                      0x00000000UL
 #define SL_STATUS_INVALID_PARAMETER       0x00000021UL
-#define SL_STATUS_NOT_FOUND               0x0000000CUL
+#define SL_STATUS_NOT_AVAILABLE           0x0000000EUL
+#define SL_STATUS_NOT_FOUND               0x0000002DUL
 
 /* EmberNetworkStatus and EmberNodeType. */
 #define EMBER_NO_NETWORK                  0U

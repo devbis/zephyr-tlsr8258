@@ -78,3 +78,18 @@ the first device that joins:
 
    pip install zigpy-znp
    ./znp_check.py /dev/ttysNNN
+
+EZSP host
+*********
+
+Built with ``coordinator_ezsp.conf`` the node speaks EZSP over ASH on ``uart1``
+instead, as an EmberZNet coordinator does. Point an EZSP host at the pseudo
+terminal: Zigbee2MQTT with ``adapter: ember``, or ZHA (bellows) with the radio
+type ``ezsp``. ``ezsp_check.py`` drives the node with bellows: it forms the
+network, asks the node for its own node descriptor, opens permit join and,
+with a wait time, reads the Basic cluster of the first device that joins:
+
+.. code-block:: console
+
+   pip install bellows
+   ./ezsp_check.py /dev/ttysNNN [wait-seconds]

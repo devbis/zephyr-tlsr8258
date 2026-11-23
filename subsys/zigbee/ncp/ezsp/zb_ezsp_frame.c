@@ -13,6 +13,7 @@ static const struct ezsp_cmd_set *const cmd_sets[] = {
 	&ezsp_core_cmds,
 #ifdef CONFIG_ZIGBEE_EZSP_NCP
 	&ezsp_net_cmds,
+	&ezsp_aps_cmds,
 #endif
 };
 
@@ -130,13 +131,15 @@ size_t ezsp_handle(struct ezsp_ctx *c, const uint8_t *data, size_t len, uint8_t 
 				  (uint8_t)(EZSP_STACK_VERSION >> 8)};
 		size_t n;
 
-		if (f.params_len < 1U) {
-			return 0U;
-		}
+		/*
+		 * The version the host wants is not needed to answer. homed sends its first request
+		 * without it, and the NCP reports its own version whatever it is.
+		 */
+		uint8_t desired = (f.params_len >= 1U) ? f.params[0] : 0U;
 
 		n = ezsp_frame_response(out, out_size, &f, EZSP_ID_VERSION, rsp, sizeof(rsp));
 		/* The host answers in the extended format if it knows it and so do we */
-		if (n > 0U && f.params[0] >= EZSP_EXTENDED_MIN_VER) {
+		if (n > 0U && desired >= EZSP_EXTENDED_MIN_VER) {
 			c->extended = true;
 		}
 		return n;

@@ -105,6 +105,11 @@ struct ezsp_cmd_set {
 extern const struct ezsp_cmd_set ezsp_core_cmds;
 /* The commands that act on the stack (zb_ezsp_cmd_net.c); in the build with the stack only. */
 extern const struct ezsp_cmd_set ezsp_net_cmds;
+/* The commands of the application data path (zb_ezsp_cmd_aps.c); with the stack only. */
+extern const struct ezsp_cmd_set ezsp_aps_cmds;
+
+/* The value of configuration ID @p id as the host set it, or false when it was not set. */
+bool ezsp_config_get(const struct ezsp_ctx *c, uint8_t id, uint16_t *value);
 
 /* Seed the configuration values the host reads before it sets them. */
 void ezsp_core_defaults(struct ezsp_ctx *c);

@@ -14,6 +14,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zigbee/zb_ezsp.h>
 
+#include "zb_ezsp_frame.h"
 #include "zb_ezsp_internal.h"
 #include "zb_ezsp_session.h"
 
@@ -150,4 +151,9 @@ bool zb_ezsp_callback(uint16_t id, const uint8_t *params, size_t len)
 	}
 
 	return ezsp_session_callback(&session, id, params, len);
+}
+
+bool zb_ezsp_config_get(uint8_t id, uint16_t *value)
+{
+	return ezsp_uart_dev != NULL && ezsp_config_get(&session.ezsp, id, value);
 }

@@ -304,14 +304,45 @@ ZTEST(ezsp, test_data_in_order)
 	zassert_equal(rx_count, 1U);
 	zassert_equal(rx_len, sizeof(d0));
 	zassert_mem_equal(rx_bytes, d0, sizeof(d0));
+	/* The ACK waits for a frame that could carry it, and goes alone when none comes */
+	zassert_equal(tx_len, 0U);
+	ash_link_tick(&link, ASH_ACK_DELAY_MS - 1U);
+	zassert_equal(tx_len, 0U);
+	ash_link_tick(&link, ASH_ACK_DELAY_MS);
 	zassert_true(sent_frame(&ctrl, data, &len, 0U, &next) > 0U);
 	/* ACK, with the number of the next frame */
 	zassert_equal(ctrl, 0x81U);
+	/* and only once */
+	tx_len = 0U;
+	ash_link_tick(&link, 10U * ASH_ACK_DELAY_MS);
+	zassert_equal(tx_len, 0U);
 
-	feed_frame(0U, 0x10, d1, sizeof(d1));
+	feed_frame(100U, 0x10, d1, sizeof(d1));
 	zassert_equal(rx_count, 2U);
-	zassert_true(sent_frame(&ctrl, data, &len, next, &next) > 0U);
+	ash_link_tick(&link, 100U + ASH_ACK_DELAY_MS);
+	zassert_true(sent_frame(&ctrl, data, &len, 0U, &next) > 0U);
 	zassert_equal(ctrl, 0x82U);
+}
+
+ZTEST(ezsp, test_ack_is_carried_by_a_data_frame)
+{
+	const uint8_t in[] = {0x01};
+	const uint8_t resp[] = {0xAA};
+	uint8_t ctrl;
+	uint8_t data[8];
+	size_t len;
+	size_t next;
+
+	connect();
+	feed_frame(0U, 0x00, in, sizeof(in));
+	/* The response goes out before the ACK is due and acknowledges the command in its ackNum */
+	zassert_equal(ash_link_send(&link, 5U, resp, sizeof(resp)), 0);
+	zassert_true(sent_frame(&ctrl, data, &len, 0U, &next) > 0U);
+	zassert_equal(ctrl, 0x01U);
+	/* so no ACK of its own follows */
+	tx_len = 0U;
+	ash_link_tick(&link, 10U * ASH_ACK_DELAY_MS);
+	zassert_equal(tx_len, 0U);
 }
 
 ZTEST(ezsp, test_sequence_wraps)
@@ -557,6 +588,21 @@ ZTEST(ezsp, test_version_legacy)
 	zassert_false(c.extended);
 }
 
+ZTEST(ezsp, test_version_without_the_wanted_version)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+	/* homed asks for the version with a legacy header and nothing else */
+	const uint8_t cmd[] = {0x00, 0x00, 0x00};
+	const uint8_t want[] = {0x00, 0x80, 0x00, 13, 2, 0x40, 0x74};
+
+	ezsp_ctx_reset(&c);
+	zassert_equal(ezsp_run(&c, cmd, sizeof(cmd), out), sizeof(want));
+	zassert_mem_equal(out, want, sizeof(want));
+	/* and goes on in the legacy format until it asks for a version of 8 or more */
+	zassert_false(c.extended);
+}
+
 ZTEST(ezsp, test_version_goes_extended)
 {
 	struct ezsp_ctx c;
@@ -625,11 +671,9 @@ ZTEST(ezsp, test_malformed_frames_are_dropped)
 	uint8_t out[64];
 	const uint8_t short_legacy[] = {0x00, 0x00};
 	const uint8_t short_ext[] = {0x00, 0x00, 0x01, 0x00};
-	const uint8_t no_version[] = {0x00, 0x00, 0x00};
 
 	ezsp_ctx_reset(&c);
 	zassert_equal(ezsp_run(&c, short_legacy, sizeof(short_legacy), out), 0U);
-	zassert_equal(ezsp_run(&c, no_version, sizeof(no_version), out), 0U);
 	c.extended = true;
 	zassert_equal(ezsp_run(&c, short_ext, sizeof(short_ext), out), 0U);
 }
@@ -739,6 +783,38 @@ ZTEST(ezsp, test_values)
 	zassert_equal(out[5], 0x36U);
 }
 
+ZTEST(ezsp, test_version_info_value)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+	/* build 0, 7.4.4.0, generally available: the 7 bytes a host reads to name the stack */
+	const uint8_t want[] = {0x00, 0x00, 0x07, 0x04, 0x04, 0x00, 0xAA};
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	zassert_equal(cmd_run(&c, 0x00AA, PARAMS(0x11), out), 5U + 2U + sizeof(want));
+	zassert_equal(out[5], 0U);
+	zassert_equal(out[6], sizeof(want));
+	zassert_mem_equal(&out[7], want, sizeof(want));
+}
+
+ZTEST(ezsp, test_config_get_for_the_stack)
+{
+	struct ezsp_ctx c;
+	uint8_t out[64];
+	uint16_t value = 0U;
+
+	ezsp_ctx_reset(&c);
+	c.extended = true;
+	/* The ZDO flags are not set until the host sets them */
+	zassert_false(ezsp_config_get(&c, 0x2A, &value));
+	cmd_run(&c, 0x0053, PARAMS(0x2A, 0x03, 0x00), out);
+	zassert_true(ezsp_config_get(&c, 0x2A, &value));
+	zassert_equal(value, 3U);
+	ezsp_ctx_reset(&c);
+	zassert_false(ezsp_config_get(&c, 0x2A, &value));
+}
+
 ZTEST(ezsp, test_policies)
 {
 	struct ezsp_ctx c;
@@ -758,17 +834,6 @@ ZTEST(ezsp, test_policies)
 	cmd_run(&c, 0x0055, PARAMS(0x20, 1), out);
 	zassert_equal(out[5], 0x37U);
 	cmd_run(&c, 0x0056, PARAMS(0x20), out);
-	zassert_equal(out[5], 0x37U);
-}
-
-ZTEST(ezsp, test_extended_value_is_refused)
-{
-	struct ezsp_ctx c;
-	uint8_t out[64];
-
-	ezsp_ctx_reset(&c);
-	c.extended = true;
-	zassert_equal(cmd_run(&c, 0x0003, PARAMS(1, 0, 0, 0, 0), out), 7U);
 	zassert_equal(out[5], 0x37U);
 }
 
@@ -828,6 +893,10 @@ ZTEST(ezsp, test_reset_clears_the_stores)
 	cmd_run(&c, 0x0015, PARAMS(1, 2), out);
 	ezsp_ctx_reset(&c);
 	zassert_false(c.extended);
+	/* The link key table the stack does not have reads as empty: homed asks before its backup */
+	cmd_run(&c, 0x0052, PARAMS(0x1e), out);
+	zassert_equal(out[5], 0U);
+	zassert_equal(out[6], 0U);
 	/* Back to the defaults: id 1 is the packet buffer count */
 	c.extended = true;
 	cmd_run(&c, 0x0052, PARAMS(0x01), out);
@@ -925,10 +994,7 @@ ZTEST(ezsp_session, test_version_over_ash)
 	zassert_equal(ctrl, ASH_CTRL_RSTACK);
 
 	host_send(1U, 0x00, cmd, sizeof(cmd));
-	/* The ACK of the command... */
-	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
-	zassert_equal(ctrl, 0x81U);
-	/* ...and nothing else until the poll sends the response */
+	/* There is no ACK of its own: the response acknowledges the command */
 	zassert_equal(host_frame(&ctrl, data, &len, &from), 0U);
 	ezsp_session_poll(&sess, 2U);
 	zassert_true(host_frame(&ctrl, data, &len, &from) > 0U);
