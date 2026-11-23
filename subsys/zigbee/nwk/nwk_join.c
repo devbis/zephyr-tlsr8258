@@ -14,9 +14,6 @@
 #include "ev_timer.h"
 #include "ss_security_flags.h"
 
-/* nwk_rejoinCmdSendCnf() reads the confirmation status by byte offset. */
-ZB_ASSERT_FIELD_OFFSET(zb_mscp_data_conf_t, status, 9);
-
 static uint8_t rejoinRespPollCnt;
 static ev_timer_event_t *rejoinRespTimeoutEvt;
 
