@@ -245,6 +245,55 @@ zb_buf_t *zb_buf_owner_of(const void *payload)
 	return (zb_buf_t *)(base + ((addr - base) / block) * block);
 }
 
+size_t zb_buf_rx_payload_tailroom(const zb_buf_t *buf, const uint8_t *payload)
+{
+	uintptr_t addr = (uintptr_t)payload;
+	uintptr_t payload_base;
+	uintptr_t payload_end;
+
+	if (buf == NULL || payload == NULL) {
+		return 0U;
+	}
+
+#if ZB_BUF_SNAPSHOT_POOL
+	uintptr_t snap_base = (uintptr_t)zb_snap_slab.buffer;
+	uintptr_t snap_end =
+		snap_base + (size_t)CONFIG_ZIGBEE_RX_SNAPSHOTS * ZB_BUF_RX_SNAPSHOT_BYTES;
+
+	if (addr >= snap_base && addr < snap_end) {
+		uint32_t snap_index = (uint32_t)((addr - snap_base) / ZB_BUF_RX_SNAPSHOT_BYTES);
+		uint32_t buf_index = 0U;
+		k_spinlock_key_t key = k_spin_lock(&zb_buf_lock);
+		bool owned = zb_buf_index(buf, &buf_index) &&
+			     zb_snap_of_buf[buf_index] == (uint8_t)(snap_index + 1U) &&
+			     zb_buf_of_snap[snap_index] == (uint8_t)buf_index;
+
+		k_spin_unlock(&zb_buf_lock, key);
+		if (!owned) {
+			return 0U;
+		}
+
+		return (size_t)(snap_base + (size_t)(snap_index + 1U) * ZB_BUF_RX_SNAPSHOT_BYTES -
+				addr);
+	}
+#else
+	uintptr_t inline_base = (uintptr_t)((const zb_buf_block_t *)buf)->rx_snapshot;
+	uintptr_t inline_end = inline_base + ZB_BUF_RX_SNAPSHOT_BYTES;
+
+	if (addr >= inline_base && addr < inline_end) {
+		return (size_t)(inline_end - addr);
+	}
+#endif
+
+	payload_base = (uintptr_t)buf->buf;
+	payload_end = payload_base + sizeof(buf->buf);
+	if (addr >= payload_base && addr < payload_end) {
+		return (size_t)(payload_end - addr);
+	}
+
+	return 0U;
+}
+
 bool is_zb_buf(void *p)
 {
 	uintptr_t addr = (uintptr_t)p;

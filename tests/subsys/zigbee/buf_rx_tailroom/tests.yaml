@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+tests:
+  zigbee.buf_rx_tailroom.inline:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    integration_platforms:
+      - native_sim
+    tags:
+      - zigbee
+  zigbee.buf_rx_tailroom.pool:
+    extra_args: ZIGBEE_TEST_RX_SNAPSHOTS=4
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    integration_platforms:
+      - native_sim
+    tags:
+      - zigbee
