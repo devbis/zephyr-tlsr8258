@@ -10,6 +10,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
@@ -33,6 +34,10 @@ struct phy62x2_gpio_data {
 	sys_slist_t callbacks;
 	/* Pins that interrupt on both edges: the polarity is flipped after every edge */
 	uint32_t both_edges;
+#ifdef CONFIG_PM_DEVICE
+	/* The registers that a power state that loses the power of the block does not keep */
+	uint32_t saved[6];
+#endif
 };
 
 static const struct gpio_driver_config gpio_config = {
@@ -210,6 +215,40 @@ static void phy62x2_gpio_isr(const struct device *dev)
 	gpio_fire_callbacks(&data->callbacks, dev, pending);
 }
 
+#ifdef CONFIG_PM_DEVICE
+static const uint32_t pm_registers[] = {GPIO_DATA, GPIO_DIR, GPIO_INT_TYPE, GPIO_INT_POLARITY,
+					GPIO_INT_EN, GPIO_INT_MASK_REG};
+
+static int phy62x2_gpio_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	struct phy62x2_gpio_data *data = dev->data;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		for (size_t i = 0U; i < ARRAY_SIZE(pm_registers); i++) {
+			data->saved[i] = sys_read32(pm_registers[i]);
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		/* The clock of the block is back, the interrupts are enabled last */
+		sys_set_bit(0x40000008U, 13U);
+		sys_write32(UINT32_MAX, GPIO_INT_MASK_REG);
+		sys_write32(0U, GPIO_INT_EN);
+		for (size_t i = 0U; i < ARRAY_SIZE(pm_registers) - 2U; i++) {
+			sys_write32(data->saved[i], pm_registers[i]);
+		}
+		sys_write32(UINT32_MAX, GPIO_INT_EOI);
+		sys_write32(data->saved[4], GPIO_INT_EN);
+		sys_write32(data->saved[5], GPIO_INT_MASK_REG);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static int phy62x2_gpio_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
@@ -233,5 +272,9 @@ static DEVICE_API(gpio, phy62x2_gpio_api) = {
 	.manage_callback = phy62x2_callback,
 };
 
-DEVICE_DT_INST_DEFINE(0, phy62x2_gpio_init, NULL, &gpio_data, &gpio_config,
+#ifdef CONFIG_PM_DEVICE
+PM_DEVICE_DT_INST_DEFINE(0, phy62x2_gpio_pm_action);
+#endif
+
+DEVICE_DT_INST_DEFINE(0, phy62x2_gpio_init, PM_DEVICE_DT_INST_GET(0), &gpio_data, &gpio_config,
 		      PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY, &phy62x2_gpio_api);
