@@ -3,7 +3,7 @@ name: Ai-Thinker PB-03F
 type: mcu
 arch: arm
 ram: 57
-flash: 179
+flash: 431
 toolchain:
   - zephyr
   - gnuarmemb

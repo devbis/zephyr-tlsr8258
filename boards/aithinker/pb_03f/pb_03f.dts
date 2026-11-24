@@ -19,6 +19,7 @@
 		zephyr,console = &uart0;
 		zephyr,shell-uart = &uart0;
 		zephyr,ieee802154 = &radio;
+		zephyr,code-partition = &slot0_partition;
 	};
 
 	aliases {
@@ -41,10 +42,10 @@
 		reg = <0x1fff1840 0xe7c0>;
 	};
 
-	/* The application, up to the storage partition at the end of the 256 KiB flash */
+	/* The application, up to the storage partition at the end of the 512 KiB flash */
 	flash0: flash@11010100 {
 		compatible = "soc-nv-flash";
-		reg = <0x11010100 0x2cf00>;
+		reg = <0x11010100 0x6bf00>;
 	};
 };
 
@@ -58,7 +59,7 @@
 
 		flash_memory: flash@11000000 {
 			compatible = "soc-nv-flash";
-			reg = <0x11000000 0x40000>;
+			reg = <0x11000000 0x80000>;
 			erase-block-size = <4096>;
 			write-block-size = <1>;
 
@@ -67,9 +68,27 @@
 				#address-cells = <1>;
 				#size-cells = <1>;
 
-				storage_partition: partition@3d000 {
+				/* MCUboot at 0x10100, XIP, then two slots of the same size for the swap */
+				boot_partition: partition@10100 {
+					label = "mcuboot";
+					reg = <0x10100 0x7f00>;
+					read-only;
+				};
+
+				slot0_partition: partition@18000 {
+					label = "image-0";
+					reg = <0x18000 0x32000>;
+				};
+
+				slot1_partition: partition@4a000 {
+					label = "image-1";
+					reg = <0x4a000 0x32000>;
+				};
+
+				/* The NV of the application: four sectors, the frame counter wears them */
+				storage_partition: partition@7c000 {
 					label = "storage";
-					reg = <0x3d000 0x3000>;
+					reg = <0x7c000 0x4000>;
 				};
 			};
 		};

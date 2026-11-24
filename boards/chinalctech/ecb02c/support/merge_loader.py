@@ -12,7 +12,9 @@ The image is for the first flashing through the boot ROM and holds everything fr
 The application goes to its slot at 0x18000, the gap between the loader and the slot is 0xff. Later
 applications are uploaded to the serial recovery of MCUboot alone, as the signed image.
 
-usage: merge_loader.py <loader.phy62x2.bin> <application.signed.bin> <image>
+usage: merge_loader.py [--slot0-offset N --slot0-size N] <loader.phy62x2.bin> <application.signed.bin> <image>
+
+The PB-03F has slot 0 at 0x18000 of 0x32000 bytes: --slot0-size 0x32000.
 """
 
 import argparse
@@ -30,15 +32,16 @@ STACK_OFFSET = 0x100
 SRAM_START = 0x1FFF0000
 
 
-def merge(loader: bytes, app: bytes) -> bytes:
+def merge(loader: bytes, app: bytes, slot0_offset: int = SLOT0_OFFSET,
+          slot0_size: int = SLOT0_SIZE) -> bytes:
     """Return the image: the loader, the gap and the application in its slot."""
-    slot = SLOT0_OFFSET - IMAGE_OFFSET
+    slot = slot0_offset - IMAGE_OFFSET
     if len(loader) > slot:
         raise ValueError(f"the loader of {len(loader)} bytes does not fit before the slot at {slot:#x}")
     if app[:4] != MCUBOOT_MAGIC:
         raise ValueError("the application is not an MCUboot image")
-    if len(app) > SLOT0_SIZE:
-        raise ValueError(f"the application of {len(app)} bytes does not fit the slot of {SLOT0_SIZE:#x}")
+    if len(app) > slot0_size:
+        raise ValueError(f"the application of {len(app)} bytes does not fit the slot of {slot0_size:#x}")
     if loader[:4] == MCUBOOT_MAGIC:
         raise ValueError("the first file is an application, the loader comes first")
     return loader + b"\xff" * (slot - len(loader)) + app
@@ -49,10 +52,15 @@ def main():
     parser.add_argument("loader", type=Path, help="zephyr.phy62x2.bin of MCUboot")
     parser.add_argument("app", type=Path, help="zephyr.signed.bin of the application")
     parser.add_argument("image", type=Path, help="the image to write")
+    parser.add_argument("--slot0-offset", type=lambda v: int(v, 0), default=SLOT0_OFFSET,
+                        help="flash offset of slot 0 (default: ECB02C, 0x18000)")
+    parser.add_argument("--slot0-size", type=lambda v: int(v, 0), default=SLOT0_SIZE,
+                        help="size of slot 0 (default: ECB02C, 0x25000)")
     args = parser.parse_args()
 
     try:
-        image = merge(args.loader.read_bytes(), args.app.read_bytes())
+        image = merge(args.loader.read_bytes(), args.app.read_bytes(), args.slot0_offset,
+                      args.slot0_size)
     except ValueError as error:
         raise SystemExit(f"merge_loader.py: {error}") from error
     args.image.write_bytes(image)
