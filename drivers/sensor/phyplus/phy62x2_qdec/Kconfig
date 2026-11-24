@@ -1,0 +1,11 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config PHY62X2_QDEC
+	bool "PHY62x2 quadrature decoder"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_QDEC_ENABLED
+	select PINCTRL
+	help
+	  Enable the driver for the quadrature decoder of the PHY62x2. The driver polls the counter
+	  of one channel and reports the rotation in degrees.

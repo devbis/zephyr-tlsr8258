@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Phyplus PHY62x2 quadrature decoder. One of its three channels, X, Y and Z, is used. The sensor
+  reports SENSOR_CHAN_ROTATION: the rotation since the last fetch, from the counter and steps.
+
+compatible: "phyplus,phy62x2-qdec"
+
+include: [sensor-device.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  steps:
+    type: int
+    required: true
+    description: Number of steps on the rotating wheel
+
+  channel:
+    type: int
+    default: 0
+    enum: [0, 1, 2]
+    description: |
+      The channel of the decoder: 0 is X, 1 is Y and 2 is Z. The pads of the channel are the
+      PHY62X2_FMUX_QDEC_CHAX, _CHBX (and _CHIX for the index) functions of the pinctrl state, with
+      Y and Z in place of X for the other channels.
+
+  quadrature-mode:
+    type: int
+    default: 4
+    enum: [1, 2, 4]
+    description: Number of counts per period of the signals.

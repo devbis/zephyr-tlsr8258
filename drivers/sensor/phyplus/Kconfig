@@ -1,0 +1,6 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# zephyr-keep-sorted-start
+source "drivers/sensor/phyplus/phy62x2_qdec/Kconfig"
+# zephyr-keep-sorted-stop
