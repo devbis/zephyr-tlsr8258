@@ -12,7 +12,10 @@
 #include <sys/types.h>
 
 #define PHY62X2_FLASH_BASE 0x11000000U
+/* The driver takes the size of the flash from the devicetree; this is the default of the unit test. */
+#ifndef PHY62X2_FLASH_SIZE
 #define PHY62X2_FLASH_SIZE 0x40000U
+#endif
 #define PHY62X2_FLASH_PAGE_SIZE 256U
 #define PHY62X2_FLASH_STAGING_SIZE 64U
 

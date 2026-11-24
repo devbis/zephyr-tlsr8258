@@ -13,6 +13,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+/* The size of the flash of the module: 256 KiB or 512 KiB */
+#define PHY62X2_FLASH_SIZE DT_REG_SIZE(DT_INST_CHILD(0, flash_11000000))
+
 #include "flash_phy62x2_util.h"
 
 #define SECTOR_SIZE 4096U
