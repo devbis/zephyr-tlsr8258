@@ -6,6 +6,7 @@ zephyr_sources(soc.c)
 zephyr_sources_ifdef(CONFIG_POWEROFF poweroff.c)
 zephyr_sources_ifdef(CONFIG_PHY62X2_DEEP_SLEEP sleep.c)
 zephyr_sources(wakeup.c)
+zephyr_sources_ifdef(CONFIG_PHY62X2_SUSPEND suspend.c suspend.S)
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")
 
 # The image for the boot ROM: its segment table, then the XIP code. The window is the chosen flash of the board

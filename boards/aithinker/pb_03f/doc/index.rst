@@ -226,6 +226,24 @@ the SDK uses under ``CFG_FLASH_ENABLE_DEEP_SLEEP``) and what the wake pads do to
 boot ROM pins. The sleep does not return and does not resume: it is a reset that keeps some RAM, not
 the sleep of the SDK that resumes the program.
 
+Suspend to RAM
+**************
+
+``CONFIG_PHY62X2_SUSPEND=y`` provides ``phy62x2_suspend(rtc_ticks)`` (``soc.h``): the chip sleeps with
+all of its SRAM retained until the RTC reaches the time or a wake pad changes its level, and then the
+function returns and the program goes on. The sequence comes from a dump of the boot ROM and from the
+SDK. The program saves its registers like ``setjmp()``, arms the wake pads and the first comparator of
+the RTC, installs a function in the slot 62 of the jump table (``WAKEUP_PROCESS``), which the boot ROM
+runs instead of the wakeup of the BLE controller when the chip wakes with the RAM kept, and enters the
+sleep through ``enter_sleep_off_mode()`` of the ROM. The function in the slot, which runs from the RAM,
+selects the core clock again, sets the clock gates, the cache of the flash, the NVIC and the SysTick as
+they were, and returns to ``phy62x2_suspend()`` with the registers of the program restored.
+
+The registers of the other peripherals are lost in the sleep: the UART, the GPIO, the radio and the
+rest have to be set up again by their drivers, and none of them does it yet. The pull of the pads, the
+retention of the outputs, the flash in its deep sleep and the time that the kernel clock loses are not
+handled either. Nothing of this has been run on the module.
+
 Pins
 ****
 

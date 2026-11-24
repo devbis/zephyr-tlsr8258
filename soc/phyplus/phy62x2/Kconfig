@@ -16,6 +16,13 @@ config PHY62X2_DEEP_SLEEP
 	  Provide phy62x2_deep_sleep(): the chip sleeps until a timeout or a wake pad and starts from the
 	  boot ROM, keeping the RAM of the zephyr,retained-ram nodes. It has not been tried on hardware.
 
+config PHY62X2_SUSPEND
+	bool "Suspend to RAM"
+	depends on SOC_PHY62X2
+	help
+	  Provide phy62x2_suspend(): the chip sleeps with its RAM retained and the program continues after the
+	  wakeup. The registers of the peripherals are lost in the sleep. It has not been tried on hardware.
+
 config PHY62X2_WATCHDOG
 	bool "Reset the chip when the system hangs"
 	default y

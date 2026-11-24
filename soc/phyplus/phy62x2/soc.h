@@ -57,4 +57,18 @@ void phy62x2_wakeup_arm(bool gpio_interrupts);
  */
 FUNC_NORETURN void phy62x2_deep_sleep(uint32_t timeout_ms);
 
+/**
+ * @brief Suspend to RAM
+ *
+ * The chip sleeps with its RAM retained until the RTC reaches the time or a wake pad changes its
+ * level, then the registers of the program, the clock, the cache of the flash, the clock gates, the
+ * NVIC and the SysTick are restored and the function returns. The registers of the other
+ * peripherals are lost in the sleep. Needs CONFIG_PHY62X2_SUSPEND.
+ *
+ * @param rtc_ticks Time to wake up after, in ticks of the RTC (32768 Hz), or 0 to wake on the pads only
+ *
+ * @retval 0 after the wakeup
+ */
+int phy62x2_suspend(uint32_t rtc_ticks);
+
 #endif
