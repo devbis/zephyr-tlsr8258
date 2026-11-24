@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <zephyr/init.h>
 #include <zephyr/irq.h>
@@ -13,25 +14,19 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/platform/hooks.h>
 
+#include "soc.h"
+
 extern const uintptr_t _vector_table[];
 extern const uintptr_t _irq_vector_table[];
 
-/* PHY62XX SDK 3.1.1 ROM clock entry points. */
-#define ROM_CLK_INIT     ((int (*)(uint32_t))0x0000a5edU)
-#define ROM_CLK_GET_PCLK ((uint32_t (*)(void))0x0000a5d1U)
-#define SYS_CLK_XTAL_16M 2U
-#define SYS_CLK_DLL_48M  3U
-#define ROM_SPIF_CONFIG  ((int (*)(uint32_t, uint8_t, uint32_t, uint8_t, uint8_t))0x00016dc5U)
-#define XFRD_FCMD_READ   0x00000003U
+/* The core clock of the devicetree, through the ROM; false if the clock of the peripherals differs */
+bool phy62x2_clock_init(void)
+{
+	*(volatile uint8_t *)0x1fff0a4aU = PHY62X2_SYS_CLK;
 
-/* The core clock is the CPU timebase of the devicetree: the 16 MHz crystal or the 48 MHz DLL. */
-#if CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 16000000
-#define PHY62X2_SYS_CLK SYS_CLK_XTAL_16M
-#elif CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 48000000
-#define PHY62X2_SYS_CLK SYS_CLK_DLL_48M
-#else
-#error "The CPU timebase frequency must be 16 MHz or 48 MHz"
-#endif
+	return ROM_CLK_INIT(PHY62X2_SYS_CLK) == 0 &&
+	       ROM_CLK_GET_PCLK() == CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
+}
 
 void soc_prep_hook(void)
 {
@@ -49,9 +44,7 @@ void soc_prep_hook(void)
 	}
 
 	/* Select the core clock and require the clock of the peripherals to match. */
-	*(volatile uint8_t *)0x1fff0a4aU = PHY62X2_SYS_CLK;
-	if (ROM_CLK_INIT(PHY62X2_SYS_CLK) != 0 ||
-	    ROM_CLK_GET_PCLK() != CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC) {
+	if (!phy62x2_clock_init()) {
 		for (;;) {
 			__asm__ volatile("wfi");
 		}
@@ -136,7 +129,7 @@ void sys_arch_reboot(int type)
  * does after the clock initialisation. The read mode of the flash changes underneath, so this runs
  * from SRAM.
  */
-static __ramfunc void phy62x2_xip_cache_enable(void)
+__ramfunc void phy62x2_xip_cache_enable(void)
 {
 	volatile uint32_t *const pcr_cache_gate = (volatile uint32_t *)0x40000020U;
 	volatile uint32_t *const pcr_cache_rst = (volatile uint32_t *)0x40000024U;

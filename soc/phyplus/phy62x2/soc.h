@@ -11,6 +11,29 @@
 #include <zephyr/toolchain.h>
 #include <cmsis_core_m_defaults.h>
 
+/* PHY62XX SDK 3.1.1 ROM clock entry points. */
+#define ROM_CLK_INIT     ((int (*)(uint32_t))0x0000a5edU)
+#define ROM_CLK_GET_PCLK ((uint32_t (*)(void))0x0000a5d1U)
+#define SYS_CLK_XTAL_16M 2U
+#define SYS_CLK_DLL_48M  3U
+#define ROM_SPIF_CONFIG  ((int (*)(uint32_t, uint8_t, uint32_t, uint8_t, uint8_t))0x00016dc5U)
+#define XFRD_FCMD_READ   0x00000003U
+
+/* The core clock is the CPU timebase of the devicetree: the 16 MHz crystal or the 48 MHz DLL. */
+#if CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 16000000
+#define PHY62X2_SYS_CLK SYS_CLK_XTAL_16M
+#elif CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 48000000
+#define PHY62X2_SYS_CLK SYS_CLK_DLL_48M
+#else
+#error "The CPU timebase frequency must be 16 MHz or 48 MHz"
+#endif
+
+/** @brief Select the core clock of the devicetree through the ROM, false if the peripheral clock differs */
+bool phy62x2_clock_init(void);
+
+/** @brief Configure the read of the flash and enable the cache of the XIP, runs from the RAM */
+void phy62x2_xip_cache_enable(void);
+
 /**
  * @brief Arm the pads that wake the chip from the power off or the deep sleep
  *
