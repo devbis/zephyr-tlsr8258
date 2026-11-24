@@ -84,6 +84,18 @@ selects the master mode of an enabled controller in ``AP_COM->PERI_MASTER_SELECT
 assumed from its interrupt threshold of 4; the real depth is in the component parameter register of the
 controller. The controllers have not been tried on this module.
 
+DMA
+***
+
+``dma0`` is the DMA controller, disabled by default, with its own driver: Zephyr's DesignWare driver
+sets the handshake interfaces in the layout of the Intel variant, and this controller has the
+classic one. Four channels move one block per transfer, memory to memory or between memory and a
+peripheral; the slots are the ``PHY62X2_DMA_SLOT_*`` of ``dt-bindings/dma/phy62x2-dma.h``. The
+channel 0 moves up to 2047 transfers of the source width, the others up to 31. Linked blocks, the
+transfers between two peripherals and the handling of the flash as a destination, which the SDK
+does by lifting the write protection and the cache, are not supported. The peripheral drivers of
+the tree do not use the DMA. It has not been tried on this module.
+
 Quadrature decoder
 ******************
 

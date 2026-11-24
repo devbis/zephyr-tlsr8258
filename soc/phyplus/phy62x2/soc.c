@@ -63,6 +63,7 @@ void soc_prep_hook(void)
 #define PHY62X2_ENABLE_MODULE(label, bit)                                                          \
 	COND_CODE_1(DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(label)),                                  \
 		    (*clock |= BIT(bit); *reset &= ~BIT(bit); *reset |= BIT(bit);), ())
+	PHY62X2_ENABLE_MODULE(dma0, 3)
 	PHY62X2_ENABLE_MODULE(uart0, 8)
 	PHY62X2_ENABLE_MODULE(uart1, 25)
 	PHY62X2_ENABLE_MODULE(i2c0, 9)

@@ -12,6 +12,7 @@
 
 #include <arm/armv6-m.dtsi>
 #include <freq.h>
+#include <zephyr/dt-bindings/dma/phy62x2-dma.h>
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/pinctrl/phy62x2-pinctrl.h>
 
@@ -132,6 +133,15 @@
 		max-xfer-size = <16>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	/* Four channels, the slots of the consumers are PHY62X2_DMA_SLOT_* */
+	dma0: dma@40010000 {
+		compatible = "phyplus,phy62x2-dma";
+		reg = <0x40010000 0x400>;
+		interrupts = <19 0>;
+		#dma-cells = <2>;
 		status = "disabled";
 	};
 
