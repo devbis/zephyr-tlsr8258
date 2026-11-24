@@ -87,6 +87,14 @@
 		status = "disabled";
 	};
 
+	/* The inputs are numbered as in the SDK, see the binding; the pads are those of the module */
+	adc0: adc@40050000 {
+		compatible = "phyplus,phy62x2-adc";
+		reg = <0x40050000 0x900>;
+		#io-channel-cells = <1>;
+		status = "disabled";
+	};
+
 	watchdog0: watchdog@40002000 {
 		compatible = "snps,designware-watchdog";
 		reg = <0x40002000 0x100>;

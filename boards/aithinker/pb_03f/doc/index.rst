@@ -59,6 +59,17 @@ prescaler.
            status = "okay";
    };
 
+ADC
+***
+
+``adc0`` is disabled by default. The inputs are numbered as in the SDK: the channels 2 to 7 are the
+single-ended inputs on P11, P23, P24, P14, P15 and P20, and the pairs 1 (P18, P25), 3, 5 and 7 are
+differential. The driver gives 12 bits of the inputs below 1 V, the internal reference is taken as
+800 mV, and a differential reading is signed around zero. The values are the raw average of 29
+hardware samples; the SDK corrects them with the calibration words in the flash at ``0x1001000`` and
+with a constant per input, which the driver does not. It polls for the end of a conversion, reads one
+differential pair at a time, and has not been tried on this module.
+
 Watchdog
 ********
 
