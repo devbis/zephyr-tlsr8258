@@ -244,6 +244,25 @@ rest have to be set up again by their drivers, and none of them does it yet. The
 retention of the outputs, the flash in its deep sleep and the time that the kernel clock loses are not
 handled either. Nothing of this has been run on the module.
 
+Power management
+****************
+
+``CONFIG_PHY62X2_PM=y`` puts the suspend to RAM under the power management of Zephyr: the state
+``suspend-to-ram`` of the CPU node, with ``pm_state_set()`` calling ``phy62x2_suspend()``. It needs
+``CONFIG_PM``, ``CONFIG_PM_DEVICE``, ``CONFIG_TICKLESS_KERNEL`` and
+``CONFIG_SYSTEM_TIMER_LPM_COMPANION_HOOKS=y``: the hooks arm the wake time on the RTC, which keeps
+counting during the sleep, and give the elapsed time back to the kernel clock, and the SysTick, which
+stops with the core, is restarted by the kernel (``CONFIG_SYSTEM_TIMER_RESET_BY_LPM``). The sleep is
+limited to half of the watchdog timeout when ``CONFIG_PHY62X2_WATCHDOG`` is on, and to half of the range
+of the RTC. ``min-residency-us`` and ``exit-latency-us`` of the state are guesses.
+
+The devices that get power management actions are the GPIO controller, which keeps its registers, the
+radio, which is set up again as at the start and refuses to sleep while it is started, and the UART,
+which sets its pins and registers again (``CONFIG_UART_NS16550_PM_RECONFIGURE``) with the FIFO of the
+console enabled afterwards. The rest, the I2C, SPI, PWM, ADC, QDEC and DMA, have none and lose their
+registers in the sleep. Nothing of the power management has been run on the module; the wake path of the
+boot ROM was read from a dump, not observed.
+
 Pins
 ****
 

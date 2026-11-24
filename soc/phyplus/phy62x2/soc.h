@@ -34,6 +34,9 @@ bool phy62x2_clock_init(void);
 /** @brief Configure the read of the flash and enable the cache of the XIP, runs from the RAM */
 void phy62x2_xip_cache_enable(void);
 
+/** @brief Enable the FIFO of the console UART again; the driver of the UART leaves it off */
+int phy62x2_uart_fifo(void);
+
 /**
  * @brief Arm the pads that wake the chip from the power off or the deep sleep
  *

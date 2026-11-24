@@ -5,6 +5,7 @@ config SOC_PHY62X2
 	select ARM
 	select CPU_CORTEX_M0
 	select CPU_CORTEX_M_HAS_SYSTICK
+	select HAS_PM
 	select HAS_POWEROFF
 	select SOC_PREP_HOOK
 	select XIP
@@ -22,6 +23,16 @@ config PHY62X2_SUSPEND
 	help
 	  Provide phy62x2_suspend(): the chip sleeps with its RAM retained and the program continues after the
 	  wakeup. The registers of the peripherals are lost in the sleep. It has not been tried on hardware.
+
+config PHY62X2_PM
+	bool "Power management with suspend to RAM"
+	depends on SOC_PHY62X2 && PM && TICKLESS_KERNEL
+	select PHY62X2_SUSPEND
+	select SYSTEM_TIMER_RESET_BY_LPM
+	imply UART_NS16550_PM_RECONFIGURE
+	help
+	  Provide the power state of suspend-to-ram on top of phy62x2_suspend(), with the RTC as the system
+	  timer companion. Select SYSTEM_TIMER_LPM_COMPANION_HOOKS to use it. It has not been tried on hardware.
 
 config PHY62X2_WATCHDOG
 	bool "Reset the chip when the system hangs"

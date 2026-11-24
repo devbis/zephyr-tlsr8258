@@ -87,7 +87,7 @@ void soc_prep_hook(void)
  * loses bytes from 115200 baud bursts. Enable the 16 byte FIFO again; the receive trigger stays at
  * one character.
  */
-static int phy62x2_uart_fifo(void)
+int phy62x2_uart_fifo(void)
 {
 	volatile uint32_t *const fcr =
 		(volatile uint32_t *)(DT_REG_ADDR(DT_CHOSEN(zephyr_console)) + 2U * 4U);
