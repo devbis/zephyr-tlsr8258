@@ -43,6 +43,22 @@ The driver waits for the controller and flash to become idle before returning
 to XIP code; a hardware failure can therefore leave it waiting indefinitely.
 Program and erase operations check the resulting flash contents.
 
+PWM
+***
+
+The six PWM channels are in ``pwm0``, disabled by default. Enable it in an overlay and give the pad
+of each channel in ``pins``, as indices of the GPIO controller (255 for a channel without a pad). The
+counters run from an assumed 16 MHz clock, divided by 2 to the power of ``prescaler``; the SDK does
+not give the clock and the period of a channel has not been measured. All channels share the
+prescaler.
+
+.. code-block:: devicetree
+
+   &pwm0 {
+           pins = <255 255 7 255 255 255>;
+           status = "okay";
+   };
+
 Watchdog
 ********
 
