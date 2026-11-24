@@ -26,6 +26,7 @@
 #include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/time_units.h>
@@ -1272,6 +1273,33 @@ static int phy62x2_init(const struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int phy62x2_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	struct phy62x2_data *data = dev->data;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		/* A radio that is receiving or sending does not go to sleep */
+		return atomic_get(&data->started) != 0 ? -EBUSY : 0;
+	case PM_DEVICE_ACTION_RESUME:
+		/* The registers of the radio are lost in the sleep: set it up as at the start */
+		k_mutex_lock(&data->op_lock, K_FOREVER);
+		phy62x2_radio_init_hw(data);
+		phy62x2_radio_set_channel(data, data->channel);
+		phy62x2_radio_set_tx_power(data, data->tx_power_dbm);
+		k_mutex_unlock(&data->op_lock);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+PM_DEVICE_DT_INST_DEFINE(0, phy62x2_pm_action);
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct ieee802154_radio_api phy62x2_radio_api = {
 	.iface_api.init = phy62x2_iface_init,
 	.get_capabilities = phy62x2_get_capabilities,
@@ -1287,15 +1315,15 @@ static const struct ieee802154_radio_api phy62x2_radio_api = {
 };
 
 #if defined(CONFIG_IEEE802154_RAW_MODE)
-DEVICE_DT_INST_DEFINE(0, phy62x2_init, NULL, &phy62x2_data, NULL, POST_KERNEL,
+DEVICE_DT_INST_DEFINE(0, phy62x2_init, PM_DEVICE_DT_INST_GET(0), &phy62x2_data, NULL, POST_KERNEL,
 		      CONFIG_IEEE802154_PHY62X2_INIT_PRIO, &phy62x2_radio_api);
 #elif defined(CONFIG_NET_L2_CUSTOM_IEEE802154)
-NET_DEVICE_DT_INST_DEFINE(0, phy62x2_init, NULL, &phy62x2_data, NULL,
+NET_DEVICE_DT_INST_DEFINE(0, phy62x2_init, PM_DEVICE_DT_INST_GET(0), &phy62x2_data, NULL,
 			  CONFIG_IEEE802154_PHY62X2_INIT_PRIO, &phy62x2_radio_api,
 			  CUSTOM_IEEE802154_L2,
 			  NET_L2_GET_CTX_TYPE(CUSTOM_IEEE802154_L2), PHY62X2_MAX_MPDU);
 #elif defined(CONFIG_NET_L2_IEEE802154)
-NET_DEVICE_DT_INST_DEFINE(0, phy62x2_init, NULL, &phy62x2_data, NULL,
+NET_DEVICE_DT_INST_DEFINE(0, phy62x2_init, PM_DEVICE_DT_INST_GET(0), &phy62x2_data, NULL,
 			  CONFIG_IEEE802154_PHY62X2_INIT_PRIO, &phy62x2_radio_api,
 			  IEEE802154_L2, NET_L2_GET_CTX_TYPE(IEEE802154_L2),
 			  PHY62X2_MAX_MPDU);
