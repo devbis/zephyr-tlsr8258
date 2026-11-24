@@ -28,6 +28,26 @@ bool phy62x2_clock_init(void)
 	       ROM_CLK_GET_PCLK() == CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 }
 
+#if defined(CONFIG_PHY62X2_DEEP_SLEEP) || defined(CONFIG_PHY62X2_SUSPEND)
+/*
+ * The RC oscillator of the RTC for the sleep, as hal_rtc_clock_config(CLK_32K_RCOSC) of the vendor
+ * SDK does it at start: without it the oscillator stops in the sleep and the RTC does not wake the
+ * chip. The sleep entry clears the software control of the 32 kHz clock (PMCTL2_0 bit 6) again.
+ */
+static void phy62x2_rtc_clock_init(void)
+{
+	volatile uint32_t *const pmctl0 = (volatile uint32_t *)0x4000f014U;
+	volatile uint32_t *const pmctl1 = (volatile uint32_t *)0x4000f018U;
+	volatile uint32_t *const pmctl2_0 = (volatile uint32_t *)0x4000f01cU;
+
+	*pmctl0 = (*pmctl0 & ~GENMASK(31, 27)) | (0x05U << 27);
+	*pmctl2_0 = (*pmctl2_0 & ~GENMASK(16, 7)) | (0x3fbU << 7);
+	*pmctl2_0 |= BIT(6);
+	*pmctl0 |= BIT(28);
+	*pmctl1 &= ~GENMASK(18, 17);
+}
+#endif
+
 void soc_prep_hook(void)
 {
 	volatile uintptr_t *const jump = (volatile uintptr_t *)0x1fff0000U;
@@ -49,6 +69,10 @@ void soc_prep_hook(void)
 			__asm__ volatile("wfi");
 		}
 	}
+
+#if defined(CONFIG_PHY62X2_DEEP_SLEEP) || defined(CONFIG_PHY62X2_SUSPEND)
+	phy62x2_rtc_clock_init();
+#endif
 
 	/* The pins of the peripherals are set by the pinctrl driver when the device is initialised */
 	*clock |= BIT(7); /* IOMUX */

@@ -219,12 +219,16 @@ enabled in the GPIO controller, on the edge of the interrupt. Flush the console 
            };
    };
 
-Only the code is written; nothing of it has been run on the module. It is not known whether the boot
-ROM leaves the retained RAM alone, which reset cause it expects (the function writes the one of the
-SDK's RTC reset, 4, which the ROM turns into the cause 5 and skips its loader window), whether the flash needs its deep sleep (``spif_set_deep_sleep`` of the ROM, which
-the SDK uses under ``CFG_FLASH_ENABLE_DEEP_SLEEP``) and what the wake pads do to the pull-ups of the
-boot ROM pins. The sleep does not return and does not resume: it is a reset that keeps some RAM, not
-the sleep of the SDK that resumes the program.
+The deep sleep is run on the module: with a timeout of 2 s the chip wakes on the RTC, the boot ROM
+reports the cause 5 and skips its loader window, and the contents of the ``zephyr,retained-ram`` node
+are kept. The sleep needs the RC oscillator of the RTC to be set up as ``hal_rtc_clock_config()`` of the
+SDK does it at start; the SoC does that when the deep sleep or the suspend to RAM is enabled, and
+without it the chip never wakes. ``hwinfo`` reports a wakeup from this sleep as a software reset, the
+cause 5 being that of a warm start. Not tried: the wake pads, the flash in its deep sleep
+(``spif_set_deep_sleep`` of the ROM, which the SDK uses under ``CFG_FLASH_ENABLE_DEEP_SLEEP``), what the
+wake pads do to the pull-ups of the boot ROM pins and the current in the sleep. The sleep does not
+return and does not resume: it is a reset that keeps some RAM, not the sleep of the SDK that resumes the
+program.
 
 Suspend to RAM
 **************
