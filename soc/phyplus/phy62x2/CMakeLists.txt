@@ -4,6 +4,7 @@
 zephyr_include_directories(.)
 zephyr_sources(soc.c)
 zephyr_sources_ifdef(CONFIG_POWEROFF poweroff.c)
+zephyr_sources(wakeup.c)
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")
 
 # The image for the boot ROM: its segment table, then the XIP code. The window is the chosen flash of the board
