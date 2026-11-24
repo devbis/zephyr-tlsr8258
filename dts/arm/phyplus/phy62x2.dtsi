@@ -107,6 +107,34 @@
 		status = "disabled";
 	};
 
+	/*
+	 * The SPI controllers are DesignWare ones. The depth of the FIFOs is not in the SDK: its
+	 * threshold of 4 needs at least 8, which is what is assumed. The clock is the core clock.
+	 */
+	spi0: spi@40006000 {
+		compatible = "snps,designware-spi";
+		reg = <0x40006000 0x100>;
+		interrupts = <14 0>;
+		clock-frequency = <DT_FREQ_M(16)>;
+		fifo-depth = <8>;
+		max-xfer-size = <16>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	spi1: spi@40007000 {
+		compatible = "snps,designware-spi";
+		reg = <0x40007000 0x100>;
+		interrupts = <15 0>;
+		clock-frequency = <DT_FREQ_M(16)>;
+		fifo-depth = <8>;
+		max-xfer-size = <16>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
 	/* Six channels; a board gives the pads of the channels in the pinctrl state */
 	pwm0: pwm@4000e000 {
 		compatible = "phyplus,phy62x2-pwm";

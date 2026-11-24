@@ -67,6 +67,16 @@ void soc_prep_hook(void)
 	PHY62X2_ENABLE_MODULE(uart1, 25)
 	PHY62X2_ENABLE_MODULE(i2c0, 9)
 	PHY62X2_ENABLE_MODULE(i2c1, 10)
+	PHY62X2_ENABLE_MODULE(spi0, 11)
+	PHY62X2_ENABLE_MODULE(spi1, 12)
+
+	/* The controllers are masters unless the devicetree says otherwise: AP_COM->PERI_MASTER_SELECT */
+#define PHY62X2_SPI_MASTER(label, bit)                                                             \
+	COND_CODE_1(DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(label)),                                  \
+		    (COND_CODE_0(DT_PROP(DT_NODELABEL(label), serial_target),                      \
+				 (*(volatile uint32_t *)0x4000302cU |= BIT(bit) | BIT((bit) + 4);), ())), ())
+	PHY62X2_SPI_MASTER(spi0, 0)
+	PHY62X2_SPI_MASTER(spi1, 1)
 
 #ifdef CONFIG_COUNTER_SNPS_DW
 	/* Timers 5 and 6 share a reset and have a 4 MHz clock. */

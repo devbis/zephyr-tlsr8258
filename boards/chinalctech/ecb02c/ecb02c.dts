@@ -100,6 +100,14 @@
 	clock-frequency = <DT_FREQ_M(48)>;
 };
 
+&spi0 {
+	clock-frequency = <DT_FREQ_M(48)>;
+};
+
+&spi1 {
+	clock-frequency = <DT_FREQ_M(48)>;
+};
+
 &uart1 {
 	clock-frequency = <DT_FREQ_M(48)>;
 	pinctrl-0 = <&uart1_tx &uart1_rx &boot_rom_p9 &boot_rom_p10>;

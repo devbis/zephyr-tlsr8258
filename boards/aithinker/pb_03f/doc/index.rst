@@ -73,6 +73,17 @@ controllers have not been tried on this module.
            status = "okay";
    };
 
+SPI
+***
+
+``spi0`` and ``spi1`` are the DesignWare SPI controllers, served by the generic ``spi_dw`` driver, and
+are disabled by default. Give the pads in a pinctrl state with the ``PHY62X2_FMUX_SPI0_SCK``,
+``_SSN``, ``_TX`` and ``_RX`` functions (``SPI1`` for the second controller). The start-up code
+selects the master mode of an enabled controller in ``AP_COM->PERI_MASTER_SELECT`` unless the node has
+``serial-target``. The clock is the core clock. The depth of the FIFOs is not in the SDK, 8 is
+assumed from its interrupt threshold of 4; the real depth is in the component parameter register of the
+controller. The controllers have not been tried on this module.
+
 PWM
 ***
 
