@@ -1,0 +1,12 @@
+identifier: pb_03f_kit
+name: Ai-Thinker PB-03F-Kit
+type: mcu
+arch: arm
+ram: 57
+flash: 431
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - gpio
+vendor: aithinker

@@ -1,0 +1,72 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * The Ai-Thinker PB-03F-Kit: the PB-03F module on the kit board with its LEDs and the user button.
+ * The pads are named with PHY62X2_Pn: the controller counts hardware indices, not pad numbers.
+ */
+
+#include "../pb_03f/pb_03f.dts"
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/gpio/phy62x2-gpio.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "Ai-Thinker PB-03F-Kit";
+	compatible = "aithinker,pb-03f-kit", "aithinker,pb-03f";
+
+	aliases {
+		led0 = &led_red;
+		led1 = &led_green;
+		led2 = &led_blue;
+		led3 = &led_cool_white;
+		led4 = &led_warm_white;
+		sw0 = &user_button;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		/* The RGB LED and the two white ones, on when the pad is high */
+		led_red: led_0 {
+			gpios = <&gpio0 PHY62X2_P7 GPIO_ACTIVE_HIGH>;
+			label = "Red LED (P7)";
+		};
+
+		led_green: led_1 {
+			gpios = <&gpio0 PHY62X2_P11 GPIO_ACTIVE_HIGH>;
+			label = "Green LED (P11)";
+		};
+
+		led_blue: led_2 {
+			gpios = <&gpio0 PHY62X2_P18 GPIO_ACTIVE_HIGH>;
+			label = "Blue LED (P18)";
+		};
+
+		led_cool_white: led_3 {
+			gpios = <&gpio0 PHY62X2_P34 GPIO_ACTIVE_HIGH>;
+			label = "Cool white LED (P34)";
+		};
+
+		led_warm_white: led_4 {
+			gpios = <&gpio0 PHY62X2_P0 GPIO_ACTIVE_HIGH>;
+			label = "Warm white LED (P0)";
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		/*
+		 * The button joins the pad to 3.3 V and the board has no pull-down: without the pull of the chip
+		 * the pad floats, picks up the mains and stays high after a release.
+		 */
+		user_button: button_0 {
+			gpios = <&gpio0 PHY62X2_P15 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+			label = "User button (P15)";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+};
