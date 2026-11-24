@@ -21,4 +21,17 @@
  */
 void phy62x2_wakeup_arm(bool gpio_interrupts);
 
+/**
+ * @brief Enter the deep sleep
+ *
+ * The chip sleeps until the timeout, if there is one, or a wake pad changes its level, and then
+ * starts from the boot ROM as after a reset: the registers and the RAM that is not retained are
+ * lost. The RAM of the enabled zephyr,retained-ram nodes is kept, for the retained_mem driver.
+ * The wake pads are those of phy62x2_wakeup_arm() with the pads of the GPIO interrupts. The
+ * caller flushes the console before. Needs CONFIG_PHY62X2_DEEP_SLEEP.
+ *
+ * @param timeout_ms Time to wake up after, in ms, or 0 to wake on the pads only
+ */
+FUNC_NORETURN void phy62x2_deep_sleep(uint32_t timeout_ms);
+
 #endif

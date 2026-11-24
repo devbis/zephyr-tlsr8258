@@ -166,6 +166,52 @@ reboot writes the cold start there, so that the boot ROM opens its loader window
 reboot is therefore reported as ``RESET_POR``. Neither the power off nor the cause has been tried on
 this module, and the value that the boot ROM leaves after a wakeup is taken from the SDK.
 
+Deep sleep with retained RAM
+****************************
+
+``CONFIG_PHY62X2_DEEP_SLEEP=y`` provides ``phy62x2_deep_sleep(timeout_ms)`` (``soc.h``). It follows
+``hal_pwrmgr_enter_sleep_rtc_reset()`` of the SDK: the RTC is configured through the ROM
+(``config_RTC``), the chip is put to sleep through the ROM (``enter_sleep_off_mode``) and starts from
+the boot ROM when the timeout ends or a wake pad changes its level, as after a reset; the registers and
+the RAM that is not retained are lost. The SDK clears the retention of the SRAM there; this function
+keeps the blocks of the ``zephyr,retained-ram`` nodes, so that the ``retained_mem`` driver keeps its
+data across the sleep. The retention is in blocks of the SRAM: 32 KiB at ``0x1fff0000`` and 16 KiB each
+at ``0x1fff8000`` and ``0x1fffc000``, and a region keeps every block that it touches. The wake pads
+are those of the ``phyplus,phy62x2-poweroff-wakeup`` nodes and the pads that have an interrupt
+enabled in the GPIO controller, on the edge of the interrupt. Flush the console before the call.
+
+.. code-block:: devicetree
+
+   &sram0 {
+           reg = <0x1fff1840 0xe3c0>;
+   };
+
+   / {
+           sram_retained: memory@1ffffc00 {
+                   compatible = "zephyr,memory-region", "mmio-sram";
+                   reg = <0x1ffffc00 0x400>;
+                   zephyr,memory-region = "RetainedMem";
+
+                   retained_ram: retainedmem {
+                           compatible = "zephyr,retained-ram";
+                           #address-cells = <1>;
+                           #size-cells = <1>;
+
+                           retention0: retention@0 {
+                                   compatible = "zephyr,retention";
+                                   reg = <0x0 0x100>;
+                           };
+                   };
+           };
+   };
+
+Only the code is written; nothing of it has been run on the module. It is not known whether the boot
+ROM leaves the retained RAM alone, which reset cause it expects (the function writes the one of the
+SDK's RTC reset, 4), whether the flash needs its deep sleep (``spif_set_deep_sleep`` of the ROM, which
+the SDK uses under ``CFG_FLASH_ENABLE_DEEP_SLEEP``) and what the wake pads do to the pull-ups of the
+boot ROM pins. The sleep does not return and does not resume: it is a reset that keeps some RAM, not
+the sleep of the SDK that resumes the program.
+
 Pins
 ****
 

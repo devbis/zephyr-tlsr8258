@@ -9,6 +9,13 @@ config SOC_PHY62X2
 	select SOC_PREP_HOOK
 	select XIP
 
+config PHY62X2_DEEP_SLEEP
+	bool "Deep sleep with retained RAM"
+	depends on SOC_PHY62X2
+	help
+	  Provide phy62x2_deep_sleep(): the chip sleeps until a timeout or a wake pad and starts from the
+	  boot ROM, keeping the RAM of the zephyr,retained-ram nodes. It has not been tried on hardware.
+
 config PHY62X2_WATCHDOG
 	bool "Reset the chip when the system hangs"
 	default y
