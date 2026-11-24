@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Phyplus PHY62x2 ADC. The channels are numbered as in the SDK: 2 to 7 are the single-ended
+  inputs on the pads P11, P23, P24, P14, P15 and P20, and the differential pairs are 1 (P18 and
+  P25), 3 (P23 and P11), 5 (P14 and P24) and 7 (P20 and P15).
+
+compatible: "phyplus,phy62x2-adc"
+
+include: adc-controller.yaml
+
+properties:
+  reg:
+    required: true
+
+  "#io-channel-cells":
+    const: 1
+
+io-channel-cells:
+  - input

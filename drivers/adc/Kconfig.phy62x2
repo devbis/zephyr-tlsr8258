@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config ADC_PHY62X2
+	bool "PHY62x2 ADC driver"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_ADC_ENABLED
+	help
+	  Enable the ADC of the PHY62x2: six single-ended and four differential inputs of 12 bits,
+	  the inputs below 1 V. The driver polls for the end of a conversion.
