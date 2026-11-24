@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Phyplus PHY62x2 PWM controller. Six channels with an up counter of 16 bits. The channels
+  share the prescaler. A channel is routed to the pad given in pins when it is first used.
+
+compatible: "phyplus,phy62x2-pwm"
+
+include: [pwm-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  "#pwm-cells":
+    const: 3
+
+  clock-frequency:
+    type: int
+    default: 16000000
+    description: |
+      Clock of the counters before the prescaler, in Hz. 16 MHz is assumed: the SDK does not give it.
+
+  prescaler:
+    type: int
+    default: 0
+    enum: [0, 1, 2, 3, 4, 5, 6, 7]
+    description: |
+      The counter clock is clock-frequency divided by 2 to the power of this value.
+
+  pins:
+    type: array
+    required: true
+    description: |
+      For each of the six channels the index of the pin in the GPIO controller (the same index as
+      in the GPIO cells), or 255 for a channel that has no pin.
+
+pwm-cells:
+  - channel
+  - period
+  - flags

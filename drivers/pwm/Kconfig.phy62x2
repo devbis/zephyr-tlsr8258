@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config PWM_PHY62X2
+	bool "PHY62x2 PWM driver"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_PWM_ENABLED
+	help
+	  Enable the PWM controller of the PHY62x2, six channels with an up counter.
