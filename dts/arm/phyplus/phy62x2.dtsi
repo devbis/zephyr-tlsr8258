@@ -145,6 +145,13 @@
 		status = "disabled";
 	};
 
+	/* The RTC of the AON block, from RTCCTL; the clock is the 32 kHz RC oscillator */
+	rtc0: rtc@4000f024 {
+		compatible = "phyplus,phy62x2-rtc";
+		reg = <0x4000f024 0x18>;
+		status = "okay";
+	};
+
 	/* One of the channels X, Y and Z, the pads in the pinctrl state of the board */
 	qdec0: qdec@4000b000 {
 		compatible = "phyplus,phy62x2-qdec";

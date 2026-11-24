@@ -84,6 +84,17 @@ selects the master mode of an enabled controller in ``AP_COM->PERI_MASTER_SELECT
 assumed from its interrupt threshold of 4; the real depth is in the component parameter register of the
 controller. The controllers have not been tried on this module.
 
+RTC counter
+***********
+
+``rtc0`` is the always-on RTC, a free-running 32 kHz counter served by the ``counter`` API, with
+``clock-frequency`` and ``prescaler`` in its node. It counts while the chip sleeps. The driver follows
+the ``rtc_*`` functions of the boot ROM for the run bit, the clear bit and the prescaler, which were
+read from a dump of the ROM. The comparators and the interrupt of the RTC are not used and there are no
+alarms: no SDK and no ROM function handles them, only ``config_RTC`` of the ROM arms the first
+comparator to wake the chip, which the power management does. The width of the counter, 24 bits, is
+assumed and has not been measured.
+
 DMA
 ***
 
