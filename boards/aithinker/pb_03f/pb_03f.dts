@@ -24,6 +24,7 @@
 
 	aliases {
 		counter = &timer5;
+		watchdog0 = &watchdog0;
 	};
 
 	cpus {
@@ -102,6 +103,16 @@
 		#gpio-cells = <2>;
 		ngpios = <23>;
 		gpio-reserved-ranges = <1 1>, <5 2>, <10 2>, <16 3>;
+		status = "okay";
+	};
+
+	watchdog0: watchdog@40002000 {
+		compatible = "snps,designware-watchdog";
+		reg = <0x40002000 0x100>;
+		/* The RC oscillator of 32 kHz */
+		clock-frequency = <32768>;
+		/* As in the SDK: a pulse of 256 cycles, a shorter one does not reset the chip */
+		reset-pulse-length = <256>;
 		status = "okay";
 	};
 

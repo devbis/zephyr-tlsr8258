@@ -43,6 +43,14 @@ The driver waits for the controller and flash to become idle before returning
 to XIP code; a hardware failure can therefore leave it waiting indefinitely.
 Program and erase operations check the resulting flash contents.
 
+Watchdog
+********
+
+The watchdog of the chip is the DesignWare one on the 32 kHz RC oscillator, as on the ECB02C.
+``CONFIG_WATCHDOG=y`` enables it, and ``CONFIG_PHY62X2_WATCHDOG`` then starts it and feeds it from
+a thread of the lowest priority, so a hang that stops the scheduler resets the chip. It is off by
+default and has not been tried on this module.
+
 Flash layout
 ************
 
