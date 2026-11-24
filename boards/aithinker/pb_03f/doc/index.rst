@@ -84,6 +84,18 @@ selects the master mode of an enabled controller in ``AP_COM->PERI_MASTER_SELECT
 assumed from its interrupt threshold of 4; the real depth is in the component parameter register of the
 controller. The controllers have not been tried on this module.
 
+Quadrature decoder
+******************
+
+``qdec0`` is the quadrature decoder, disabled by default, with the sensor driver
+``phyplus,phy62x2-qdec``. It uses one of the channels X, Y and Z (``channel``) and reports
+``SENSOR_CHAN_ROTATION``, the rotation since the last fetch, from ``steps`` and
+``quadrature-mode``. Give the pads in a pinctrl state with the ``PHY62X2_FMUX_QDEC_CHAX`` and
+``_CHBX`` functions (``Y`` and ``Z`` for the other channels), with a pull-down as the SDK sets. The
+driver polls the counter and clears it with the interrupt flag, as the interrupt handler of the SDK
+does; the index input, the interrupts and the wakeup from sleep are not supported. It has not been
+tried on this module.
+
 PWM
 ***
 

@@ -135,6 +135,14 @@
 		status = "disabled";
 	};
 
+	/* One of the channels X, Y and Z, the pads in the pinctrl state of the board */
+	qdec0: qdec@4000b000 {
+		compatible = "phyplus,phy62x2-qdec";
+		reg = <0x4000b000 0x60>;
+		steps = <24>;
+		status = "disabled";
+	};
+
 	/* Six channels; a board gives the pads of the channels in the pinctrl state */
 	pwm0: pwm@4000e000 {
 		compatible = "phyplus,phy62x2-pwm";
