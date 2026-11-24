@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config PINCTRL_PHY62X2
+	bool "PHY62x2 pin controller"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_PINCTRL_ENABLED
+	help
+	  Enable the pin controller of the PHY62x2: the function of a pad through the full mux of
+	  the IOMUX, and its pull.

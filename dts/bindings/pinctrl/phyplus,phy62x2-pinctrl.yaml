@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Phyplus PHY62x2 pin controller. A state lists nodes with one pad each: the pad, the function
+  that the full mux of the IOMUX gives it, and the pull.
+
+compatible: "phyplus,phy62x2-pinctrl"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+child-binding:
+  description: A pad and its function
+
+  include:
+    - name: pincfg-node.yaml
+      property-allowlist:
+        - bias-disable
+        - bias-pull-down
+        - bias-pull-up
+
+  properties:
+    phyplus,strong-pull-up:
+      type: boolean
+      description: |
+        Use the strong pull-up with bias-pull-up, the weak one is the default.
+
+    pinmux:
+      required: true
+      type: int
+      description: |
+        The pad and the function, made with PHY62X2_PINMUX() of
+        include/zephyr/dt-bindings/pinctrl/phy62x2-pinctrl.h. PHY62X2_FMUX_NONE leaves the pad a
+        GPIO and sets only the pull.

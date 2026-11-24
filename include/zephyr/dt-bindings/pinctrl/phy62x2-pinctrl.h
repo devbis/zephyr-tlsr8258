@@ -1,0 +1,60 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef ZEPHYR_INCLUDE_DT_BINDINGS_PINCTRL_PHY62X2_PINCTRL_H_
+#define ZEPHYR_INCLUDE_DT_BINDINGS_PINCTRL_PHY62X2_PINCTRL_H_
+
+/**
+ * @brief Pin and function of a PHY62x2 pad
+ *
+ * The pin is the index in the GPIO controller (P0 0, P1 1, P2 2, P3 3, P7 4, P9 5, P10 6, P11 7,
+ * P14 8, P15 9, P16 10, P17 11, P18 12, P20 13, P23 14, P24 15, P25 16, P26 17, P27 18, P31 19,
+ * P32 20, P33 21, P34 22). The function is one of the PHY62X2_FMUX_ values.
+ */
+#define PHY62X2_PINMUX(pin, function) (((pin) << 8) | (function))
+
+/* No function: the pad stays a GPIO and only its pull is set, as for the pads of the boot ROM */
+#define PHY62X2_FMUX_NONE 255
+
+#define PHY62X2_FMUX_I2C0_SCL 0
+#define PHY62X2_FMUX_I2C0_SDA 1
+#define PHY62X2_FMUX_I2C1_SCL 2
+#define PHY62X2_FMUX_I2C1_SDA 3
+#define PHY62X2_FMUX_UART0_TX 4
+#define PHY62X2_FMUX_UART0_RX 5
+#define PHY62X2_FMUX_RF_RX_EN 6
+#define PHY62X2_FMUX_RF_TX_EN 7
+#define PHY62X2_FMUX_UART1_TX 8
+#define PHY62X2_FMUX_UART1_RX 9
+#define PHY62X2_FMUX_PWM0 10
+#define PHY62X2_FMUX_PWM1 11
+#define PHY62X2_FMUX_PWM2 12
+#define PHY62X2_FMUX_PWM3 13
+#define PHY62X2_FMUX_PWM4 14
+#define PHY62X2_FMUX_PWM5 15
+#define PHY62X2_FMUX_SPI0_SCK 16
+#define PHY62X2_FMUX_SPI0_SSN 17
+#define PHY62X2_FMUX_SPI0_TX 18
+#define PHY62X2_FMUX_SPI0_RX 19
+#define PHY62X2_FMUX_SPI1_SCK 20
+#define PHY62X2_FMUX_SPI1_SSN 21
+#define PHY62X2_FMUX_SPI1_TX 22
+#define PHY62X2_FMUX_SPI1_RX 23
+#define PHY62X2_FMUX_QDEC_CHAX 24
+#define PHY62X2_FMUX_QDEC_CHBX 25
+#define PHY62X2_FMUX_QDEC_CHIX 26
+#define PHY62X2_FMUX_QDEC_CHAY 27
+#define PHY62X2_FMUX_QDEC_CHBY 28
+#define PHY62X2_FMUX_QDEC_CHIY 29
+#define PHY62X2_FMUX_QDEC_CHAZ 30
+#define PHY62X2_FMUX_QDEC_CHBZ 31
+#define PHY62X2_FMUX_QDEC_CHIZ 32
+#define PHY62X2_FMUX_CLK1P28M 33
+#define PHY62X2_FMUX_ADCC 34
+#define PHY62X2_FMUX_ANT_SEL_0 35
+#define PHY62X2_FMUX_ANT_SEL_1 36
+#define PHY62X2_FMUX_ANT_SEL_2 37
+
+#endif /* ZEPHYR_INCLUDE_DT_BINDINGS_PINCTRL_PHY62X2_PINCTRL_H_ */
