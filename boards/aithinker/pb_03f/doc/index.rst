@@ -43,6 +43,36 @@ The driver waits for the controller and flash to become idle before returning
 to XIP code; a hardware failure can therefore leave it waiting indefinitely.
 Program and erase operations check the resulting flash contents.
 
+I2C
+***
+
+``i2c0`` and ``i2c1`` are the DesignWare I2C controllers, served by the generic ``i2c_dw`` driver, and
+are disabled by default. Give the pads in a pinctrl state with the ``PHY62X2_FMUX_I2C0_SCL`` and
+``PHY62X2_FMUX_I2C0_SDA`` functions (``I2C1`` for the second controller), with the pull-up. The
+controllers run from the core clock, which ``CONFIG_I2C_DW_CLOCK_SPEED`` follows (16 or 48 MHz); the
+SDK sets the timing counts of the clock divider by hand, and the driver computes them. The
+controllers have not been tried on this module.
+
+.. code-block:: devicetree
+
+   &pinctrl {
+           i2c0_scl: i2c0_scl {
+                   pinmux = <PHY62X2_PINMUX(8, PHY62X2_FMUX_I2C0_SCL)>;
+                   bias-pull-up;
+           };
+
+           i2c0_sda: i2c0_sda {
+                   pinmux = <PHY62X2_PINMUX(9, PHY62X2_FMUX_I2C0_SDA)>;
+                   bias-pull-up;
+           };
+   };
+
+   &i2c0 {
+           pinctrl-0 = <&i2c0_scl &i2c0_sda>;
+           pinctrl-names = "default";
+           status = "okay";
+   };
+
 PWM
 ***
 

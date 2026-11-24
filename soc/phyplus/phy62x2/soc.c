@@ -65,6 +65,8 @@ void soc_prep_hook(void)
 		    (*clock |= BIT(bit); *reset &= ~BIT(bit); *reset |= BIT(bit);), ())
 	PHY62X2_ENABLE_MODULE(uart0, 8)
 	PHY62X2_ENABLE_MODULE(uart1, 25)
+	PHY62X2_ENABLE_MODULE(i2c0, 9)
+	PHY62X2_ENABLE_MODULE(i2c1, 10)
 
 #ifdef CONFIG_COUNTER_SNPS_DW
 	/* Timers 5 and 6 share a reset and have a 4 MHz clock. */
