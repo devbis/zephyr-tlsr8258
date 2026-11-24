@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config DMA_PHY62X2
+	bool "PHY62x2 DMA driver"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_DMA_ENABLED
+	help
+	  Enable the DMA controller of the PHY62x2: four channels, one block per transfer, memory to
+	  memory and between memory and the peripherals.

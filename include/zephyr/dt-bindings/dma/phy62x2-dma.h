@@ -1,0 +1,23 @@
+/*
+ * SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef ZEPHYR_INCLUDE_DT_BINDINGS_DMA_PHY62X2_DMA_H_
+#define ZEPHYR_INCLUDE_DT_BINDINGS_DMA_PHY62X2_DMA_H_
+
+/* The handshake interfaces of the DMA controller, the DMA_CONN_* of the PHY62XX SDK minus one */
+#define PHY62X2_DMA_SLOT_SPI0_TX 0
+#define PHY62X2_DMA_SLOT_SPI0_RX 1
+#define PHY62X2_DMA_SLOT_SPI1_TX 2
+#define PHY62X2_DMA_SLOT_SPI1_RX 3
+#define PHY62X2_DMA_SLOT_I2C0_TX 8
+#define PHY62X2_DMA_SLOT_I2C0_RX 9
+#define PHY62X2_DMA_SLOT_I2C1_TX 10
+#define PHY62X2_DMA_SLOT_I2C1_RX 11
+#define PHY62X2_DMA_SLOT_UART0_TX 12
+#define PHY62X2_DMA_SLOT_UART0_RX 13
+#define PHY62X2_DMA_SLOT_UART1_TX 14
+#define PHY62X2_DMA_SLOT_UART1_RX 15
+
+#endif /* ZEPHYR_INCLUDE_DT_BINDINGS_DMA_PHY62X2_DMA_H_ */
