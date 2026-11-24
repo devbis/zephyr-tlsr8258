@@ -142,6 +142,30 @@ hardware samples; the SDK corrects them with the calibration words in the flash 
 with a constant per input, which the driver does not. It polls for the end of a conversion, reads one
 differential pair at a time, and has not been tried on this module.
 
+Power off and the reset cause
+*****************************
+
+``sys_poweroff()`` (``CONFIG_POWEROFF``) powers the chip off as ``hal_pwrmgr_poweroff()`` of the SDK
+does: the RAM is not retained and the chip starts from the boot ROM when a pad changes its level. The
+pads are the ``gpios`` of an enabled ``phyplus,phy62x2-poweroff-wakeup`` node: a pad that is active
+low wakes the chip on the falling edge and gets the strong pull-up, a pad that is active high wakes it
+on the rising edge and gets the pull-down. The pads are given as indices of the GPIO controller.
+
+.. code-block:: devicetree
+
+   / {
+           poweroff-wakeup {
+                   compatible = "phyplus,phy62x2-poweroff-wakeup";
+                   gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+           };
+   };
+
+``hwinfo_get_reset_cause()`` reads the cause that the boot ROM keeps in ``AON->SLEEP_R[0]``: a cold
+start is ``RESET_POR``, a wakeup from the power off or the RTC is ``RESET_LOW_POWER_WAKE``. Zephyr's
+reboot writes the cold start there, so that the boot ROM opens its loader window, and a software
+reboot is therefore reported as ``RESET_POR``. Neither the power off nor the cause has been tried on
+this module, and the value that the boot ROM leaves after a wakeup is taken from the SDK.
+
 Pins
 ****
 

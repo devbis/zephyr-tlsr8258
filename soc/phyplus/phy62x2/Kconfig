@@ -5,6 +5,7 @@ config SOC_PHY62X2
 	select ARM
 	select CPU_CORTEX_M0
 	select CPU_CORTEX_M_HAS_SYSTICK
+	select HAS_POWEROFF
 	select SOC_PREP_HOOK
 	select XIP
 

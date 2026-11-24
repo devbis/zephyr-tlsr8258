@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  The pads that wake the PHY62x2 from sys_poweroff(). A pad that is GPIO_ACTIVE_LOW wakes the chip on
+  the falling edge and gets the strong pull-up, a pad that is GPIO_ACTIVE_HIGH wakes it on the rising
+  edge and gets the pull-down. The chip then starts from the boot ROM; the RAM is not retained.
+
+compatible: "phyplus,phy62x2-poweroff-wakeup"
+
+include: base.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
