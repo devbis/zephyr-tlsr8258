@@ -72,6 +72,12 @@ config UART_NS16550_VARIANT_NS16950
 	  This enables support for 128-bytes FIFO and automatic hardware flow control.
 endchoice
 
+config UART_NS16550_PM_RECONFIGURE
+	bool "NS16550 loses its registers and pins in the power states"
+	help
+	  Set the pins and the registers of the UART again when the device resumes from a power state in
+	  which the SoC loses them, as the initialisation of the driver does.
+
 config UART_NS16550_ACCESS_WORD_ONLY
 	bool "NS16550 only allows word access"
 	help

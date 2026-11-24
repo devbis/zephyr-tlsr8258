@@ -892,7 +892,16 @@ static int uart_ns16550_pm_action(const struct device *dev, enum pm_device_actio
 
 	switch (action) {
 	case PM_DEVICE_ACTION_RESUME:
+#if defined(CONFIG_UART_NS16550_PM_RECONFIGURE)
+#if defined(CONFIG_PINCTRL)
+		if (dev_cfg->pincfg != NULL) {
+			pinctrl_apply_state(dev_cfg->pincfg, PINCTRL_STATE_DEFAULT);
+		}
+#endif
+		return uart_ns16550_configure(dev, uart_cfg);
+#else
 		break;
+#endif
 	case PM_DEVICE_ACTION_SUSPEND:
 		break;
 	case PM_DEVICE_ACTION_TURN_ON:
