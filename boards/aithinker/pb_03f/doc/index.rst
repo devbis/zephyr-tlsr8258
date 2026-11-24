@@ -26,8 +26,12 @@ P0, P1, P2, P3, P7, P9, P10, P11, P14, P15, P16, P17, P18, P20, P23, P24,
 P25, P26, P27, P31, P32, P33 and P34. Indices 5 and 6 are reserved for the
 console, 10 and 11 for the crystal, and 1 and 16 through 18 for pads not listed
 for PHY62x2. The module does not necessarily expose every pad. The driver
-supports input, output, pulls and single-edge or level interrupts; both-edge
-interrupts and open-drain output are not supported.
+supports input, output, pulls and edge or level interrupts; open-drain output is not supported.
+The controller has one polarity per pin, so an interrupt on both edges flips the polarity after
+every edge in the interrupt handler. An edge that comes within a few instructions of the handler
+reading the pin level can be merged with the previous one; read the pin in the callback instead of
+counting callbacks. Level interrupts cannot use both edges. Wakeup from sleep through the pins
+is not implemented.
 
 The optional ``CONFIG_FLASH_PHY62X2`` driver uses ROM flash functions and
 executes its cache-bypass path from SRAM. The ``storage_partition`` occupies

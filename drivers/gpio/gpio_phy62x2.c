@@ -31,6 +31,8 @@
 struct phy62x2_gpio_data {
 	struct gpio_driver_data common;
 	sys_slist_t callbacks;
+	/* Pins that interrupt on both edges: the polarity is flipped after every edge */
+	uint32_t both_edges;
 };
 
 static const struct gpio_driver_config gpio_config = {
@@ -129,10 +131,28 @@ static int phy62x2_toggle(const struct device *dev, gpio_port_pins_t pins)
 	return 0;
 }
 
+/*
+ * The controller has one polarity per pin. For both edges, expect the edge opposite to the
+ * level of the pin. The level is read again after the write: an edge between the two would
+ * leave the polarity wrong and the next edge would be lost.
+ */
+static void phy62x2_arm_both_edges(uint32_t pins)
+{
+	uint32_t level;
+
+	do {
+		level = sys_read32(GPIO_INPUT_DATA) & pins;
+		update_bits(GPIO_INT_POLARITY, pins, ~level & pins);
+	} while ((sys_read32(GPIO_INPUT_DATA) & pins) != level);
+	/* A change of the polarity can latch an edge that did not happen */
+	sys_write32(pins, GPIO_INT_EOI);
+}
+
 static int phy62x2_interrupt(const struct device *dev, gpio_pin_t pin,
 			     enum gpio_int_mode mode, enum gpio_int_trig trig)
 {
 	const struct gpio_driver_config *config = dev->config;
+	struct phy62x2_gpio_data *data = dev->data;
 	uint32_t bit;
 	unsigned int key;
 
@@ -144,7 +164,10 @@ static int phy62x2_interrupt(const struct device *dev, gpio_pin_t pin,
 		return -ENOTSUP;
 	}
 	if (mode != GPIO_INT_MODE_DISABLED && trig != GPIO_INT_TRIG_LOW &&
-	    trig != GPIO_INT_TRIG_HIGH) {
+	    trig != GPIO_INT_TRIG_HIGH && trig != GPIO_INT_TRIG_BOTH) {
+		return -ENOTSUP;
+	}
+	if (mode == GPIO_INT_MODE_LEVEL && trig == GPIO_INT_TRIG_BOTH) {
 		return -ENOTSUP;
 	}
 	bit = BIT(pin);
@@ -152,9 +175,15 @@ static int phy62x2_interrupt(const struct device *dev, gpio_pin_t pin,
 	update_bits(GPIO_INT_MASK_REG, bit, bit);
 	update_bits(GPIO_INT_EN, bit, 0U);
 	sys_write32(bit, GPIO_INT_EOI);
+	data->both_edges &= ~bit;
 	if (mode != GPIO_INT_MODE_DISABLED) {
 		update_bits(GPIO_INT_TYPE, bit, mode == GPIO_INT_MODE_EDGE ? bit : 0U);
-		update_bits(GPIO_INT_POLARITY, bit, trig == GPIO_INT_TRIG_HIGH ? bit : 0U);
+		if (trig == GPIO_INT_TRIG_BOTH) {
+			data->both_edges |= bit;
+			phy62x2_arm_both_edges(bit);
+		} else {
+			update_bits(GPIO_INT_POLARITY, bit, trig == GPIO_INT_TRIG_HIGH ? bit : 0U);
+		}
 		update_bits(GPIO_INT_EN, bit, bit);
 		update_bits(GPIO_INT_MASK_REG, bit, 0U);
 	}
@@ -175,6 +204,9 @@ static void phy62x2_gpio_isr(const struct device *dev)
 	uint32_t pending = sys_read32(GPIO_INT_STATUS);
 
 	sys_write32(pending, GPIO_INT_EOI);
+	if ((pending & data->both_edges) != 0U) {
+		phy62x2_arm_both_edges(pending & data->both_edges);
+	}
 	gpio_fire_callbacks(&data->callbacks, dev, pending);
 }
 
