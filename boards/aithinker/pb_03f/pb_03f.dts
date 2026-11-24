@@ -56,6 +56,21 @@
 	};
 };
 
+/* UART0 on P9 (TX) and P10 (RX), the pins of the boot ROM loader, which look for its string on P10 */
+&pinctrl {
+	uart0_tx: uart0_tx {
+		pinmux = <PHY62X2_PINMUX(5, PHY62X2_FMUX_UART0_TX)>;
+		bias-pull-up;
+	};
+
+	uart0_rx: uart0_rx {
+		pinmux = <PHY62X2_PINMUX(6, PHY62X2_FMUX_UART0_RX)>;
+		bias-pull-up;
+	};
+};
+
 &uart0 {
+	pinctrl-0 = <&uart0_tx &uart0_rx>;
+	pinctrl-names = "default";
 	status = "okay";
 };

@@ -46,16 +46,23 @@ Program and erase operations check the resulting flash contents.
 PWM
 ***
 
-The six PWM channels are in ``pwm0``, disabled by default. Enable it in an overlay and give the pad
-of each channel in ``pins``, as indices of the GPIO controller (255 for a channel without a pad). The
-counters run from an assumed 16 MHz clock, divided by 2 to the power of ``prescaler``; the SDK does
-not give the clock and the period of a channel has not been measured. All channels share the
-prescaler.
+The six PWM channels are in ``pwm0``, disabled by default. Enable it in an overlay and give the pads
+of the channels in a pinctrl state, with the ``PHY62X2_FMUX_PWM0`` to ``PHY62X2_FMUX_PWM5``
+functions. The counters run from an assumed 16 MHz clock, divided by 2 to the power of
+``prescaler``; the SDK does not give the clock and the period of a channel has not been measured.
+All channels share the prescaler.
 
 .. code-block:: devicetree
 
+   &pinctrl {
+           pwm_ch2: pwm_ch2 {
+                   pinmux = <PHY62X2_PINMUX(7, PHY62X2_FMUX_PWM2)>;
+           };
+   };
+
    &pwm0 {
-           pins = <255 255 7 255 255 255>;
+           pinctrl-0 = <&pwm_ch2>;
+           pinctrl-names = "default";
            status = "okay";
    };
 
@@ -69,6 +76,13 @@ differential. The driver gives 12 bits of the inputs below 1 V, the internal ref
 hardware samples; the SDK corrects them with the calibration words in the flash at ``0x1001000`` and
 with a constant per input, which the driver does not. It polls for the end of a conversion, reads one
 differential pair at a time, and has not been tried on this module.
+
+Pins
+****
+
+The function of a pad comes from the ``pinctrl`` node. A state lists nodes with the pad, as its
+index in the GPIO controller, the function and the pull; ``PHY62X2_FMUX_NONE`` leaves a pad a GPIO
+and sets only the pull. The console is UART0 on P9 and P10, the pins of the boot ROM loader.
 
 Watchdog
 ********

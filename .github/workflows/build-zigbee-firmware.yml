@@ -489,8 +489,8 @@ jobs:
           if [[ "$SOC" == ecb02c ]]; then
             grep -Fx 'CONFIG_BOOTLOADER_MCUBOOT=y' "$config_file"
             grep -Fx 'CONFIG_IEEE802154_PHY62X2=y' "$config_file"
-            # the USB-UART of the module is wired to UART1 with TX on P3 and RX on P2
-            grep -Fx 'CONFIG_PHY62X2_UART1_SWAP=y' "$config_file"
+            # the pins of UART1 come from the pinctrl states of the board
+            grep -Fx 'CONFIG_PINCTRL_PHY62X2=y' "$config_file"
           fi
           if [[ "$ROLE" == coordinator && "$SOC" == ecb02c ]]; then
             grep -Fx 'CONFIG_ZIGBEE_NCP_ZSTACK_UART_IRQ=y' "$config_file"
@@ -581,7 +581,7 @@ jobs:
               "-DEXTRA_CONF_FILE=$sample/mcuboot/ecb02c.conf" \
               "-DEXTRA_DTC_OVERLAY_FILE=$sample/mcuboot/ecb02c.overlay"
             grep -Fx 'CONFIG_BOOT_SERIAL_UART=y' "$boot_dir/zephyr/.config"
-            grep -Fx 'CONFIG_PHY62X2_UART1_SWAP=y' "$boot_dir/zephyr/.config"
+            grep -Fx 'CONFIG_PINCTRL_PHY62X2=y' "$boot_dir/zephyr/.config"
 
             # The image for the first flashing: the boot ROM table and MCUboot at 0x2000 and the
             # signed coordinator in its slot at 0x18000; later images go to the serial recovery.

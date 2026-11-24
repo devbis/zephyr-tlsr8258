@@ -3,11 +3,12 @@
 
 description: |
   Phyplus PHY62x2 PWM controller. Six channels with an up counter of 16 bits. The channels
-  share the prescaler. A channel is routed to the pad given in pins when it is first used.
+  share the prescaler. The pads are the PHY62X2_FMUX_PWM0 to PHY62X2_FMUX_PWM5 functions of the
+  pinctrl state.
 
 compatible: "phyplus,phy62x2-pwm"
 
-include: [pwm-controller.yaml, base.yaml]
+include: [pwm-controller.yaml, pinctrl-device.yaml, base.yaml]
 
 properties:
   reg:
@@ -29,12 +30,11 @@ properties:
     description: |
       The counter clock is clock-frequency divided by 2 to the power of this value.
 
-  pins:
-    type: array
+  pinctrl-0:
     required: true
-    description: |
-      For each of the six channels the index of the pin in the GPIO controller (the same index as
-      in the GPIO cells), or 255 for a channel that has no pin.
+
+  pinctrl-names:
+    required: true
 
 pwm-cells:
   - channel

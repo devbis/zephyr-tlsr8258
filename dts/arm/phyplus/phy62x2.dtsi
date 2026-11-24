@@ -12,6 +12,7 @@
 
 #include <arm/armv6-m.dtsi>
 #include <freq.h>
+#include <zephyr/dt-bindings/pinctrl/phy62x2-pinctrl.h>
 
 / {
 	chosen {
@@ -67,6 +68,13 @@
 		};
 	};
 
+	/* The states of the pins are in the board: the pads of a module differ */
+	pinctrl: pinctrl@40003800 {
+		compatible = "phyplus,phy62x2-pinctrl";
+		reg = <0x40003800 0x54>;
+		status = "okay";
+	};
+
 	gpio0: gpio@40008000 {
 		compatible = "phyplus,phy62x2-gpio";
 		reg = <0x40008000 0x60>;
@@ -78,12 +86,11 @@
 		status = "okay";
 	};
 
-	/* Six channels; a board gives the pad of a channel in pins, in the indices of the GPIO controller */
+	/* Six channels; a board gives the pads of the channels in the pinctrl state */
 	pwm0: pwm@4000e000 {
 		compatible = "phyplus,phy62x2-pwm";
 		reg = <0x4000e000 0x4c>;
 		#pwm-cells = <3>;
-		pins = <255 255 255 255 255 255>;
 		status = "disabled";
 	};
 

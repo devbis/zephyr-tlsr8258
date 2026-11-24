@@ -9,8 +9,5 @@ CONFIG_UART_NS16550=y
 CONFIG_UART_NS16550_ACCESS_WORD_ONLY=y
 CONFIG_UART_INTERRUPT_DRIVEN=y
 
-# The USB-UART of the module is wired to UART1 with TX on P3 and RX on P2
-CONFIG_PHY62X2_UART1_SWAP=y
-
 # The watchdog of the chip; the applications are reset when they hang
 CONFIG_WATCHDOG=y

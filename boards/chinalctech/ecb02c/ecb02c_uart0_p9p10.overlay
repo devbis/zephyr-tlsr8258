@@ -18,6 +18,8 @@
 };
 
 &uart0 {
+	pinctrl-0 = <&uart0_tx &uart0_rx>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 

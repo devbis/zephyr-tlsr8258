@@ -50,7 +50,7 @@ UART pins
 *********
 
 UART1 is the console by default. The USB-UART of the module is wired to P2 and P3 the other way
-round (TX of the chip on P3, RX on P2), which ``CONFIG_PHY62X2_UART1_SWAP`` selects; P2 and P3 are the
+round (TX of the chip on P3, RX on P2), as the ``uart1_tx`` and ``uart1_rx`` pinctrl nodes of the board give; P2 and P3 are the
 pads of the debug interface and the SoC code gives them to the UART. P9 and P10 are the pins of the
 boot ROM loader, which listens at 9600 baud for a synchronisation string for a short time after a
 reset: keep them free of the console to flash through the boot ROM with a second USB-UART.

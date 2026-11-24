@@ -51,13 +51,58 @@
 	};
 };
 
-/* P9 and P10, the pins of the boot ROM loader: the board uses UART1 */
+&pinctrl {
+	/*
+	 * UART1 on P2 and P3, the pads that the USB-UART of the module is wired to, with TX of the
+	 * chip on P3 and RX on P2.
+	 */
+	uart1_tx: uart1_tx {
+		pinmux = <PHY62X2_PINMUX(3, PHY62X2_FMUX_UART1_TX)>;
+		bias-pull-up;
+		phyplus,strong-pull-up;
+	};
+
+	uart1_rx: uart1_rx {
+		pinmux = <PHY62X2_PINMUX(2, PHY62X2_FMUX_UART1_RX)>;
+		bias-pull-up;
+		phyplus,strong-pull-up;
+	};
+
+	/*
+	 * P9 and P10 are the pins of the boot ROM loader, which looks for its string on P10 after every
+	 * reset: when the console is on UART1 they stay GPIO with a pull-up, a floating input must not
+	 * look like the string.
+	 */
+	boot_rom_p9: boot_rom_p9 {
+		pinmux = <PHY62X2_PINMUX(5, PHY62X2_FMUX_NONE)>;
+		bias-pull-up;
+	};
+
+	boot_rom_p10: boot_rom_p10 {
+		pinmux = <PHY62X2_PINMUX(6, PHY62X2_FMUX_NONE)>;
+		bias-pull-up;
+	};
+
+	/* UART0 on P9 (TX) and P10 (RX), for a module that is wired there, see the overlay */
+	uart0_tx: uart0_tx {
+		pinmux = <PHY62X2_PINMUX(5, PHY62X2_FMUX_UART0_TX)>;
+		bias-pull-up;
+	};
+
+	uart0_rx: uart0_rx {
+		pinmux = <PHY62X2_PINMUX(6, PHY62X2_FMUX_UART0_RX)>;
+		bias-pull-up;
+	};
+};
+
+/* The board uses UART1 */
 &uart0 {
 	clock-frequency = <DT_FREQ_M(48)>;
 };
 
-/* P2 and P3, the pads of the debug interface that the USB-UART of the module is wired to */
 &uart1 {
 	clock-frequency = <DT_FREQ_M(48)>;
+	pinctrl-0 = <&uart1_tx &uart1_rx &boot_rom_p9 &boot_rom_p10>;
+	pinctrl-names = "default";
 	status = "okay";
 };
