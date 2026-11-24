@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config COUNTER_PHY62X2_RTC
+	bool "PHY62x2 RTC counter"
+	default y
+	depends on DT_HAS_PHYPLUS_PHY62X2_RTC_ENABLED
+	help
+	  Enable the counter of the always-on RTC of the PHY62x2. It counts and is read; the comparators
+	  and the interrupt are not used, so there are no alarms.

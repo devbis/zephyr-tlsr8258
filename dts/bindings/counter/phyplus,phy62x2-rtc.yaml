@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Phyplus PHY62x2 always-on RTC, used as a free-running counter. The registers are those of the RTC in
+  the AON block, from RTCCTL on.
+
+compatible: "phyplus,phy62x2-rtc"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  clock-frequency:
+    type: int
+    default: 32768
+    description: |
+      Frequency of the 32 kHz clock of the RTC before the prescaler, in Hz. The RC oscillator is
+      not exactly 32768 Hz.
+
+  prescaler:
+    type: int
+    default: 1
+    description: |
+      Divider of the clock of the counter, 1 to 4096. The SDK keeps it at 1.
