@@ -6,6 +6,7 @@ zephyr_library()
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE hwinfo_handlers.c)
 zephyr_library_sources_ifdef(CONFIG_HWINFO hwinfo_weak_impl.c)
+zephyr_library_sources_ifdef(CONFIG_HWINFO_PHY62X2 hwinfo_phy62x2.c)
 zephyr_library_sources_ifdef(CONFIG_HWINFO_SHELL hwinfo_shell.c)
 
 if(CONFIG_HWINFO_NATIVE)

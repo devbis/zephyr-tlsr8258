@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+config HWINFO_PHY62X2
+	bool "PHY62x2 hwinfo driver"
+	default y
+	depends on SOC_PHY62X2
+	select HWINFO_HAS_DRIVER
+	help
+	  Enable the reset cause of the PHY62x2, from the register that the boot ROM and the power off
+	  of the SDK write.
