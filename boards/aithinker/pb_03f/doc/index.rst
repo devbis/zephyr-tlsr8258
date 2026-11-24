@@ -160,11 +160,14 @@ on the rising edge and gets the pull-down. The pads are given as indices of the 
            };
    };
 
-``hwinfo_get_reset_cause()`` reads the cause that the boot ROM keeps in ``AON->SLEEP_R[0]``: a cold
-start is ``RESET_POR``, a wakeup from the power off or the RTC is ``RESET_LOW_POWER_WAKE``. Zephyr's
-reboot writes the cold start there, so that the boot ROM opens its loader window, and a software
-reboot is therefore reported as ``RESET_POR``. Neither the power off nor the cause has been tried on
-this module, and the value that the boot ROM leaves after a wakeup is taken from the SDK.
+``hwinfo_get_reset_cause()`` reads ``g_system_reset_cause``, the variable in which the boot ROM keeps
+the cause of the start: the ROM takes it from ``AON->SLEEP_R[0]`` and writes 1 back into the register,
+so the register itself is of no use after the start. A cold start is ``RESET_POR``, a warm start is
+``RESET_SOFTWARE``, and the power off and the sleep are ``RESET_LOW_POWER_WAKE``. Zephyr's reboot
+writes the cold start into the register, so that the boot ROM opens its loader window, and a software
+reboot is therefore reported as ``RESET_POR``; after a cold start the ROM leaves the variable as it
+was, so a stale value can survive in the RAM. The values were read from the boot ROM; none of this has
+been tried on the module.
 
 Deep sleep with retained RAM
 ****************************
@@ -207,7 +210,7 @@ enabled in the GPIO controller, on the edge of the interrupt. Flush the console 
 
 Only the code is written; nothing of it has been run on the module. It is not known whether the boot
 ROM leaves the retained RAM alone, which reset cause it expects (the function writes the one of the
-SDK's RTC reset, 4), whether the flash needs its deep sleep (``spif_set_deep_sleep`` of the ROM, which
+SDK's RTC reset, 4, which the ROM turns into the cause 5 and skips its loader window), whether the flash needs its deep sleep (``spif_set_deep_sleep`` of the ROM, which
 the SDK uses under ``CFG_FLASH_ENABLE_DEEP_SLEEP``) and what the wake pads do to the pull-ups of the
 boot ROM pins. The sleep does not return and does not resume: it is a reset that keeps some RAM, not
 the sleep of the SDK that resumes the program.

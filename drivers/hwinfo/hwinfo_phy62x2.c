@@ -9,12 +9,15 @@
 #include <zephyr/sys/util.h>
 
 /*
- * The cause of the start is in AON->SLEEP_R[0], the RSTC_* of the PHY62XX SDK 3.1.1: 0 cold start,
- * 1 warm start, 2 power off, 3 wakeup by a pad, 4 wakeup by the RTC, 5 warm start of the user
- * mode. Zephyr's own reboot writes 0 there, so that the boot ROM opens its loader window, and
- * so a software reboot is reported as a cold start.
+ * The boot ROM reads AON->SLEEP_R[0] at the start, keeps the cause in g_system_reset_cause, a variable
+ * of its own RAM, and writes 1 back into the register: bit 0 is a warm start (1), bit 1 the power off
+ * (2), bit 2 a warm start of the user mode (5), and no bit leaves the variable as it was. The causes 2
+ * and 5 skip the window of the loader. Zephyr's reboot writes 0, so that the window opens, and a
+ * software reboot is therefore reported as a cold start. The values were read from the ROM; 3 and 4,
+ * the wakeup by a pad and by the RTC, are the other RSTC_* of the SDK and are not set by the ROM paths
+ * read.
  */
-#define AON_SLEEP_R0 0x4000f0c0U
+#define G_SYSTEM_RESET_CAUSE 0x1fff0a80U
 
 #define RSTC_COLD_UP 0U
 #define RSTC_WARM_UP 1U
@@ -25,7 +28,7 @@
 
 int z_impl_hwinfo_get_reset_cause(uint32_t *cause)
 {
-	switch (sys_read32(AON_SLEEP_R0)) {
+	switch (sys_read32(G_SYSTEM_RESET_CAUSE)) {
 	case RSTC_COLD_UP:
 		*cause = RESET_POR;
 		break;
@@ -48,7 +51,7 @@ int z_impl_hwinfo_get_reset_cause(uint32_t *cause)
 
 int z_impl_hwinfo_clear_reset_cause(void)
 {
-	sys_write32(RSTC_COLD_UP, AON_SLEEP_R0);
+	sys_write32(RSTC_COLD_UP, G_SYSTEM_RESET_CAUSE);
 
 	return 0;
 }

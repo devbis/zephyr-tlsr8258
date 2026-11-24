@@ -31,8 +31,11 @@
 
 /* The RC oscillator of the RTC runs at 32768 Hz */
 #define RTC_HZ 32768U
-/* The reset cause for the boot ROM, RSTC_WAKE_RTC of the SDK */
-#define RESET_CAUSE_WAKE_RTC 4U
+/*
+ * The value of AON->SLEEP_R[0] that the SDK writes for this sleep: the boot ROM makes the cause 5, a
+ * warm start of the user mode, of it and skips the window of its loader.
+ */
+#define SLEEP_R0_USER_WARM_START 4U
 
 /*
  * The blocks of the SRAM that can be retained, bits 0 to 2 of the retention field: 32 KiB at
@@ -60,7 +63,7 @@ static __ramfunc void phy62x2_sleep_enter(uint32_t rtc_ticks)
 	/* The retention of the SRAM blocks, then the reset cause for the boot ROM */
 	*pmctl2_0 = (*pmctl2_0 & ~PMCTL2_0_RETENTION_MASK) |
 		    (RETAINED_RAM_BLOCKS << PMCTL2_0_RETENTION_SHIFT);
-	*(volatile uint32_t *)AON_SLEEP_R0 = RESET_CAUSE_WAKE_RTC;
+	*(volatile uint32_t *)AON_SLEEP_R0 = SLEEP_R0_USER_WARM_START;
 
 	ROM_ENTER_SLEEP_OFF_MODE(SYSTEM_SLEEP_MODE);
 
