@@ -21,31 +21,36 @@
  * registers of the program as longjmp() does, so phy62x2_suspend() returns to its caller. The
  * peripherals lose their registers in the sleep and the drivers have to set them again.
  *
- * The sequence was read from a dump of the boot ROM and from the SDK's hal_pwrmgr_enter_standby(),
- * and has not been run: the sleep is entered through enter_sleep_off_mode() of the ROM, which writes
- * the key of the sleep to AON->PWRSLP.
+ * The sequence was read from a dump of the boot ROM and from the SDK's hal_pwrmgr_enter_standby();
+ * the sleep is entered through enter_sleep_off_mode() of the ROM, which writes the key of the sleep
+ * to AON->PWRSLP. The ROM runs the function of the slot only when the sleep flag (set_sleep_flag()
+ * of the ROM, bit 0 of AON 0xa8) is set. The RC oscillator of the RTC must have been set up for the
+ * sleep, see the prep hook of the SoC; the bits of AON->PMCTL0 that it sets must stay set.
  */
+#define ROM_CONFIG_RTC ((void (*)(uint32_t))0x0000a6f9U)
+#define ROM_SET_SLEEP_FLAG ((void (*)(uint32_t))0x00016c01U)
 #define ROM_ENTER_SLEEP_OFF_MODE ((void (*)(uint32_t))0x0000afa1U)
 #define SYSTEM_SLEEP_MODE 1U
 
 #define JUMP_TABLE_BASE 0x1fff0000U
 #define JUMP_WAKEUP_PROCESS 62U
 
+#define AON_PMCTL0 0x4000f014U
 #define AON_PMCTL2_0 0x4000f01cU
 #define AON_SLEEP_R0 0x4000f0c0U
-#define AON_RTC_CTL 0x4000f024U
 #define AON_RTC_CNT 0x4000f028U
-#define AON_RTC_CC0 0x4000f02cU
 #define PMCTL2_0_SW_CONTROL BIT(6)
 #define PMCTL2_0_RETENTION_MASK GENMASK(21, 17)
 #define PMCTL2_0_RETENTION_SHIFT 17U
-/* The bits that config_RTC() of the ROM sets in RTCCTL when it arms the first comparator */
-#define RTC_CTL_ARM_CC0 (BIT(15) | BIT(18) | BIT(20))
+/* The ROM waits 5 ms after the wakeup before it uses the analog blocks: 160 ticks of the RTC */
+#define WAKEUP_SETTLE_TICKS 160U
 /* The three blocks of the SRAM, 64 KiB: the Zephyr image is spread over all of them */
 #define RETENTION_ALL_SRAM 0x7U
 /* The value that the SDK writes before it enters the sleep with the RAM retained */
 #define SLEEP_R0_POWER_OFF 2U
 
+#define IOMUX_BASE 0x40003800U
+#define IOMUX_WORDS 12U
 #define PCR_SW_CLK 0x40000008U
 #define PCR_SW_CLK1 0x40000014U
 #define SCB_SHPR2 0xe000ed1cU
@@ -70,6 +75,7 @@ struct suspend_state {
 	uint32_t shpr3;
 	uint32_t systick_csr;
 	uint32_t systick_rvr;
+	uint32_t iomux[IOMUX_WORDS];
 };
 
 /* Returns twice, like setjmp(): the compiler must not keep values in registers across it */
@@ -83,12 +89,27 @@ static __ramfunc void phy62x2_resume(void)
 {
 	__asm__ volatile("cpsid i" ::: "memory");
 
+	/* The clock gates first: the RTC and the AON registers are read through them */
+	sys_write32(state.sw_clk1, PCR_SW_CLK1);
+	sys_write32(state.sw_clk, PCR_SW_CLK);
+
+	/* Switch the analog blocks on and clear the sleep flag, as the SDK's wakeup does */
+	sys_write32(sys_read32(AON_PMCTL0) | GENMASK(29, 27), AON_PMCTL0);
+	for (uint32_t start = sys_read32(AON_RTC_CNT);
+	     sys_read32(AON_RTC_CNT) - start < WAKEUP_SETTLE_TICKS;) {
+	}
+	ROM_SET_SLEEP_FLAG(0U);
+
 	/* The jump table is retained, clear the slot so that the ROM's own wakeup is used next */
 	sys_write32(0U, JUMP_TABLE_BASE + 4U * JUMP_WAKEUP_PROCESS);
 
 	(void)phy62x2_clock_init();
 	sys_write32(state.sw_clk, PCR_SW_CLK);
 	sys_write32(state.sw_clk1, PCR_SW_CLK1);
+	/* The pads: the pin multiplexer is lost in the sleep */
+	for (uint32_t i = 0U; i < IOMUX_WORDS; i++) {
+		sys_write32(state.iomux[i], IOMUX_BASE + 4U * i);
+	}
 	phy62x2_xip_cache_enable();
 
 	sys_write32(UINT32_MAX, NVIC_ICER);
@@ -113,12 +134,12 @@ static __ramfunc void phy62x2_sleep_enter(uint32_t rtc_ticks)
 {
 	volatile uint32_t *const pmctl2_0 = (volatile uint32_t *)AON_PMCTL2_0;
 
-	/* The comparator of the RTC that wakes the chip, as config_RTC() arms it */
+	/* The comparator of the RTC that wakes the chip */
 	if (rtc_ticks != 0U) {
-		sys_write32(sys_read32(AON_RTC_CNT) + rtc_ticks, AON_RTC_CC0);
-		sys_write32(sys_read32(AON_RTC_CTL) | RTC_CTL_ARM_CC0, AON_RTC_CTL);
+		ROM_CONFIG_RTC(rtc_ticks);
 	}
 
+	ROM_SET_SLEEP_FLAG(1U);
 	*pmctl2_0 &= ~PMCTL2_0_SW_CONTROL;
 	*pmctl2_0 = (*pmctl2_0 & ~PMCTL2_0_RETENTION_MASK) |
 		    (RETENTION_ALL_SRAM << PMCTL2_0_RETENTION_SHIFT);
@@ -144,6 +165,9 @@ int phy62x2_suspend(uint32_t rtc_ticks)
 	state.shpr3 = sys_read32(SCB_SHPR3);
 	state.systick_csr = sys_read32(SYST_CSR);
 	state.systick_rvr = sys_read32(SYST_RVR);
+	for (uint32_t i = 0U; i < IOMUX_WORDS; i++) {
+		state.iomux[i] = sys_read32(IOMUX_BASE + 4U * i);
+	}
 
 	phy62x2_wakeup_arm(true);
 	sys_write32((uint32_t)(uintptr_t)phy62x2_resume, JUMP_TABLE_BASE + 4U * JUMP_WAKEUP_PROCESS);
