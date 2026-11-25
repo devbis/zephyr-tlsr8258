@@ -244,9 +244,16 @@ selects the core clock again, sets the clock gates, the cache of the flash, the 
 they were, and returns to ``phy62x2_suspend()`` with the registers of the program restored.
 
 The registers of the other peripherals are lost in the sleep: the UART, the GPIO, the radio and the
-rest have to be set up again by their drivers, and none of them does it yet. The pull of the pads, the
-retention of the outputs, the flash in its deep sleep and the time that the kernel clock loses are not
-handled either. Nothing of this has been run on the module.
+rest have to be set up again by their drivers, which is done for those that have power management
+actions (see below). The pin multiplexer is saved and restored by the function itself. The pull of the
+pads, the retention of the outputs and the flash in its deep sleep are not handled, and the time that
+the kernel clock loses is given back by the power management only. The boot ROM runs the function of the
+slot 62 only when the sleep flag of the ROM is set, which the function does, and the RC oscillator of
+the RTC must have been set up for the sleep (see the deep sleep above).
+
+Run on the module: ``phy62x2_suspend()`` of 2 s and of 0.5 s returned after the time, with the program,
+the stack and the console where they were. Not tried: the wake pads, the current in the sleep and the
+suspend with the radio.
 
 Power management
 ****************
