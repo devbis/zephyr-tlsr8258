@@ -398,6 +398,10 @@ struct uart_ns16550_dev_data {
 	bool tx_stream_on;
 #endif
 
+#if defined(CONFIG_UART_NS16550_PM_RECONFIGURE)
+	uint8_t ier_saved; /**< interrupt enables over a power state that loses the registers */
+#endif
+
 #if defined(CONFIG_UART_ASYNC_API)
 	uint64_t phys_addr;
 	struct uart_ns16550_async_data async;
@@ -898,11 +902,17 @@ static int uart_ns16550_pm_action(const struct device *dev, enum pm_device_actio
 			pinctrl_apply_state(dev_cfg->pincfg, PINCTRL_STATE_DEFAULT);
 		}
 #endif
-		return uart_ns16550_configure(dev, uart_cfg);
+		ret = uart_ns16550_configure(dev, uart_cfg);
+		/* The configuration disables the interrupts: bring back those that were enabled */
+		ns16550_outbyte(dev_cfg, IER(dev), data->ier_saved);
+		return ret;
 #else
 		break;
 #endif
 	case PM_DEVICE_ACTION_SUSPEND:
+#if defined(CONFIG_UART_NS16550_PM_RECONFIGURE)
+		data->ier_saved = ns16550_inbyte(dev_cfg, IER(dev));
+#endif
 		break;
 	case PM_DEVICE_ACTION_TURN_ON:
 		return uart_ns16550_configure(dev, uart_cfg);
